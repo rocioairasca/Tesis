@@ -36,3 +36,30 @@
     transform: rotate(360deg);
   }
 }
+
+/* Sidebar */
+.ant-layout-sider {
+  background-color: #1D2A62; /* Fondo de la sidebar */
+}
+
+.ant-menu-item-selected {
+  background-color: #87AECE !important; /* Color de los ítems seleccionados */
+}
+
+/* Botones Primarios */
+.ant-btn-primary {
+  background-color: #437118;
+  border-color: #437118;
+}
+
+/* Botones Secundarios */
+.ant-btn-default {
+  background-color: #AFD06E;
+  border-color: #AFD06E;
+}
+
+/* Hover de botones primarios y secundarios */
+.ant-btn-primary:hover,
+.ant-btn-default:hover {
+  opacity: 0.8;
+}
