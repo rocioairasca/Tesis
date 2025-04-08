@@ -9,16 +9,40 @@ import './App.css';
 
 function App() {
   return (
-     <Router>
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" />} />
-          <Route path="/login" element={<LoginRegister />} /> 
-          <Route exact path="/dashboard" element={<Dashboard/>} />
-          <Route path="/usuarios" element={<Users/>} />
-          <Route path="/inventario" element={<Inventory/>} />
-        </Routes>
-      </AppLayout>
+    <Router>
+      <Routes>
+        {/* Rutas públicas (sin layout) */}
+        <Route path="/login" element={<LoginRegister />} />
+
+        {/* Rutas privadas (con layout) */}
+        <Route
+          path="/dashboard"
+          element={
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/usuarios"
+          element={
+            <AppLayout>
+              <Users />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/inventario"
+          element={
+            <AppLayout>
+              <Inventory />
+            </AppLayout>
+          }
+        />
+
+        {/* Redirección por defecto */}
+        <Route path="/" element={<Navigate to="/login" />} />
+      </Routes>
     </Router>
   );
 }
