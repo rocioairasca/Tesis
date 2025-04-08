@@ -1,11 +1,34 @@
-import React from "react";
-import { Form, Input, Button } from "antd";
+import React, {useState} from "react";
+import { Form, Input, Button, message } from "antd";
 import { UserOutlined, LockOutlined, MailOutlined } from "@ant-design/icons";
+import { registerUser } from "../../services/authService";
 
-const RegisterForm = () => {
-  const onFinish = (values) => {
-    console.log("Register form values:", values);
-    // Acá se podría conectar con Auth0 o tu backend para registrar el usuario
+const RegisterForm = ({onSwitchToLogin}) => {
+  const [loading, setLoading] = useState(false);
+
+  const onFinish = async (values) => {
+    try {
+      setLoading(true);
+      const { username, email, password } = values;
+      const response = await registerUser({ username, email, password });
+
+      if (response?.message === "Usuario creado correctamente") {
+        message.success("Usuario registrado con éxito 🚀");
+
+        setTimeout(() => {
+          if (onSwitchToLogin) {
+            onSwitchToLogin(); 
+          }
+        }, 1000);
+      }
+
+    } catch (error) {
+      console.error("→ Error:", error);
+      message.error(error?.response?.data?.message || "Error al registrar usuario");
+
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,7 +74,7 @@ const RegisterForm = () => {
       </Form.Item>
 
       <Form.Item>
-        <Button type="primary" htmlType="submit" block style={{ backgroundColor: "#437118", borderColor: "#437118" }}>
+        <Button type="primary" htmlType="submit" block loading={loading} style={{ backgroundColor: "#437118", borderColor: "#437118" }}>
           Registrarse
         </Button>
       </Form.Item>

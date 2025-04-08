@@ -49,7 +49,7 @@ const LoginRegister = () => {
             {
               key: "register",
               label: "Register",
-              children: <RegisterForm />,
+              children: <RegisterForm onSwitchToLogin={() => setActiveTab("login")} />,
             },
           ]}
         />
