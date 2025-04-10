@@ -11,3 +11,13 @@ export const loginUser = async (userData) => {
   const response = await axios.post(`${API_URL}/login`, userData);
   return response.data;
 };
+
+export const getUserInfo = async (token) => {
+  const res = await axios.get(`https://${process.env.REACT_APP_AUTH0_DOMAIN}/userinfo`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return res.data;
+};

@@ -26,6 +26,7 @@ const loginUser = async (req, res) => {
 
     return res.status(200).json({
       access_token: response.data.access_token,
+      id_token: response.data.id_token,
       token_type: response.data.token_type,
       expires_in: response.data.expires_in,
     });

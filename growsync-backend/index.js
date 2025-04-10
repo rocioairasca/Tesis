@@ -12,22 +12,17 @@ app.use(cors({
 app.use(express.json());
 
 app.get("/", (req, res) => {
-    res.send("GrowSync Backenf funcionando");
-});
-
-//Ruta de prueba para ver si se conecta bien la BD
-app.get("/users", async (req, res) => {
-    try{
-        const result = await pool.query("SELECT * FROM users");
-        res.json(result.rows);
-    }catch(err){
-        console.error("Error al obtener los usuarios", err);
-        res.status(500).json({ error: "Error al obtener los usuarios" });
-    }
+    res.send("GrowSync Backend funcionando");
 });
 
 const authRoutes = require("./routes/auth");
-app.use("/api", authRoutes);
+const userRoutes = require("./routes/userRoutes");
+
+// Rutas públicas
+app.use('/api', authRoutes);
+
+// Rutas privadas con protección
+app.use('/api', userRoutes);
 
 
 const PORT = process.env.PORT || 4000;

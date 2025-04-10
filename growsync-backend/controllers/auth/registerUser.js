@@ -36,8 +36,8 @@ const registerUser = async (req, res) => {
 
         // guardamios el usuario en la bd
         const dbRes = await pool.query(
-            `INSERT INTO users (auth0_id, username, email) VALUES ($1, $2, $3) RETURNING *`,
-            [auth0_id, username, email]
+            `INSERT INTO users (auth0_id, username, email, role) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [auth0_id, username, email, 0]
         );
 
         return res.status(201).json({ message: 'Usuario creado correctamente', user: dbRes.rows[0], });

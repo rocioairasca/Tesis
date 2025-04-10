@@ -1,23 +1,25 @@
 import React, {useState} from "react";
 import { Form, Input, Button, message } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
-import { loginUser } from "../../services/authService"; // Asegúrate de que la ruta sea correcta
+import { loginUser, getUserInfo } from "../../services/authService"; // Asegúrate de que la ruta sea correcta
 import { useNavigate } from "react-router-dom"; // Importa useNavigate para redireccionar
 
 const LoginForm = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const navigate = useNavigate(); // Inicializa useNavigate
 
   const onFinish = async (values) => {
-    console.log('Enviando datos:', values);
     try {
       const res = await loginUser(values);
-      console.log('Respuesta del backend:', res);
   
       message.success('Inicio de sesión exitoso');
   
       // Guardamos el token en localStorage
       localStorage.setItem('token', res.access_token);
+      localStorage.setItem('id_token', res.id_token);
+
+      const userData = await getUserInfo(res.access_token);
+      localStorage.setItem('user', JSON.stringify(userData));
   
       // Redireccionamos al dashboard
       navigate('/dashboard');

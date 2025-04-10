@@ -8,12 +8,9 @@ const checkJwt = jwt({
     jwksRequestsPerMinute: 5,
     jwksUri: `https://dev-fl08rf2h5payxfcu.us.auth0.com/.well-known/jwks.json`,
   }),
-  audience: "TU_API_IDENTIFIER", // lo definís en Auth0
+  audience: process.env.AUTH0_API_IDENTIFIER, // desde tu .env
   issuer: `https://dev-fl08rf2h5payxfcu.us.auth0.com/`,
   algorithms: ["RS256"],
 });
 
-// Usalo en rutas protegidas:
-app.get("/perfil", checkJwt, (req, res) => {
-  res.send("Ruta protegida ✔");
-});
+module.exports = checkJwt;
