@@ -8,10 +8,10 @@ const registerUser = async (req, res) => {
     try {
         //obtenemos el token de management api
         const tokenRes = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, {
-            client_id: process.env.AUTH0_CLIENT_ID,
-            client_secret: process.env.AUTH0_CLIENT_SECRET,
+            grant_type: "client_credentials",
+            client_id: process.env.AUTH0_M2M_CLIENT_ID,
+            client_secret: process.env.AUTH0_M2M_CLIENT_SECRET,
             audience: process.env.AUTH0_API_AUDIENCE,
-            grant_type: 'client_credentials',
         });
 
         const accessToken = tokenRes.data.access_token;

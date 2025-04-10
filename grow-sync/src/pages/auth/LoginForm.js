@@ -9,27 +9,24 @@ const LoginForm = () => {
   const navigate = useNavigate(); // Inicializa useNavigate
 
   const onFinish = async (values) => {
-    const { username, password } = values;
-
+    console.log('Enviando datos:', values);
     try {
-      setLoading(true);
-      const response = await loginUser(username, password);
-      localStorage.setItem("access_token", response.access_token);
-      message.success("¡Inicio de sesión exitoso! 🚀");
-
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 1000);
-
+      const res = await loginUser(values);
+      console.log('Respuesta del backend:', res);
+  
+      message.success('Inicio de sesión exitoso');
+  
+      // Guardamos el token en localStorage
+      localStorage.setItem('token', res.access_token);
+  
+      // Redireccionamos al dashboard
+      navigate('/dashboard');
     } catch (error) {
-      console.error("Error al iniciar sesión:", error.response?.data || error.message);
-      message.error("Email o contraseña incorrectos.");
-      
-    } finally {
-      setLoading(false);
+      console.error('Error al iniciar sesión:', error);
+      message.error(error.response?.data?.message || 'Error al iniciar sesión');
     }
   };
-
+  
   return (
     <Form
       name="login_form"
@@ -38,7 +35,7 @@ const LoginForm = () => {
       layout="vertical"
     >
       <Form.Item
-        name="username"
+        name="email"
         rules={[{ required: true, message: "Por favor ingrese su email" }]}
       >
         <Input prefix={<UserOutlined />} placeholder="Email" />
