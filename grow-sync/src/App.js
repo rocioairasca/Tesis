@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard.js';
 import Users from './pages/Users.js';
 import Inventory from './pages/Inventory.js';
 import LoginRegister from "./pages/auth/LoginRegister";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import RoleProtectedRoute from "./routes/RoleProtectedRoute";
 import './App.css'; 
 
 function App() {
@@ -14,37 +16,44 @@ function App() {
         {/* Rutas públicas (sin layout) */}
         <Route path="/login" element={<LoginRegister />} />
 
-        {/* Rutas privadas (con layout) */}
+        {/* Rutas privadas (con layout y protegido por token) */}
         <Route
           path="/dashboard"
           element={
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/usuarios"
           element={
-            <AppLayout>
-              <Users />
-            </AppLayout>
+            <RoleProtectedRoute allowedRoles={[3]}> {/* Solo Admin */}
+              <AppLayout>
+                <Users />
+              </AppLayout>
+            </RoleProtectedRoute>
           }
         />
         <Route
           path="/inventario"
           element={
-            <AppLayout>
-              <Inventory />
-            </AppLayout>
+            <ProtectedRoute>
+              <AppLayout>
+                <Inventory />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         {/* Redirección por defecto */}
-        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </Router>
   );
 }
 
 export default App;
+

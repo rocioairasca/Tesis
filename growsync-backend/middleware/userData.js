@@ -2,9 +2,9 @@ const pool = require("../db/connection");
 
 const userData = async (req, res, next) => {
   try {
-    const auth0_id = req.auth.sub; // auth0|xxxxxx
+    const { sub } = req.auth;
 
-    const userDb = await pool.query('SELECT * FROM users WHERE auth0_id = $1', [auth0_id]);
+    const userDb = await pool.query('SELECT * FROM users WHERE auth0_id = $1', [sub]);
 
     if (userDb.rowCount === 0) {
       return res.status(404).json({ message: 'Usuario no encontrado en base de datos' });
