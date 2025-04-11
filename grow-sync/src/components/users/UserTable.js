@@ -49,7 +49,7 @@ const UserTable = () => {
     },
   ];
 
-  return <Table dataSource={users} columns={columns} rowKey="id" />;
+  return <Table dataSource={users} columns={columns} rowKey="id" pagination={{ position: ['bottomCenter'] }}/>;
 };
 
 export default UserTable;

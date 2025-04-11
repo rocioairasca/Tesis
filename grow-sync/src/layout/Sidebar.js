@@ -46,7 +46,7 @@ const Sidebar = () => {
                     {
                         key: "dashboard",
                         icon: <DashboardOutlined />,
-                        label: <Link to="/">Dashboard</Link>,
+                        label: <Link to="/dashboard">Dashboard</Link>,
                     },
                     {
                         key: "usuarios",
