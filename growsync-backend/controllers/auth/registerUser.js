@@ -23,6 +23,9 @@ const registerUser = async (req, res) => {
                 email,
                 password,
                 connection: "Username-Password-Authentication",
+                user_metadata: {
+                    username
+                }
             },
             {
                 headers: {
@@ -33,11 +36,14 @@ const registerUser = async (req, res) => {
         );
 
         const auth0_id = createRes.data.user_id;
+        const nickname = createRes.data.nickname;
+        const picture = createRes.data.picture;
+        const name = createRes.data.name;
 
         // guardamios el usuario en la bd
         const dbRes = await pool.query(
-            `INSERT INTO users (auth0_id, username, email, role) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [auth0_id, username, email, 0]
+            `INSERT INTO users (auth0_id, username, email, role, nickname, picture, name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [auth0_id, username, email, 0, nickname, picture, name]
         );
 
         return res.status(201).json({ message: 'Usuario creado correctamente', user: dbRes.rows[0], });

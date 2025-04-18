@@ -60,7 +60,8 @@ const AppHeader = () => {
             }}
             >
             <Avatar
-                src={user?.picture || "https://api.dicebear.com/7.x/initials/svg?seed=Rocio"}
+                src={user?.picture}
+                icon={!user?.picture && <UserOutlined />}
                 size="large"
             />
             <span
@@ -71,7 +72,7 @@ const AppHeader = () => {
                 whiteSpace: "nowrap",
                 }}
             >
-                {user?.nickname || user?.name || user?.email}
+                {user?.nickname || user?.username || user?.email}
             </span>
             </div>
         </Dropdown>
