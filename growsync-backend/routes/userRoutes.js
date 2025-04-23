@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
 
+// Las rutas son puntos de entrada al servidor, y nos sirven para establecer respuestas a las solicitudes HTTP
+// Al mismo tiempo, nos mueve a crear codigo de una forma mas limpia y modular
+
+// IMPORTACION DE MIDDLEWARES EN /middleware
 const checkJwt = require('../middleware/checkJwt');
 const userData = require('../middleware/userData');
 const checkRole = require('../middleware/checkRole');
+
+// CONEXION A LA BASE DE DATOS
 const pool = require('../db/connection');
+
+// IMPORTACION DE CONTROLADORES EN /controllers/auth
 const updateRole = require('../controllers/users/updateRole'); 
 
-// Obtener todos los usuarios (solo Admin rol 3)
+// GetAllUsers EN POSTMAN - Devuelve todos los usuarios (solo Admin rol 3)
 router.get('/', checkJwt, userData, checkRole(3), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users');
@@ -18,7 +26,10 @@ router.get('/', checkJwt, userData, checkRole(3), async (req, res) => {
   }
 });
 
-// Obtener usuario por email
+// UpdateUserRole EN POSTMAN - Modifica el rol de un usuario (solo Admin rol 3)
+router.put('/:id/role', checkJwt, userData, checkRole(3), updateRole);
+
+// --- EN POSTMAN - Devuelve todos los usuarios que coincidan con el email proporcionado
 router.get('/email/:email', async (req, res) => {
   const { email } = req.params;
   try {
@@ -36,7 +47,5 @@ router.get('/email/:email', async (req, res) => {
   }
 });
 
-// Modificar rol de un usuario (solo Admin rol 3)
-router.put('/:id/role', checkJwt, userData, checkRole(3), updateRole);
-
+// se exporta el router para que pueda ser usado en index.js
 module.exports = router;
