@@ -34,13 +34,14 @@ const registerUser = async (req, res) => {
 
         const auth0_id = createRes.data.user_id;
 
-        // guardamios el usuario en la bd
+        // guardamos el usuario en la bd
         const dbRes = await pool.query(
             `INSERT INTO users (auth0_id, username, email, role) VALUES ($1, $2, $3, $4) RETURNING *`,
             [auth0_id, username, email, 0]
         );
 
         return res.status(201).json({ message: 'Usuario creado correctamente', user: dbRes.rows[0], });
+        
     } catch (error) {
         console.error(error.response?.data || error.message);
         return res.status(500).json({

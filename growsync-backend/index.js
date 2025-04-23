@@ -4,17 +4,19 @@ const app = express();
 require('dotenv').config();
 const pool = require('./db/connection');
 
+// PERMITIR SOLICITUDES CORS
 app.use(cors({
     origin: "http://localhost:3000",
     credentials: true
 }));
-
 app.use(express.json());
 
+// ENDPOINT PARA TESTEAR SI EL SERVICIO ESTA EN LINEA
 app.get("/", (req, res) => {
     res.send("GrowSync Backend funcionando");
 });
 
+// IMPORTAR MODULOS DE RUTAS
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/userRoutes");
 
