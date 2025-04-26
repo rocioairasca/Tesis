@@ -1,8 +1,7 @@
 import React from "react";
 import { Layout, Avatar, Dropdown, Button, Badge } from "antd";
 import { BellOutlined, SettingOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom"; // Importa useNavigate para redireccionar
-
+import { useNavigate } from "react-router-dom"; 
 
 const { Header } = Layout;
 const user = JSON.parse(localStorage.getItem('user'));

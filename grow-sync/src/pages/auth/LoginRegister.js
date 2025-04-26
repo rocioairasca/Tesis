@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Tabs, Button, Typography, Space, Divider } from "antd";
-import { GoogleOutlined } from "@ant-design/icons";
+import { Tabs, Typography } from "antd";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 
@@ -53,16 +52,6 @@ const LoginRegister = () => {
             },
           ]}
         />
-
-        <Divider plain>Acceso rápido:</Divider>
-        <Space style={{ justifyContent: "center", width: "100%" }}>
-          <Button
-            shape="circle"
-            icon={<GoogleOutlined style={{ fontSize: 18 }} />}
-            onClick={() => console.log("Login con Google")}
-          />
-          {/* GitHub eliminado como pediste */}
-        </Space>
 
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Text type="secondary">Copyright © 2024 - Grow Sync</Text>
