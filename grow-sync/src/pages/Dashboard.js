@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Card, Row, Col, Statistic } from "antd";
 import { UserOutlined, InboxOutlined, FileTextOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import axios from "axios";
 
 const Dashboard = () => {
+  const [lotCount, setLotCount] = useState(0);
+
   const [data, setData] = useState({
     users: 0,
     inventory: 0,
@@ -11,12 +14,21 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
-    // Acá simulo que traemos datos del backend.
+    const fetchLotCount = async () => {
+      try {
+        const res = await axios.get('http://localhost:4000/api/lots/count/enabled');
+        setLotCount(res.data.total);
+      } catch (error) {
+        console.error('Error al cargar cantidad de lotes:', error);
+      }
+    };
+
+    fetchLotCount();
+
     setTimeout(() => {
       setData({
         users: 8,
         inventory: 120,
-        lots: 5,
         usages: 15,
       });
     }, 500);
@@ -49,7 +61,7 @@ const Dashboard = () => {
           <Card>
             <Statistic
               title="Lotes Registrados"
-              value={data.lots}
+              value={lotCount}
               prefix={<EnvironmentOutlined />}
             />
           </Card>

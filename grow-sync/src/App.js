@@ -10,6 +10,7 @@ import Lotes from './pages/Lotes.js';
 import DisabledLotes from './pages/DisabledLotes.js';
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleProtectedRoute from "./routes/RoleProtectedRoute";
+import DisabledProducts from "./pages/DisabledInventory.js";
 import './App.css'; 
 
 function App() {
@@ -78,6 +79,16 @@ function App() {
               </AppLayout>
             </ProtectedRoute>
           } />
+          <Route
+            path="/productos-deshabilitados"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <DisabledProducts />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
           
           {/* Redirección por defecto */}
           <Route path="*" element={<Navigate to="/login" />} />

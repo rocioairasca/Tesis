@@ -20,6 +20,7 @@ app.get("/", (req, res) => {
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/userRoutes");
 const lotRoutes = require("./routes/lot");
+const productRoutes = require('./routes/products');
 
 // Uso de rutas públicas (register y login)
 app.use('/api', authRoutes);
@@ -27,6 +28,7 @@ app.use('/api', authRoutes);
 // Uso de rutas privadas con protección (getAllUsers, getUserByEmail y updateUserRole)
 app.use('/api/users', userRoutes);
 app.use('/api/lots', lotRoutes);
+app.use('/api/products', productRoutes);
 
 // ARRANQUE DEL SERVIDOR EN PUERTO (PORT=4000)
 const PORT = process.env.PORT || 4000;

@@ -50,9 +50,21 @@ const softDeleteLot = async (req, res) => {
   }
 };
 
+// CONTAR LOTES HABILITADOS
+const countEnabledLots = async (req, res) => {
+  try {
+    const result = await db.query('SELECT COUNT(*) FROM lots WHERE enabled = TRUE');
+    const count = result.rows[0].count;
+    res.json({ total: parseInt(count, 10) });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al contar lotes', error });
+  }
+};
+
 module.exports = {
   listLots,
   addLot,
   editLot,
-  softDeleteLot
+  softDeleteLot,
+  countEnabledLots
 };
