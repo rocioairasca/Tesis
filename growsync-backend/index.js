@@ -39,3 +39,17 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`🔵 Servidor corriendo en el puerto ${PORT}`);
 });
+
+if (process.env.NODE_ENV === "development") {
+    const consoleWarn = console.warn;
+    console.warn = (...args) => {
+      if (
+        args[0].includes("-ms-high-contrast") ||
+        args[0].includes("Tracking Prevention") ||
+        args[0].includes("[antd]") 
+      ) {
+        return;
+      }
+      consoleWarn(...args);
+    };
+}

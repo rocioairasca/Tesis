@@ -47,11 +47,6 @@ const DisabledLots = () => {
       key: "area",
     },
     {
-      title: "Ubicación",
-      dataIndex: "location",
-      key: "location",
-    },
-    {
       title: "Acciones",
       key: "actions",
       render: (_, record) => (

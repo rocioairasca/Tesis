@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col } from "antd";
 import axios from "axios";
+
+import MapSelector from '../components/MapSelector';
 
 const Lotes = () => {
   const [lots, setLots] = useState([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingLot, setEditingLot] = useState(null);
   const [form] = Form.useForm();
+
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false); 
+  const [selectedLocation, setSelectedLocation] = useState(null);
+
+  const mapRef = useRef();
 
   // cargamos los lotes desde el back
   const fetchLots = async () => {
@@ -68,6 +75,7 @@ const Lotes = () => {
     }
   };
 
+
   const columns = [
     {
       title: "#",
@@ -89,6 +97,15 @@ const Lotes = () => {
       title: "Ubicación",
       dataIndex: "location",
       key: "location",
+      render: (location) => {
+        if (!location) return "Sin ubicación";
+    
+        return (
+          <Button type="link" onClick={() => setSelectedLocation(JSON.parse(location))}>
+            Ver
+          </Button>
+        );
+      }
     },
     {
       title: "Acciones",
@@ -128,8 +145,21 @@ const Lotes = () => {
         </Col>
       </Row>
 
-      {/* Tabla */}
-      <Table columns={columns} dataSource={lots} pagination={{ pageSize: 5, position: ['bottomCenter'] }} rowKey="id" />
+      <Row gutter={24}>
+        <Col span={12}>
+          {/* Mapa a la izquierda */}
+          <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
+        </Col>
+        <Col span={12}>
+          {/* Tabla de lotes a la derecha */}
+          <Table
+            columns={columns}
+            dataSource={lots}
+            pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+            rowKey="id"
+          />
+        </Col>
+      </Row>
 
       {/* Drawer para agregar/editar */}
       <Drawer
@@ -152,16 +182,19 @@ const Lotes = () => {
             name="area"
             label="Área Total (hectáreas)"
             rules={[{ required: true, message: "Por favor ingresá la superficie." }]}
+            extra="Área calculada automáticamente. Podés modificarla si lo deseás."
           >
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
 
-          <Form.Item
-            name="location"
-            label="Ubicación"
-            rules={[{ required: true, message: "Por favor ingresá la ubicación." }]}
-          >
+          <Form.Item name="location" hidden>
             <Input />
+          </Form.Item>
+
+          <Form.Item>
+            <Button type="default" onClick={() => setIsMapModalOpen(true)} block>
+              Seleccionar ubicación en el mapa
+            </Button>
           </Form.Item>
 
           <Form.Item>
@@ -170,6 +203,34 @@ const Lotes = () => {
             </Button>
           </Form.Item>
         </Form>
+
+        <Drawer
+          title="Seleccioná la ubicación del Lote"
+          placement="right"
+          open={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          width={800}
+          afterOpenChange={(open) => {
+            if (open && mapRef.current) {
+              mapRef.current.invalidateSize();
+            }
+          }}
+        >
+          <MapSelector
+            lots={lots}
+            initialLocation={editingLot?.location ? JSON.parse(editingLot.location) : null}
+            onSelect={(data) => {
+              form.setFieldsValue({
+                location: data.location,
+                area: data.calculatedArea
+              });
+              setIsMapModalOpen(false);
+            }}
+            modalOpen={isMapModalOpen}
+            mapRef={mapRef}
+          />
+        </Drawer>
+
       </Drawer>
     </div>
   );
