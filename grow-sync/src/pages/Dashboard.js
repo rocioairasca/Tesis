@@ -4,34 +4,24 @@ import { UserOutlined, InboxOutlined, FileTextOutlined, EnvironmentOutlined } fr
 import axios from "axios";
 
 const Dashboard = () => {
-  const [lotCount, setLotCount] = useState(0);
-
-  const [data, setData] = useState({
+  const [stats, setStats] = useState({
     users: 0,
-    inventory: 0,
+    products: 0,
     lots: 0,
     usages: 0,
   });
 
   useEffect(() => {
-    const fetchLotCount = async () => {
+    const fetchStats = async () => {
       try {
-        const res = await axios.get('http://localhost:4000/api/lots/count/enabled');
-        setLotCount(res.data.total);
+        const res = await axios.get('http://localhost:4000/api/stats');
+        setStats(res.data);
       } catch (error) {
-        console.error('Error al cargar cantidad de lotes:', error);
+        console.error("Error al cargar estadísticas", error);
       }
     };
 
-    fetchLotCount();
-
-    setTimeout(() => {
-      setData({
-        users: 8,
-        inventory: 120,
-        usages: 15,
-      });
-    }, 500);
+    fetchStats();
   }, []);
 
   return (
@@ -41,7 +31,7 @@ const Dashboard = () => {
           <Card>
             <Statistic
               title="Usuarios Registrados"
-              value={data.users}
+              value={stats.users}
               prefix={<UserOutlined />}
             />
           </Card>
@@ -51,7 +41,7 @@ const Dashboard = () => {
           <Card>
             <Statistic
               title="Productos en Inventario"
-              value={data.inventory}
+              value={stats.products}
               prefix={<InboxOutlined />}
             />
           </Card>
@@ -61,7 +51,7 @@ const Dashboard = () => {
           <Card>
             <Statistic
               title="Lotes Registrados"
-              value={lotCount}
+              value={stats.lots}
               prefix={<EnvironmentOutlined />}
             />
           </Card>
@@ -71,7 +61,7 @@ const Dashboard = () => {
           <Card>
             <Statistic
               title="Registros de Uso"
-              value={data.usages}
+              value={stats.usages}
               prefix={<FileTextOutlined />}
             />
           </Card>
