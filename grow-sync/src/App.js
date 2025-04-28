@@ -11,6 +11,8 @@ import DisabledLotes from './pages/DisabledLotes.js';
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleProtectedRoute from "./routes/RoleProtectedRoute";
 import DisabledProducts from "./pages/DisabledInventory.js";
+import Usage from "./pages/Usage.js";
+import DisabledUsages from "./pages/DisabledUsages.js";
 import './App.css'; 
 
 function App() {
@@ -85,6 +87,26 @@ function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <DisabledProducts />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/usage"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Usage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/usages-disabled"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <DisabledUsages />
                 </AppLayout>
               </ProtectedRoute>
             }

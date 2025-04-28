@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import { Layout, Menu } from "antd";
-import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
 
 const { Sider } = Layout;
@@ -35,7 +35,7 @@ const Sidebar = () => {
                 mode="inline"
                 selectedKeys={[location.pathname.split("/")[1] || "dashboard"]}  
                 style={{
-                background: "#1D2A62",  // Fondo igual al de la sidebar
+                background: "#1D2A62", 
                 }}
                 items={[
                     {
@@ -43,6 +43,11 @@ const Sidebar = () => {
                         icon: <DashboardOutlined />,
                         label: <Link to="/dashboard">Dashboard</Link>,
                     },
+                    {
+                        key: "usage",
+                        icon: <FormOutlined />, 
+                        label: <Link to="/usage">Registros de Uso</Link>,
+                      },
                     {
                         key: "inventario",
                         icon: <AppstoreOutlined />,
