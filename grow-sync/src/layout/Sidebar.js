@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import { Layout, Menu } from "antd";
-import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined } from "@ant-design/icons";
+import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined ,ScheduleOutlined} from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
 
 const { Sider } = Layout;
@@ -52,6 +52,21 @@ const Sidebar = () => {
                         key: "inventario",
                         icon: <AppstoreOutlined />,
                         label: <Link to="/inventario">Inventario</Link>,
+                    },
+                    {
+                        key: "produccion",
+                        icon: <ScheduleOutlined />,
+                        label: "Campaña",
+                        children: [
+                          {
+                            key: "siembras",
+                            label: <Link to="/plantings">Siembras</Link>,
+                          },
+                          {
+                            key: "cosechas",
+                            label: <Link to="#">Cosechas</Link>, // Placeholder, todavía no implementado
+                          },
+                        ],
                     },
                     {
                         key: "lotes",

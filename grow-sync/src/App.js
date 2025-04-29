@@ -13,6 +13,7 @@ import RoleProtectedRoute from "./routes/RoleProtectedRoute";
 import DisabledProducts from "./pages/DisabledInventory.js";
 import Usage from "./pages/Usage.js";
 import DisabledUsages from "./pages/DisabledUsages.js";
+import Plantings from './pages/Plantings.js';
 import './App.css'; 
 
 function App() {
@@ -107,6 +108,16 @@ function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <DisabledUsages />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/plantings"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Plantings />
                 </AppLayout>
               </ProtectedRoute>
             }
