@@ -14,6 +14,7 @@ const listProducts = async (req, res) => {
 const addProduct = async (req, res) => {
   try {
     const { name, type, total_quantity, available_quantity, unit, price, acquisition_date } = req.body;
+    console.log("datos: ", req.body);
     const result = await db.query(
       `INSERT INTO products (name, type, total_quantity, available_quantity, unit, price, acquisition_date)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,

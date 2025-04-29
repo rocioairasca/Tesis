@@ -12,5 +12,5 @@ const loginUser = require("../controllers/auth/loginUser");
 router.post('/register', registerUser);
 router.post("/login", loginUser);
 
-// se exporta el router para que pueda ser usado en index.js
+// Se exporta el router para que pueda ser usado en index.js
 module.exports = router;

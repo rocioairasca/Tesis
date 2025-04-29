@@ -42,6 +42,7 @@ app.listen(PORT, () => {
     console.log(`🔵 Servidor corriendo en el puerto ${PORT}`);
 });
 
+// coso para que no haya conflictos de versiones (limpia consola)
 if (process.env.NODE_ENV === "development") {
     const consoleWarn = console.warn;
     console.warn = (...args) => {

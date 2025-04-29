@@ -52,11 +52,16 @@ const Inventory = () => {
 
   const handleSubmit = async (values) => {
     try {
+      const payload = {
+        ...values,
+        available_quantity: values.total_quantity,
+      };
+      
       if (editingProduct) {
-        await axios.put(`${url}/api/products/${editingProduct.id}`, values);
+        await axios.put(`${url}/api/products/${editingProduct.id}`, payload);
         notification.success({ message: 'Producto actualizado exitosamente' });
       } else {
-        await axios.post(`${url}/api/products`, values);
+        await axios.post(`${url}/api/products`, payload);
         notification.success({ message: 'Producto creado exitosamente' });
       }
       fetchProducts();

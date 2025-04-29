@@ -14,6 +14,7 @@ router.get('/', listUsages);
 router.post('/', createUsage);
 router.put('/:id', editUsage);
 router.delete('/:id', disableUsage);
+
 router.get('/disabled', listDisabledUsages);
 router.put('/enable/:id', enableUsage);
 
