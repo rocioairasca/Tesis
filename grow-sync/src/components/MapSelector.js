@@ -1,6 +1,6 @@
 import * as turf from '@turf/turf';
 import React, { useState, useEffect, useRef  } from 'react';
-import { MapContainer, TileLayer, Polygon, FeatureGroup, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, FeatureGroup, useMap, Tooltip, LayersControl } from 'react-leaflet';
 import { Button } from 'antd';
 import { AimOutlined } from '@ant-design/icons';
 import { EditControl } from 'react-leaflet-draw';
@@ -108,7 +108,7 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen})
         type="primary" 
         size="small"
         icon={<AimOutlined />} 
-        style={{ position: "absolute", top: 10, right: 17, zIndex: 1000 }}
+        style={{ position: "absolute", top: 60, right: 24, zIndex: 1000 }}
         onClick={handleRecenter}
       />
 
@@ -116,12 +116,32 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen})
         ref={mapRef}
         center={userPosition ? [userPosition.lat, userPosition.lng] : defaultPosition}
         zoom={13}
-        style={{ height: '100%', width: '100%' }}    
+        style={{ height: '100%', width: '100%' }}
+
+        whenReady={() => {
+          if (mapRef.current) {
+            setTimeout(() => {
+              mapRef.current.invalidateSize();
+            }, 200);
+          }
+        }}
       >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Mapa Callejero">
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.BaseLayer name="Satélite">
+            <TileLayer
+              attribution='Imagery © NASA'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+
         {selectedLocation && (
           <Polygon
             positions={selectedLocation}

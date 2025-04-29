@@ -9,7 +9,7 @@ const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [setUnit] = useState('');
+  const [unit, setUnit] = useState('');
   const [form] = Form.useForm();
 
   const fetchProducts = async () => {
