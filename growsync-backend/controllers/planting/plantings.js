@@ -1,6 +1,9 @@
+// IMPORTACION DE POOL DE BD
 const db = require('../../db/connection');
 
-// OBTENER TODAS LAS SIEMBRAS ACTIVAS
+// DECLARAMOS FUNCIONES PARA OBTENER, CREAR, EDITAR, DESHABILITAR Y HABILITAR SIEMBRAS
+
+// LISTAR SIEMBRAS - Obtiene de la BD todas las siembras habilitadas, ordenadas por ID
 const listPlantings = async (req, res) => {
   try {
     const result = await db.query(
@@ -13,7 +16,7 @@ const listPlantings = async (req, res) => {
   }
 };
 
-// CREAR NUEVA SIEMBRA
+// CREAR SIEMBRA - Obtiene informacion del front para crear una nueva entrada en la BD con informacion de la siembra
 const createPlanting = async (req, res) => {
   const { lot_id, planting_date, crop, seed_variety, density, total_seeds, notes } = req.body;
   try {
@@ -29,7 +32,7 @@ const createPlanting = async (req, res) => {
   }
 };
 
-// ACTUALIZAR SIEMBRA
+// EDITAR SIEMBRA - Se vale del ID para editar los datos de la entrada de la BD que coincida con dicha ID
 const updatePlanting = async (req, res) => {
   const { id } = req.params;
   const { lot_id, planting_date, crop, seed_variety, density, total_seeds, notes } = req.body;
@@ -47,7 +50,7 @@ const updatePlanting = async (req, res) => {
   }
 };
 
-// DESHABILITAR SIEMBRA (Soft Delete)
+// DESHABILITAR SIEMBRA - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const disablePlanting = async (req, res) => {
   const { id } = req.params;
   try {
@@ -64,7 +67,7 @@ const disablePlanting = async (req, res) => {
   }
 };
 
-// HABILITAR SIEMBRA
+// HABILITAR SIEMBRA - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const enablePlanting = async (req, res) => {
   const { id } = req.params;
   try {
@@ -81,6 +84,7 @@ const enablePlanting = async (req, res) => {
   }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/plantings.js)
 module.exports = {
   listPlantings,
   createPlanting,

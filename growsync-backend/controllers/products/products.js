@@ -1,6 +1,9 @@
+// IMPORTACION DE POOL DE BD
 const db = require('../../db/connection'); 
 
-// LISTAR PRODUCTOS
+// DECLARAMOS FUNCIONES PARA OBTENER, CREAR, EDITAR Y DESHABILITAR
+
+// LISTAR PRODUCTOS - Obtiene de la BD todos los productos habilitados, ordenados por ID
 const listProducts = async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM products WHERE enabled = TRUE ORDER BY id');
@@ -10,7 +13,7 @@ const listProducts = async (req, res) => {
   }
 };
 
-// CREAR PRODUCTO
+// CREAR PRODUCTO  - Obtiene informacion del front para crear una nueva entrada en la BD con informacion del producto
 const addProduct = async (req, res) => {
   try {
     const { name, type, total_quantity, available_quantity, unit, price, acquisition_date } = req.body;
@@ -26,7 +29,7 @@ const addProduct = async (req, res) => {
   }
 };
 
-// EDITAR PRODUCTO
+// EDITAR PRODUCTO - Se vale del ID para editar los datos de la entrada de la BD que coincida con dicha ID
 const editProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -43,7 +46,7 @@ const editProduct = async (req, res) => {
   }
 };
 
-// DESHABILITAR PRODUCTO
+// DESHABILITAR PRODUCTO - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const disableProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -54,6 +57,7 @@ const disableProduct = async (req, res) => {
   }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/products.js)
 module.exports = {
   listProducts,
   addProduct,

@@ -1,5 +1,8 @@
+// IMPORTACION DEL POOL DE CONEXION A LA BD
 const pool = require("../db/connection");
 
+// DEFINIMOS Y CONFIGURAMOS EL MIDDLEWARE userData
+// Este se vale del sub, que es un ID unico que Auth0, que nos sirve para identificarlo en nuestra BD, y nos devuelve informacion local del usuario
 const userData = async (req, res, next) => {
   try {
     const { sub } = req.auth;
@@ -24,4 +27,5 @@ const userData = async (req, res, next) => {
   }
 };
 
+// EXPORTAMOS EL MIDDLEWARE PARA PODER USARLO EN EL PROYECTO
 module.exports = userData;

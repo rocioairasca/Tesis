@@ -1,5 +1,7 @@
+// IMPORTACION DE POOL DE BD
 const pool = require('../../db/connection');
 
+// DECLARAMOS UNA FUNCION updateRole - se vale del ID de usuario para editar el valor role de la BD correspondiente a ese ID
 const updateRole = async (req, res) => {
     const {id} = req.params;
     const { role } = req.body;
@@ -27,4 +29,5 @@ const updateRole = async (req, res) => {
     }
 };
 
+// EXPORTAMOS LA FUNCION PARA SER USADA EN UNA RUTA (routes/userRoutes.js)
 module.exports = updateRole;

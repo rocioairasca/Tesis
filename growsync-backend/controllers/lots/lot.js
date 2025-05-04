@@ -1,6 +1,9 @@
+// IMPORTACION DE POOL DE BD
 const db = require('../../db/connection.js');
 
-// LISTAR LOTES
+// DECLARAMOS FUNCIONES PARA OBTENER, CREAR, EDITAR, DESHABILITAR Y CONTAR LOTES
+
+// LISTAR LOTES - Obtiene de la BD todos los lotes habilitados, ordenados por ID
 const listLots = async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM lots WHERE enabled = TRUE ORDER BY id');
@@ -10,7 +13,7 @@ const listLots = async (req, res) => {
   }
 };
 
-// CREAR LOTE
+// CREAR LOTE - Obtiene informacion del front para crear una nueva entrada en la BD con informacion del lote
 const addLot = async (req, res) => {
   try {
     const { name, area, location } = req.body;
@@ -24,7 +27,7 @@ const addLot = async (req, res) => {
   }
 };
 
-// EDITAR LOTE
+// EDITAR LOTE - Se vale del ID para editar los datos de la entrada de la BD que coincida con dicha ID
 const editLot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -39,7 +42,7 @@ const editLot = async (req, res) => {
   }
 };
 
-// DESHABILITAR LOTE
+// DESHABILITAR LOTE - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const softDeleteLot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -50,7 +53,7 @@ const softDeleteLot = async (req, res) => {
   }
 };
 
-// CONTAR LOTES HABILITADOS
+// CONTAR LOTES HABILITADOS - Funciona similar a LISTAR LOTES, pero en vez de devolvernos las entradas, nos devuelve la cantidad de entradas encontradas
 const countEnabledLots = async (req, res) => {
   try {
     const result = await db.query('SELECT COUNT(*) FROM lots WHERE enabled = TRUE');
@@ -61,6 +64,7 @@ const countEnabledLots = async (req, res) => {
   }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/lot.js)
 module.exports = {
   listLots,
   addLot,

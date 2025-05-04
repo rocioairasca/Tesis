@@ -1,5 +1,7 @@
+// IMPORTACION DE POOL DE BD
 const db = require('../db/connection');
 
+// DECLARAMOS UNA FUNCION getStats - Realiza determinados conteos con los datos almacenados en la BD (sujeto a cambios)
 const getStats = async (req, res) => {
   try {
     const [users, products, lots, usages] = await Promise.all([
@@ -21,4 +23,5 @@ const getStats = async (req, res) => {
   }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN index.js O EL FRONT
 module.exports = { getStats };

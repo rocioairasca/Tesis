@@ -1,6 +1,9 @@
+// IMPORTACION DE POOL DE BD
 const db = require('../../db/connection.js');
 
-// LISTAR LOTES DESHABILITADOS
+// DECLARAMOS FUNCIONES PARA OBTENER Y HABILITAR
+
+// LISTAR LOTES DESHABILITADOS - Obtiene de la BD todos los lotes deshabilitados, ordenados por ID
 const listDisabledLots = async (req, res) => {
     try {
       const result = await db.query('SELECT * FROM lots WHERE enabled = FALSE ORDER BY id');
@@ -10,7 +13,7 @@ const listDisabledLots = async (req, res) => {
     }
 };
 
-// HABILITAR LOTES
+// HABILITAR LOTES - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const enableLot = async (req, res) => {
     try {
       const { id } = req.params;
@@ -21,6 +24,7 @@ const enableLot = async (req, res) => {
     }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/lot.js)
 module.exports = {
     listDisabledLots,
     enableLot

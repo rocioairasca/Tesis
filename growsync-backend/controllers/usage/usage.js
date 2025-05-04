@@ -1,6 +1,9 @@
+// IMPORTACION DE POOL DE BD
 const db = require("../../db/connection");
 
-// LISTAR USOS HABILITADOS
+// DECLARAMOS FUNCIONES PARA OBTENER, CREAR, EDITAR, DESHABILITAR, OBTENER LOS DESHABILITADOS Y HABILITAR LOS DISTINTOS RDU
+
+// LISTAR RDUs HABILITADOS - Obtiene de la BD todos los RDU habilitados, ordenados por ID
 const listUsages = async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM usage_records WHERE enabled = TRUE ORDER BY date DESC');
@@ -11,17 +14,18 @@ const listUsages = async (req, res) => {
   }
 };
 
-// CREAR UN USO
+// CREAR UN RDU - Obtiene informacion del front para crear una nueva entrada en la BD con informacion del RDU
 const createUsage = async (req, res) => {
   try {
     const { product_id, amount_used, unit, lot_ids, total_area, previous_crop, current_crop, user_id, date } = req.body;
 
+    // AÑADE UNA NUEVA ENTRADA DE RDU A LA BD
     await db.query(`
       INSERT INTO usage_records (product_id, amount_used, unit, lot_ids, total_area, previous_crop, current_crop, user_id, date)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [product_id, amount_used, unit, lot_ids, total_area, previous_crop, current_crop, user_id, date]);
 
-    // Descontar del stock disponible
+    // DESCUENTA DEL STOCK DISPONIBLE
     await db.query(`
       UPDATE products
       SET available_quantity = available_quantity - $1
@@ -35,7 +39,7 @@ const createUsage = async (req, res) => {
   }
 };
 
-// EDITAR UN USO
+// EDITAR UN RDU - Se vale del ID para editar los datos de la entrada de la BD que coincida con dicha ID
 const editUsage = async (req, res) => {
   try {
     const { id } = req.params;
@@ -54,26 +58,26 @@ const editUsage = async (req, res) => {
   }
 };
 
-// DESHABILITAR UN USO (soft delete)
+// DESHABILITAR UN RDU - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const disableUsage = async (req, res) => {
   const { id } = req.params;
   
   try {
-    // 1. Buscar el registro de uso
+    // 1. Busca el registro de uso
     const { rows } = await db.query('SELECT product_id, amount_used FROM usage_records WHERE id = $1', [id]);
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Registro de uso no encontrado' });
     }
     const usage = rows[0];
 
-    // 2. Reintegrar la cantidad al inventario
+    // 2. Reintegra la cantidad al inventario
     await db.query(`
       UPDATE products
       SET available_quantity = available_quantity + $1
       WHERE id = $2
     `, [usage.amount_used, usage.product_id]);
 
-    // 3. Deshabilitar el registro
+    // 3. Deshabilita el registro
     await db.query(`
       UPDATE usage_records
       SET enabled = false
@@ -87,7 +91,7 @@ const disableUsage = async (req, res) => {
   }
 };
 
-// LISTAR USOS DESHABILITADOS
+// LISTAR RDUs DESHABILITADOS - Obtiene de la BD todos los RDU deshabilitados, ordenados por ID
 const listDisabledUsages = async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM usage_records WHERE enabled = FALSE ORDER BY date DESC');
@@ -98,7 +102,7 @@ const listDisabledUsages = async (req, res) => {
   }
 };
 
-// HABILITAR UN USO
+// HABILITAR UN RDU - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
 const enableUsage = async (req, res) => {
   try {
     const { id } = req.params;
@@ -111,6 +115,7 @@ const enableUsage = async (req, res) => {
   }
 };
 
+// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/usage.js)
 module.exports = {
   listUsages,
   createUsage,
