@@ -4,7 +4,7 @@ import axios from "axios";
 import { LeftOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 
-const url = 'http://localhost:4000';
+const url = process.env.REACT_APP_URL;
 
 const DisabledInventory = () => {
   const [disabledProducts, setDisabledProducts] = useState([]);
@@ -105,6 +105,7 @@ const DisabledInventory = () => {
       </Row>
 
       <Table
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={disabledProducts}
         pagination={{ pageSize: 5, position: ['bottomCenter'] }}

@@ -3,6 +3,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 
 const { Option } = Select;
+const url = process.env.REACT_APP_URL;
 
 const UserTable = () => {
   const [users, setUsers] = useState([]);
@@ -14,7 +15,7 @@ const UserTable = () => {
   const fetchUsers = async () => {
     const token = localStorage.getItem("access_token");
 
-    const res = await axios.get("http://localhost:4000/api/users/", {
+    const res = await axios.get(`${url}/api/users/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -24,7 +25,7 @@ const UserTable = () => {
   const handleRoleChange = async (userId, newRole) => {
     const token = localStorage.getItem("access_token");
 
-    await axios.put(`http://localhost:4000/api/users/${userId}/role`, 
+    await axios.put(`${url}/api/users/${userId}/role`, 
       { role: newRole },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -49,7 +50,7 @@ const UserTable = () => {
     },
   ];
 
-  return <Table dataSource={users} columns={columns} rowKey="id" pagination={{ position: ['bottomCenter'] }}/>;
+  return <Table scroll={{ x: "max-content" }} dataSource={users} columns={columns} rowKey="id" pagination={{ position: ['bottomCenter'] }}/>;
 };
 
 export default UserTable;

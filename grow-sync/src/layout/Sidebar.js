@@ -15,7 +15,13 @@ const Sidebar = () => {
     };
 
     return(
-        <Sider collapsible collapsed={collapsed} onCollapse={onCollapse}>
+        <Sider
+            breakpoint="md"
+            // collapsedWidth="0"
+            // onBreakpoint={(broken) => setCollapsed(broken)}
+            collapsible 
+            collapsed={collapsed} onCollapse={onCollapse}
+        >
             <div style={{ padding: "16px", display: "flex", alignItems: "center" }}>
                 {/* Logo visible siempre, nombre solo cuando la sidebar está expandida */}
                 <img 
@@ -33,6 +39,7 @@ const Sidebar = () => {
             <Menu
                 theme="dark"
                 mode="inline"
+                inlineCollapsed={collapsed}
                 selectedKeys={[location.pathname.split("/")[1] || "dashboard"]}  
                 style={{
                 background: "#1D2A62", 

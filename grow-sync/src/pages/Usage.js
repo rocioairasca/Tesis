@@ -5,6 +5,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 
+const url = process.env.REACT_APP_URL;
 const { Option } = Select;
 
 const Usage = () => {
@@ -18,7 +19,7 @@ const Usage = () => {
 
   const fetchUsages = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/usages');
+      const res = await axios.get(`${url}/api/usages`);
       setUsages(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar registros de uso' });
@@ -27,7 +28,7 @@ const Usage = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/products');
+      const res = await axios.get(`${url}/api/products`);
       setProducts(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar productos' });
@@ -36,7 +37,7 @@ const Usage = () => {
 
   const fetchLots = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/lots');
+      const res = await axios.get(`${url}/api/lots`);
       setLots(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar lotes' });
@@ -82,10 +83,10 @@ const Usage = () => {
       };
 
       if (editingUsage) {
-        await axios.put(`http://localhost:4000/api/usages/${editingUsage.id}`, payload);
+        await axios.put(`${url}/api/usages/${editingUsage.id}`, payload);
         notification.success({ message: 'Registro de uso actualizado exitosamente' });
       } else {
-        await axios.post('http://localhost:4000/api/usages', payload);
+        await axios.post(`${url}/api/usages`, payload);
         notification.success({ message: 'Registro de uso creado exitosamente' });
       }
 
@@ -98,7 +99,7 @@ const Usage = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:4000/api/usages/${id}`);
+      await axios.delete(`${url}/api/usages/${id}`);
       notification.success({ message: 'Registro de uso deshabilitado exitosamente' });
       fetchUsages();
     } catch (error) {
@@ -225,6 +226,7 @@ const Usage = () => {
       </Row>
 
       <Table
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={usages}
         pagination={{ pageSize: 5, position: ['bottomCenter'] }}

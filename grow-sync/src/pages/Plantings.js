@@ -4,7 +4,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import CalendarCampaign from "../components/CalendarCampaign";
 
-// const { Option } = Select;
+const url = process.env.REACT_APP_URL;
 
 const Plantings = () => {
   const [plantings, setPlantings] = useState([]);
@@ -17,7 +17,7 @@ const Plantings = () => {
   const fetchPlantings = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get("http://localhost:4000/api/plantings");
+      const { data } = await axios.get(`${url}/api/plantings`);
       setPlantings(data);
     } catch (error) {
       console.error(error);
@@ -64,10 +64,10 @@ const Plantings = () => {
 
     try {
       if (editingPlanting) {
-        await axios.put(`http://localhost:4000/api/plantings/${editingPlanting.id}`, payload);
+        await axios.put(`${url}/api/plantings/${editingPlanting.id}`, payload);
         message.success("Siembra actualizada exitosamente");
       } else {
-        await axios.post("http://localhost:4000/api/plantings", payload);
+        await axios.post(`${url}/api/plantings`, payload);
         message.success("Siembra creada exitosamente");
       }
       setOpen(false);
@@ -80,7 +80,7 @@ const Plantings = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:4000/api/plantings/${id}`);
+      await axios.delete(`${url}/api/plantings/${id}`);
       message.success("Siembra deshabilitada exitosamente");
       fetchPlantings();
     } catch (error) {
@@ -169,6 +169,7 @@ const Plantings = () => {
         </Col>
         <Col span={12}>
             <Table
+              scroll={{ x: "max-content" }}
                 columns={columns}
                 dataSource={plantings}
                 rowKey="id"

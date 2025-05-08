@@ -1,7 +1,8 @@
 import React from "react";
 import { Layout, Avatar, Dropdown, Button, Badge } from "antd";
-import { BellOutlined, SettingOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom"; 
+import { BellOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import useIsMobile from "../hooks/useIsMobile";
 
 const { Header } = Layout;
 const user = JSON.parse(localStorage.getItem('user'));
@@ -9,12 +10,7 @@ console.log("USUARIO DECODIFICADO:", user);
 
 const AppHeader = () => {
     const navigate = useNavigate(); 
-
-    // Menú de usuario
-    const userMenuItems = [
-        { key: "profile", icon: <UserOutlined />, label: "Perfil" },
-        { key: "settings", icon: <SettingOutlined />, label: "Configuración" },
-    ];
+    const isMobile = useIsMobile();
 
     // Menú de notificaciones
     const notificationsMenuItems = [
@@ -29,60 +25,74 @@ const AppHeader = () => {
       
     return(
         <Header
-        style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            padding: "0 20px",
-            background: "#fff",
-            gap: "20px", // espacio parejito entre los elementos
-        }}
-        >
-        {/* Notificaciones */}
-        <Dropdown menu={{ items: notificationsMenuItems }} placement="bottomRight" arrow>
-            <Badge count={0} showZero offset={[-2, 2]}>
-            <Button
-                type="text"
-                icon={<BellOutlined style={{ fontSize: "20px", color: "#1D2A62" }} />}
-            />
-            </Badge>
-        </Dropdown>
-
-        {/* Usuario */}
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
-            <div
             style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "10px",
-                cursor: "pointer",
+                padding: "0 20px",
+                background: "#fff",
             }}
             >
-            <Avatar
-                src={user?.picture}
-                icon={!user?.picture && <UserOutlined />}
-                size="large"
-            />
-            <span
-                style={{
-                fontSize: "16px",
-                fontWeight: "500",
-                color: "#1D2A62",
-                whiteSpace: "nowrap",
-                }}
-            >
-                {user?.nickname || user?.username || user?.email}
-            </span>
-            </div>
-        </Dropdown>
+            {/* IZQUIERDA: logo solo en mobile */}
+            {isMobile && (
+                <div style={{ display: "flex", alignItems: "center" }}>
+                <img
+                    src="/LogoGrande.png"
+                    alt="GrowSync"
+                    style={{ height: 50 }}
+                />
+                </div>
+            )}
 
-        {/* Cerrar Sesión */}
-        <Button
-            type="text"
-            icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
-            onClick={handleLogout}
-        />
+            {/* ESPACIO ENTRE logo y contenido */}
+            <div style={{ flexGrow: 1 }} />
+
+            {/* DERECHA: notificaciones + usuario + logout */}
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                {/* Notificaciones */}
+                <Dropdown menu={{ items: notificationsMenuItems }} placement="bottomRight" arrow>
+                <Badge count={0} showZero offset={[-2, 2]}>
+                    <Button
+                    type="text"
+                    icon={<BellOutlined style={{ fontSize: "20px", color: "#1D2A62" }} />}
+                    />
+                </Badge>
+                </Dropdown>
+
+                {/* Usuario */}
+                <div
+                    style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    cursor: "pointer",
+                    }}
+                >
+                    <Avatar
+                    src={user?.picture}
+                    icon={!user?.picture && <UserOutlined />}
+                    size="large"
+                    />
+                    <span
+                    style={{
+                        fontSize: "16px",
+                        fontWeight: "500",
+                        color: "#1D2A62",
+                        whiteSpace: "nowrap",
+                    }}
+                    >
+                    {user?.nickname || user?.username || user?.email}
+                    </span>
+                </div>
+
+                {/* Cerrar sesión */}
+                <Button
+                type="text"
+                icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
+                onClick={handleLogout}
+                />
+            </div>
         </Header>
+
 
     );
 };

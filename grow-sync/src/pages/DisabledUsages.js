@@ -4,6 +4,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 
+const url = process.env.REACT_APP_URL;
+
 const DisabledUsages = () => {
   const [usages, setUsages] = useState([]);
   const [products, setProducts] = useState([]);
@@ -11,7 +13,7 @@ const DisabledUsages = () => {
 
   const fetchDisabledUsages = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/usages/disabled');
+      const res = await axios.get(`${url}/api/usages/disabled`);
       setUsages(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar registros deshabilitados' });
@@ -20,7 +22,7 @@ const DisabledUsages = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/products');
+      const res = await axios.get(`${url}/api/products`);
       setProducts(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar productos' });
@@ -34,7 +36,7 @@ const DisabledUsages = () => {
 
   const handleEnable = async (id) => {
     try {
-      await axios.put(`http://localhost:4000/api/usages/enable/${id}`);
+      await axios.put(`${url}/api/usages/enable/${id}`);
       notification.success({ message: 'Registro de uso habilitado exitosamente' });
       fetchDisabledUsages();
     } catch (error) {
@@ -106,6 +108,7 @@ const DisabledUsages = () => {
       </Row>
 
       <Table
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={usages}
         pagination={{ pageSize: 5, position: ['bottomCenter'] }}

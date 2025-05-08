@@ -2,17 +2,31 @@ import React from "react";
 import { Layout, Typography } from "antd";
 import Sidebar from "./Sidebar";
 import AppHeader from "./Header";
+import useIsMobile from "../hooks/useIsMobile";
 
 const { Content } = Layout;
 const { Text } = Typography;
 
 const AppLayout = ({ children }) => {
+  const isMobile = useIsMobile();
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sidebar />
+      {!isMobile && (
+        <Sidebar />
+      )}
+
       <Layout>
         <AppHeader />
-        <Content style={{ margin: "16px", padding: "16px", background: "#fff" }}>
+        <Content
+          style={{
+            margin: "16px",
+            padding: "16px",
+            background: "#fff",
+            maxWidth: "100%",
+            overflowX: "hidden",
+          }}
+        >
           {children}
         </Content>
         <div style={{ marginTop: 24, textAlign: "center" }}>
@@ -24,3 +38,4 @@ const AppLayout = ({ children }) => {
 };
 
 export default AppLayout;
+

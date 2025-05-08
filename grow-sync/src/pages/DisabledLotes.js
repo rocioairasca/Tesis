@@ -3,12 +3,14 @@ import { Table, Button, Space, Popconfirm, notification, Row, Col } from "antd";
 import { LeftOutlined } from "@ant-design/icons";
 import axios from "axios";
 
+const url = process.env.REACT_APP_URL;
+
 const DisabledLots = () => {
   const [lots, setLots] = useState([]);
 
   const fetchDisabledLots = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/lots/disabled');
+      const res = await axios.get(`${url}/api/lots/disabled`);
       setLots(res.data);
     } catch (error) {
       notification.error({ message: 'Error al cargar lotes deshabilitados' });
@@ -21,7 +23,7 @@ const DisabledLots = () => {
 
   const handleEnable = async (id) => {
     try {
-      await axios.put(`http://localhost:4000/api/lots/enable/${id}`);
+      await axios.put(`${url}/api/lots/enable/${id}`);
       notification.success({ message: 'Lote habilitado exitosamente' });
       fetchDisabledLots();
     } catch (error) {
@@ -84,6 +86,7 @@ const DisabledLots = () => {
       </Row>
 
       <Table
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={lots}
         pagination={{ pageSize: 5, position: ['bottomCenter'] }}

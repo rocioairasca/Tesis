@@ -3,7 +3,7 @@ import { Table, Button, Drawer, Form, Input, InputNumber, Select, Space, Popconf
 import axios from "axios";
 
 const { Option } = Select;
-const url = 'http://localhost:4000';
+const url = process.env.REACT_APP_URL;
 
 const Inventory = () => {
   const [products, setProducts] = useState([]);
@@ -166,6 +166,7 @@ const Inventory = () => {
       </Row>
 
       <Table
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={products}
         pagination={{ pageSize: 5, position: ['bottomCenter'] }}

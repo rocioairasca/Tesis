@@ -6,8 +6,10 @@ const pool = require('./db/connection');
 
 // PERMITIR SOLICITUDES CORS
 app.use(cors({
-    origin: "http://localhost:3000",
-    credentials: true
+  origin: [
+    "http://localhost:3000"
+  ],
+  credentials: true
 }));
 app.use(express.json());
 
@@ -35,6 +37,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/usages', usageRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/plantings', plantingRoutes);
+
 
 // ARRANQUE DEL SERVIDOR EN PUERTO (PORT=4000)
 const PORT = process.env.PORT || 4000;

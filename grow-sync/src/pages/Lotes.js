@@ -3,6 +3,7 @@ import { Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, not
 import axios from "axios";
 
 import MapSelector from '../components/MapSelector';
+const url = process.env.REACT_APP_URL;
 
 const Lotes = () => {
   const [lots, setLots] = useState([]);
@@ -18,7 +19,7 @@ const Lotes = () => {
   // cargamos los lotes desde el back
   const fetchLots = async () => {
     try {
-      const res = await axios.get('http://localhost:4000/api/lots');
+      const res = await axios.get(`${url}/api/lots`);
       setLots(res.data);
     } catch (error) {
       notification.error({ message: "Error al cargar los lotes" });
@@ -50,11 +51,11 @@ const Lotes = () => {
     try {
       if (editingLot) {
         // Editar
-        await axios.put(`http://localhost:4000/api/lots/${editingLot.id}`, values);
+        await axios.put(`${url}/api/lots/${editingLot.id}`, values);
         notification.success({ message: 'Lote actualizado exitosamente' });
       } else {
         // Agregar nuevo
-        await axios.post('http://localhost:4000/api/lots', values);
+        await axios.post(`${url}/api/lots`, values);
         notification.success({ message: 'Lote creado exitosamente' });
       }
       fetchLots();
@@ -67,7 +68,7 @@ const Lotes = () => {
   // Eliminar (Deshabilitar) Lote
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:4000/api/lots/${id}`);
+      await axios.delete(`${url}/api/lots/${id}`);
       notification.success({ message: 'Lote deshabilitado exitosamente' });
       fetchLots();
     } catch (error) {
@@ -153,6 +154,7 @@ const Lotes = () => {
         <Col span={12}>
           {/* Tabla de lotes a la derecha */}
           <Table
+            scroll={{ x: "max-content" }}
             columns={columns}
             dataSource={lots}
             pagination={{ pageSize: 5, position: ['bottomCenter'] }}

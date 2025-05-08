@@ -6,12 +6,14 @@ import interactionPlugin from "@fullcalendar/interaction"; // Para futuros click
 import { Card, message } from "antd";
 import "../css/CalendarCampaign.css"; // Estilos personalizados para el calendario
 
+const url = process.env.REACT_APP_URL;
+
 const CalendarCampaign = () => {
   const [events, setEvents] = useState([]);
 
     const fetchPlantings = async () => {
         try {
-        const { data } = await axios.get("http://localhost:4000/api/plantings");
+        const { data } = await axios.get(`${url}/api/plantings`);
         const formattedEvents = data.map((item) => ({
             id: item.id,
             title: `Siembra de ${item.crop}`,
