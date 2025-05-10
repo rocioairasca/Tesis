@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Space, Row, Col, notification } from "antd";
+import { Table, Button, Row, Col, notification } from "antd";
+import { ArrowLeftOutlined, CalendarOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
+import useIsMobile from "../hooks/useIsMobile";
+import { Package, MapPin, Ruler } from "phosphor-react";
 
 const url = process.env.REACT_APP_URL;
 
@@ -10,6 +13,7 @@ const DisabledUsages = () => {
   const [usages, setUsages] = useState([]);
   const [products, setProducts] = useState([]);
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const fetchDisabledUsages = async () => {
     try {
@@ -85,11 +89,10 @@ const DisabledUsages = () => {
       title: "Acciones",
       key: "actions",
       render: (_, record) => (
-        <Space>
-          <Button type="primary" size="small" onClick={() => handleEnable(record.id)}>
-            Habilitar
-          </Button>
-        </Space>
+        <Button type="primary" size="small" onClick={() => handleEnable(record.id)}>
+          Habilitar
+        </Button>
+
       ),
     },
   ];
@@ -101,19 +104,62 @@ const DisabledUsages = () => {
           <h2>Registros de Uso Deshabilitados</h2>
         </Col>
         <Col>
+        {!isMobile && (
           <Button onClick={() => navigate('/usage')}>
             ← Volver a Registros de Uso
           </Button>
+        )}
+
+        {isMobile && (
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/usage')}
+            shape="circle"
+            type="default"
+            style={{ borderColor: "#95ba56" }}
+          />
+        )}
         </Col>
       </Row>
 
-      <Table
-        scroll={{ x: "max-content" }}
-        columns={columns}
-        dataSource={usages}
-        pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-        rowKey="id"
-      />
+      {!isMobile && (
+        <Table
+          scroll={{ x: "max-content" }}
+          columns={columns}
+          dataSource={usages}
+          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+          rowKey="id"
+        />
+      )}
+
+      {isMobile && (
+        <div className="inventory-cards-container">
+          {usages.map((usage) => {
+            const product = products.find(p => p.id === usage.product_id);
+            const lotList = JSON.parse(usage.lot_ids || "[]").join(", ");
+            const date = dayjs(usage.date).format("DD/MM/YYYY");
+
+            return (
+              <div className="inventory-card" key={usage.id}>
+                <div className="card-header">
+                  <h3>{product?.name || "-"}</h3>
+                </div>
+
+                <p className="flex-row"><Package size={18} style={{ marginRight: 8 }} /> <strong>Cantidad:</strong> {usage.amount_used} {usage.unit}</p>
+                <p className="flex-row"><MapPin size={18} style={{ marginRight: 8 }} /> <strong>Lotes:</strong> {lotList}</p>
+                <p className="flex-row"><Ruler size={18} style={{ marginRight: 8 }} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
+                <p><CalendarOutlined style={{ marginRight: 8 }} /> <strong>Fecha:</strong> {date}</p>
+
+                <div style={{ marginTop: 12 }}>
+                  <Button type="primary" block onClick={() => handleEnable(usage.id)}>
+                    Habilitar Registro
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

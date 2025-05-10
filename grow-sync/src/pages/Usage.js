@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker, Space, Popconfirm, Row, Col, notification } from "antd";
+import { Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker, Dropdown, Space, Popconfirm, Row, Col, notification } from "antd";
 import axios from "axios";
-import { PlusOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  MoreOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
+import {
+  Package,
+  MapPin,
+  Ruler,
+  Leaf,
+  User,
+  Calendar,
+} from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
+import useIsMobile from "../hooks/useIsMobile";
 
 const url = process.env.REACT_APP_URL;
 const { Option } = Select;
@@ -16,6 +30,8 @@ const Usage = () => {
   const [editingUsage, setEditingUsage] = useState(null);
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   const fetchUsages = async () => {
     try {
@@ -53,13 +69,21 @@ const Usage = () => {
   const openDrawer = (usage = null) => {
     setEditingUsage(usage);
     setIsDrawerOpen(true);
+
     if (usage) {
+      const selectedProduct = products.find(p => p.id === usage.product_id);
+      if (selectedProduct) {
+        setSelectedProduct(selectedProduct);
+      }
+
       form.setFieldsValue({
         ...usage,
         lot_ids: JSON.parse(usage.lot_ids),
         date: dayjs(usage.date),
       });
+
     } else {
+      setSelectedProduct(null);
       form.resetFields();
     }
   };
@@ -110,6 +134,7 @@ const Usage = () => {
   const handleProductChange = (productId) => {
     const selectedProduct = products.find(p => p.id === productId);
     if (selectedProduct) {
+      setSelectedProduct(selectedProduct);
       form.setFieldsValue({
         unit: selectedProduct.unit
       });
@@ -118,15 +143,18 @@ const Usage = () => {
 
   const handleLotChange = (selectedLotIds) => {
     let totalArea = 0;
+
     selectedLotIds.forEach(id => {
       const lot = lots.find(l => l.id === id);
       if (lot) {
         totalArea += parseFloat(lot.area || 0);
       }
     });
+
+    const roundedArea = Math.round(totalArea * 100) / 100;
   
     form.setFieldsValue({
-      total_area: totalArea
+      total_area: roundedArea
     });
   };  
 
@@ -207,6 +235,13 @@ const Usage = () => {
     },
   ];
 
+  const menuItems = [
+    {
+      key: '1',
+      label: <span onClick={() => window.location.href = "/usages-disabled"}>Ver Registros Deshabilitados</span>,
+    }
+  ];
+
   return (
     <div style={{ padding: 24 }}>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
@@ -215,51 +250,112 @@ const Usage = () => {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate('/usages-disabled')}>
-              Ver Registros Deshabilitados
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
-              Agregar Registro
-            </Button>
+            {isMobile ? (
+              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
+                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+              </Dropdown>
+            ) : (
+              <Space>
+                <Button onClick={() => navigate("/usages-disabled")}>
+                  Ver Registros Deshabilitados
+                </Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
+                  Agregar Registro
+                </Button>
+              </Space>
+            )}
           </Space>
         </Col>
       </Row>
 
-      <Table
-        scroll={{ x: "max-content" }}
-        columns={columns}
-        dataSource={usages}
-        pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-        rowKey="id"
-      />
+      {!isMobile && (
+        <Table
+          scroll={{ x: "max-content" }}
+          columns={columns}
+          dataSource={usages}
+          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+          rowKey="id"
+        />
+      )}
+
+      {isMobile && (
+        <div className="inventory-cards-container">
+          {usages.map((usage) => {
+            const product = products.find(p => p.id === usage.product_id);
+            const lotList = JSON.parse(usage.lot_ids).join(", ");
+            const date = dayjs(usage.date).format("DD/MM/YYYY");
+
+            return (
+              <div className="inventory-card" key={usage.id}>
+                <div className="card-header">
+                  <h3>{product?.name || "Producto"}</h3>
+                  <div className="card-icons">
+                    <EditOutlined onClick={() => openDrawer(usage)} />
+                    <DeleteOutlined onClick={() => handleDelete(usage.id)} />
+                  </div>
+                </div>
+
+                <p className="flex-row"><Package size={18} /> <strong>Cantidad:</strong> {usage.amount_used} {usage.unit}</p>
+                <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotList}</p>
+                <p className="flex-row"><Ruler size={18} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
+                <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Previo:</strong> {usage.previous_crop || "-"}</p>
+                <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Actual:</strong> {usage.current_crop || "-"}</p>
+                <p className="flex-row"><User size={18} /> <strong>Usuario:</strong> {usage.user_id}</p>
+                <p className="flex-row"><Calendar size={18} /> <strong>Fecha:</strong> {date}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
 
       <Drawer
         title={editingUsage ? "Editar Registro de Uso" : "Agregar Registro de Uso"}
-        placement="right"
+        placement={isMobile ? "bottom" : "right"}
         onClose={closeDrawer}
         open={isDrawerOpen}
-        width={400}
+        height={isMobile ? "90vh" : undefined}
+        width={isMobile ? "100%" : 400}
+        styles={{ body: { paddingBottom: 80 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
-            <Form.Item
-                name="product_id"
-                label="Producto"
-                rules={[{ required: true, message: "Seleccioná un producto" }]}
-                >
-                <Select
-                    placeholder="Seleccione un producto"
-                    onChange={handleProductChange}
-                >
-                    {products.map((product) => (
-                    <Option key={product.id} value={product.id}>{product.name}</Option>
-                    ))}
-                </Select>
-            </Form.Item>
+          <Form.Item
+            name="product_id"
+            label="Producto"
+            rules={[{ required: true, message: "Seleccioná un producto" }]}
+          >
+            <Select
+              placeholder="Seleccione un producto"
+              onChange={handleProductChange}
+            >
+              {products.map((product) => (
+                <Option key={product.id} value={product.id}>{product.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ fontWeight: 500 }}>Cantidad Usada</label>
+            {selectedProduct && (
+              <div style={{ fontSize: 13, color: "#888" }}>
+                Disponible: <strong>{selectedProduct.available_quantity} {selectedProduct.unit}</strong>
+              </div>
+            )}
+          </div>
 
           <Form.Item
             name="amount_used"
-            label="Cantidad Usada"
-            rules={[{ required: true, message: "Ingresá la cantidad usada" }]}
+            rules={[
+              { required: true, message: "Ingresá la cantidad usada" },
+              {
+                validator: (_, value) => {
+                  if (selectedProduct && value > selectedProduct.available_quantity) {
+                    return Promise.reject(`Solo hay ${selectedProduct.available_quantity} disponibles`);
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
           >
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
@@ -289,7 +385,7 @@ const Usage = () => {
             label="Área Total (ha)"
             rules={[{ required: true, message: "Ingresá el área total" }]}
           >
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <InputNumber disabled min={0} style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item name="previous_crop" label="Cultivo Previo">
@@ -315,6 +411,13 @@ const Usage = () => {
           </Form.Item>
         </Form>
       </Drawer>
+
+      {isMobile && !isDrawerOpen && (
+        <div className="fab-button" onClick={() => openDrawer()}>
+          <PlusOutlined />
+        </div>
+      )}
+
     </div>
   );
 };
