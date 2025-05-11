@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col } from "antd";
+import { Dropdown, Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col } from "antd";
+import { MoreOutlined, EnvironmentOutlined, AimOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import axios from "axios";
-
+import useIsMobile from "../hooks/useIsMobile";
 import MapSelector from '../components/MapSelector';
+
 const url = process.env.REACT_APP_URL;
 
 const Lotes = () => {
@@ -13,8 +15,8 @@ const Lotes = () => {
 
   const [isMapModalOpen, setIsMapModalOpen] = useState(false); 
   const [selectedLocation, setSelectedLocation] = useState(null);
-
   const mapRef = useRef();
+  const isMobile = useIsMobile();
 
   // cargamos los lotes desde el back
   const fetchLots = async () => {
@@ -127,6 +129,13 @@ const Lotes = () => {
     },
   ];
 
+    const menuItems = [
+    {
+      key: '1',
+      label: <span onClick={() => window.location.href = "/lotes-deshabilitados"}>Ver Lotes Deshabilitados</span>,
+    }
+  ];
+
   return (
     <div style={{ padding: 24 }}>
       {/* Título y botones */}
@@ -136,37 +145,88 @@ const Lotes = () => {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => window.location.href = "/lotes-deshabilitados"}>
-              Ver Lotes Deshabilitados
-            </Button>
-            <Button type="primary" onClick={() => openDrawer()}>
-              Agregar Lote
-            </Button>
+            {isMobile ? (
+              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
+                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+              </Dropdown>
+            ) : (
+              <Space>
+                <Button onClick={() => window.location.href = "/lotes-deshabilitados"}>
+                  Ver Lotes Deshabilitados
+                </Button>
+                <Button type="primary" onClick={() => openDrawer()}>
+                  Agregar Lote
+                </Button>
+              </Space>
+            )}
           </Space>
         </Col>
       </Row>
 
-      <Row gutter={24}>
-        <Col span={12}>
-          {/* Mapa a la izquierda */}
+      {!isMobile&& (
+        <Row gutter={24}>
+          <Col span={12}>
+            {/* Mapa a la izquierda */}
+            <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
+          </Col>
+          <Col span={12}>
+            {/* Tabla de lotes a la derecha */}
+            <Table
+              scroll={{ x: "max-content" }}
+              columns={columns}
+              dataSource={lots}
+              pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+              rowKey="id"
+            />
+          </Col>
+        </Row>
+      )}
+
+      {isMobile && (
+        <div style={{ marginBottom: 24 }}>
           <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
-        </Col>
-        <Col span={12}>
-          {/* Tabla de lotes a la derecha */}
-          <Table
-            scroll={{ x: "max-content" }}
-            columns={columns}
-            dataSource={lots}
-            pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-            rowKey="id"
-          />
-        </Col>
-      </Row>
+        </div>
+      )}
+
+      {isMobile && (
+        <div className="inventory-cards-container">
+          {lots.map((lot) => (
+            <div className="inventory-card" key={lot.id}>
+              <div className="card-header">
+                <h3>{lot.name}</h3>
+                <div className="card-icons">
+                  <EditOutlined onClick={() => openDrawer(lot)} />
+                  <DeleteOutlined onClick={() => handleDelete(lot.id)} />
+                </div>
+              </div>
+              <p><AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha</p>
+              <p>
+                <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
+                {lot.location ? (
+                  <>
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ padding: 0, marginLeft: 0 }}
+                      onClick={() => setSelectedLocation(JSON.parse(lot.location))}
+                    >
+                      Ver
+                    </Button>
+                  </>
+                ) : (
+                  "No asignada"
+                )}
+              </p>
+
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Drawer para agregar/editar */}
       <Drawer
         title={editingLot ? "Editar Lote" : "Agregar Nuevo Lote"}
-        placement="right"
+        placement={isMobile ? "bottom" : "right"}
         onClose={closeDrawer}
         open={isDrawerOpen}
         width={400}
@@ -230,10 +290,17 @@ const Lotes = () => {
             }}
             modalOpen={isMapModalOpen}
             mapRef={mapRef}
+            insideDrawer={true}
           />
         </Drawer>
 
       </Drawer>
+
+      {isMobile && !isDrawerOpen && (
+        <div className="fab-button" onClick={() => openDrawer()}>
+          <PlusOutlined />
+        </div>
+      )}
     </div>
   );
 };

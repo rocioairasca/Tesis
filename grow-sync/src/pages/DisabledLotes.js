@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { Table, Button, Space, Popconfirm, notification, Row, Col } from "antd";
 import { LeftOutlined } from "@ant-design/icons";
 import axios from "axios";
+import useIsMobile from "../hooks/useIsMobile";
 
 const url = process.env.REACT_APP_URL;
 
 const DisabledLots = () => {
   const [lots, setLots] = useState([]);
+  const isMobile = useIsMobile();
 
   const fetchDisabledLots = async () => {
     try {
@@ -75,23 +77,36 @@ const DisabledLots = () => {
         </Col>
         <Col>
             <Button
-                type="default"
-                icon={<LeftOutlined />}
-                onClick={() => window.history.back()}
-                style={{ marginBottom: 8 }}
-            >
-                Volver
-            </Button>
+              type="default"
+              icon={<LeftOutlined />}
+              shape="circle"
+              onClick={() => window.history.back()}
+              style={{ borderColor: "#95ba56" }}
+            />
         </Col>
       </Row>
 
-      <Table
-        scroll={{ x: "max-content" }}
-        columns={columns}
-        dataSource={lots}
-        pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-        rowKey="id"
-      />
+      {!isMobile && (
+        <Table
+          scroll={{ x: "max-content" }}
+          columns={columns}
+          dataSource={lots}
+          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+          rowKey="id"
+        />
+      )}
+
+      {isMobile && (
+        <div className="inventory-cards-container">
+          {lots.map((lot) => (
+            <div key={lot.id} className="inventory-card">
+              <h3>{lot.name}</h3>
+              <p>Área Total: {lot.area} ha</p>
+              <Button type="primary" onClick={() => handleEnable(lot.id)}>Habilitar</Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

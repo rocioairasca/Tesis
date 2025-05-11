@@ -6,21 +6,22 @@ import { AimOutlined } from '@ant-design/icons';
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import useIsMobile from '../hooks/useIsMobile';
 
-const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen}) => {
+const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, insideDrawer = false}) => {
   const [userPosition, setUserPosition] = useState(null);
   const mapRef = useRef(null);
+  const isMobile = useIsMobile();
 
-  const defaultPosition = [-32.4082, -63.2402]; 
+  const defaultPosition = [-32.4082, -63.2402]; // esto a tener en cuenta no puede quedar asi
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const pos = {
+        setUserPosition({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        };
-        setUserPosition(pos);
+        });
       },
       (error) => {
         console.error("Error al obtener ubicación:", error);
@@ -29,15 +30,12 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen})
   }, []);
 
   useEffect(() => {
-    // console.log("modalOpen cambió:", modalOpen);
-    // console.log("mapRef actual:", mapRef.current);
-
-    if (modalOpen && mapRef.current) {
+    if ((modalOpen || insideDrawer) && mapRef.current) {
       setTimeout(() => {
         mapRef.current.invalidateSize();
-      }, 700);
+      }, 300);
     }
-  }, [modalOpen]);
+  }, [modalOpen, insideDrawer]);
 
   const roundCoord = (coord) => ({
     lat: parseFloat(coord.lat.toFixed(6)),
@@ -108,7 +106,19 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen})
         type="primary" 
         size="small"
         icon={<AimOutlined />} 
-        style={{ position: "absolute", top: 60, right: 24, zIndex: 1000 }}
+        style={{ 
+          position: "absolute", 
+          top: insideDrawer
+            ? 190
+            : isMobile
+              ? 260
+              : 60,
+          right: insideDrawer
+            ? 35
+            : isMobile
+              ? 67
+              : 24,
+          zIndex: 1000 }}
         onClick={handleRecenter}
       />
 
