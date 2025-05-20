@@ -26,6 +26,7 @@ const productRoutes = require('./routes/products');
 const usageRoutes = require('./routes/usage');
 const statsRoutes = require('./routes/stats');
 const plantingRoutes = require('./routes/plantings');
+const vehicleRoutes = require('./routes/vehicles');
 
 // Uso de rutas públicas (register y login)
 app.use('/api', authRoutes);
@@ -37,6 +38,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/usages', usageRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/plantings', plantingRoutes);
+app.use('/api/vehicles', vehicleRoutes);
 
 
 // ARRANQUE DEL SERVIDOR EN PUERTO (PORT=4000)

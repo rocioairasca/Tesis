@@ -3,6 +3,8 @@ import { Card, Row, Col, Statistic } from "antd";
 import { UserOutlined, InboxOutlined, FileTextOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import axios from "axios";
 
+const url = process.env.REACT_APP_URL;
+
 const Dashboard = () => {
   const [stats, setStats] = useState({
     users: 0,
@@ -14,7 +16,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get('http://localhost:4000/api/stats');
+        const res = await axios.get(`${url}/api/stats`);
         setStats(res.data);
       } catch (error) {
         console.error("Error al cargar estadísticas", error);
