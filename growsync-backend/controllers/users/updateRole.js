@@ -1,27 +1,35 @@
-// IMPORTACION DE POOL DE BD
-const pool = require('../../db/connection');
+// IMPORTACION DE CLIENTE SUPABASE
+const supabase = require('../../db/supabaseClient');
 
-// DECLARAMOS UNA FUNCION updateRole - se vale del ID de usuario para editar el valor role de la BD correspondiente a ese ID
+// DECLARAMOS UNA FUNCIÓN updateRole - usa el ID de usuario para editar el valor role en la BD
 const updateRole = async (req, res) => {
-    const {id} = req.params;
+    const { id } = req.params;
     const { role } = req.body;
 
     try {
-        const result = await pool.query(
-            `UPDATE users SET role = $1 WHERE id = $2 RETURNING *`,
-            [role, id]
-        );
+        // Actualizar el rol del usuario en Supabase
+        const { data, error } = await supabase
+            .from('users')
+            .update({ role })
+            .eq('id', id)
+            .select()
+            .single(); // Queremos solo un registro actualizado
 
-        if (result.rowCount === 0) {
+        if (error && error.code === 'PGRST116') { // No encontrado
             return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+        if (error) {
+            console.error("Error al actualizar rol en Supabase:", error);
+            return res.status(500).json({ message: 'Error al actualizar el rol', error: error.message });
         }
 
         res.status(200).json({
             message: 'Rol actualizado correctamente',
-            user: result.rows[0],
+            user: data,
         });
+
     } catch (error) {
-        console.error(error);
+        console.error("Error inesperado:", error);
         res.status(500).json({
             message: 'Error al actualizar el rol',
             error: error.message,
@@ -29,5 +37,5 @@ const updateRole = async (req, res) => {
     }
 };
 
-// EXPORTAMOS LA FUNCION PARA SER USADA EN UNA RUTA (routes/userRoutes.js)
+// EXPORTAMOS LA FUNCIÓN PARA SER USADA EN UNA RUTA (routes/userRoutes.js)
 module.exports = updateRole;

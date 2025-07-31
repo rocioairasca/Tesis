@@ -1,86 +1,117 @@
-// IMPORTACION DE POOL DE BD
-const db = require('../db/connection'); 
+// IMPORTACION DEL CLIENTE SUPABASE
+const supabase = require('../db/supabaseClient');
 
-// DECLARAMOS FUNCIONES PARA OBTENER, CREAR, EDITAR Y DESHABILITAR
-
-// LISTAR VEHICULOS - Obtiene de la BD todos los vehiculos habilitados, ordenados por ID
+// LISTAR VEHICULOS - Obtiene todos los vehículos habilitados
 const listVehicles = async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM vehicles WHERE enabled = TRUE ORDER BY id');
-    res.json(result.rows);
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('enabled', true)
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+
+    res.json(data);
   } catch (error) {
-    res.status(500).json({ message: 'Error al listar vehiculos', error });
+    res.status(500).json({ message: 'Error al listar vehículos', error });
   }
 };
 
-// CREAR VEHICULOS  - Obtiene informacion del front para crear una nueva entrada en la BD con informacion del vehiculo
+// CREAR VEHÍCULO
 const addVehicle = async (req, res) => {
   try {
     const { marca, modelo, tipo, anio, patente } = req.body;
-    console.log("datos: ", req.body);
-    const result = await db.query(
-      `INSERT INTO vehicles (marca, modelo, tipo, anio, patente)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [marca, modelo, tipo, anio, patente]
-    );
-    res.status(201).json(result.rows[0]);
+
+    const { data, error } = await supabase
+      .from('vehicles')
+      .insert([{ marca, modelo, tipo, anio, patente }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json(data);
   } catch (error) {
-    res.status(500).json({ message: 'Error al crear vehiculo', error });
+    res.status(500).json({ message: 'Error al crear vehículo', error });
   }
 };
 
-// EDITAR VEHICULOS - Se vale del ID para editar los datos de la entrada de la BD que coincida con dicha ID
+// EDITAR VEHÍCULO
 const editVehicle = async (req, res) => {
   try {
     const { id } = req.params;
     const { marca, modelo, tipo, anio, patente } = req.body;
-    const result = await db.query(
-      `UPDATE vehicles
-       SET marca=$1, modelo=$2, tipo=$3, anio=$4, patente=$5
-       WHERE id=$6 RETURNING *`,
-      [marca, modelo, tipo, anio, patente, id]
-    );
-    res.json(result.rows[0]);
+
+    const { data, error } = await supabase
+      .from('vehicles')
+      .update({ marca, modelo, tipo, anio, patente })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json(data);
   } catch (error) {
-    res.status(500).json({ message: 'Error al editar vehiculo', error });
+    res.status(500).json({ message: 'Error al editar vehículo', error });
   }
 };
 
-// DESHABILITAR VEHICULOS - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
+// DESHABILITAR VEHÍCULO
 const disableVehicle = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.query('UPDATE vehicles SET enabled = FALSE WHERE id = $1', [id]);
-    res.status(200).json({ message: 'Vehiculo deshabilitado exitosamente.' });
+
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ enabled: false })
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.status(200).json({ message: 'Vehículo deshabilitado exitosamente.' });
   } catch (error) {
-    res.status(500).json({ message: 'Error al deshabilitar vehiculo', error });
+    res.status(500).json({ message: 'Error al deshabilitar vehículo', error });
   }
 };
 
-// LISTAR VEHICULOS DESHABILITADOS - Obtiene de la BD todos los vehiculos deshabilitados, ordenados por ID
+// LISTAR VEHÍCULOS DESHABILITADOS
 const listDisabledVehicles = async (req, res) => {
-    try {
-      const result = await db.query('SELECT * FROM vehicles WHERE enabled = FALSE ORDER BY id');
-      res.json(result.rows);
-    } catch (error) {
-        console.error(error);
-      res.status(500).json({ message: 'Error al listar vehiculos deshabilitados', error });
-    }
-};
-  
-// HABILITAR VEHICULOS - Se vale de la ID para cambiar el valor "enabled" de la entrada correspondiente a dicho ID
-const enableVehicle = async (req, res) => {
-    try {
-      const { id } = req.params;
-      await db.query('UPDATE vehicles SET enabled = TRUE WHERE id = $1', [id]);
-      res.status(200).json({ message: 'Vehiculo habilitado exitosamente.' });
-    } catch (error) {
-        console.error(error);
-      res.status(500).json({ message: 'Error al habilitar vehiculo', error });
-    }
+  try {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('enabled', false)
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al listar vehículos deshabilitados', error });
+  }
 };
 
-// EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/products.js)
+// HABILITAR VEHÍCULO
+const enableVehicle = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ enabled: true })
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.status(200).json({ message: 'Vehículo habilitado exitosamente.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al habilitar vehículo', error });
+  }
+};
+
+// EXPORTAMOS LAS FUNCIONES
 module.exports = {
   listVehicles,
   addVehicle,

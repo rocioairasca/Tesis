@@ -2,7 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 require('dotenv').config();
-const pool = require('./db/connection');
+const supabase = require('./db/supabaseClient');
+
+(async () => {
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error) {
+    console.error("🔴 Error al conectar a Supabase:", error.message);
+  } else {
+    console.log("🟢 Conectado correctamente a Supabase");
+  }
+})();
 
 // PERMITIR SOLICITUDES CORS
 app.use(cors({
@@ -41,23 +50,18 @@ app.use('/api/plantings', plantingRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 
 
+app.get('/api/test-db', async (req, res) => {
+  const { data, error } = await supabase.from('products').select('*');
+
+  if (error) {
+    return res.status(500).json({ ok: false, error });
+  }
+
+  res.json({ ok: true, data });
+});
+
 // ARRANQUE DEL SERVIDOR EN PUERTO (PORT=4000)
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`🔵 Servidor corriendo en el puerto ${PORT}`);
 });
-
-// coso para que no haya conflictos de versiones (limpia consola)
-if (process.env.NODE_ENV === "development") {
-    const consoleWarn = console.warn;
-    console.warn = (...args) => {
-      if (
-        args[0].includes("-ms-high-contrast") ||
-        args[0].includes("Tracking Prevention") ||
-        args[0].includes("[antd]") 
-      ) {
-        return;
-      }
-      consoleWarn(...args);
-    };
-}

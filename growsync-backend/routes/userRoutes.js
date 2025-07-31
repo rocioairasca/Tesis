@@ -6,46 +6,65 @@ const checkJwt = require('../middleware/checkJwt');
 const userData = require('../middleware/userData');
 const checkRole = require('../middleware/checkRole');
 
-// CONEXION A LA BASE DE DATOS
-const pool = require('../db/connection');
+// CONEXION A LA BASE DE DATOS (Supabase)
+const supabase = require('../db/supabaseClient');
 
 // IMPORTACION DE CONTROLADORES EN /controllers/auth
 const updateRole = require('../controllers/users/updateRole'); 
 
-// Las rutas son puntos de entrada al servidor, y nos sirven para establecer respuestas a las solicitudes HTTP
-// Al mismo tiempo, nos mueve a crear codigo de una forma mas limpia y modular
-
-// GetAllUsers EN POSTMAN - Devuelve todos los usuarios (solo Admin rol 3)
+/**
+ * 📌 GetAllUsers
+ * Devuelve todos los usuarios (solo Admin rol 3)
+ */
 router.get('/', checkJwt, userData, checkRole(3), async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM users');
-    res.json(result.rows);
+    const { data, error } = await supabase.from('users').select('*');
+
+    if (error) {
+      console.error('Error al obtener usuarios desde Supabase:', error);
+      return res.status(500).json({ message: 'Error al obtener usuarios' });
+    }
+
+    res.json(data);
   } catch (error) {
-    console.error('Error al obtener usuarios:', error);
+    console.error('Error inesperado al obtener usuarios:', error);
     res.status(500).json({ message: 'Error al obtener usuarios' });
   }
 });
 
-// UpdateUserRole EN POSTMAN - Modifica el rol de un usuario (solo Admin rol 3)
+/**
+ * 📌 UpdateUserRole
+ * Modifica el rol de un usuario (solo Admin rol 3)
+ */
 router.put('/:id/role', checkJwt, userData, checkRole(3), updateRole);
 
-// --- EN POSTMAN - Devuelve todos los usuarios que coincidan con el email proporcionado
+/**
+ * 📌 GetUserByEmail
+ * Devuelve un usuario que coincida con el email proporcionado
+ */
 router.get('/email/:email', async (req, res) => {
   const { email } = req.params;
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single(); // .single() porque esperamos solo un resultado
 
-    if (result.rowCount === 0) {
+    if (error && error.code === 'PGRST116') { // No encontrado
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
+    if (error) {
+      console.error('Error al obtener usuario por email:', error);
+      return res.status(500).json({ message: 'Error del servidor' });
+    }
 
-    res.json(result.rows[0]);
-
+    res.json(data);
   } catch (error) {
-    console.error('Error al obtener usuario por email:', error);
+    console.error('Error inesperado al obtener usuario por email:', error);
     res.status(500).json({ message: 'Error del servidor' });
   }
 });
 
-// se exporta el router para que pueda ser usado en index.js
+// Exportar router
 module.exports = router;

@@ -1,22 +1,32 @@
-// IMPORTACION DEL POOL DE CONEXION A LA BD
-const pool = require("../db/connection");
+// IMPORTACION DE CLIENTE SUPABASE
+const supabase = require("../db/supabaseClient");
 
 // DEFINIMOS Y CONFIGURAMOS EL MIDDLEWARE userData
-// Este se vale del sub, que es un ID unico que Auth0, que nos sirve para identificarlo en nuestra BD, y nos devuelve informacion local del usuario
+// Este se vale del sub, que es un ID único que Auth0 nos da, que usamos para buscar al usuario en nuestra BD
 const userData = async (req, res, next) => {
   try {
     const { sub } = req.auth;
 
-    const userDb = await pool.query('SELECT * FROM users WHERE auth0_id = $1', [sub]);
+    // Consultar usuario en Supabase
+    const { data: userDb, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth0_id', sub)
+      .single(); // Esperamos un único resultado
 
-    if (userDb.rowCount === 0) {
+    if (error && error.code === 'PGRST116') { // No encontrado
       return res.status(404).json({ message: 'Usuario no encontrado en base de datos' });
     }
+    if (error) {
+      console.error("Error al obtener usuario en Supabase:", error);
+      return res.status(500).json({ message: "Error al obtener datos de usuario" });
+    }
 
+    // Guardar datos del usuario en req.user
     req.user = {
-      id: userDb.rows[0].id,
-      email: userDb.rows[0].email,
-      role: userDb.rows[0].role
+      id: userDb.id,
+      email: userDb.email,
+      role: userDb.role
     };
 
     next();

@@ -1,16 +1,25 @@
-// IMPORTACION DE POOL DE BD
-const pool = require('../../db/connection');
+// IMPORTACION DEL CLIENTE SUPABASE
+const supabase = require('../../db/supabaseClient');
 
-// DECLARAMOS UNA FUNCION getAllUsers - Obtiene de la BD todos los usuarios
+// DECLARAMOS UNA FUNCIÓN getAllUsers - Obtiene de la BD todos los usuarios
 const getAllUsers = async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, username, email, role FROM users');
-    res.status(200).json(result.rows);
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, email, role');
+
+    if (error) {
+      console.error('Error al obtener usuarios desde Supabase:', error);
+      return res.status(500).json({ message: 'Error al obtener usuarios', error });
+    }
+
+    res.status(200).json(data);
   } catch (error) {
-    console.error('Error al obtener usuarios:', error);
-    res.status(500).json({ message: 'Error al obtener usuarios' });
+    console.error('Error inesperado al obtener usuarios:', error);
+    res.status(500).json({ message: 'Error al obtener usuarios', error });
   }
 };
 
-// EXPORTAMOS LA FUNCION PARA SER USADA (por ahora, en ningun lado)
+// EXPORTAMOS LA FUNCIÓN
 module.exports = getAllUsers;
+
