@@ -5,7 +5,8 @@ import {
   InboxOutlined, 
   FileTextOutlined, 
   EnvironmentOutlined, 
-  CloudOutlined 
+  CloudOutlined,
+  ArrowUpOutlined 
 } from "@ant-design/icons";
 import axios from "axios";
 
@@ -122,7 +123,18 @@ const Dashboard = () => {
           <>
             <p><strong>Temp:</strong> {weather?.temperature ?? "-"} °C</p>
             <p><strong>Humedad:</strong> {weather?.humidity ?? "-"} %</p>
-            <p><strong>Viento:</strong> {weather?.wind_speed ?? "-"} km/h {weather?.wind_direction ?? ""}°</p>
+            <p>
+              <strong>Viento:</strong> {weather?.wind_speed ?? "-"} km/h 
+              {weather?.wind_direction && (
+                <ArrowUpOutlined
+                  style={{
+                    transform: `rotate(${weather.wind_direction}deg)`,
+                    marginLeft: 8,
+                    fontSize: 18
+                  }}
+                />
+              )}
+            </p>
             <p><strong>Lluvia:</strong> {weather?.rainfall ?? "-"} mm</p>
           </>
         ) : (
