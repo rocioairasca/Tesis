@@ -34,6 +34,7 @@ const lotRoutes = require("./routes/lot");
 const productRoutes = require('./routes/products');
 const usageRoutes = require('./routes/usage');
 const statsRoutes = require('./routes/stats');
+const weatherRoutes = require("./routes/weather");
 
 // Uso de rutas públicas (register y login)
 app.use('/api', authRoutes);
@@ -44,6 +45,7 @@ app.use('/api/lots', lotRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/usages', usageRoutes);
 app.use('/api/stats', statsRoutes);
+app.use("/api/weather", weatherRoutes);
 
 // ARRANQUE DEL SERVIDOR EN PUERTO (PORT=4000)
 const PORT = process.env.PORT || 4000;
