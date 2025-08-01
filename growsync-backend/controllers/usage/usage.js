@@ -1,14 +1,18 @@
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require("../../db/supabaseClient");
 
-// LISTAR RDUs HABILITADOS
+// LISTAR RDUs HABILITADOS (incluyendo lotes asociados)
 const listUsages = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('usage_records')
-      .select('*')
-      .eq('enabled', true)
-      .order('date', { ascending: false });
+      .from("usage_records")
+      .select(`
+        *,
+        usage_lots ( lot_id ),
+        users:user_id ( full_name, nickname, email )
+      `)
+      .eq("enabled", true)
+      .order("date", { ascending: false });
 
     if (error) throw error;
 
@@ -22,39 +26,73 @@ const listUsages = async (req, res) => {
 // CREAR UN RDU
 const createUsage = async (req, res) => {
   try {
-    const { product_id, amount_used, unit, lot_ids, total_area, previous_crop, current_crop, user_id, date } = req.body;
+    const {
+      product_id,
+      amount_used,
+      unit,
+      lot_ids,
+      total_area,
+      previous_crop,
+      current_crop,
+      user_id,
+      date
+    } = req.body;
 
-    // 1️⃣ Insertar nuevo registro
-    const { error: insertError } = await supabase
-      .from('usage_records')
+    // 1️⃣ Insertar nuevo registro en usage_records
+    const { data: usage, error: insertError } = await supabase
+      .from("usage_records")
       .insert([{
         product_id,
         amount_used,
         unit,
-        lot_ids,
         total_area,
         previous_crop,
         current_crop,
         user_id,
         date
-      }]);
+      }])
+      .select("id")
+      .single();
 
     if (insertError) throw insertError;
 
-    // 2️⃣ Descontar del stock
+    const usageId = usage.id;
+
+    // 2️⃣ Insertar relaciones en usage_lots
+    const safeLotIds = Array.isArray(lot_ids) ? lot_ids : JSON.parse(lot_ids || '[]');
+    if (safeLotIds.length > 0) {
+      const usageLotsData = safeLotIds.map(lot_id => ({
+        usage_id: usageId,
+        lot_id
+      }));
+      const { error: usageLotsError } = await supabase
+        .from("usage_lots")
+        .insert(usageLotsData);
+      if (usageLotsError) throw usageLotsError;
+    }
+
+    // 3️⃣ Descontar stock manualmente
+    const { data: product, error: fetchError } = await supabase
+      .from("products")
+      .select("available_quantity")
+      .eq("id", product_id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const newQty = (product?.available_quantity || 0) - Number(amount_used);
+
     const { error: updateError } = await supabase
-      .from('products')
-      .update({
-        available_quantity: supabase.rpc('decrement_stock', { qty: amount_used }) // RPC opcional
-      })
-      .eq('id', product_id);
+      .from("products")
+      .update({ available_quantity: newQty })
+      .eq("id", product_id);
 
     if (updateError) throw updateError;
 
-    res.status(201).json({ message: 'Registro de uso creado exitosamente.' });
+    res.status(201).json({ message: "Registro de uso creado exitosamente." });
   } catch (error) {
     console.error("Error al crear registro de uso:", error);
-    res.status(500).json({ message: 'Error al crear registro de uso', error });
+    res.status(500).json({ message: "Error al crear registro de uso", error });
   }
 };
 
@@ -62,29 +100,54 @@ const createUsage = async (req, res) => {
 const editUsage = async (req, res) => {
   try {
     const { id } = req.params;
-    const { product_id, amount_used, unit, lot_ids, total_area, previous_crop, current_crop, user_id, date } = req.body;
+    const {
+      product_id,
+      amount_used,
+      unit,
+      lot_ids,
+      total_area,
+      previous_crop,
+      current_crop,
+      user_id,
+      date
+    } = req.body;
 
-    const { error } = await supabase
-      .from('usage_records')
+    // 1️⃣ Actualizar usage_records
+    const { error: updateUsageError } = await supabase
+      .from("usage_records")
       .update({
         product_id,
         amount_used,
         unit,
-        lot_ids,
         total_area,
         previous_crop,
         current_crop,
         user_id,
         date
       })
-      .eq('id', id);
+      .eq("id", id);
 
-    if (error) throw error;
+    if (updateUsageError) throw updateUsageError;
 
-    res.status(200).json({ message: 'Registro de uso actualizado exitosamente.' });
+    // 2️⃣ Actualizar usage_lots
+    await supabase.from("usage_lots").delete().eq("usage_id", id);
+
+    const safeLotIds = Array.isArray(lot_ids) ? lot_ids : JSON.parse(lot_ids || '[]');
+    if (safeLotIds.length > 0) {
+      const usageLotsData = safeLotIds.map(lot_id => ({
+        usage_id: id,
+        lot_id
+      }));
+      const { error: usageLotsError } = await supabase
+        .from("usage_lots")
+        .insert(usageLotsData);
+      if (usageLotsError) throw usageLotsError;
+    }
+
+    res.status(200).json({ message: "Registro de uso actualizado exitosamente." });
   } catch (error) {
     console.error("Error al actualizar registro de uso:", error);
-    res.status(500).json({ message: 'Error al actualizar registro de uso', error });
+    res.status(500).json({ message: "Error al actualizar registro de uso", error });
   }
 };
 
@@ -94,36 +157,36 @@ const disableUsage = async (req, res) => {
   try {
     // 1️⃣ Obtener el registro
     const { data: usage, error: fetchError } = await supabase
-      .from('usage_records')
-      .select('product_id, amount_used')
-      .eq('id', id)
+      .from("usage_records")
+      .select("product_id, amount_used")
+      .eq("id", id)
       .single();
 
     if (fetchError) throw fetchError;
-    if (!usage) return res.status(404).json({ message: 'Registro de uso no encontrado' });
+    if (!usage) return res.status(404).json({ message: "Registro de uso no encontrado" });
 
-    // 2️⃣ Reintegrar stock
+    // 2️⃣ Reintegrar stock (opcional)
     const { error: reintegrateError } = await supabase
-      .from('products')
+      .from("products")
       .update({
-        available_quantity: supabase.rpc('increment_stock', { qty: usage.amount_used }) // RPC opcional
+        available_quantity: supabase.rpc("increment_stock", { qty: usage.amount_used })
       })
-      .eq('id', usage.product_id);
+      .eq("id", usage.product_id);
 
     if (reintegrateError) throw reintegrateError;
 
     // 3️⃣ Marcar como deshabilitado
     const { error: disableError } = await supabase
-      .from('usage_records')
+      .from("usage_records")
       .update({ enabled: false })
-      .eq('id', id);
+      .eq("id", id);
 
     if (disableError) throw disableError;
 
-    res.status(200).json({ message: 'Registro de uso deshabilitado exitosamente.' });
+    res.status(200).json({ message: "Registro de uso deshabilitado exitosamente." });
   } catch (error) {
     console.error("Error al deshabilitar registro de uso:", error);
-    res.status(500).json({ message: 'Error al deshabilitar registro de uso', error });
+    res.status(500).json({ message: "Error al deshabilitar registro de uso", error });
   }
 };
 
@@ -131,17 +194,17 @@ const disableUsage = async (req, res) => {
 const listDisabledUsages = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('usage_records')
-      .select('*')
-      .eq('enabled', false)
-      .order('date', { ascending: false });
+      .from("usage_records")
+      .select("*")
+      .eq("enabled", false)
+      .order("date", { ascending: false });
 
     if (error) throw error;
 
     res.json(data);
   } catch (error) {
     console.error("Error al listar registros de uso deshabilitados:", error);
-    res.status(500).json({ message: 'Error al listar registros de uso deshabilitados', error });
+    res.status(500).json({ message: "Error al listar registros de uso deshabilitados", error });
   }
 };
 
@@ -151,20 +214,19 @@ const enableUsage = async (req, res) => {
     const { id } = req.params;
 
     const { error } = await supabase
-      .from('usage_records')
+      .from("usage_records")
       .update({ enabled: true })
-      .eq('id', id);
+      .eq("id", id);
 
     if (error) throw error;
 
-    res.status(200).json({ message: 'Registro de uso habilitado exitosamente.' });
+    res.status(200).json({ message: "Registro de uso habilitado exitosamente." });
   } catch (error) {
     console.error("Error al habilitar registro de uso:", error);
-    res.status(500).json({ message: 'Error al habilitar registro de uso', error });
+    res.status(500).json({ message: "Error al habilitar registro de uso", error });
   }
 };
 
-// EXPORTAMOS LAS FUNCIONES
 module.exports = {
   listUsages,
   createUsage,

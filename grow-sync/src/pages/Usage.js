@@ -78,7 +78,7 @@ const Usage = () => {
 
       form.setFieldsValue({
         ...usage,
-        lot_ids: JSON.parse(usage.lot_ids),
+        lot_ids: usage.usage_lots ? usage.usage_lots.map(l => l.lot_id) : [],
         date: dayjs(usage.date),
       });
 
@@ -95,13 +95,13 @@ const Usage = () => {
   };
 
   const storedUser = JSON.parse(localStorage.getItem('user'));
-  const userName = storedUser?.name;
+  const userName = storedUser?.id;
 
   const handleSubmit = async (values) => {
     try {
       const payload = {
         ...values,
-        lot_ids: JSON.stringify(values.lot_ids),
+        lot_ids: values.lot_ids,
         date: values.date.format('YYYY-MM-DD'),
         user_id: userName,
       };
@@ -184,9 +184,13 @@ const Usage = () => {
       title: "Lotes",
       dataIndex: "lot_ids",
       key: "lot_ids",
-      render: (text) => {
-        const lotIds = JSON.parse(text);
-        return lotIds.join(", ");
+      render: (_, record) => {
+        if (!record.usage_lots) return '-';
+        const lotNames = record.usage_lots.map(l => {
+          const lot = lots.find(lotItem => lotItem.id === l.lot_id);
+          return lot ? lot.name : l.lot_id;
+        });
+        return lotNames.join(", ");
       }
     },
     {
@@ -207,8 +211,10 @@ const Usage = () => {
     },
     {
       title: "Usuario",
-      dataIndex: "user_id",
-      key: "user_id",
+      key: "user",
+      render: (_, record) => {
+        return record.users?.full_name || record.users?.nickname || record.users?.email || "-";
+      }
     },
     {
       title: "Fecha",
@@ -282,7 +288,12 @@ const Usage = () => {
         <div className="inventory-cards-container">
           {usages.map((usage) => {
             const product = products.find(p => p.id === usage.product_id);
-            const lotList = JSON.parse(usage.lot_ids).join(", ");
+            const lotList = usage.usage_lots
+              ? usage.usage_lots.map(l => {
+                  const lot = lots.find(lotItem => lotItem.id === l.lot_id);
+                  return lot ? lot.name : l.lot_id;
+                }).join(", ")
+              : "-";
             const date = dayjs(usage.date).format("DD/MM/YYYY");
 
             return (
@@ -300,7 +311,7 @@ const Usage = () => {
                 <p className="flex-row"><Ruler size={18} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
                 <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Previo:</strong> {usage.previous_crop || "-"}</p>
                 <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Actual:</strong> {usage.current_crop || "-"}</p>
-                <p className="flex-row"><User size={18} /> <strong>Usuario:</strong> {usage.user_id}</p>
+                <p className="flex-row"><User size={18} /> <strong>Usuario:</strong> {usage.users?.full_name || usage.users?.nickname || usage.users?.email}</p>
                 <p className="flex-row"><Calendar size={18} /> <strong>Fecha:</strong> {date}</p>
               </div>
             );

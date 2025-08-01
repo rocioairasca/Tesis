@@ -4,7 +4,6 @@ import {
   HomeOutlined,
   AppstoreOutlined,
   FormOutlined,
-  ScheduleOutlined,
   EnvironmentOutlined,
   MoreOutlined,
   UserOutlined,
@@ -41,10 +40,6 @@ const BottomNavigation = () => {
         <AppstoreOutlined
           onClick={() => navigate("/inventario")}
           style={{ fontSize: 24, color: isActive("/inventario") ? "#1D2A62" : "#aaa" }}
-        />
-        <ScheduleOutlined
-          onClick={() => navigate("/plantings")}
-          style={{ fontSize: 24, color: isActive("/plantings") ? "#1D2A62" : "#aaa" }}
         />
         <FormOutlined
           onClick={() => navigate("/usage")}

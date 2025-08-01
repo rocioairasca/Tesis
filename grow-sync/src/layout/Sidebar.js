@@ -1,8 +1,7 @@
 import React, {useState} from "react";
 import { Layout, Menu } from "antd";
-import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined ,ScheduleOutlined} from "@ant-design/icons";
+import { UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined} from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
-import { CarSimple } from "phosphor-react";
 
 const { Sider } = Layout;
 
@@ -62,21 +61,6 @@ const Sidebar = () => {
                         label: <Link to="/inventario">Inventario</Link>,
                     },
                     {
-                        key: "produccion",
-                        icon: <ScheduleOutlined />,
-                        label: "Campaña",
-                        children: [
-                          {
-                            key: "siembras",
-                            label: <Link to="/plantings">Siembras</Link>,
-                          },
-                          {
-                            key: "cosechas",
-                            label: <Link to="#">Cosechas</Link>, // Placeholder, todavía no implementado
-                          },
-                        ],
-                    },
-                    {
                         key: "lotes",
                         icon: <EnvironmentOutlined />,
                         label: <Link to="/lotes">Lotes</Link>,
@@ -85,11 +69,6 @@ const Sidebar = () => {
                         key: "usuarios",
                         icon: <UserOutlined />,
                         label: <Link to="/usuarios">Usuarios</Link>,
-                    },
-                    {
-                        key: "vehiculos",
-                        icon: <CarSimple size={15} color = "rgba(255, 255, 255, 0.65)"/>,
-                        label: <Link to="/vehicles">Vehiculos</Link>,
                     },
                 ]}
             />

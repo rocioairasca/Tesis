@@ -164,7 +164,7 @@ const Inventory = () => {
       render: (text) => `$ ${text}`
     },
     {
-      title: "Fecha de Adquisición",
+      title: "Fecha de Vencimiento",
       dataIndex: "acquisition_date",
       key: "acquisition_date",
       render: (text) => text ? new Date(text).toLocaleDateString() : '-'

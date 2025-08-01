@@ -17,8 +17,6 @@ import DisabledLotes from './pages/DisabledLotes.js';
 import DisabledProducts from './pages/DisabledInventory.js';
 import Usage from './pages/Usage.js';
 import DisabledUsages from './pages/DisabledUsages.js';
-import Plantings from './pages/Plantings.js';
-import Vehicles from './pages/Vehicles.js';
 
 // Páginas de autenticación
 import LoginRegister from "./pages/auth/LoginRegister";
@@ -96,18 +94,6 @@ function App() {
           <Route path="/usages-disabled" element={
             <ProtectedRoute>
               <AppLayout><DisabledUsages /></AppLayout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/plantings" element={
-            <ProtectedRoute>
-              <AppLayout><Plantings /></AppLayout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/vehicles" element={
-            <ProtectedRoute>
-              <AppLayout><Vehicles /></AppLayout>
             </ProtectedRoute>
           } />
 
