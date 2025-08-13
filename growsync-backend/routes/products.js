@@ -1,31 +1,73 @@
-const express = require('express');
-const router = express.Router();
+const router = require('express').Router();
 
-// IMPORTACION DE CONTROLADORES EN /controllers/products
-    const { 
-        listProducts, 
-        addProduct, 
-        editProduct, 
-        disableProduct 
-    } = require('../controllers/products/products');
+const {
+  listProducts,
+  addProduct,
+  editProduct,
+  disableProduct, // ← soft delete: enabled=false
+} = require('../controllers/products/products');
 
-    const { 
-        listDisabledProducts, 
-        enableProduct 
-    } = require('../controllers/products/products.disabled');
+const {
+  listDisabledProducts,
+  enableProduct,    // ← restore: enabled=true
+} = require('../controllers/products/products.disabled');
 
-// Las rutas son puntos de entrada al servidor, y nos sirven para establecer respuestas a las solicitudes HTTP
-// Al mismo tiempo, nos mueve a crear codigo de una forma mas limpia y modular
+const validate  = require('../middleware/validate');
+const checkRole = require('../middleware/checkRole');
+const schema    = require('../validations/products.schema');
 
-// DEFINICION DE RUTAS PARA EL MANEJO DE PRODUCTOS HABILITADOS
-router.get('/', listProducts);
-router.post('/', addProduct);
-router.put('/:id', editProduct);
-router.delete('/:id', disableProduct);
+/**
+ * Roles
+ *  0 = Empleado (logueado)
+ *  1 = Supervisor
+ *  2 = Dueño
+ *  3 = Admin
+ *
+ * Criterio:
+ * - GET requieren login (0).
+ * - Crear/Editar/Deshabilitar/Restaurar requieren Dueño+ (2).
+ */
 
-// DEFINICION DE RUTAS PARA EL MANEJO DE PRODUCTOS DESHABILITADOS
-router.get('/disabled', listDisabledProducts);
-router.put('/enable/:id', enableProduct);
+// Listado de deshabilitados
+router.get('/disabled',
+  checkRole(0),
+  listDisabledProducts
+);
 
-// Se exporta el router para que pueda ser usado en index.js
+// Restaurar (enabled=true)
+router.put('/enable/:id',
+  validate(schema.idParam),
+  checkRole(2),
+  enableProduct
+);
+
+// ── CRUD PRINCIPAL ────────────────────────────────────────────────────────────
+// Listar (enabled=true por defecto; soporta filtros/paginado)
+router.get('/',
+  validate(schema.listQuery),
+  checkRole(0),
+  listProducts
+);
+
+// Crear
+router.post('/',
+  validate(schema.createBody),
+  checkRole(2),
+  addProduct
+);
+
+// Editar (parcial)
+router.put('/:id',
+  validate(schema.updateBody),
+  checkRole(2),
+  editProduct
+);
+
+// “Eliminar” (soft delete → enabled=false)
+router.delete('/:id',
+  validate(schema.idParam),
+  checkRole(2),
+  disableProduct
+);
+
 module.exports = router;

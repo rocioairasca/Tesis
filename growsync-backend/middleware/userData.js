@@ -1,41 +1,79 @@
 // IMPORTACION DE CLIENTE SUPABASE
 const supabase = require("../db/supabaseClient");
 
-// DEFINIMOS Y CONFIGURAMOS EL MIDDLEWARE userData
-// Este se vale del sub, que es un ID único que Auth0 nos da, que usamos para buscar al usuario en nuestra BD
-const userData = async (req, res, next) => {
+// Middleware: carga datos del user (id, email, role) en req.user a partir del sub del JWT
+// REquiere que checkJwt haya corrido antes y haya dejado el payload en req.auth
+module.exports = async function userData(req, res, next) {
   try {
-    const { sub } = req.auth;
+    // 1. Extramos el "sub" del token
+    const sub =
+      req.auth?.sub ||
+      req.auth?.payload?.sub ||
+      req.user?.sub ||
+      null;
 
-    // Consultar usuario en Supabase
-    const { data: userDb, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('auth0_id', sub)
-      .single(); // Esperamos un único resultado
-
-    if (error && error.code === 'PGRST116') { // No encontrado
-      return res.status(404).json({ message: 'Usuario no encontrado en base de datos' });
+    if (!sub) {
+      return res.status(401).json({ message: 'Token invalido: no se encontro el sub' });
     }
-    if (error) {
+    
+    // 2. campos que necesitamos del user
+    const selectCols = 'id, email, role, enabled';
+
+    // Buscamos el usuario en la base de datos
+    // Usamos maybeSingle para evitar errores si no se encuentra el usuario
+    const fetchMaybeSingle = async (column, value) => {
+      if (typeof supabase.from('users').select(selectCols).maybeSingle === "function") {
+        return supabase.from('users').select(selectCols).eq(column, value).maybeSingle();
+      } else {
+        // Si maybeSingle no está disponible, usamos single y manejamos el error
+        const r = await supabase.from('users').select(selectCols).eq(column, value).single();
+        // same shape
+        return r;
+      }
+    };
+
+    // 3. Buscamos primero por auth0_id, desp por auth0_sub
+    let userDb = null;
+    let error = null;
+
+    let resp = await fetchMaybeSingle('auth0_id', sub);
+    userDb = resp.data; error = resp.error;
+
+    if (!userDb && !error) {
+      // Si no se encontró por auth0_id, intentamos con auth0_sub
       console.error("Error al obtener usuario en Supabase:", error);
       return res.status(500).json({ message: "Error al obtener datos de usuario" });
     }
 
-    // Guardar datos del usuario en req.user
+    // 4) Manejo de errores / no encontrado
+    if (error && error.code && error.code !== "PGRST116") {
+      // error real de Supabase
+      console.error("Error al obtener usuario en Supabase:", error);
+      return res.status(500).json({ message: "Error al obtener datos de usuario" });
+    }
+
+    if (!userDb) {
+      // No existe en BD → no está “provisionado”
+      return res.status(403).json({ message: "Usuario no registrado en BD" });
+    }
+
+    // 5) Usuario deshabilitado (soft delete)
+    if (userDb.enabled === false) {
+      return res.status(403).json({ message: "Usuario deshabilitado" });
+    }
+
+    // 6) Setear req.user para checkRole y controladores
     req.user = {
       id: userDb.id,
       email: userDb.email,
-      role: userDb.role
+      role: Number(userDb.role) || 0,
+      sub, // útil para trazas
     };
 
-    next();
-
-  } catch (error) {
-    console.error("Error en userData middleware:", error);
-    res.status(500).json({ message: "Error al obtener datos de usuario" });
+    return next();
+    
+  } catch (err) {
+    console.error("Error en userData middleware:", err);
+    return res.status(500).json({ message: "Error al obtener datos de usuario" });
   }
 };
-
-// EXPORTAMOS EL MIDDLEWARE PARA PODER USARLO EN EL PROYECTO
-module.exports = userData;

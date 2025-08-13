@@ -1,34 +1,80 @@
-const express = require('express');
-const router = express.Router();
+const router = require('express').Router();
+const {
+  listLots,
+  addLot,
+  editLot,
+  softDeleteLot,
+  countEnabledLots,
+} = require('../controllers/lots/lot.js');
 
-// IMPORTACION DE CONTROLADORES EN /controllers/lots
-    const { 
-        listLots, 
-        addLot, 
-        editLot, 
-        softDeleteLot, 
-        countEnabledLots 
-    } = require('../controllers/lots/lot.js');
+const {
+  listDisabledLots,
+  enableLot,
+} = require('../controllers/lots/lot.disabled.js');
 
-    const { 
-        listDisabledLots, 
-        enableLot 
-    } = require('../controllers/lots/lot.disabled.js');
+const validate = require('../middleware/validate');
+const checkRole = require('../middleware/checkRole');
+const schema = require('../validations/lots.schema'); 
 
+/**
+ * Roles
+ *  0 = Empleado (logueado)
+ *  1 = Supervisor
+ *  2 = Dueño
+ *  3 = Admin
+ *
+ * Notas:
+ * - GET list/disabled/count requieren login (0).
+ * - Crear/Editar/Soft delete/Enable requieren Dueño+ (2).
+ */
 
-// Las rutas son puntos de entrada al servidor, y nos sirven para establecer respuestas a las solicitudes HTTP
-// Al mismo tiempo, nos mueve a crear codigo de una forma mas limpia y modular
+// Contadores (enabled)
+router.get('/count/enabled',
+  checkRole(0),
+  countEnabledLots
+);
 
-// DEFINICION DE RUTAS PARA EL MANEJO DE LOTES HABILITADOS
-router.get('/', listLots);
-router.post('/', addLot);
-router.put('/:id', editLot);
-router.delete('/:id', softDeleteLot);
-router.get('/count/enabled', countEnabledLots);
+// Listado de deshabilitados (enabled=false)
+router.get('/disabled',
+  checkRole(0),
+  listDisabledLots
+);
 
-// DEFINICION DE RUTAS PARA EL MANEJO DE LOTES DESHABILITADOS
-router.get('/disabled', listDisabledLots);
-router.put('/enable/:id', enableLot);
+// Habilitar (soft-restore) un lote
+router.put('/enable/:id',
+  validate(schema.idParam),
+  checkRole(2),
+  enableLot
+);
 
-// Se exporta el router para que pueda ser usado en index.js
+// ── CRUD PRINCIPAL ────────────────────────────────────────────────────────────
+// Listado (enabled=true por defecto)
+router.get('/',
+  validate(schema.listQuery),
+  checkRole(0),
+  listLots
+);
+
+// Crear lote
+router.post('/',
+  validate(schema.createBody),
+  checkRole(2),
+  addLot
+);
+
+// Editar lote 
+router.put('/:id',
+  validate(schema.updateBody),
+  checkRole(2),
+  editLot
+);
+
+// Soft delete (enabled=false)
+router.delete('/:id',
+  validate(schema.idParam),
+  checkRole(2),
+  softDeleteLot
+);
+
 module.exports = router;
+
