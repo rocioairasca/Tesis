@@ -7,6 +7,7 @@ import {
   EnvironmentOutlined,
   MoreOutlined,
   UserOutlined,
+  CarOutlined
 } from "@ant-design/icons";
 import { Dropdown, Menu } from "antd";
 import "../css/BottomNavigation.css";
@@ -26,6 +27,12 @@ const BottomNavigation = () => {
           label: "Usuarios",
           icon: <UserOutlined />,
           onClick: () => navigate("/usuarios"),
+        },
+        {
+          key: "vehiculos",
+          label: "Vehículos",
+          icon: <CarOutlined />,
+          onClick: () => navigate("/vehiculos"),
         }
       ]}
     />

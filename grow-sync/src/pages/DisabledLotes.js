@@ -116,12 +116,6 @@ const DisabledLots = () => {
             <div key={rowKey(lot)} className="inventory-card">
               <div className="card-header">
                 <h3>{lot.name}</h3>
-                <div className="card-icons">
-                  <CheckOutlined
-                    onClick={() => handleEnable(getId(lot))}
-                    style={{ color: "#52c41a" }}
-                  />
-                </div>
               </div>
 
               <p>
