@@ -22,14 +22,12 @@ import DisabledUsages from './pages/DisabledUsages.js';
 import LoginRegister from "./pages/auth/LoginRegister";
 
 // Rutas protegidas
-import ProtectedRoute from "./routes/ProtectedRoute";
-import RoleProtectedRoute from "./routes/RoleProtectedRoute";
+import GuardedRoute from './routes/GuardedRoute.js';
 
 // Estilos globales
 import './App.css';
 
 function App() {
-
   return (
     <Auth0Provider
       domain={process.env.REACT_APP_AUTH0_DOMAIN}
@@ -49,53 +47,77 @@ function App() {
           <Route path="/login" element={<LoginRegister />} />
 
           {/* Rutas protegidas con layout */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <AppLayout><Dashboard /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/dashboard"
+            element={
+              <GuardedRoute>
+                <AppLayout><Dashboard /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/usuarios" element={
-            <RoleProtectedRoute allowedRoles={[3]}> {/* Solo Admin */}
-              <AppLayout><Users /></AppLayout>
-            </RoleProtectedRoute>
-          } />
+          <Route
+            path="/usuarios"
+            element={
+              <GuardedRoute allowedRoles={[3]}>
+                <AppLayout><Users /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/inventario" element={
-            <ProtectedRoute>
-              <AppLayout><Inventory /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/inventario"
+            element={
+              <GuardedRoute>
+                <AppLayout><Inventory /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/lotes" element={
-            <ProtectedRoute>
-              <AppLayout><Lotes /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/lotes"
+            element={
+              <GuardedRoute >
+                <AppLayout><Lotes /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/lotes-deshabilitados" element={
-            <ProtectedRoute>
-              <AppLayout><DisabledLotes /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/lotes-deshabilitados"
+            element={
+              <GuardedRoute allowedRoles={[3]}>
+                <AppLayout><DisabledLotes /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/productos-deshabilitados" element={
-            <ProtectedRoute>
-              <AppLayout><DisabledProducts /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/productos-deshabilitados"
+            element={
+              <GuardedRoute allowedRoles={[3]}>
+                <AppLayout><DisabledProducts /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/usage" element={
-            <ProtectedRoute>
-              <AppLayout><Usage /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/usage"
+            element={
+              <GuardedRoute >
+                <AppLayout><Usage /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
-          <Route path="/usages-disabled" element={
-            <ProtectedRoute>
-              <AppLayout><DisabledUsages /></AppLayout>
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/usages-disabled"
+            element={
+              <GuardedRoute allowedRoles={[3]}>
+                <AppLayout><DisabledUsages /></AppLayout>
+              </GuardedRoute>
+            }
+          />
 
           {/* Redirección por defecto a login */}
           <Route path="*" element={<Navigate to="/login" />} />
@@ -110,4 +132,3 @@ function App() {
 }
 
 export default App;
-

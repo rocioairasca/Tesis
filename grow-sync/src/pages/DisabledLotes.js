@@ -1,35 +1,46 @@
-import React, { useState, useEffect } from "react";
-import { Table, Button, Space, Popconfirm, notification, Row, Col } from "antd";
-import { LeftOutlined } from "@ant-design/icons";
-import axios from "axios";
+import React, { useState, useEffect, useCallback } from "react";
+import { Table, Button, Space, Popconfirm, notification, Row, Col, Tooltip } from "antd";
+import { LeftOutlined, CheckOutlined, EnvironmentOutlined, AimOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import api from "../services/apiClient";
 import useIsMobile from "../hooks/useIsMobile";
 
-const url = process.env.REACT_APP_URL;
+// helpers
+const getId = (r) => r?.id ?? r?._id;
+const rowKey = (r) => getId(r) ?? r?.name ?? String(Math.random());
 
 const DisabledLots = () => {
   const [lots, setLots] = useState([]);
+  const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
-  const fetchDisabledLots = async () => {
+  const fetchDisabledLots = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${url}/api/lots/disabled`);
-      setLots(res.data);
+      const { data } = await api.get("/lots/disabled");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setLots(list);
     } catch (error) {
-      notification.error({ message: 'Error al cargar lotes deshabilitados' });
+      console.error("→ disabled lots list error:", error);
+      notification.error({ message: "Error al cargar lotes deshabilitados" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDisabledLots();
-  }, []);
+  }, [fetchDisabledLots]);
 
   const handleEnable = async (id) => {
     try {
-      await axios.put(`${url}/api/lots/enable/${id}`);
-      notification.success({ message: 'Lote habilitado exitosamente' });
+      await api.put(`/lots/enable/${id}`);
+      notification.success({ message: "Lote habilitado exitosamente" });
       fetchDisabledLots();
     } catch (error) {
-      notification.error({ message: 'Error al habilitar lote' });
+      console.error("→ enable lot error:", error);
+      notification.error({ message: "Error al habilitar lote" });
     }
   };
 
@@ -38,30 +49,31 @@ const DisabledLots = () => {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1,
+      render: (_, __, index) => index + 1,
+      width: 64,
     },
-    {
-      title: "Nombre del Lote",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Área Total (ha)",
-      dataIndex: "area",
-      key: "area",
-    },
+    { title: "Nombre del Lote", dataIndex: "name", key: "name" },
+    { title: "Área Total (ha)", dataIndex: "area", key: "area" },
     {
       title: "Acciones",
       key: "actions",
+      width: 72,
       render: (_, record) => (
-        <Space>
+        <Space size="small">
           <Popconfirm
-            title="¿Querés volver a habilitar este lote?"
-            onConfirm={() => handleEnable(record.id)}
+            title="¿Volver a habilitar este lote?"
             okText="Sí"
             cancelText="No"
+            onConfirm={() => handleEnable(getId(record))}
           >
-            <Button size="small" type="primary">Habilitar</Button>
+            <Tooltip title="Habilitar">
+              <Button
+                type="text"
+                shape="circle"
+                aria-label="Habilitar"
+                icon={<CheckOutlined style={{ color: "#52c41a" }} />}
+              />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -70,39 +82,59 @@ const DisabledLots = () => {
 
   return (
     <div style={{ padding: 24 }}>
-
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <h2>Gestión de Lotes Deshabilitados</h2>
+          <h2>Lotes Deshabilitados</h2>
         </Col>
         <Col>
-            <Button
-              type="default"
-              icon={<LeftOutlined />}
-              shape="circle"
-              onClick={() => window.history.back()}
-              style={{ borderColor: "#95ba56" }}
-            />
+          <Button
+            type="default"
+            icon={<LeftOutlined />}
+            shape="circle"
+            onClick={() => navigate("/lotes")}
+            style={{ borderColor: "#95ba56" }}
+          />
         </Col>
       </Row>
 
+      {/* Tabla (desktop) */}
       {!isMobile && (
         <Table
           scroll={{ x: "max-content" }}
           columns={columns}
           dataSource={lots}
-          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+          rowKey={rowKey}
         />
       )}
 
+      {/* Cards (mobile) */}
       {isMobile && (
         <div className="inventory-cards-container">
           {lots.map((lot) => (
-            <div key={lot.id} className="inventory-card">
-              <h3>{lot.name}</h3>
-              <p>Área Total: {lot.area} ha</p>
-              <Button type="primary" onClick={() => handleEnable(lot.id)}>Habilitar</Button>
+            <div key={rowKey(lot)} className="inventory-card">
+              <div className="card-header">
+                <h3>{lot.name}</h3>
+                <div className="card-icons">
+                  <CheckOutlined
+                    onClick={() => handleEnable(getId(lot))}
+                    style={{ color: "#52c41a" }}
+                  />
+                </div>
+              </div>
+
+              <p>
+                <AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha
+              </p>
+              <p>
+                <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
+                {lot.location ? "Asignada" : "No asignada"}
+              </p>
+
+              <Button type="primary" block style={{ marginTop: 12 }} onClick={() => handleEnable(getId(lot))}>
+                Habilitar Lote
+              </Button>
             </div>
           ))}
         </div>

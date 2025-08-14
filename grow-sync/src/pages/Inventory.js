@@ -1,123 +1,198 @@
-import React, { useState, useEffect } from "react";
-import { Table, Button, Drawer, Form, Input, InputNumber, Select, Space, Popconfirm, notification, Row, Col, Tag, Dropdown } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined, MoreOutlined, CalendarOutlined, DollarOutlined, InboxOutlined, AppstoreOutlined } from "@ant-design/icons";
-import axios from "axios";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  Table, Button, Drawer, Form, Input, InputNumber, Select, Space,
+  Popconfirm, notification, Row, Col, Tag, Dropdown, Tooltip
+} from "antd";
+import {
+  EditOutlined, DeleteOutlined, PlusOutlined, MoreOutlined,
+  CalendarOutlined, DollarOutlined, InboxOutlined, AppstoreOutlined, ExclamationCircleOutlined
+} from "@ant-design/icons";
+import api from "../services/apiClient";
 import useIsMobile from "../hooks/useIsMobile";
 
-const { Option } = Select;
-const url = process.env.REACT_APP_URL;
+const ROLE_OPTIONS = [
+  { value: "líquido", label: "Líquido" },
+  { value: "polvo", label: "Polvo" },
+];
+
+// ---- helpers de formato ----
+const UNIT_DISPLAY = {
+  litros: "L", litro: "L", lt: "L", l: "L", L: "L",
+  kg: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
+};
+const formatUnit = (u) => UNIT_DISPLAY[String(u || "").toLowerCase()] || (u || "-");
+
+const formatCurrency = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+};
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const formatDateDDMMYYYY = (d) => {
+  if (!d) return "-";
+  const dt = new Date(d);
+  if (isNaN(dt)) return "-";
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+};
+
+const daysTo = (d) => {
+  if (!d) return null;
+  const dt = new Date(d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((dt - today) / (1000 * 60 * 60 * 24));
+};
+const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
+const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
+
 
 const Inventory = () => {
   // ------------------------- STATE -------------------------
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const notifiedRef = useRef(false);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [unit, setUnit] = useState('');
+  const [unit, setUnit] = useState("");
   const [form] = Form.useForm();
 
-  // Detecta si el dispositivo es móvil (para comportamiento responsivo)
   const isMobile = useIsMobile();
 
+  const getId = (r) => r?.id ?? r?._id;
+  const rowKey = (r) => getId(r) ?? r?.name;
+
   // ------------------------- API -------------------------
-  // Función que obtiene la lista de productos desde el backend
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${url}/api/products`);
-      setProducts(res.data); // Actualiza el estado con la lista de productos
+      const { data } = await api.get("/products");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setProducts(list);
+
+      // Notificar solo una vez por montaje
+      if (!notifiedRef.current) {
+        const expired = list.filter(p => isExpired(p.acquisition_date));
+        const soon = list.filter(p => isExpiringSoon(p.acquisition_date));
+
+        if (expired.length) {
+          notification.error({
+            message: "Productos vencidos",
+            description:
+              expired.slice(0, 5).map(p => p.name).join(", ") +
+              (expired.length > 5 ? ` y ${expired.length - 5} más` : ""),
+            duration: 6,
+          });
+        }
+        if (soon.length) {
+          notification.warning({
+            message: "Vencen pronto (≤15 días)",
+            description:
+              soon.slice(0, 5).map(p => p.name).join(", ") +
+              (soon.length > 5 ? ` y ${soon.length - 5} más` : ""),
+            duration: 6,
+          });
+        }
+        notifiedRef.current = true;
+      }
     } catch (error) {
-      notification.error({ message: 'Error al cargar productos' });
+      console.error("→ products list error:", error);
+      notification.error({ message: "Error al cargar productos" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []); 
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [fetchProducts]); 
+
 
   // ------------------------- HANDLERS -------------------------
-  // Abre el drawer con datos si es edición, vacío si es nuevo
   const openDrawer = (product = null) => {
     if (!product) {
-      //  Nuevo producto: limpiamos antes de abrir
       setEditingProduct(null);
-      setUnit('');
+      setUnit("");
       form.resetFields();
       form.setFieldsValue({
         type: undefined,
-        unit: '',
+        unit: "",
         acquisition_date: null,
+        total_quantity: undefined,
+        price: undefined,
+        name: "",
       });
-
     } else {
-      //  Editar producto
       setEditingProduct(product);
       const acquisitionDate = product.acquisition_date
-        ? new Date(product.acquisition_date).toISOString().split('T')[0]
+        ? new Date(product.acquisition_date).toISOString().split("T")[0]
         : null;
 
-      const type = ["líquido", "polvo"].includes(product.type) ? product.type : undefined;
+      const type = ["líquido", "polvo"].includes(product.type)
+        ? product.type
+        : undefined;
 
       form.setFieldsValue({
-        ...product,
+        name: product.name ?? "",
         type,
-        acquisition_date: acquisitionDate
+        unit: product.unit ?? (type === "líquido" ? "litros" : "kg"),
+        total_quantity: product.total_quantity ?? undefined,
+        price: product.price ?? undefined,
+        acquisition_date: acquisitionDate,
       });
-      setUnit(product.unit);
+      setUnit(product.unit ?? (type === "líquido" ? "litros" : "kg"));
     }
-
-    // Abrir Drawer al final
     setIsDrawerOpen(true);
   };
 
-  // Cierra el drawer y limpia estados
   const closeDrawer = () => {
     setIsDrawerOpen(false);
     setEditingProduct(null);
     form.resetFields();
   };
 
-  // Envío del formulario para crear o actualizar un producto
   const handleSubmit = async (values) => {
     try {
       const payload = {
         ...values,
         unit: values.unit || (values.type === "líquido" ? "litros" : "kg"),
+        // si es creación, la disponible = total; si es edición, se conserva
         available_quantity: editingProduct
-          ? editingProduct.available_quantity 
+          ? editingProduct.available_quantity
           : values.total_quantity,
       };
 
-      const id = editingProduct?.id || editingProduct?._id;
-      
-      if (editingProduct && id) {
-        // Editar producto existente
-        await axios.put(`${url}/api/products/${editingProduct.id}`, payload);
-        notification.success({ message: 'Producto actualizado exitosamente' });
+      const id = getId(editingProduct);
 
+      if (editingProduct && id) {
+        await api.put(`/products/${id}`, payload);
+        notification.success({ message: "Producto actualizado exitosamente" });
       } else {
-        // Crear nuevo producto
-        await axios.post(`${url}/api/products`, payload);
-        notification.success({ message: 'Producto creado exitosamente' });
+        await api.post("/products", payload);
+        notification.success({ message: "Producto creado exitosamente" });
       }
 
-      fetchProducts(); // Refresca lista
-      closeDrawer(); // Cierra el formulario
-
+      fetchProducts();
+      closeDrawer();
     } catch (error) {
-      
-      notification.error({ message: 'Error al guardar producto' });
+      console.error("→ save product error:", error);
+      notification.error({
+        message: error?.response?.data?.message || "Error al guardar producto",
+      });
     }
   };
 
-  // Elimina un producto (lo deshabilita)
   const handleDelete = async (id) => {
-    
     try {
-      await axios.delete(`${url}/api/products/${id}`);
-      notification.success({ message: 'Producto deshabilitado exitosamente' });
+      await api.delete(`/products/${id}`);
+      notification.success({ message: "Producto deshabilitado exitosamente" });
       fetchProducts();
-
     } catch (error) {
-      notification.error({ message: 'Error al deshabilitar producto' });
+      console.error("→ disable product error:", error);
+      notification.error({
+        message:
+          error?.response?.data?.message || "Error al deshabilitar producto",
+      });
     }
   };
 
@@ -127,18 +202,10 @@ const Inventory = () => {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1,
+      render: (_, __, index) => index + 1,
+      width: 64,
     },
-    {
-      title: "Nombre",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Tipo",
-      dataIndex: "type",
-      key: "type",
-    },
+    { title: "Nombre", dataIndex: "name", key: "name" },
     {
       title: "Cantidad Total",
       dataIndex: "total_quantity",
@@ -148,40 +215,72 @@ const Inventory = () => {
       title: "Cantidad Disponible",
       dataIndex: "available_quantity",
       key: "available_quantity",
-      render: (text) => (
-        text > 0 ? text : <Tag color="red">Agotado</Tag>
-      )
+      render: (v) => (v > 0 ? v : <Tag color="red">Agotado</Tag>),
     },
-    {
-      title: "Unidad",
-      dataIndex: "unit",
-      key: "unit",
+    { title: "Unidad", dataIndex: "unit", key: "unit",
+      render: (u) => formatUnit(u),
     },
     {
       title: "Precio",
       dataIndex: "price",
       key: "price",
-      render: (text) => `$ ${text}`
+      render: (v) => formatCurrency(v),
     },
     {
       title: "Fecha de Vencimiento",
       dataIndex: "acquisition_date",
       key: "acquisition_date",
-      render: (text) => text ? new Date(text).toLocaleDateString() : '-'
+      render: (d) => {
+        const expired = isExpired(d);
+        const soon = isExpiringSoon(d);
+        return (
+          <Space size={6}>
+            <span>{formatDateDDMMYYYY(d)}</span>
+            {expired && (
+              <Tooltip title="Vencido">
+                <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />
+              </Tooltip>
+            )}
+            {!expired && soon && (
+              <Tooltip title="Próximo a vencer">
+                <ExclamationCircleOutlined style={{ color: "#faad14" }} />
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: "Acciones",
       key: "actions",
+      width: 96,
       render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => openDrawer(record)}>Editar</Button>
+        <Space size="small">
+          <Tooltip title="Editar">
+            <Button
+              type="text"
+              shape="circle"
+              icon={<EditOutlined />}
+              aria-label="Editar"
+              onClick={() => openDrawer(record)}
+            />
+          </Tooltip>
+
           <Popconfirm
-            title="¿Estás seguro que querés deshabilitar este producto?"
-            onConfirm={() => handleDelete(record.id || record._id)}
+            title="¿Deshabilitar este producto?"
             okText="Sí"
             cancelText="No"
+            onConfirm={() => handleDelete(getId(record))}
           >
-            <Button size="small" className="danger-button">Eliminar</Button>
+            <Tooltip title="Deshabilitar">
+              <Button
+                type="text"
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+                aria-label="Deshabilitar"
+              />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -190,16 +289,23 @@ const Inventory = () => {
 
   const menuItems = [
     {
-      key: '1',
-      label: <span onClick={() => window.location.href = "/productos-deshabilitados"}>Ver productos deshabilitados</span>,
-    }
+      key: "1",
+      label: (
+        <span onClick={() => (window.location.href = "/productos-deshabilitados")}>
+          Ver productos deshabilitados
+        </span>
+      ),
+    },
   ];
 
-  
   // ------------------------- RENDER -------------------------
   return (
     <div style={{ padding: 12 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 12, marginTop: isMobile ? 8 : 24 }}>
+      <Row
+        justify="space-between"
+        align="middle"
+        style={{ marginBottom: 12, marginTop: isMobile ? 8 : 24 }}
+      >
         <Col>
           <h2>Gestión de Inventario</h2>
         </Col>
@@ -212,7 +318,7 @@ const Inventory = () => {
             )}
             {!isMobile && (
               <Space>
-                <Button onClick={() => window.location.href = "/productos-deshabilitados"}>
+                <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
                   Ver Productos Deshabilitados
                 </Button>
                 <Button type="primary" onClick={() => openDrawer(null)}>
@@ -230,8 +336,9 @@ const Inventory = () => {
           scroll={{ x: "max-content" }}
           columns={columns}
           dataSource={products}
-          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+          rowKey={rowKey}
         />
       )}
 
@@ -239,44 +346,57 @@ const Inventory = () => {
       {isMobile && (
         <div className="inventory-cards-container">
           {products.map((product) => {
-            const expiration = new Date(product.acquisition_date);
+            const expiration = product.acquisition_date
+              ? new Date(product.acquisition_date)
+              : null;
             const today = new Date();
-            const diffDays = Math.ceil((expiration - today) / (1000 * 60 * 60 * 24));
+            const diffDays =
+              expiration != null
+                ? Math.ceil((expiration - today) / (1000 * 60 * 60 * 24))
+                : null;
 
             return (
-              <div className="inventory-card" key={product._id}>
+              <div className="inventory-card" key={rowKey(product)}>
                 <div className="card-header">
                   <h3>{product.name}</h3>
                   <div className="card-icons">
                     <EditOutlined onClick={() => openDrawer(product)} />
-                    <DeleteOutlined onClick={() => handleDelete(product._id || product.id)} />
+                    <DeleteOutlined onClick={() => handleDelete(getId(product))} />
                   </div>
                 </div>
 
-                <p><AppstoreOutlined /> <strong>Tipo:</strong> {product.type}</p>
-                <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {product.unit}</p>
-
+                <p>
+                  <AppstoreOutlined /> <strong>Tipo:</strong> {product.type}
+                </p>
+                <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {formatUnit(product.unit)}</p>
                 <p>
                   <InboxOutlined /> <strong>Disponible:</strong>{" "}
-                  <Tag color={
-                    product.available_quantity === 0 ? "red" :
-                    product.available_quantity < product.total_quantity * 0.3 ? "orange" :
-                    "green"
-                  }>
-                    {product.available_quantity} {product.unit}
+                  <Tag
+                    color={
+                      product.available_quantity === 0
+                        ? "red"
+                        : product.available_quantity < product.total_quantity * 0.3
+                        ? "orange"
+                        : "green"
+                    }
+                  >
+                    {product.available_quantity} {formatUnit(product.unit)}
                   </Tag>
                 </p>
 
-                <p><DollarOutlined /> <strong>Precio:</strong> ${product.price}</p>
+                <p><DollarOutlined /> <strong>Precio:</strong> {formatCurrency(product.price)}</p>
 
                 <p>
                   <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                  {expiration.toLocaleDateString()}{" "}
-
-                  {diffDays <= 0 && <Tag color="red">Vencido</Tag>}
-                  {diffDays > 0 && diffDays <= 15 && <Tag color="orange">Próximo a vencer</Tag>}
+                  {formatDateDDMMYYYY(product.acquisition_date)}{" "}
+                  {/* ícono de alerta en mobile */}
+                  {isExpired(product.acquisition_date) && (
+                    <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
+                  )}
+                  {!isExpired(product.acquisition_date) && isExpiringSoon(product.acquisition_date) && (
+                    <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
+                  )}
                 </p>
-
               </div>
             );
           })}
@@ -291,6 +411,7 @@ const Inventory = () => {
         height={isMobile ? "90vh" : undefined}
         width={isMobile ? "100%" : 400}
         styles={{ body: { paddingBottom: 80 } }}
+        destroyOnClose
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Form.Item
@@ -309,14 +430,13 @@ const Inventory = () => {
             <Select
               allowClear
               placeholder="Seleccioná el tipo de producto"
+              options={ROLE_OPTIONS} // ✅ AntD v5
               onChange={(value) => {
-                form.setFieldsValue({ unit: value === "líquido" ? "litros" : "kg" });
-                setUnit(value === "líquido" ? "litros" : "kg");
+                const nextUnit = value === "líquido" ? "litros" : "kg";
+                form.setFieldsValue({ unit: nextUnit });
+                setUnit(nextUnit);
               }}
-            >
-              <Option value="líquido">Líquido</Option>
-              <Option value="polvo">Polvo</Option>
-            </Select>
+            />
           </Form.Item>
 
           <Form.Item
@@ -324,11 +444,16 @@ const Inventory = () => {
             label="Cantidad Total"
             rules={[{ required: true, message: "Por favor ingresá la cantidad total." }]}
           >
-            <InputNumber min={0} style={{ width: "100%" }} placeholder="Ingresá la cantidad total." disabled={!!editingProduct} />
+            <InputNumber
+              min={0}
+              style={{ width: "100%" }}
+              placeholder="Ingresá la cantidad total."
+              disabled={!!editingProduct}
+            />
           </Form.Item>
 
           <Form.Item name="unit" label="Unidad">
-            <Input disabled />
+            <Input disabled value={unit} />
           </Form.Item>
 
           <Form.Item
@@ -339,20 +464,21 @@ const Inventory = () => {
             <InputNumber min={0} style={{ width: "100%" }} prefix="$" placeholder="Ingresá el precio." />
           </Form.Item>
 
-          <Form.Item 
-            name="acquisition_date" 
+          <Form.Item
+            name="acquisition_date"
             label="Fecha de Vencimiento"
             rules={[
+              { required: true, message: "Por favor ingresá la fecha de vencimiento." },
               {
-                required: true,
-                message: "Por favor ingresá la fecha de vencimiento.",
-              },
-              {
-                validator: (_, value) => 
-                  !value || new Date(value) >= new Date().setHours(0, 0, 0, 0)
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve();
+                  const inputTs = new Date(value).getTime();
+                  const todayMidnight = new Date().setHours(0, 0, 0, 0);
+                  return inputTs >= todayMidnight
                     ? Promise.resolve()
-                    : Promise.reject("La fecha de vencimiento no puede ser anterior a la fecha actual.")
-              }
+                    : Promise.reject(new Error("La fecha de vencimiento no puede ser anterior a la fecha actual."));
+                },
+              },
             ]}
           >
             <Input type="date" placeholder="dd/mm/aaaa" />
@@ -373,7 +499,7 @@ const Inventory = () => {
       )}
     </div>
   );
-
 };
 
 export default Inventory;
+

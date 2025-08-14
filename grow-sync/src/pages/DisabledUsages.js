@@ -1,51 +1,93 @@
-import React, { useState, useEffect } from "react";
-import { Table, Button, Row, Col, notification } from "antd";
-import { ArrowLeftOutlined, CalendarOutlined } from "@ant-design/icons";
-import axios from "axios";
+import React, { useState, useEffect, useCallback } from "react";
+import { Table, Button, Row, Col, notification, Tooltip } from "antd";
+import { ArrowLeftOutlined, CalendarOutlined, CheckOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import useIsMobile from "../hooks/useIsMobile";
 import { Package, MapPin, Ruler } from "phosphor-react";
+import api from "../services/apiClient";
 
-const url = process.env.REACT_APP_URL;
+// helpers
+const getId = (r) => r?.id ?? r?._id;
+const rowKey = (r) => getId(r) ?? `${r?.product_id}-${r?.date}`;
+const parseLotIds = (lot_ids) => {
+  if (!lot_ids) return [];
+  if (Array.isArray(lot_ids)) return lot_ids;
+  try { return JSON.parse(lot_ids); } catch { return []; }
+};
 
 const DisabledUsages = () => {
   const [usages, setUsages] = useState([]);
   const [products, setProducts] = useState([]);
+  const [lots, setLots] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const fetchDisabledUsages = async () => {
+  const fetchDisabledUsages = useCallback(async () => {
     try {
-      const res = await axios.get(`${url}/api/usages/disabled`);
-      setUsages(res.data);
+      setLoading(true);
+      const { data } = await api.get("/usages/disabled");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setUsages(list);
     } catch (error) {
-      notification.error({ message: 'Error al cargar registros deshabilitados' });
+      console.error("→ disabled usages list error:", error);
+      notification.error({ message: "Error al cargar registros deshabilitados" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const res = await axios.get(`${url}/api/products`);
-      setProducts(res.data);
+      const { data } = await api.get("/products");
+      setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
     } catch (error) {
-      notification.error({ message: 'Error al cargar productos' });
+      console.error("→ products list error:", error);
+      notification.error({ message: "Error al cargar productos" });
     }
-  };
+  }, []);
+
+  // para mostrar nombres de lotes en lugar de IDs
+  const fetchLots = useCallback(async () => {
+    try {
+      const { data } = await api.get("/lots");
+      setLots(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch (error) {
+      console.error("→ lots list error:", error);
+      // opcional: notification.warning({ message: "No se pudo cargar la lista de lotes" });
+    }
+  }, []);
 
   useEffect(() => {
     fetchDisabledUsages();
     fetchProducts();
-  }, []);
+    fetchLots();
+  }, [fetchDisabledUsages, fetchProducts, fetchLots]);
 
   const handleEnable = async (id) => {
     try {
-      await axios.put(`${url}/api/usages/enable/${id}`);
-      notification.success({ message: 'Registro de uso habilitado exitosamente' });
+      await api.put(`/usages/enable/${id}`);
+      notification.success({ message: "Registro de uso habilitado exitosamente" });
       fetchDisabledUsages();
     } catch (error) {
-      notification.error({ message: 'Error al habilitar registro de uso' });
+      console.error("→ enable usage error:", error);
+      notification.error({ message: "Error al habilitar registro de uso" });
     }
+  };
+
+  // helpers UI
+  const productName = (id) => products.find((p) => p.id === id)?.name || "-";
+  const lotNames = (usage) => {
+    // preferimos usage_lots -> lot_id -> nombre; si no, parseamos lot_ids
+    if (Array.isArray(usage?.usage_lots) && usage.usage_lots.length) {
+      return usage.usage_lots
+        .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
+        .join(", ");
+    }
+    const ids = parseLotIds(usage?.lot_ids);
+    return ids.map((id) => lots.find((x) => x.id === id)?.name || id).join(", ");
   };
 
   const columns = [
@@ -53,46 +95,52 @@ const DisabledUsages = () => {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1,
+      width: 64,
+      render: (_, __, index) => index + 1,
     },
     {
       title: "Producto",
       dataIndex: "product_id",
       key: "product_id",
-      render: (text) => {
-        const product = products.find(p => p.id === text);
-        return product ? product.name : "-";
-      }
+      render: (id) => productName(id),
     },
     {
-      title: "Cantidad Usada",
+      title: "Cantidad",
       dataIndex: "amount_used",
       key: "amount_used",
+      render: (v, record) => `${v} ${record.unit}`,
     },
     {
       title: "Lotes",
-      dataIndex: "lot_ids",
       key: "lot_ids",
+      render: (_, record) => lotNames(record) || "-",
     },
     {
       title: "Área Total (ha)",
       dataIndex: "total_area",
       key: "total_area",
+      render: (v) => (v != null ? `${v} ha` : "-"),
     },
     {
-      title: "Fecha de Uso",
+      title: "Fecha",
       dataIndex: "date",
       key: "date",
-      render: (text) => dayjs(text).format('DD/MM/YYYY')
+      render: (text) => (text ? dayjs(text).format("DD/MM/YYYY") : "-"),
     },
     {
       title: "Acciones",
       key: "actions",
+      width: 72,
       render: (_, record) => (
-        <Button type="primary" size="small" onClick={() => handleEnable(record.id)}>
-          Habilitar
-        </Button>
-
+        <Tooltip title="Habilitar">
+          <Button
+            type="text"
+            shape="circle"
+            aria-label="Habilitar"
+            icon={<CheckOutlined style={{ color: "#52c41a" }} />}
+            onClick={() => handleEnable(getId(record))}
+          />
+        </Tooltip>
       ),
     },
   ];
@@ -104,54 +152,61 @@ const DisabledUsages = () => {
           <h2>Registros de Uso Deshabilitados</h2>
         </Col>
         <Col>
-        {!isMobile && (
-          <Button onClick={() => navigate('/usage')}>
-            ← Volver a Registros de Uso
-          </Button>
-        )}
-
-        {isMobile && (
-          <Button 
-            icon={<ArrowLeftOutlined />} 
-            onClick={() => navigate('/usage')}
-            shape="circle"
-            type="default"
-            style={{ borderColor: "#95ba56" }}
-          />
-        )}
+          {!isMobile ? (
+            <Button onClick={() => navigate("/usage")}>← Volver a Registros de Uso</Button>
+          ) : (
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate("/usage")}
+              shape="circle"
+              type="default"
+              style={{ borderColor: "#95ba56" }}
+            />
+          )}
         </Col>
       </Row>
 
+      {/* Tabla (desktop) */}
       {!isMobile && (
         <Table
           scroll={{ x: "max-content" }}
           columns={columns}
           dataSource={usages}
-          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+          rowKey={rowKey}
         />
       )}
 
+      {/* Cards (mobile) */}
       {isMobile && (
         <div className="inventory-cards-container">
           {usages.map((usage) => {
-            const product = products.find(p => p.id === usage.product_id);
-            const lotList = JSON.parse(usage.lot_ids || "[]").join(", ");
-            const date = dayjs(usage.date).format("DD/MM/YYYY");
-
+            const date = usage.date ? dayjs(usage.date).format("DD/MM/YYYY") : "-";
             return (
-              <div className="inventory-card" key={usage.id}>
+              <div className="inventory-card" key={rowKey(usage)}>
                 <div className="card-header">
-                  <h3>{product?.name || "-"}</h3>
+                  <h3>{productName(usage.product_id)}</h3>
                 </div>
 
-                <p className="flex-row"><Package size={18} style={{ marginRight: 8 }} /> <strong>Cantidad:</strong> {usage.amount_used} {usage.unit}</p>
-                <p className="flex-row"><MapPin size={18} style={{ marginRight: 8 }} /> <strong>Lotes:</strong> {lotList}</p>
-                <p className="flex-row"><Ruler size={18} style={{ marginRight: 8 }} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
-                <p><CalendarOutlined style={{ marginRight: 8 }} /> <strong>Fecha:</strong> {date}</p>
+                <p className="flex-row">
+                  <Package size={18} style={{ marginRight: 8 }} /> <strong>Cantidad:</strong>{" "}
+                  {usage.amount_used} {usage.unit}
+                </p>
+                <p className="flex-row">
+                  <MapPin size={18} style={{ marginRight: 8 }} /> <strong>Lotes:</strong>{" "}
+                  {lotNames(usage) || "-"}
+                </p>
+                <p className="flex-row">
+                  <Ruler size={18} style={{ marginRight: 8 }} /> <strong>Área Total:</strong>{" "}
+                  {usage.total_area} ha
+                </p>
+                <p>
+                  <CalendarOutlined style={{ marginRight: 8 }} /> <strong>Fecha:</strong> {date}
+                </p>
 
                 <div style={{ marginTop: 12 }}>
-                  <Button type="primary" block onClick={() => handleEnable(usage.id)}>
+                  <Button type="primary" block onClick={() => handleEnable(getId(usage))}>
                     Habilitar Registro
                   </Button>
                 </div>

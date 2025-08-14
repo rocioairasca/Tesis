@@ -12,20 +12,14 @@ const RegisterForm = ({onSwitchToLogin}) => {
       const { username, email, password } = values;
       const response = await registerUser({ username, email, password });
 
-      if (response?.message === "Usuario creado correctamente") {
-        message.success("Usuario registrado con éxito 🚀");
+      message.success(response?.message || "Usuario registrado con éxito 🚀");
 
-        setTimeout(() => {
-          if (onSwitchToLogin) {
-            onSwitchToLogin(); 
-          }
-        }, 1000);
-      }
-
+      setTimeout(() => {
+        onSwitchToLogin?.();
+      }, 800);
     } catch (error) {
       console.error("→ Error:", error);
-      message.error(error?.response?.data?.message || "Error al registrar usuario");
-
+      message.error(error?.message || "Error al registrar usuario");
     } finally {
       setLoading(false);
     }
@@ -33,24 +27,21 @@ const RegisterForm = ({onSwitchToLogin}) => {
 
   return (
     <Form name="register_form" onFinish={onFinish} layout="vertical">
-      <Form.Item
-        name="username"
-        rules={[{ required: true, message: "Por favor ingrese un nombre de usuario" }]}
-      >
+      <Form.Item name="username" rules={[{ required: true, message: "Por favor ingrese un nombre de usuario" }]}>
         <Input prefix={<UserOutlined />} placeholder="Nombre de usuario" />
       </Form.Item>
 
       <Form.Item
         name="email"
-        rules={[{ required: true, message: "Por favor ingrese su correo electrónico" }, { type: "email", message: "Correo no válido" }]}
+        rules={[
+          { required: true, message: "Por favor ingrese su correo electrónico" },
+          { type: "email", message: "Correo no válido" }
+        ]}
       >
         <Input prefix={<MailOutlined />} placeholder="Correo electrónico" />
       </Form.Item>
 
-      <Form.Item
-        name="password"
-        rules={[{ required: true, message: "Por favor ingrese una contraseña" }]}
-      >
+      <Form.Item name="password" rules={[{ required: true, message: "Por favor ingrese una contraseña" }]}>
         <Input.Password prefix={<LockOutlined />} placeholder="Contraseña" />
       </Form.Item>
 
@@ -62,9 +53,7 @@ const RegisterForm = ({onSwitchToLogin}) => {
           { required: true, message: "Por favor confirme su contraseña" },
           ({ getFieldValue }) => ({
             validator(_, value) {
-              if (!value || getFieldValue("password") === value) {
-                return Promise.resolve();
-              }
+              if (!value || getFieldValue("password") === value) return Promise.resolve();
               return Promise.reject(new Error("Las contraseñas no coinciden"));
             },
           }),
@@ -74,7 +63,13 @@ const RegisterForm = ({onSwitchToLogin}) => {
       </Form.Item>
 
       <Form.Item>
-        <Button type="primary" htmlType="submit" block loading={loading} style={{ backgroundColor: "#437118", borderColor: "#437118" }}>
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          loading={loading}
+          style={{ backgroundColor: "#437118", borderColor: "#437118" }}
+        >
           Registrarse
         </Button>
       </Form.Item>

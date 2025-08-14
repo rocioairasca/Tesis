@@ -1,14 +1,29 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Dropdown, Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col } from "antd";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Dropdown, Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col, Tooltip } from "antd";
 import { MoreOutlined, EnvironmentOutlined, AimOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import axios from "axios";
+import api from "../services/apiClient";
 import useIsMobile from "../hooks/useIsMobile";
 import MapSelector from '../components/MapSelector';
 
-const url = process.env.REACT_APP_URL;
+// -------- helpers --------
+const getId = (r) => r?.id ?? r?._id;
+const rowKey = (r) => getId(r) ?? r?.name ?? String(Math.random());
+
+const safeParse = (value) => {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch { return null; }
+};
+const ensureString = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  try { return JSON.stringify(value); } catch { return ""; }
+};
 
 const Lotes = () => {
   const [lots, setLots] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingLot, setEditingLot] = useState(null);
   const [form] = Form.useForm();
@@ -16,31 +31,42 @@ const Lotes = () => {
   const [isMapModalOpen, setIsMapModalOpen] = useState(false); 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const mapRef = useRef();
+
   const isMobile = useIsMobile();
 
   // cargamos los lotes desde el back
-  const fetchLots = async () => {
+  const fetchLots = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${url}/api/lots`);
-      setLots(res.data);
+      const { data } = await api.get("/lots");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setLots(list);
     } catch (error) {
+      console.error("→ lots list error:", error);
       notification.error({ message: "Error al cargar los lotes" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchLots();
-  }, []);
+  }, [fetchLots]);
 
+  // Drawer handlers ---
   const openDrawer = (lot = null) => {
     setEditingLot(lot);
-    setIsDrawerOpen(true);
     if (lot) {
-      form.setFieldsValue(lot); // Cargar datos del lote en el formulario
+      form.setFieldsValue({
+        name: lot.name ?? "",
+        area: lot.area ?? undefined,
+        location: ensureString(safeParse(lot.location) || lot.location),
+      });
     } else {
-      form.resetFields(); // Limpiar el formulario si es un nuevo lote
+      form.resetFields();
     }
-  }
+    setIsDrawerOpen(true);
+  };
 
   const closeDrawer = () => {
     setIsDrawerOpen(false);
@@ -50,41 +76,48 @@ const Lotes = () => {
 
   // Agregar o Editar Lote
   const handleSubmit = async (values) => {
+    const payload = {
+      name: values.name?.trim(),
+      area: Number(values.area ?? 0),
+      location: ensureString(values.location),
+    };
+
     try {
-      if (editingLot) {
-        // Editar
-        await axios.put(`${url}/api/lots/${editingLot.id}`, values);
-        notification.success({ message: 'Lote actualizado exitosamente' });
+      if (editingLot && getId(editingLot)) {
+        await api.put(`/lots/${getId(editingLot)}`, payload);
+        notification.success({ message: "Lote actualizado exitosamente" });
       } else {
-        // Agregar nuevo
-        await axios.post(`${url}/api/lots`, values);
-        notification.success({ message: 'Lote creado exitosamente' });
+        await api.post("/lots", payload);
+        notification.success({ message: "Lote creado exitosamente" });
       }
       fetchLots();
       closeDrawer();
     } catch (error) {
-      notification.error({ message: 'Error al guardar lote' });
+      console.error("→ save lot error:", error);
+      notification.error({ message: "Error al guardar lote" });
     }
   };
 
   // Eliminar (Deshabilitar) Lote
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${url}/api/lots/${id}`);
-      notification.success({ message: 'Lote deshabilitado exitosamente' });
+      await api.delete(`/lots/${id}`);
+      notification.success({ message: "Lote deshabilitado exitosamente" });
       fetchLots();
     } catch (error) {
-      notification.error({ message: 'Error al deshabilitar lote' });
+      console.error("→ disable lot error:", error);
+      notification.error({ message: "Error al deshabilitar lote" });
     }
   };
 
-
+  // Tabla ---
   const columns = [
     {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1, 
+      render: (_, __, index) => index + 1,
+      width: 64, 
     },
     {
       title: "Nombre del Lote",
@@ -100,40 +133,61 @@ const Lotes = () => {
       title: "Ubicación",
       dataIndex: "location",
       key: "location",
-      render: (location) => {
-        if (!location) return "Sin ubicación";
-    
+      render: (loc) => {
+        const parsed = safeParse(loc);
+        if (!parsed) return "Sin ubicación";
         return (
-          <Button type="link" onClick={() => setSelectedLocation(JSON.parse(location))}>
+          <Button type="link" onClick={() => setSelectedLocation(parsed)}>
             Ver
           </Button>
         );
-      }
+      },
     },
     {
       title: "Acciones",
       key: "actions",
+      width: 96,
       render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => openDrawer(record)}>Editar</Button>
+        <Space size="small">
+          <Tooltip title="Editar">
+            <Button
+              type="text"
+              shape="circle"
+              icon={<EditOutlined />}
+              onClick={() => openDrawer(record)}
+              aria-label="Editar"
+            />
+          </Tooltip>
           <Popconfirm
-            title="¿Estás seguro que querés deshabilitar este lote?"
-            onConfirm={() => handleDelete(record.id)}
+            title="¿Deshabilitar este lote?"
             okText="Sí"
             cancelText="No"
+            onConfirm={() => handleDelete(getId(record))}
           >
-            <Button size="small" className="danger-button">Eliminar</Button>
+            <Tooltip title="Deshabilitar">
+              <Button
+                type="text"
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+                aria-label="Deshabilitar"
+              />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
     },
   ];
 
-    const menuItems = [
+  const menuItems = [
     {
-      key: '1',
-      label: <span onClick={() => window.location.href = "/lotes-deshabilitados"}>Ver Lotes Deshabilitados</span>,
-    }
+      key: "1",
+      label: (
+        <span onClick={() => (window.location.href = "/lotes-deshabilitados")}>
+          Ver Lotes Deshabilitados
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -175,52 +229,53 @@ const Lotes = () => {
               scroll={{ x: "max-content" }}
               columns={columns}
               dataSource={lots}
+              loading={loading}
               pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-              rowKey="id"
+              rowKey={rowKey}
             />
           </Col>
         </Row>
       )}
 
       {isMobile && (
-        <div style={{ marginBottom: 24 }}>
-          <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
-        </div>
-      )}
+        <>
+          <div style={{ marginBottom: 24 }}>
+            <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
+          </div>
 
-      {isMobile && (
-        <div className="inventory-cards-container">
-          {lots.map((lot) => (
-            <div className="inventory-card" key={lot.id}>
-              <div className="card-header">
-                <h3>{lot.name}</h3>
-                <div className="card-icons">
-                  <EditOutlined onClick={() => openDrawer(lot)} />
-                  <DeleteOutlined onClick={() => handleDelete(lot.id)} />
+          <div className="inventory-cards-container">
+            {lots.map((lot) => (
+              <div className="inventory-card" key={rowKey(lot)}>
+                <div className="card-header">
+                  <h3>{lot.name}</h3>
+                  <div className="card-icons">
+                    <EditOutlined onClick={() => openDrawer(lot)} />
+                    <DeleteOutlined onClick={() => handleDelete(getId(lot))} />
+                  </div>
                 </div>
-              </div>
-              <p><AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha</p>
-              <p>
-                <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
-                {lot.location ? (
-                  <>
+
+                <p>
+                  <AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha
+                </p>
+                <p>
+                  <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
+                  {safeParse(lot.location) ? (
                     <Button
                       type="link"
                       size="small"
                       style={{ padding: 0, marginLeft: 0 }}
-                      onClick={() => setSelectedLocation(JSON.parse(lot.location))}
+                      onClick={() => setSelectedLocation(safeParse(lot.location))}
                     >
                       Ver
                     </Button>
-                  </>
-                ) : (
-                  "No asignada"
-                )}
-              </p>
-
-            </div>
-          ))}
-        </div>
+                  ) : (
+                    "No asignada"
+                  )}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Drawer para agregar/editar */}
@@ -229,7 +284,10 @@ const Lotes = () => {
         placement={isMobile ? "bottom" : "right"}
         onClose={closeDrawer}
         open={isDrawerOpen}
-        width={400}
+        width={isMobile ? "100%" : 420}
+        height={isMobile ? "90vh" : undefined}
+        styles={{ body: { paddingBottom: 80 } }}
+        destroyOnClose
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Form.Item
@@ -237,7 +295,7 @@ const Lotes = () => {
             label="Nombre del Lote"
             rules={[{ required: true, message: "Por favor ingresá el nombre del lote." }]}
           >
-            <Input />
+            <Input placeholder="Ej: Lote Norte" />
           </Form.Item>
 
           <Form.Item
@@ -246,9 +304,10 @@ const Lotes = () => {
             rules={[{ required: true, message: "Por favor ingresá la superficie." }]}
             extra="Área calculada automáticamente. Podés modificarla si lo deseás."
           >
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <InputNumber min={0} style={{ width: "100%" }} placeholder="Ej: 12.5" />
           </Form.Item>
 
+          {/* location se guarda como string JSON */}
           <Form.Item name="location" hidden>
             <Input />
           </Form.Item>
@@ -266,6 +325,7 @@ const Lotes = () => {
           </Form.Item>
         </Form>
 
+        {/* Drawer secundario con el mapa */}
         <Drawer
           title="Seleccioná la ubicación del Lote"
           placement="right"
@@ -273,18 +333,17 @@ const Lotes = () => {
           onClose={() => setIsMapModalOpen(false)}
           width={800}
           afterOpenChange={(open) => {
-            if (open && mapRef.current) {
-              mapRef.current.invalidateSize();
-            }
+            if (open && mapRef.current) mapRef.current.invalidateSize?.();
           }}
         >
           <MapSelector
             lots={lots}
-            initialLocation={editingLot?.location ? JSON.parse(editingLot.location) : null}
+            initialLocation={editingLot?.location ? safeParse(editingLot.location) : null}
             onSelect={(data) => {
+              // data: { location: obj|str, calculatedArea: number }
               form.setFieldsValue({
-                location: data.location,
-                area: data.calculatedArea
+                location: ensureString(data.location),
+                area: Number(data.calculatedArea ?? form.getFieldValue("area") ?? 0),
               });
               setIsMapModalOpen(false);
             }}
@@ -293,7 +352,6 @@ const Lotes = () => {
             insideDrawer={true}
           />
         </Drawer>
-
       </Drawer>
 
       {isMobile && !isDrawerOpen && (

@@ -1,38 +1,83 @@
-import React, { useState, useEffect } from "react";
-import { Table, Button, notification, Row, Col, Tag } from "antd";
-import axios from "axios";
-import { LeftOutlined, CalendarOutlined, DollarOutlined, InboxOutlined, AppstoreOutlined } from "@ant-design/icons";
+import React, { useState, useEffect, useCallback } from "react";
+import { Table, Button, notification, Row, Col, Tag, Tooltip } from "antd";
+import {
+  LeftOutlined,
+  CalendarOutlined,
+  DollarOutlined,
+  InboxOutlined,
+  AppstoreOutlined,
+  ExclamationCircleOutlined,
+  CheckOutlined,
+} from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import api from "../services/apiClient";
 import useIsMobile from "../hooks/useIsMobile";
 
-const url = process.env.REACT_APP_URL;
+// ---- helpers de formato (mismos criterios que Inventory) ----
+const UNIT_DISPLAY = {
+  litros: "L", litro: "L", lt: "L", l: "L", L: "L",
+  kg: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
+};
+const formatUnit = (u) => UNIT_DISPLAY[String(u || "").toLowerCase()] || (u || "-");
+
+const formatCurrency = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+};
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const formatDateDDMMYYYY = (d) => {
+  if (!d) return "-";
+  const dt = new Date(d);
+  if (isNaN(dt)) return "-";
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+};
+
+const daysTo = (d) => {
+  if (!d) return null;
+  const dt = new Date(d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((dt - today) / (1000 * 60 * 60 * 24));
+};
+const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
+const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
+
+const getId = (r) => r?.id ?? r?._id;
+const rowKey = (r) => getId(r) ?? r?.name;
 
 const DisabledInventory = () => {
   const [disabledProducts, setDisabledProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const fetchDisabledProducts = async () => {
+  const fetchDisabledProducts = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${url}/api/products/disabled`);	
-      setDisabledProducts(res.data);
+      const { data } = await api.get("/products/disabled");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setDisabledProducts(list);
     } catch (error) {
-      notification.error({ message: 'Error al cargar productos deshabilitados' });
+      console.error("→ disabled products list error:", error);
+      notification.error({ message: "Error al cargar productos deshabilitados" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDisabledProducts();
-  }, []);
+  }, [fetchDisabledProducts]);
 
   const handleEnable = async (id) => {
     try {
-      await axios.put(`${url}/api/products/enable/${id}`);
-      notification.success({ message: 'Producto habilitado exitosamente' });
+      await api.put(`/products/enable/${id}`);
+      notification.success({ message: "Producto habilitado exitosamente" });
       fetchDisabledProducts();
-
     } catch (error) {
-      notification.error({ message: 'Error al habilitar producto' });
+      console.error("→ enable product error:", error);
+      notification.error({ message: "Error al habilitar producto" });
     }
   };
 
@@ -41,55 +86,59 @@ const DisabledInventory = () => {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1,
+      render: (_, __, index) => index + 1,
+      width: 64,
     },
-    {
-      title: "Nombre",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Tipo",
-      dataIndex: "type",
-      key: "type",
-    },
-    {
-      title: "Cantidad Total",
-      dataIndex: "total_quantity",
-      key: "total_quantity",
-    },
+    { title: "Nombre", dataIndex: "name", key: "name" },
+    { title: "Cantidad Total", dataIndex: "total_quantity", key: "total_quantity" },
     {
       title: "Cantidad Disponible",
       dataIndex: "available_quantity",
       key: "available_quantity",
-      render: (text) => (
-        text > 0 ? text : <span style={{ color: "red", fontWeight: "bold" }}>Agotado</span>
-      )
+      render: (v) => (v > 0 ? v : <Tag color="red">Agotado</Tag>),
     },
     {
       title: "Unidad",
       dataIndex: "unit",
       key: "unit",
+      render: (u) => formatUnit(u),
     },
     {
       title: "Precio",
       dataIndex: "price",
       key: "price",
-      render: (text) => `$ ${text}`
+      render: (v) => formatCurrency(v),
     },
     {
       title: "Fecha de Vencimiento",
       dataIndex: "acquisition_date",
       key: "acquisition_date",
-      render: (text) => text ? new Date(text).toLocaleDateString() : '-'
+      render: (d) => {
+        const expired = isExpired(d);
+        const soon = isExpiringSoon(d);
+        return (
+          <span>
+            {formatDateDDMMYYYY(d)}{" "}
+            {expired && <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />}
+            {!expired && soon && <ExclamationCircleOutlined style={{ color: "#faad14" }} />}
+          </span>
+        );
+      },
     },
     {
       title: "Acciones",
       key: "actions",
+      width: 72,
       render: (_, record) => (
-        <Button type="primary" size="small" onClick={() => handleEnable(record.id)}>
-          Habilitar
-        </Button>
+        <Tooltip title="Habilitar">
+          <Button
+            type="text"
+            shape="circle"
+            aria-label="Habilitar"
+            icon={<CheckOutlined style={{ color: "#52c41a" }} />}
+            onClick={() => handleEnable(getId(record))}
+          />
+        </Tooltip>
       ),
     },
   ];
@@ -101,9 +150,9 @@ const DisabledInventory = () => {
           <h2>Productos Deshabilitados</h2>
         </Col>
         <Col>
-          <Button 
-            icon={<LeftOutlined />} 
-            onClick={() => navigate('/inventario')}
+          <Button
+            icon={<LeftOutlined />}
+            onClick={() => navigate("/inventario")}
             shape="circle"
             type="default"
             style={{ borderColor: "#95ba56" }}
@@ -111,58 +160,65 @@ const DisabledInventory = () => {
         </Col>
       </Row>
 
+      {/* Tabla (desktop) */}
       {!isMobile && (
         <Table
           scroll={{ x: "max-content" }}
           columns={columns}
           dataSource={disabledProducts}
+          loading={loading}
           pagination={{ pageSize: 5, position: ["bottomCenter"] }}
-          rowKey="id"
+          rowKey={rowKey}
         />
       )}
 
+      {/* Cards (mobile) */}
       {isMobile && (
         <div className="inventory-cards-container">
-          {disabledProducts.map((product) => {
-            const expiration = new Date(product.acquisition_date);
-            const today = new Date();
-            const diffDays = Math.ceil((expiration - today) / (1000 * 60 * 60 * 24));
-
-            return (
-              <div className="inventory-card" key={product._id}>
-                <div className="card-header">
-                  <h3>{product.name}</h3>
-                </div>
-
-                <p><AppstoreOutlined /> <strong>Tipo:</strong> {product.type}</p>
-                <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {product.unit}</p>
-                <p>
-                  <InboxOutlined /> <strong>Disponible:</strong>{" "}
-                  <Tag color={
-                    product.available_quantity === 0 ? "red" :
-                    product.available_quantity < product.total_quantity * 0.3 ? "orange" :
-                    "green"
-                  }>
-                    {product.available_quantity} {product.unit}
-                  </Tag>
-                </p>
-                <p><DollarOutlined /> <strong>Precio:</strong> ${product.price}</p>
-                <p>
-                  <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                  {expiration.toLocaleDateString()}{" "}
-
-                  {diffDays <= 0 && <Tag color="red">Vencido</Tag>}
-                  {diffDays > 0 && diffDays <= 15 && <Tag color="orange">Próximo a vencer</Tag>}
-                </p>
-
-                <div style={{ marginTop: 12 }}>
-                  <Button type="primary" block onClick={() => handleEnable(product.id)}>
-                    Habilitar Producto
-                  </Button>
-                </div>
+          {disabledProducts.map((product) => (
+            <div className="inventory-card" key={rowKey(product)}>
+              <div className="card-header">
+                <h3>{product.name}</h3>
               </div>
-            );
-          })}
+
+              <p><AppstoreOutlined /> <strong>Tipo:</strong> {product.type}</p>
+              <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {formatUnit(product.unit)}</p>
+
+              <p>
+                <InboxOutlined /> <strong>Disponible:</strong>{" "}
+                <Tag
+                  color={
+                    product.available_quantity === 0
+                      ? "red"
+                      : product.available_quantity < product.total_quantity * 0.3
+                      ? "orange"
+                      : "green"
+                  }
+                >
+                  {product.available_quantity} {formatUnit(product.unit)}
+                </Tag>
+              </p>
+
+              <p><DollarOutlined /> <strong>Precio:</strong> {formatCurrency(product.price)}</p>
+
+              <p>
+                <CalendarOutlined /> <strong>Vence:</strong>{" "}
+                {formatDateDDMMYYYY(product.acquisition_date)}{" "}
+                {isExpired(product.acquisition_date) && (
+                  <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
+                )}
+                {!isExpired(product.acquisition_date) && isExpiringSoon(product.acquisition_date) && (
+                  <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
+                )}
+              </p>
+
+              <div style={{ marginTop: 12 }}>
+                <Button type="primary" block onClick={() => handleEnable(getId(product))}>
+                  Habilitar Producto
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

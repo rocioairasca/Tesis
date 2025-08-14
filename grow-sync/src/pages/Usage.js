@@ -1,87 +1,122 @@
-import React, { useState, useEffect } from "react";
-import { Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker, Dropdown, Space, Popconfirm, Row, Col, notification } from "antd";
-import axios from "axios";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  PlusOutlined,
-  MoreOutlined,
-  EditOutlined,
-  DeleteOutlined,
+  Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
+  Dropdown, Space, Popconfirm, Row, Col, notification, Tooltip
+} from "antd";
+import {
+  PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined,
 } from "@ant-design/icons";
 import {
-  Package,
-  MapPin,
-  Ruler,
-  Leaf,
-  User,
-  Calendar,
+  Package, MapPin, Ruler, Leaf, User as UserIcon, Calendar as CalendarIcon,
 } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
+import api from "../services/apiClient";
 import useIsMobile from "../hooks/useIsMobile";
-
-const url = process.env.REACT_APP_URL;
-const { Option } = Select;
 
 const Usage = () => {
   const [usages, setUsages] = useState([]);
+  const [userIndex, setUserIndex] = useState({});
   const [products, setProducts] = useState([]);
   const [lots, setLots] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingUsage, setEditingUsage] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const fetchUsages = async () => {
-    try {
-      const res = await axios.get(`${url}/api/usages`);
-      setUsages(res.data);
-    } catch (error) {
-      notification.error({ message: 'Error al cargar registros de uso' });
-    }
-  };
+  const getId = (r) => r?.id ?? r?._id;
+  const rowKey = (r) => getId(r) ?? `${r?.product_id}-${r?.date}`;
 
-  const fetchProducts = async () => {
+  // ---------- fetchers ----------
+  const fetchUsages = useCallback(async () => {
     try {
-      const res = await axios.get(`${url}/api/products`);
-      setProducts(res.data);
+      setLoading(true);
+      const { data } = await api.get("/usages");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      setUsages(list);
     } catch (error) {
-      notification.error({ message: 'Error al cargar productos' });
+      console.error("→ usages list error:", error);
+      notification.error({ message: "Error al cargar registros de uso" });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchLots = async () => {
+  const fetchUsersIndex = useCallback(async () => {
     try {
-      const res = await axios.get(`${url}/api/lots`);
-      setLots(res.data);
+      const { data } = await api.get("/users");
+      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+      const idx = {};
+      list.forEach((u) => {
+        const id = u.id ?? u._id;
+        idx[id] = u.full_name || u.nickname || u.username || u.email || String(id);
+      });
+      setUserIndex(idx);
     } catch (error) {
-      notification.error({ message: 'Error al cargar lotes' });
+      console.error("→ users index error:", error);
+      // opcional: notification.warning({ message: "No se pudo cargar el índice de usuarios" });
     }
-  };
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      const { data } = await api.get("/products");
+      setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch (error) {
+      console.error("→ products list error:", error);
+      notification.error({ message: "Error al cargar productos" });
+    }
+  }, []);
+
+  const fetchLots = useCallback(async () => {
+    try {
+      const { data } = await api.get("/lots");
+      setLots(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch (error) {
+      console.error("→ lots list error:", error);
+      notification.error({ message: "Error al cargar lotes" });
+    }
+  }, []);
 
   useEffect(() => {
     fetchUsages();
     fetchProducts();
     fetchLots();
-  }, []);
+    fetchUsersIndex();
+  }, [fetchUsages, fetchProducts, fetchLots, fetchUsersIndex]);
 
+  // Si estamos editando y los productos se cargaron después, sincroniza selectedProduct
+  useEffect(() => {
+    if (editingUsage && products.length) {
+      const p = products.find((x) => x.id === editingUsage.product_id);
+      if (p) setSelectedProduct(p);
+    }
+  }, [editingUsage, products]);
+
+  // ---------- drawer handlers ----------
   const openDrawer = (usage = null) => {
     setEditingUsage(usage);
     setIsDrawerOpen(true);
 
     if (usage) {
-      const selectedProduct = products.find(p => p.id === usage.product_id);
-      if (selectedProduct) {
-        setSelectedProduct(selectedProduct);
-      }
+      const p = products.find((x) => x.id === usage.product_id) || null;
+      setSelectedProduct(p);
 
       form.setFieldsValue({
-        ...usage,
-        lot_ids: usage.usage_lots ? usage.usage_lots.map(l => l.lot_id) : [],
-        date: dayjs(usage.date),
+        product_id: usage.product_id,
+        amount_used: usage.amount_used,
+        unit: usage.unit,
+        lot_ids: usage.usage_lots ? usage.usage_lots.map((l) => l.lot_id) : [],
+        total_area: usage.total_area,
+        previous_crop: usage.previous_crop,
+        current_crop: usage.current_crop,
+        date: usage.date ? dayjs(usage.date) : null,
       });
-
     } else {
       setSelectedProduct(null);
       form.resetFields();
@@ -94,147 +129,155 @@ const Usage = () => {
     form.resetFields();
   };
 
-  const storedUser = JSON.parse(localStorage.getItem('user'));
-  const userName = storedUser?.id;
+  const storedUser = JSON.parse(localStorage.getItem("user"));
+  const userId = storedUser?.id;
 
+  // ---------- submit / delete ----------
   const handleSubmit = async (values) => {
     try {
       const payload = {
-        ...values,
+        product_id: values.product_id,
+        amount_used: Number(values.amount_used),
+        unit: values.unit,
         lot_ids: values.lot_ids,
-        date: values.date.format('YYYY-MM-DD'),
-        user_id: userName,
+        total_area: Number(values.total_area ?? 0),
+        previous_crop: values.previous_crop || null,
+        current_crop: values.current_crop || null,
+        date: values.date.format("YYYY-MM-DD"),
+        user_id: userId,
       };
 
-      if (editingUsage) {
-        await axios.put(`${url}/api/usages/${editingUsage.id}`, payload);
-        notification.success({ message: 'Registro de uso actualizado exitosamente' });
+      if (editingUsage && getId(editingUsage)) {
+        await api.put(`/usages/${getId(editingUsage)}`, payload);
+        notification.success({ message: "Registro de uso actualizado exitosamente" });
       } else {
-        await axios.post(`${url}/api/usages`, payload);
-        notification.success({ message: 'Registro de uso creado exitosamente' });
+        await api.post("/usages", payload);
+        notification.success({ message: "Registro de uso creado exitosamente" });
       }
 
       fetchUsages();
       closeDrawer();
     } catch (error) {
-      notification.error({ message: 'Error al guardar registro de uso' });
+      console.error("→ save usage error:", error);
+      notification.error({ message: "Error al guardar registro de uso" });
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${url}/api/usages/${id}`);
-      notification.success({ message: 'Registro de uso deshabilitado exitosamente' });
+      await api.delete(`/usages/${id}`);
+      notification.success({ message: "Registro de uso deshabilitado exitosamente" });
       fetchUsages();
     } catch (error) {
-      notification.error({ message: 'Error al deshabilitar registro de uso' });
+      console.error("→ disable usage error:", error);
+      notification.error({ message: "Error al deshabilitar registro de uso" });
     }
   };
 
+  // ---------- select handlers ----------
   const handleProductChange = (productId) => {
-    const selectedProduct = products.find(p => p.id === productId);
-    if (selectedProduct) {
-      setSelectedProduct(selectedProduct);
-      form.setFieldsValue({
-        unit: selectedProduct.unit
-      });
-    }
-  };  
+    const p = products.find((x) => x.id === productId) || null;
+    setSelectedProduct(p);
+    form.setFieldsValue({
+      unit: p?.unit || "",
+    });
+  };
 
   const handleLotChange = (selectedLotIds) => {
-    let totalArea = 0;
+    const totalArea = selectedLotIds.reduce((acc, id) => {
+      const lot = lots.find((l) => l.id === id);
+      return acc + Number(lot?.area || 0);
+    }, 0);
+    form.setFieldsValue({ total_area: Math.round(totalArea * 100) / 100 });
+  };
 
-    selectedLotIds.forEach(id => {
-      const lot = lots.find(l => l.id === id);
-      if (lot) {
-        totalArea += parseFloat(lot.area || 0);
-      }
-    });
-
-    const roundedArea = Math.round(totalArea * 100) / 100;
-  
-    form.setFieldsValue({
-      total_area: roundedArea
-    });
-  };  
-
+  // ---------- table ----------
   const columns = [
     {
       title: "#",
       dataIndex: "index",
       key: "index",
-      render: (text, record, index) => index + 1,
+      width: 64,
+      render: (_, __, index) => index + 1,
     },
     {
       title: "Producto",
       dataIndex: "product_id",
       key: "product_id",
-      render: (text) => {
-        const product = products.find(p => p.id === text);
-        return product ? product.name : "-";
-      }
+      render: (id) => products.find((p) => p.id === id)?.name || "-",
     },
     {
       title: "Cantidad",
       dataIndex: "amount_used",
       key: "amount_used",
-      render: (text, record) => `${text} ${record.unit}`
+      render: (value, record) => `${value} ${record.unit}`,
     },
     {
       title: "Lotes",
       dataIndex: "lot_ids",
       key: "lot_ids",
       render: (_, record) => {
-        if (!record.usage_lots) return '-';
-        const lotNames = record.usage_lots.map(l => {
-          const lot = lots.find(lotItem => lotItem.id === l.lot_id);
-          return lot ? lot.name : l.lot_id;
-        });
-        return lotNames.join(", ");
-      }
+        if (!record.usage_lots) return "-";
+        const lotNames = record.usage_lots
+          .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
+          .join(", ");
+        return lotNames || "-";
+      },
     },
     {
       title: "Área Total",
       dataIndex: "total_area",
       key: "total_area",
-      render: (text) => `${text} ha`
+      render: (v) => `${v} ha`,
     },
-    {
-      title: "Cultivo Previo",
-      dataIndex: "previous_crop",
-      key: "previous_crop",
-    },
-    {
-      title: "Cultivo Actual",
-      dataIndex: "current_crop",
-      key: "current_crop",
-    },
+    { title: "Cultivo Previo", dataIndex: "previous_crop", key: "previous_crop" },
+    { title: "Cultivo Actual", dataIndex: "current_crop", key: "current_crop" },
     {
       title: "Usuario",
       key: "user",
-      render: (_, record) => {
-        return record.users?.full_name || record.users?.nickname || record.users?.email || "-";
-      }
+      render: (_, record) =>
+        userIndex[record.user_id]
+          || record.users?.full_name
+          || record.users?.nickname
+          || record.users?.email
+          || "-",
     },
     {
       title: "Fecha",
       dataIndex: "date",
       key: "date",
-      render: (text) => dayjs(text).format('DD/MM/YYYY')
+      render: (text) => (text ? dayjs(text).format("DD/MM/YYYY") : "-"),
     },
     {
       title: "Acciones",
       key: "actions",
+      width: 96,
       render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => openDrawer(record)}>Editar</Button>
+        <Space size="small">
+          <Tooltip title="Editar">
+            <Button
+              type="text"
+              shape="circle"
+              aria-label="Editar"
+              icon={<EditOutlined />}
+              onClick={() => openDrawer(record)}
+            />
+          </Tooltip>
           <Popconfirm
-            title="¿Estás seguro que querés deshabilitar este registro?"
-            onConfirm={() => handleDelete(record.id)}
+            title="¿Deshabilitar este registro?"
             okText="Sí"
             cancelText="No"
+            onConfirm={() => handleDelete(getId(record))}
           >
-            <Button size="small" className="danger-button">Eliminar</Button>
+            <Tooltip title="Deshabilitar">
+              <Button
+                type="text"
+                danger
+                shape="circle"
+                aria-label="Deshabilitar"
+                icon={<DeleteOutlined />}
+              />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -243,9 +286,9 @@ const Usage = () => {
 
   const menuItems = [
     {
-      key: '1',
-      label: <span onClick={() => window.location.href = "/usages-disabled"}>Ver Registros Deshabilitados</span>,
-    }
+      key: "1",
+      label: <span onClick={() => navigate("/usages-disabled")}>Ver Registros Deshabilitados</span>,
+    },
   ];
 
   return (
@@ -274,35 +317,37 @@ const Usage = () => {
         </Col>
       </Row>
 
+      {/* Tabla (desktop) */}
       {!isMobile && (
         <Table
           scroll={{ x: "max-content" }}
           columns={columns}
           dataSource={usages}
-          pagination={{ pageSize: 5, position: ['bottomCenter'] }}
-          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+          rowKey={rowKey}
         />
       )}
 
+      {/* Cards (mobile) */}
       {isMobile && (
         <div className="inventory-cards-container">
           {usages.map((usage) => {
-            const product = products.find(p => p.id === usage.product_id);
+            const product = products.find((p) => p.id === usage.product_id);
             const lotList = usage.usage_lots
-              ? usage.usage_lots.map(l => {
-                  const lot = lots.find(lotItem => lotItem.id === l.lot_id);
-                  return lot ? lot.name : l.lot_id;
-                }).join(", ")
+              ? usage.usage_lots
+                  .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
+                  .join(", ")
               : "-";
-            const date = dayjs(usage.date).format("DD/MM/YYYY");
+            const date = usage.date ? dayjs(usage.date).format("DD/MM/YYYY") : "-";
 
             return (
-              <div className="inventory-card" key={usage.id}>
+              <div className="inventory-card" key={rowKey(usage)}>
                 <div className="card-header">
                   <h3>{product?.name || "Producto"}</h3>
                   <div className="card-icons">
                     <EditOutlined onClick={() => openDrawer(usage)} />
-                    <DeleteOutlined onClick={() => handleDelete(usage.id)} />
+                    <DeleteOutlined onClick={() => handleDelete(getId(usage))} />
                   </div>
                 </div>
 
@@ -311,23 +356,31 @@ const Usage = () => {
                 <p className="flex-row"><Ruler size={18} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
                 <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Previo:</strong> {usage.previous_crop || "-"}</p>
                 <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Actual:</strong> {usage.current_crop || "-"}</p>
-                <p className="flex-row"><User size={18} /> <strong>Usuario:</strong> {usage.users?.full_name || usage.users?.nickname || usage.users?.email}</p>
-                <p className="flex-row"><Calendar size={18} /> <strong>Fecha:</strong> {date}</p>
+                <p className="flex-row">
+                  <UserIcon size={18} /> <strong>Usuario:</strong> {" "}
+                  {userIndex[usage.user_id]
+                    || usage.users?.full_name
+                    || usage.users?.nickname
+                    || usage.users?.email
+                    || "-"}
+                </p>
+                <p className="flex-row"><CalendarIcon size={18} /> <strong>Fecha:</strong> {date}</p>
               </div>
             );
           })}
         </div>
       )}
 
-
+      {/* Drawer crear/editar */}
       <Drawer
         title={editingUsage ? "Editar Registro de Uso" : "Agregar Registro de Uso"}
         placement={isMobile ? "bottom" : "right"}
         onClose={closeDrawer}
         open={isDrawerOpen}
         height={isMobile ? "90vh" : undefined}
-        width={isMobile ? "100%" : 400}
+        width={isMobile ? "100%" : 420}
         styles={{ body: { paddingBottom: 80 } }}
+        destroyOnClose
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Form.Item
@@ -336,13 +389,10 @@ const Usage = () => {
             rules={[{ required: true, message: "Seleccioná un producto" }]}
           >
             <Select
-              placeholder="Seleccione un producto"
+              placeholder="Seleccioná un producto"
+              options={products.map((p) => ({ value: p.id, label: p.name }))}
               onChange={handleProductChange}
-            >
-              {products.map((product) => (
-                <Option key={product.id} value={product.id}>{product.name}</Option>
-              ))}
-            </Select>
+            />
           </Form.Item>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -360,12 +410,12 @@ const Usage = () => {
               { required: true, message: "Ingresá la cantidad usada" },
               {
                 validator: (_, value) => {
-                  if (selectedProduct && value > selectedProduct.available_quantity) {
+                  if (selectedProduct && Number(value) > Number(selectedProduct.available_quantity)) {
                     return Promise.reject(`Solo hay ${selectedProduct.available_quantity} disponibles`);
                   }
                   return Promise.resolve();
-                }
-              }
+                },
+              },
             ]}
           >
             <InputNumber min={0} style={{ width: "100%" }} />
@@ -384,11 +434,12 @@ const Usage = () => {
             label="Seleccionar Lotes"
             rules={[{ required: true, message: "Seleccioná al menos un lote" }]}
           >
-            <Select mode="multiple" placeholder="Seleccione lotes" onChange={handleLotChange}>
-              {lots.map((lot) => (
-                <Option key={lot.id} value={lot.id}>{lot.name}</Option>
-              ))}
-            </Select>
+            <Select
+              mode="multiple"
+              placeholder="Seleccioná lotes"
+              options={lots.map((l) => ({ value: l.id, label: l.name }))}
+              onChange={handleLotChange}
+            />
           </Form.Item>
 
           <Form.Item
@@ -428,9 +479,9 @@ const Usage = () => {
           <PlusOutlined />
         </div>
       )}
-
     </div>
   );
 };
 
 export default Usage;
+
