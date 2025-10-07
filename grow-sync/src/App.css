@@ -173,3 +173,76 @@ body, html {
   gap: 6px;
 }
 
+
+/* ====== Calendar bars – bandas continuas tipo Google ====== */
+
+/* (opcional) colapsá paddings de la celda para tener más control */
+.ant-picker-calendar-date {
+  padding: 0;                /* quita padding global */
+}
+.ant-picker-calendar-date-value {
+  padding-left: 6px;         /* deja el número del día prolijo */
+}
+.ant-picker-calendar-date-content {
+  /* mantené SOLO padding inferior para respiración bajo las bandas */
+  padding: 0 8px 6px;        /* <- 8px es nuestro "gutter" horizontal */
+}
+
+.ant-picker-cell { border: 0; }
+
+/* variable para reutilizar ese gutter */
+:root { --cal-pad-x: 8px; }
+
+.cal-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.cal-bar {
+  height: 18px;
+  line-height: 18px;
+  color: #fff;
+  font-size: 11px;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  opacity: .95;
+}
+.cal-bar:hover { opacity: 1; }
+
+/* Esquinas según tramo */
+.cal-bar--single { border-radius: 10px; }
+
+/* Estirá cada tramo hasta EL BORDE de la celda:
+   - start: corre a la izquierda (−padding)
+   - end:   corre a la derecha (−padding)
+   - middle: corre a ambos lados
+*/
+.cal-bar--start  {
+  margin-left: calc(-1 * var(--cal-pad-x));
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+.cal-bar--end {
+  margin-right: calc(-1 * var(--cal-pad-x));
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+.cal-bar--middle {
+  margin-left:  calc(-1 * var(--cal-pad-x));
+  margin-right: calc(-1 * var(--cal-pad-x));
+  border-radius: 0;
+}
+
+/* indicador “+N más” cuando hay muchos */
+.cal-more { font-size: 11px; color: #999; }
+
+/* (opcional) asegúrate de que la tabla no meta espacios raros */
+.ant-picker-panel .ant-picker-body table {
+  border-collapse: separate;
+  border-spacing: 0;
+}

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, Space, Popconfirm, notification, Row, Col, Tooltip } from "antd";
 import { LeftOutlined, CheckOutlined, EnvironmentOutlined, AimOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import api from "../services/apiClient";
-import useIsMobile from "../hooks/useIsMobile";
+import api from "../../services/apiClient";
+import useIsMobile from "../../hooks/useIsMobile";
 
 // helpers
 const getId = (r) => r?.id ?? r?._id;

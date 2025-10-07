@@ -1,7 +1,7 @@
 import React, {useState} from "react";
 import { Form, Input, Button, message } from "antd";
 import { UserOutlined, LockOutlined, MailOutlined } from "@ant-design/icons";
-import { registerUser } from "../../services/authService";
+import { registerUser } from "../services/authService";
 
 const RegisterForm = ({onSwitchToLogin}) => {
   const [loading, setLoading] = useState(false);

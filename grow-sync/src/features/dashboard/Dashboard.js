@@ -7,10 +7,8 @@ import {
   EnvironmentOutlined,
   CloudOutlined,
   ArrowUpOutlined,
-  SunOutlined,
-  ThunderboltOutlined
 } from "@ant-design/icons";
-import api from "../services/apiClient";
+import api from "../../services/apiClient";
 
 const { Text, Title } = Typography;
 

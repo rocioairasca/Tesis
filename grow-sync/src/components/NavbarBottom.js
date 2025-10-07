@@ -7,7 +7,8 @@ import {
   EnvironmentOutlined,
   MoreOutlined,
   UserOutlined,
-  CarOutlined
+  CarOutlined,
+  CalendarOutlined
 } from "@ant-design/icons";
 import { Dropdown, Menu } from "antd";
 import "../css/BottomNavigation.css";
@@ -43,6 +44,10 @@ const BottomNavigation = () => {
         <HomeOutlined
           onClick={() => navigate("/dashboard")}
           style={{ fontSize: 24, color: isActive("/dashboard") ? "#1D2A62" : "#aaa" }}
+        />
+        <CalendarOutlined
+          onClick={() => navigate("/planificaciones")}
+          style={{ fontSize: 24, color: isActive("/planificaciones") ? "#1D2A62" : "#aaa" }}
         />
         <AppstoreOutlined
           onClick={() => navigate("/inventario")}

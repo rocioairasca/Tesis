@@ -3,9 +3,9 @@ import { Table, Button, Row, Col, notification, Tooltip } from "antd";
 import { ArrowLeftOutlined, CalendarOutlined, CheckOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
-import useIsMobile from "../hooks/useIsMobile";
+import useIsMobile from "../../hooks/useIsMobile";
 import { Package, MapPin, Ruler } from "phosphor-react";
-import api from "../services/apiClient";
+import api from "../../services/apiClient";
 
 // helpers
 const getId = (r) => r?.id ?? r?._id;

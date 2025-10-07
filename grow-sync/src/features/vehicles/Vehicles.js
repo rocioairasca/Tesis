@@ -6,8 +6,8 @@ import {
 import { MoreOutlined, EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined } from "@ant-design/icons";
 import { Truck, IdentificationCard, ClipboardText, Gauge } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/apiClient";
-import useIsMobile from "../hooks/useIsMobile";
+import api from "../../services/apiClient";
+import useIsMobile from "../../hooks/useIsMobile";
 
 // ---- helpers ----
 const getId = (r) => r?.id ?? r?._id;

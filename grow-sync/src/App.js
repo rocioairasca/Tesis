@@ -9,19 +9,21 @@ import AppLayout from './layout/Layout.js';
 import MobileBottomNavigationWrapper from './components/MobileBottomNavigationWrapper';
 
 // Páginas principales
-import Dashboard from './pages/Dashboard.js';
-import Users from './pages/Users.js';
-import Inventory from './pages/Inventory.js';
-import Lotes from './pages/Lotes.js';
-import DisabledLotes from './pages/DisabledLotes.js';
-import DisabledProducts from './pages/DisabledInventory.js';
-import Usage from './pages/Usage.js';
-import DisabledUsages from './pages/DisabledUsages.js';
-import Vehicles from './pages/Vehicles.js';
-import DisabledVehicles from './pages/DisabledVehicles.js';
+import Dashboard from './features/dashboard/Dashboard.js';
+import Users from './features/users/Users.js';
+import Inventory from './features/inventory/Inventory.js';
+import Lotes from './features/lots/Lotes.js';
+import DisabledLotes from './features/lots/DisabledLotes.js';
+import DisabledProducts from './features/inventory/DisabledInventory.js';
+import Usage from './features/usages/Usage.js';
+import DisabledUsages from './features/usages/DisabledUsages.js';
+import Vehicles from './features/vehicles/Vehicles.js';
+import DisabledVehicles from './features/vehicles/DisabledVehicles.js';
+import Planning from './features/planning/Planning.js';
+import DisabledPlanning from './features/planning/DisabledPlanning.js';
 
 // Páginas de autenticación
-import LoginRegister from "./pages/auth/LoginRegister";
+import LoginRegister from "./auth/LoginRegister.js";
 
 // Rutas protegidas
 import GuardedRoute from './routes/GuardedRoute.js';
@@ -135,6 +137,24 @@ function App() {
             element={
               <GuardedRoute >
                 <AppLayout><DisabledVehicles /></AppLayout>
+              </GuardedRoute>
+            }
+          />
+
+          <Route
+            path="/planificaciones"
+            element={
+              <GuardedRoute >
+                <AppLayout><Planning /></AppLayout>
+              </GuardedRoute>
+            }
+          />
+
+          <Route
+            path="/planificaciones-deshabilitadas"
+            element={
+              <GuardedRoute>
+                <AppLayout><DisabledPlanning /></AppLayout>
               </GuardedRoute>
             }
           />

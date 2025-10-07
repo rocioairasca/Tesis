@@ -11,8 +11,8 @@ import {
 } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
-import api from "../services/apiClient";
-import useIsMobile from "../hooks/useIsMobile";
+import api from "../../services/apiClient";
+import useIsMobile from "../../hooks/useIsMobile";
 
 const Usage = () => {
   const [usages, setUsages] = useState([]);

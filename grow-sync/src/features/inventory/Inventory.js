@@ -7,8 +7,8 @@ import {
   EditOutlined, DeleteOutlined, PlusOutlined, MoreOutlined,
   CalendarOutlined, DollarOutlined, InboxOutlined, AppstoreOutlined, ExclamationCircleOutlined
 } from "@ant-design/icons";
-import api from "../services/apiClient";
-import useIsMobile from "../hooks/useIsMobile";
+import api from "../../services/apiClient";
+import useIsMobile from "../../hooks/useIsMobile";
 
 const ROLE_OPTIONS = [
   { value: "líquido", label: "Líquido" },

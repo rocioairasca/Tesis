@@ -10,8 +10,8 @@ import {
   CheckOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import api from "../services/apiClient";
-import useIsMobile from "../hooks/useIsMobile";
+import api from "../../services/apiClient";
+import useIsMobile from "../../hooks/useIsMobile";
 
 // ---- helpers de formato (mismos criterios que Inventory) ----
 const UNIT_DISPLAY = {
