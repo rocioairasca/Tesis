@@ -1,3 +1,10 @@
+/**
+ * Ruta: Planificación
+ * Ubicación: routes/planning.js
+ * Descripción:
+ *  Define los endpoints para la gestión de actividades planificadas.
+ *  Utiliza el controlador `controllers/planning.js`.
+ */
 const router = require('express').Router();
 const ctrl = require('../controllers/planning');
 const validate = require('../middleware/validate');
@@ -17,9 +24,9 @@ const schema = require('../validations/planning.schema');
  * - "Eliminar" NO borra: hace soft delete (enabled=false) y/o status='cancelado' en el controller.
  */
 
-// LISTAR planificaciones (filtros y paginado)
-// Query soporta: from, to, type, status, responsible, lotId, search,
-// page, pageSize, includeCanceled, includeDisabled
+// ----------------------------------------------------------------------------
+// RUTAS ESPECÍFICAS (Deshabilitados)
+// ----------------------------------------------------------------------------
 
 // Listado de planificaciones DESHABILITADAS (enabled=false)
 router.get('/disabled',
@@ -35,6 +42,11 @@ router.put('/enable/:id',
   ctrl.enable
 );
 
+// ----------------------------------------------------------------------------
+// CRUD PRINCIPAL
+// ----------------------------------------------------------------------------
+
+// Listar planificaciones (filtros y paginado)
 router.get('/',
   validate(schema.listQuery),
   checkRole(0),
@@ -71,3 +83,4 @@ router.delete('/:id',
 );
 
 module.exports = router;
+

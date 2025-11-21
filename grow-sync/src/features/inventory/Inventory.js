@@ -1,14 +1,26 @@
+/**
+ * Feature: Gestión de Inventario (Productos)
+ * Ubicación: src/features/inventory/Inventory.js
+ * Descripción:
+ *  Contenedor principal para la gestión de productos/insumos.
+ *  Maneja el estado (lista, loading, alertas de vencimiento) y la lógica CRUD.
+ * 
+ * Refactorización:
+ *  - Extracción de vistas de tabla (Desktop) y lista (Mobile) a componentes.
+ *  - Lógica de alertas de vencimiento centralizada en el fetch.
+ */
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  Table, Button, Drawer, Form, Input, InputNumber, Select, Space,
-  Popconfirm, notification, Row, Col, Tag, Dropdown, Tooltip
+  Button, Drawer, Form, Input, InputNumber, Select, Space,
+  notification, Row, Col, Dropdown
 } from "antd";
 import {
-  EditOutlined, DeleteOutlined, PlusOutlined, MoreOutlined,
-  CalendarOutlined, DollarOutlined, InboxOutlined, AppstoreOutlined, ExclamationCircleOutlined
+  PlusOutlined, MoreOutlined
 } from "@ant-design/icons";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import ProductTable from "./components/ProductTable";
+import ProductListMobile from "./components/ProductListMobile";
 
 const ROLE_OPTIONS = [
   { value: "líquido", label: "Líquido" },
@@ -39,7 +51,7 @@ const formatDateDDMMYYYY = (d) => {
 const daysTo = (d) => {
   if (!d) return null;
   const dt = new Date(d);
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   return Math.ceil((dt - today) / (1000 * 60 * 60 * 24));
 };
 const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
@@ -101,11 +113,11 @@ const Inventory = () => {
     } finally {
       setLoading(false);
     }
-  }, []); 
+  }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]); 
+  }, [fetchProducts]);
 
 
   // ------------------------- HANDLERS -------------------------
@@ -196,97 +208,6 @@ const Inventory = () => {
     }
   };
 
-  // ------------------------- TABLE CONFIG -------------------------
-  const columns = [
-    {
-      title: "#",
-      dataIndex: "index",
-      key: "index",
-      render: (_, __, index) => index + 1,
-      width: 64,
-    },
-    { title: "Nombre", dataIndex: "name", key: "name" },
-    {
-      title: "Cantidad Total",
-      dataIndex: "total_quantity",
-      key: "total_quantity",
-    },
-    {
-      title: "Cantidad Disponible",
-      dataIndex: "available_quantity",
-      key: "available_quantity",
-      render: (v) => (v > 0 ? v : <Tag color="red">Agotado</Tag>),
-    },
-    { title: "Unidad", dataIndex: "unit", key: "unit",
-      render: (u) => formatUnit(u),
-    },
-    {
-      title: "Precio",
-      dataIndex: "price",
-      key: "price",
-      render: (v) => formatCurrency(v),
-    },
-    {
-      title: "Fecha de Vencimiento",
-      dataIndex: "acquisition_date",
-      key: "acquisition_date",
-      render: (d) => {
-        const expired = isExpired(d);
-        const soon = isExpiringSoon(d);
-        return (
-          <Space size={6}>
-            <span>{formatDateDDMMYYYY(d)}</span>
-            {expired && (
-              <Tooltip title="Vencido">
-                <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />
-              </Tooltip>
-            )}
-            {!expired && soon && (
-              <Tooltip title="Próximo a vencer">
-                <ExclamationCircleOutlined style={{ color: "#faad14" }} />
-              </Tooltip>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Acciones",
-      key: "actions",
-      width: 96,
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="Editar">
-            <Button
-              type="text"
-              shape="circle"
-              icon={<EditOutlined />}
-              aria-label="Editar"
-              onClick={() => openDrawer(record)}
-            />
-          </Tooltip>
-
-          <Popconfirm
-            title="¿Deshabilitar este producto?"
-            okText="Sí"
-            cancelText="No"
-            onConfirm={() => handleDelete(getId(record))}
-          >
-            <Tooltip title="Deshabilitar">
-              <Button
-                type="text"
-                danger
-                shape="circle"
-                icon={<DeleteOutlined />}
-                aria-label="Deshabilitar"
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
   const menuItems = [
     {
       key: "1",
@@ -332,75 +253,35 @@ const Inventory = () => {
 
       {/* Tabla solo en desktop */}
       {!isMobile && (
-        <Table
-          scroll={{ x: "max-content" }}
-          columns={columns}
-          dataSource={products}
+        <ProductTable
+          products={products}
           loading={loading}
-          pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+          onEdit={openDrawer}
+          onDelete={handleDelete}
           rowKey={rowKey}
+          getId={getId}
+          formatUnit={formatUnit}
+          formatCurrency={formatCurrency}
+          formatDateDDMMYYYY={formatDateDDMMYYYY}
+          isExpired={isExpired}
+          isExpiringSoon={isExpiringSoon}
         />
       )}
 
       {/* Cards solo en mobile */}
       {isMobile && (
-        <div className="inventory-cards-container">
-          {products.map((product) => {
-            const expiration = product.acquisition_date
-              ? new Date(product.acquisition_date)
-              : null;
-            const today = new Date();
-            const diffDays =
-              expiration != null
-                ? Math.ceil((expiration - today) / (1000 * 60 * 60 * 24))
-                : null;
-
-            return (
-              <div className="inventory-card" key={rowKey(product)}>
-                <div className="card-header">
-                  <h3>{product.name}</h3>
-                  <div className="card-icons">
-                    <EditOutlined onClick={() => openDrawer(product)} />
-                    <DeleteOutlined onClick={() => handleDelete(getId(product))} />
-                  </div>
-                </div>
-
-                <p>
-                  <AppstoreOutlined /> <strong>Tipo:</strong> {product.type}
-                </p>
-                <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {formatUnit(product.unit)}</p>
-                <p>
-                  <InboxOutlined /> <strong>Disponible:</strong>{" "}
-                  <Tag
-                    color={
-                      product.available_quantity === 0
-                        ? "red"
-                        : product.available_quantity < product.total_quantity * 0.3
-                        ? "orange"
-                        : "green"
-                    }
-                  >
-                    {product.available_quantity} {formatUnit(product.unit)}
-                  </Tag>
-                </p>
-
-                <p><DollarOutlined /> <strong>Precio:</strong> {formatCurrency(product.price)}</p>
-
-                <p>
-                  <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                  {formatDateDDMMYYYY(product.acquisition_date)}{" "}
-                  {/* ícono de alerta en mobile */}
-                  {isExpired(product.acquisition_date) && (
-                    <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
-                  )}
-                  {!isExpired(product.acquisition_date) && isExpiringSoon(product.acquisition_date) && (
-                    <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
-                  )}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+        <ProductListMobile
+          products={products}
+          onEdit={openDrawer}
+          onDelete={handleDelete}
+          rowKey={rowKey}
+          getId={getId}
+          formatUnit={formatUnit}
+          formatCurrency={formatCurrency}
+          formatDateDDMMYYYY={formatDateDDMMYYYY}
+          isExpired={isExpired}
+          isExpiringSoon={isExpiringSoon}
+        />
       )}
 
       <Drawer
@@ -502,4 +383,5 @@ const Inventory = () => {
 };
 
 export default Inventory;
+
 

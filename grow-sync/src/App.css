@@ -1,4 +1,5 @@
-body, html {
+body,
+html {
   overflow-x: hidden;
 }
 
@@ -40,6 +41,7 @@ body, html {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -47,11 +49,13 @@ body, html {
 
 /* Sidebar */
 .ant-layout-sider {
-  background-color: #1D2A62; /* Fondo de la sidebar */
+  background-color: #1D2A62;
+  /* Fondo de la sidebar */
 }
 
 .ant-menu-item-selected {
-  background-color: #87AECE !important; /* Color de los ítems seleccionados */
+  background-color: #87AECE !important;
+  /* Color de los ítems seleccionados */
 }
 
 /* Botones Primarios */
@@ -83,13 +87,15 @@ body, html {
 }
 
 .danger-button {
-  background-color: #d32f2f; /* rojo fuerte */
+  background-color: #d32f2f;
+  /* rojo fuerte */
   color: white;
   border: none;
 }
 
 .danger-button:hover {
-  background-color: #b71c1c !important; /* rojo más oscuro en hover */
+  background-color: #b71c1c !important;
+  /* rojo más oscuro en hover */
   color: white !important;
   border: none !important;
   opacity: 0.9 !important;
@@ -146,7 +152,8 @@ body, html {
 
 .fab-button {
   position: fixed;
-  bottom: 80px; /* arriba de la navbar bottom */
+  bottom: 80px;
+  /* arriba de la navbar bottom */
   right: 20px;
   width: 56px;
   height: 56px;
@@ -178,20 +185,29 @@ body, html {
 
 /* (opcional) colapsá paddings de la celda para tener más control */
 .ant-picker-calendar-date {
-  padding: 0;                /* quita padding global */
+  padding: 0;
+  /* quita padding global */
 }
+
 .ant-picker-calendar-date-value {
-  padding-left: 6px;         /* deja el número del día prolijo */
+  padding-left: 6px;
+  /* deja el número del día prolijo */
 }
+
 .ant-picker-calendar-date-content {
   /* mantené SOLO padding inferior para respiración bajo las bandas */
-  padding: 0 8px 6px;        /* <- 8px es nuestro "gutter" horizontal */
+  padding: 0 8px 6px;
+  /* <- 8px es nuestro "gutter" horizontal */
 }
 
-.ant-picker-cell { border: 0; }
+.ant-picker-cell {
+  border: 0;
+}
 
 /* variable para reutilizar ese gutter */
-:root { --cal-pad-x: 8px; }
+:root {
+  --cal-pad-x: 8px;
+}
 
 .cal-bars {
   display: flex;
@@ -212,37 +228,76 @@ body, html {
   cursor: pointer;
   opacity: .95;
 }
-.cal-bar:hover { opacity: 1; }
+
+.cal-bar:hover {
+  opacity: 1;
+}
 
 /* Esquinas según tramo */
-.cal-bar--single { border-radius: 10px; }
+.cal-bar--single {
+  border-radius: 10px;
+}
 
 /* Estirá cada tramo hasta EL BORDE de la celda:
    - start: corre a la izquierda (−padding)
    - end:   corre a la derecha (−padding)
    - middle: corre a ambos lados
 */
-.cal-bar--start  {
+.cal-bar--start {
   margin-left: calc(-1 * var(--cal-pad-x));
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
 }
+
 .cal-bar--end {
   margin-right: calc(-1 * var(--cal-pad-x));
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
 }
+
 .cal-bar--middle {
-  margin-left:  calc(-1 * var(--cal-pad-x));
+  margin-left: calc(-1 * var(--cal-pad-x));
   margin-right: calc(-1 * var(--cal-pad-x));
   border-radius: 0;
 }
 
-/* indicador “+N más” cuando hay muchos */
-.cal-more { font-size: 11px; color: #999; }
+/* indicador "+N más" cuando hay muchos */
+.cal-more {
+  font-size: 11px;
+  color: #999;
+}
 
 /* (opcional) asegúrate de que la tabla no meta espacios raros */
 .ant-picker-panel .ant-picker-body table {
   border-collapse: separate;
   border-spacing: 0;
+}
+
+/* ====== RangePicker Mobile Responsive ====== */
+@media (max-width: 768px) {
+
+  /* Stack calendars vertically on mobile */
+  .ant-picker-panel-container .ant-picker-panels {
+    flex-direction: column !important;
+  }
+
+  /* Ensure each panel takes full width */
+  .ant-picker-panel {
+    width: 100% !important;
+  }
+
+  /* Add border between stacked calendars */
+  .ant-picker-panel-container .ant-picker-panel:first-child {
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  /* Adjust dropdown width to fit mobile screen */
+  .ant-picker-dropdown {
+    max-width: 100vw !important;
+  }
+
+  /* Ensure the dropdown doesn't overflow */
+  .ant-picker-dropdown .ant-picker-panel-container {
+    overflow-x: hidden !important;
+  }
 }

@@ -1,9 +1,25 @@
+/**
+ * Feature: Gestión de Lotes
+ * Ubicación: src/features/lots/Lotes.js
+ * Descripción:
+ *  Contenedor principal para la gestión de lotes.
+ *  Maneja el estado de la aplicación (lista de lotes, loading, modales) y la lógica de negocio (CRUD).
+ * 
+ * Refactorización (Mejoras de Código):
+ *  - Se han extraído las vistas de tabla (Desktop) y lista (Mobile) a componentes separados:
+ *    1. <LotTable /> -> Para vista de escritorio.
+ *    2. <LotListMobile /> -> Para vista móvil.
+ *  - Esto reduce la complejidad del renderizado y mejora la legibilidad del archivo principal.
+ *  - Se mantiene la lógica de estado y llamadas a API centralizadas aquí.
+ */
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Dropdown, Table, Button, Drawer, Form, Input, InputNumber, Space, Popconfirm, notification, Row, Col, Tooltip } from "antd";
-import { MoreOutlined, EnvironmentOutlined, AimOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Dropdown, Button, Drawer, Form, Input, InputNumber, Space, notification, Row, Col } from "antd";
+import { MoreOutlined, PlusOutlined } from "@ant-design/icons";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import MapSelector from '../../components/MapSelector';
+import LotTable from "./components/LotTable";
+import LotListMobile from "./components/LotListMobile";
 
 // -------- helpers --------
 const getId = (r) => r?.id ?? r?._id;
@@ -28,7 +44,7 @@ const Lotes = () => {
   const [editingLot, setEditingLot] = useState(null);
   const [form] = Form.useForm();
 
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false); 
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const mapRef = useRef();
 
@@ -110,75 +126,6 @@ const Lotes = () => {
     }
   };
 
-  // Tabla ---
-  const columns = [
-    {
-      title: "#",
-      dataIndex: "index",
-      key: "index",
-      render: (_, __, index) => index + 1,
-      width: 64, 
-    },
-    {
-      title: "Nombre del Lote",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Área Total (ha)",
-      dataIndex: "area",
-      key: "area",
-    },
-    {
-      title: "Ubicación",
-      dataIndex: "location",
-      key: "location",
-      render: (loc) => {
-        const parsed = safeParse(loc);
-        if (!parsed) return "Sin ubicación";
-        return (
-          <Button type="link" onClick={() => setSelectedLocation(parsed)}>
-            Ver
-          </Button>
-        );
-      },
-    },
-    {
-      title: "Acciones",
-      key: "actions",
-      width: 96,
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="Editar">
-            <Button
-              type="text"
-              shape="circle"
-              icon={<EditOutlined />}
-              onClick={() => openDrawer(record)}
-              aria-label="Editar"
-            />
-          </Tooltip>
-          <Popconfirm
-            title="¿Deshabilitar este lote?"
-            okText="Sí"
-            cancelText="No"
-            onConfirm={() => handleDelete(getId(record))}
-          >
-            <Tooltip title="Deshabilitar">
-              <Button
-                type="text"
-                danger
-                shape="circle"
-                icon={<DeleteOutlined />}
-                aria-label="Deshabilitar"
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
   const menuItems = [
     {
       key: "1",
@@ -217,7 +164,7 @@ const Lotes = () => {
         </Col>
       </Row>
 
-      {!isMobile&& (
+      {!isMobile ? (
         <Row gutter={24}>
           <Col span={12}>
             {/* Mapa a la izquierda */}
@@ -225,56 +172,32 @@ const Lotes = () => {
           </Col>
           <Col span={12}>
             {/* Tabla de lotes a la derecha */}
-            <Table
-              scroll={{ x: "max-content" }}
-              columns={columns}
-              dataSource={lots}
+            <LotTable
+              lots={lots}
               loading={loading}
-              pagination={{ pageSize: 5, position: ['bottomCenter'] }}
+              onEdit={openDrawer}
+              onDelete={handleDelete}
+              onViewLocation={setSelectedLocation}
               rowKey={rowKey}
+              getId={getId}
+              safeParse={safeParse}
             />
           </Col>
         </Row>
-      )}
-
-      {isMobile && (
+      ) : (
         <>
           <div style={{ marginBottom: 24 }}>
             <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
           </div>
-
-          <div className="inventory-cards-container">
-            {lots.map((lot) => (
-              <div className="inventory-card" key={rowKey(lot)}>
-                <div className="card-header">
-                  <h3>{lot.name}</h3>
-                  <div className="card-icons">
-                    <EditOutlined onClick={() => openDrawer(lot)} />
-                    <DeleteOutlined onClick={() => handleDelete(getId(lot))} />
-                  </div>
-                </div>
-
-                <p>
-                  <AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha
-                </p>
-                <p>
-                  <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
-                  {safeParse(lot.location) ? (
-                    <Button
-                      type="link"
-                      size="small"
-                      style={{ padding: 0, marginLeft: 0 }}
-                      onClick={() => setSelectedLocation(safeParse(lot.location))}
-                    >
-                      Ver
-                    </Button>
-                  ) : (
-                    "No asignada"
-                  )}
-                </p>
-              </div>
-            ))}
-          </div>
+          <LotListMobile
+            lots={lots}
+            onEdit={openDrawer}
+            onDelete={handleDelete}
+            onViewLocation={setSelectedLocation}
+            rowKey={rowKey}
+            getId={getId}
+            safeParse={safeParse}
+          />
         </>
       )}
 
@@ -364,4 +287,5 @@ const Lotes = () => {
 };
 
 export default Lotes;
+
 

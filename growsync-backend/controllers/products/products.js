@@ -1,4 +1,14 @@
-// IMPORTACION DEL CLIENTE SUPABASE
+/**
+ * Controlador: Productos (CRUD Principal)
+ * Ubicación: controllers/products/products.js
+ * Descripción:
+ *  Maneja las operaciones principales de productos: listar, crear, editar y deshabilitar.
+ *  Implementa validaciones de negocio (ej: cantidad disponible <= total).
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Estandarización de manejo de errores con `next(err)`.
+ *  - Documentación detallada de cada función.
+ */
 const supabase = require('../../db/supabaseClient');
 
 /**
@@ -6,7 +16,7 @@ const supabase = require('../../db/supabaseClient');
  * Soporta: ?q=&category=&page=&pageSize=&includeDisabled=
  * Devuelve: { data, page, pageSize, total }
  */
-const listProducts = async (req, res) => {
+const listProducts = async (req, res, next) => {
   try {
     const {
       q,
@@ -16,15 +26,15 @@ const listProducts = async (req, res) => {
       includeDisabled = false,
     } = req.query;
 
-    const limit  = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
+    const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     const columns = [
-      'id','name','category','unit',
-      'price','cost',
-      'total_quantity','available_quantity',
-      'expiration_date','acquisition_date',
-      'enabled','created_at'
+      'id', 'name', 'category', 'unit',
+      'price', 'cost',
+      'total_quantity', 'available_quantity',
+      'expiration_date', 'acquisition_date',
+      'enabled', 'created_at'
     ].join(',');
 
     let query = supabase
@@ -34,15 +44,12 @@ const listProducts = async (req, res) => {
       .range(offset, offset + limit - 1);
 
     if (!includeDisabled) query = query.eq('enabled', true);
-    if (category)         query = query.eq('category', category);
+    if (category) query = query.eq('category', category);
     if (q && q.trim().length >= 2) query = query.ilike('name', `%${q.trim()}%`);
 
     const { data, error, count } = await query;
 
-    if (error) {
-      console.error('Error al listar productos:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al listar productos' });
-    }
+    if (error) throw error;
 
     return res.json({
       data: data || [],
@@ -51,8 +58,7 @@ const listProducts = async (req, res) => {
       total: count ?? (data?.length || 0),
     });
   } catch (err) {
-    console.error('Error inesperado al listar productos:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al listar productos' });
+    next(err);
   }
 };
 
@@ -61,11 +67,11 @@ const listProducts = async (req, res) => {
  * Body esperado
  *  { name, category, unit, expiration_date?, cost?, price?, total_quantity?, available_quantity?, acquisition_date? }
  */
-const addProduct = async (req, res) => {
+const addProduct = async (req, res, next) => {
   try {
     const {
       name,
-      category,               
+      category,
       unit,
       expiration_date,
       cost,
@@ -103,15 +109,11 @@ const addProduct = async (req, res) => {
       .select('id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at')
       .single();
 
-    if (error) {
-      console.error('Error al crear producto:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al crear producto' });
-    }
+    if (error) throw error;
 
     return res.status(201).json({ product: data });
   } catch (err) {
-    console.error('Error inesperado al crear producto:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al crear producto' });
+    next(err);
   }
 };
 
@@ -120,15 +122,15 @@ const addProduct = async (req, res) => {
  * PUT parcial: solo actualiza campos presentes en el body
  * 404 si no existe
  */
-const editProduct = async (req, res) => {
+const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
     // Armamos el objeto de update solo con campos definidos
     const allowed = [
-      'name','category','unit','expiration_date',
-      'cost','price','total_quantity','available_quantity','acquisition_date',
-      'enabled' 
+      'name', 'category', 'unit', 'expiration_date',
+      'cost', 'price', 'total_quantity', 'available_quantity', 'acquisition_date',
+      'enabled'
     ];
     const updateData = {};
     for (const k of allowed) {
@@ -156,18 +158,15 @@ const editProduct = async (req, res) => {
       .select('id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at')
       .maybeSingle();
 
-    if (error) {
-      console.error('Error al editar producto:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al editar producto' });
-    }
+    if (error) throw error;
+
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado' });
     }
 
     return res.json({ product: data });
   } catch (err) {
-    console.error('Error inesperado al editar producto:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al editar producto' });
+    next(err);
   }
 };
 
@@ -175,7 +174,7 @@ const editProduct = async (req, res) => {
  * DESHABILITAR PRODUCTO (soft delete)
  * Solo cambia enabled=false si esta true. 404 si no existe o ya esta deshabilitado.
  */
-const disableProduct = async (req, res) => {
+const disableProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -187,18 +186,15 @@ const disableProduct = async (req, res) => {
       .select('id,enabled')
       .maybeSingle();
 
-    if (error) {
-      console.error('Error al deshabilitar producto:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al deshabilitar producto' });
-    }
+    if (error) throw error;
+
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado o ya deshabilitado' });
     }
 
     return res.status(200).json({ ok: true, id: data.id });
   } catch (err) {
-    console.error('Error inesperado al deshabilitar producto:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al deshabilitar producto' });
+    next(err);
   }
 };
 
@@ -209,3 +205,4 @@ module.exports = {
   editProduct,
   disableProduct
 };
+

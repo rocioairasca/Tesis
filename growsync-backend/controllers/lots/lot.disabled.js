@@ -1,3 +1,13 @@
+/**
+ * Controlador: Lotes Deshabilitados
+ * Ubicación: controllers/lots/lot.disabled.js
+ * Descripción:
+ *  Maneja la lógica específica para lotes deshabilitados (Listar eliminados, Restaurar).
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Estandarización del manejo de errores usando `next(err)`.
+ *  - Alineación con el patrón de diseño del controlador principal.
+ */
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require('../../db/supabaseClient');
 
@@ -6,7 +16,7 @@ const supabase = require('../../db/supabaseClient');
  * - Soporta paginado y busqueda por nombre (?q=)
  * - Devuelve { data, page, pageSize, total }
  */
-const listDisabledLots = async (req, res) => {
+const listDisabledLots = async (req, res, next) => {
   try {
     const {
       q,
@@ -14,7 +24,7 @@ const listDisabledLots = async (req, res) => {
       pageSize = 50,
     } = req.query;
 
-    const limit  = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
+    const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     // Seleccionamos columnas explícitas
@@ -33,10 +43,7 @@ const listDisabledLots = async (req, res) => {
 
     const { data, error, count } = await query;
 
-    if (error) {
-      console.error('Error al listar lotes deshabilitados:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al listar lotes deshabilitados' });
-    }
+    if (error) throw error;
 
     return res.json({
       data: data || [],
@@ -45,8 +52,7 @@ const listDisabledLots = async (req, res) => {
       total: count ?? (data?.length || 0),
     });
   } catch (err) {
-    console.error('Error inesperado al listar lotes deshabilitados:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al listar lotes deshabilitados' });
+    next(err);
   }
 };
 
@@ -55,7 +61,7 @@ const listDisabledLots = async (req, res) => {
  * - Cambia enabled=false -> true
  * - Si el lote no existe o ya esta habilitado, responde 404
  */
-const enableLot = async (req, res) => {
+const enableLot = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -68,10 +74,7 @@ const enableLot = async (req, res) => {
       .select('id, name, enabled')
       .maybeSingle(); // no lanza error si no hay fila
 
-    if (error) {
-      console.error('Error al habilitar lote:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al habilitar lote' });
-    }
+    if (error) throw error;
 
     if (!data) {
       // No hay fila que cumpla: o no existe, o ya estaba habilitado
@@ -83,8 +86,7 @@ const enableLot = async (req, res) => {
       lot: data,
     });
   } catch (err) {
-    console.error('Error inesperado al habilitar lote:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al habilitar lote' });
+    next(err);
   }
 };
 

@@ -1,3 +1,13 @@
+/**
+ * Controlador: Vehículos (Maquinaria)
+ * Ubicación: controllers/vehicle.js
+ * Descripción:
+ *  Maneja el CRUD de vehículos y maquinaria.
+ *  Incluye listado con filtros, creación, edición, y soft-delete.
+ * 
+ * Nota:
+ *  - Ya implementa manejo de errores con `next(e)`.
+ */
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 
@@ -6,7 +16,10 @@ const SELECT_COLUMNS = `
   responsible_user, created_by, enabled, created_at, updated_at
 `;
 
-// LISTAR (enabled=true por defecto; soporta includeDisabled, q, type, status, paginado + total)
+/**
+ * LISTAR VEHICULOS
+ * Soporta: ?q=&type=&status=&includeDisabled=&page=&pageSize=
+ */
 exports.list = async (req, res, next) => {
   try {
     const {
@@ -19,9 +32,9 @@ exports.list = async (req, res, next) => {
     const incDisabled = includeDisabled === '1' || String(includeDisabled).toLowerCase() === 'true';
     if (!incDisabled) w.push(`enabled IS TRUE`);
 
-    if (q)      { p.push(`%${q}%`); w.push(`(name ILIKE $${p.length} OR brand ILIKE $${p.length} OR model ILIKE $${p.length} OR plate ILIKE $${p.length})`); }
-    if (type)   { p.push(type);     w.push(`type = $${p.length}`); }
-    if (status) { p.push(status);   w.push(`status = $${p.length}`); }
+    if (q) { p.push(`%${q}%`); w.push(`(name ILIKE $${p.length} OR brand ILIKE $${p.length} OR model ILIKE $${p.length} OR plate ILIKE $${p.length})`); }
+    if (type) { p.push(type); w.push(`type = $${p.length}`); }
+    if (status) { p.push(status); w.push(`status = $${p.length}`); }
 
     const whereSql = w.length ? `WHERE ${w.join(' AND ')}` : '';
     const limit = parsePageSize(pageSize, 50, 500);
@@ -38,7 +51,7 @@ exports.list = async (req, res, next) => {
       SELECT ${SELECT_COLUMNS} FROM vehicles
       ${whereSql}
       ORDER BY name ASC
-      LIMIT $${p.length-1} OFFSET $${p.length}
+      LIMIT $${p.length - 1} OFFSET $${p.length}
     `;
     const { rows } = await pool.query(dataSql, p);
 
@@ -46,7 +59,9 @@ exports.list = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// DETALLE
+/**
+ * OBTENER UN VEHICULO
+ */
 exports.getOne = async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -58,12 +73,14 @@ exports.getOne = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// CREAR
+/**
+ * CREAR VEHICULO
+ */
 exports.create = async (req, res, next) => {
   try {
     const {
-      name, type='otro', brand, model, plate, capacity, notes,
-      status='activo', responsible_user, created_by
+      name, type = 'otro', brand, model, plate, capacity, notes,
+      status = 'activo', responsible_user, created_by
     } = req.body;
 
     const sql = `
@@ -79,11 +96,13 @@ exports.create = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// ACTUALIZAR (parcial) + updated_at
+/**
+ * ACTUALIZAR VEHICULO
+ */
 exports.update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const allowed = ['name','type','brand','model','plate','capacity','notes','status','responsible_user','enabled'];
+    const allowed = ['name', 'type', 'brand', 'model', 'plate', 'capacity', 'notes', 'status', 'responsible_user', 'enabled'];
     const sets = []; const vals = [];
     for (const k of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body, k)) {
@@ -105,7 +124,9 @@ exports.update = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// SOFT DELETE (enabled=false)
+/**
+ * DESHABILITAR VEHICULO (Soft Delete)
+ */
 exports.remove = async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -120,15 +141,17 @@ exports.remove = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// LISTAR SOLO DESHABILITADOS (como en los otros controladores)
+/**
+ * LISTAR VEHICULOS DESHABILITADOS
+ */
 exports.listDisabled = async (req, res, next) => {
   try {
     const { q, type, status, page = 1, pageSize = 50 } = req.query;
     const p = []; const w = [`enabled IS FALSE`];
 
-    if (q)      { p.push(`%${q}%`); w.push(`(name ILIKE $${p.length} OR brand ILIKE $${p.length} OR model ILIKE $${p.length} OR plate ILIKE $${p.length})`); }
-    if (type)   { p.push(type);     w.push(`type = $${p.length}`); }
-    if (status) { p.push(status);   w.push(`status = $${p.length}`); }
+    if (q) { p.push(`%${q}%`); w.push(`(name ILIKE $${p.length} OR brand ILIKE $${p.length} OR model ILIKE $${p.length} OR plate ILIKE $${p.length})`); }
+    if (type) { p.push(type); w.push(`type = $${p.length}`); }
+    if (status) { p.push(status); w.push(`status = $${p.length}`); }
 
     const whereSql = `WHERE ${w.join(' AND ')}`;
     const limit = parsePageSize(pageSize, 50, 500);
@@ -145,7 +168,7 @@ exports.listDisabled = async (req, res, next) => {
       SELECT ${SELECT_COLUMNS} FROM vehicles
       ${whereSql}
       ORDER BY name ASC
-      LIMIT $${p.length-1} OFFSET $${p.length}
+      LIMIT $${p.length - 1} OFFSET $${p.length}
     `;
     const { rows } = await pool.query(dataSql, p);
 
@@ -153,7 +176,9 @@ exports.listDisabled = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// RESTAURAR (enabled=true)
+/**
+ * HABILITAR VEHICULO (Restaurar)
+ */
 exports.enable = async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -167,3 +192,4 @@ exports.enable = async (req, res, next) => {
     res.json({ ok: true, id: rows[0].id });
   } catch (e) { next(e); }
 };
+

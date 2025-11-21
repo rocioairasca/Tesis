@@ -1,17 +1,32 @@
+/**
+ * Componente: Planning
+ * Ubicación: src/features/planning/Planning.js
+ * Descripción:
+ *  Contenedor principal para la gestión de planificaciones.
+ *  Maneja la lógica de estado, llamadas a API, y renderizado condicional
+ *  de vistas (Tabla Desktop, Lista Mobile, Calendario).
+ * 
+ * Refactorización:
+ *  - Se extrajo la tabla desktop a `components/PlanningTable.js`.
+ *  - Se extrajo la lista mobile a `components/PlanningListMobile.js`.
+ *  - Se mantiene la lógica de estado y handlers aquí.
+ */
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
-  Dropdown, Space, Row, Col, Tag, Tooltip, notification,
+  Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
+  Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List
 } from "antd";
-import { MoreOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import { Calendar as CalIcon, User as UserIcon, MapPin, Package, Truck } from "phosphor-react";
+import { PlusOutlined, MoreOutlined } from "@ant-design/icons";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { useNavigate } from "react-router-dom";
 
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
+import PlanningTable from "./components/PlanningTable";
+import PlanningListMobile from "./components/PlanningListMobile";
+
 dayjs.extend(isBetween);
 
 const { RangePicker } = DatePicker;
@@ -51,10 +66,10 @@ const Planning = () => {
   const [vehicles, setVehicles] = useState([]);
 
   // índices id -> nombre
-  const userIx   = Object.fromEntries(users.map(u => [u.id ?? u._id, u.full_name || u.nickname || u.username || u.email]));
-  const lotIx    = Object.fromEntries(lots.map(l => [l.id ?? l._id, l.name]));
-  const prodIx   = Object.fromEntries(products.map(p => [p.id ?? p._id, p.name]));
-  const vehIx    = Object.fromEntries(vehicles.map(v => [v.id ?? v._id, v.name || v.model || v.plate]));
+  const userIx = Object.fromEntries(users.map(u => [u.id ?? u._id, u.full_name || u.nickname || u.username || u.email]));
+  const lotIx = Object.fromEntries(lots.map(l => [l.id ?? l._id, l.name]));
+  const prodIx = Object.fromEntries(products.map(p => [p.id ?? p._id, p.name]));
+  const vehIx = Object.fromEntries(vehicles.map(v => [v.id ?? v._id, v.name || v.model || v.plate]));
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -65,70 +80,70 @@ const Planning = () => {
 
   //helpers
   // planificaciones que "tocan" un día (inicio/fin inclusivo)
-    const eventsOn = (day) => {
+  const eventsOn = (day) => {
     if (!day) return [];
     return list.filter((r) => {
-        const start = r.start_at ? dayjs(r.start_at) : null;
-        const end   = r.end_at ? dayjs(r.end_at) : null;
-        if (!start || !end) return false;
-        return day.isBetween(start.startOf("day"), end.endOf("day"), "day", "[]");
+      const start = r.start_at ? dayjs(r.start_at) : null;
+      const end = r.end_at ? dayjs(r.end_at) : null;
+      if (!start || !end) return false;
+      return day.isBetween(start.startOf("day"), end.endOf("day"), "day", "[]");
     });
-    };
+  };
 
-    // contenido de cada celda de fecha
-    // color por estado (podés cambiarlo por tipo de actividad si querés)
-    const statusColor = (s) => ({
-        planificado: "#1677ff",
-        en_progreso: "#faad14",
-        completado:  "#52c41a",
-        cancelado:   "#ff4d4f",
-    }[s] || "#8c8c8c");
+  // contenido de cada celda de fecha
+  // color por estado (podés cambiarlo por tipo de actividad si querés)
+  const statusColor = (s) => ({
+    planificado: "#1677ff",
+    en_progreso: "#faad14",
+    completado: "#52c41a",
+    cancelado: "#ff4d4f",
+  }[s] || "#8c8c8c");
 
-    // parte del span para ese día
-    const eventPartForDay = (ev, day) => {
-        const s = ev.start_at ? dayjs(ev.start_at).startOf("day") : null;
-        const e = ev.end_at   ? dayjs(ev.end_at).endOf("day")   : null;
-        if (!s || !e) return "single";
-        if (s.isSame(e, "day")) return "single";
-        if (day.isSame(s, "day")) return "start";
-        if (day.isSame(e, "day")) return "end";
-        return "middle";
-    };
+  // parte del span para ese día
+  const eventPartForDay = (ev, day) => {
+    const s = ev.start_at ? dayjs(ev.start_at).startOf("day") : null;
+    const e = ev.end_at ? dayjs(ev.end_at).endOf("day") : null;
+    if (!s || !e) return "single";
+    if (s.isSame(e, "day")) return "single";
+    if (day.isSame(s, "day")) return "start";
+    if (day.isSame(e, "day")) return "end";
+    return "middle";
+  };
 
-    const renderDateCell = (value) => {
-        const items = eventsOn(value);
-        if (!items.length) return null;
+  const renderDateCell = (value) => {
+    const items = eventsOn(value);
+    if (!items.length) return null;
 
-        // si hay muchos, mostramos 3 bandas y luego “+N más”
-        const visible = items.slice(0, 3);
+    // si hay muchos, mostramos 3 bandas y luego “+N más”
+    const visible = items.slice(0, 3);
 
-        return (
-            <div className="cal-bars">
-            {visible.map((ev) => {
-                const part = eventPartForDay(ev, value);
-                const bg = statusColor(ev.status);
-                return (
-                <div
-                    key={getId(ev)}
-                    className={`cal-bar cal-bar--${part}`}
-                    style={{ backgroundColor: bg }}
-                    title={`${ev.title || "Sin título"} • ${dayjs(ev.start_at).format("DD/MM")} → ${dayjs(ev.end_at).format("DD/MM")}`}
-                    onClick={(e) => {
-                    e.stopPropagation();
-                    // abrimos el drawer de edición que ya tenés
-                    openDrawer(ev);
-                    }}
-                >
-                    <span className="cal-bar__text">{ev.title || "Sin título"}</span>
-                </div>
-                );
-            })}
-            {items.length > 3 && (
-                <div className="cal-more">+{items.length - 3} más</div>
-            )}
+    return (
+      <div className="cal-bars">
+        {visible.map((ev) => {
+          const part = eventPartForDay(ev, value);
+          const bg = statusColor(ev.status);
+          return (
+            <div
+              key={getId(ev)}
+              className={`cal-bar cal-bar--${part}`}
+              style={{ backgroundColor: bg }}
+              title={`${ev.title || "Sin título"} • ${dayjs(ev.start_at).format("DD/MM/YYYY")} → ${dayjs(ev.end_at).format("DD/MM/YYYY")}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                // abrimos el drawer de edición que ya tenés
+                openDrawer(ev);
+              }}
+            >
+              <span className="cal-bar__text">{ev.title || "Sin título"}</span>
             </div>
-        );
-    };
+          );
+        })}
+        {items.length > 3 && (
+          <div className="cal-more">+{items.length - 3} más</div>
+        )}
+      </div>
+    );
+  };
 
 
   // ---------- fetchers ----------
@@ -150,25 +165,25 @@ const Planning = () => {
     try {
       const { data } = await api.get("/users");
       setUsers(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch {}
+    } catch { }
   }, []);
   const fetchLots = useCallback(async () => {
     try {
       const { data } = await api.get("/lots");
       setLots(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch {}
+    } catch { }
   }, []);
   const fetchProducts = useCallback(async () => {
     try {
       const { data } = await api.get("/products");
       setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch {}
+    } catch { }
   }, []);
   const fetchVehicles = useCallback(async () => {
     try {
       const { data } = await api.get("/vehicles");
       setVehicles(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -267,69 +282,6 @@ const Planning = () => {
     }
   };
 
-  // ---------- table ----------
-  const columns = [
-    { title: "#", dataIndex: "index", width: 56, render: (_, __, i) => i + 1 },
-    { title: "Título", dataIndex: "title" },
-    {
-      title: "Actividad",
-      dataIndex: "activity_type",
-      render: (t) => <Tag color="blue">{t ? (t[0].toUpperCase() + t.slice(1)) : "—"}</Tag>,
-    },
-    {
-      title: "Lotes",
-      dataIndex: "lot_ids",
-      render: (ids = []) => (ids.map(id => lotIx[id]).filter(Boolean).join(", ") || "—"),
-    },
-    {
-      title: "Período",
-      key: "period",
-      render: (_, r) =>
-        r.start_at && r.end_at
-          ? `${dayjs(r.start_at).format("DD/MM/YYYY")} → ${dayjs(r.end_at).format("DD/MM/YYYY")}`
-          : "—",
-    },
-    {
-      title: "Responsable",
-      dataIndex: "responsible_user",
-      render: (id) => userIx[id] || "—",
-    },
-    { title: "Vehículo", dataIndex: "vehicle_id", render: (id) => vehIx[id] || "—" },
-    {
-      title: "Productos",
-      dataIndex: "products",
-      render: (arr = []) => (arr.length ? `${arr.length} ítem(s)` : "—"),
-    },
-    { title: "Estado", dataIndex: "status", render: statusTag },
-    {
-      title: "Acciones",
-      key: "actions",
-      width: 140,
-      render: (_, record) => {
-        const menuItems = [
-          { key: "prog", label: "Marcar en progreso", onClick: () => updateStatus(record, "en_progreso") },
-          { key: "done", label: "Marcar completado", onClick: () => updateStatus(record, "completado") },
-          { type: "divider" },
-          {
-            key: "cancel",
-            label: <span style={{ color: "#ff4d4f" }}>Cancelar</span>,
-            onClick: () => handleCancel(record),
-          },
-        ];
-        return (
-          <Space size="small">
-            <Tooltip title="Editar">
-              <Button type="text" shape="circle" icon={<EditOutlined />} onClick={() => openDrawer(record)} />
-            </Tooltip>
-            <Dropdown menu={{ items: menuItems }} placement="bottomRight">
-              <Button type="text" shape="circle" icon={<MoreOutlined />} />
-            </Dropdown>
-          </Space>
-        );
-      },
-    },
-  ];
-
   const disabledMenu = [{ key: "1", label: <span onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver Canceladas</span> }];
 
   // ---------- UI ----------
@@ -351,13 +303,13 @@ const Planning = () => {
                 </Button>
 
                 <Segmented
-                    size="middle"
-                    value={viewMode}
-                    onChange={setViewMode}
-                    options={[
-                      { label: "Tabla", value: "table" },
-                      { label: "Calendario", value: "calendar" },
-                    ]}
+                  size="middle"
+                  value={viewMode}
+                  onChange={setViewMode}
+                  options={[
+                    { label: "Tabla", value: "table" },
+                    { label: "Calendario", value: "calendar" },
+                  ]}
                 />
               </Space>
             )}
@@ -367,54 +319,43 @@ const Planning = () => {
 
       {/* Tabla (desktop) */}
       {viewMode === "table" && !isMobile && (
-        <Table
-          scroll={{ x: "max-content" }}
-          columns={columns}
-          dataSource={list}
+        <PlanningTable
+          list={list}
           loading={loading}
-          pagination={{ pageSize: 8, position: ["bottomCenter"] }}
+          onEdit={openDrawer}
+          onUpdateStatus={updateStatus}
+          onCancel={handleCancel}
           rowKey={rowKey}
+          userIx={userIx}
+          lotIx={lotIx}
+          vehIx={vehIx}
+          statusTag={statusTag}
         />
       )}
 
       {/* Vista CALENDARIO (desktop y mobile) */}
-        {viewMode === "calendar" && (
+      {viewMode === "calendar" && (
         <div style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
-            <AntCalendar
+          <AntCalendar
             fullscreen={!isMobile}
             dateCellRender={renderDateCell}
             onSelect={(d) => setOpenDay(d)} // click en día abre detalle
-            />
+          />
         </div>
-        )}
+      )}
 
       {/* Cards (mobile) */}
       {isMobile && viewMode === "table" && (
-        <div className="inventory-cards-container">
-          {list.map((r) => {
-            const lotsText = (r.lot_ids || []).map(id => lotIx[id]).filter(Boolean).join(", ") || "—";
-            const period = (r.start_at && r.end_at)
-              ? `${dayjs(r.start_at).format("DD/MM")} → ${dayjs(r.end_at).format("DD/MM")}`
-              : "—";
-            return (
-              <div className="inventory-card" key={rowKey(r)}>
-                <div className="card-header">
-                  <h3>{r.title}</h3>
-                  <div className="card-icons">
-                    <EditOutlined onClick={() => openDrawer(r)} />
-                    <DeleteOutlined onClick={() => handleCancel(r)} />
-                  </div>
-                </div>
-                <p className="flex-row"><CalIcon size={18} /> <strong>Período:</strong> {period}</p>
-                <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotsText}</p>
-                <p className="flex-row"><UserIcon size={18} /> <strong>Resp.:</strong> {userIx[r.responsible_user] || "—"}</p>
-                <p className="flex-row"><Truck size={18} /> <strong>Vehículo:</strong> {vehIx[r.vehicle_id] || "—"}</p>
-                <p className="flex-row"><Package size={18} /> <strong>Productos:</strong> {(r.products?.length || 0)} ítem(s)</p>
-                <p><strong>Estado:</strong> {statusTag(r.status)}</p>
-              </div>
-            );
-          })}
-        </div>
+        <PlanningListMobile
+          list={list}
+          onEdit={openDrawer}
+          onCancel={handleCancel}
+          rowKey={rowKey}
+          userIx={userIx}
+          lotIx={lotIx}
+          vehIx={vehIx}
+          statusTag={statusTag}
+        />
       )}
 
       {/* Drawer crear/editar */}
@@ -457,7 +398,9 @@ const Planning = () => {
             <Select
               allowClear
               placeholder="Seleccioná un vehículo"
-              options={vehicles.map(v => ({ value: v.id ?? v._id, label: vehIx[v.id ?? v._id] }))}
+              options={vehicles
+                .filter(v => v.status === 'activo')
+                .map(v => ({ value: v.id ?? v._id, label: vehIx[v.id ?? v._id] }))}
             />
           </Form.Item>
 
@@ -544,37 +487,45 @@ const Planning = () => {
         placement={isMobile ? "bottom" : "right"}
         height={isMobile ? "80vh" : undefined}
         destroyOnClose
-        >
+      >
         <List
-            dataSource={eventsOn(openDay)}
-            locale={{ emptyText: "Sin planificaciones para este día" }}
-            renderItem={(item) => (
+          dataSource={eventsOn(openDay)}
+          locale={{ emptyText: "Sin planificaciones para este día" }}
+          renderItem={(item) => (
             <List.Item
-                key={getId(item)}
-                actions={[
+              key={getId(item)}
+              actions={[
                 <Button type="link" onClick={() => { setOpenDay(null); openDrawer(item); }}>Editar</Button>,
                 <Button type="link" danger onClick={() => { setOpenDay(null); /* podés llamar a handleCancel(item) si querés */ }}>
-                    Cancelar
+                  Cancelar
                 </Button>,
-                ]}
+              ]}
             >
-                <List.Item.Meta
+              <List.Item.Meta
                 title={<span>{statusTag(item.status)} <strong>{item.title || "Sin título"}</strong></span>}
                 description={
-                    <div style={{ fontSize: 12 }}>
-                    <div>Período: {item.start_at ? dayjs(item.start_at).format("DD/MM") : "—"} → {item.end_at ? dayjs(item.end_at).format("DD/MM") : "—"}</div>
+                  <div style={{ fontSize: 12 }}>
+                    <div>Período: {item.start_at ? dayjs(item.start_at).format("DD/MM/YYYY") : "—"} → {item.end_at ? dayjs(item.end_at).format("DD/MM/YYYY") : "—"}</div>
                     <div>Lotes: {(item.lot_ids || []).map(id => lotIx[id]).filter(Boolean).join(", ") || "—"}</div>
                     <div>Resp.: {userIx[item.responsible_user] || "—"}</div>
-                    </div>
+                  </div>
                 }
-                />
+              />
             </List.Item>
-            )}
+          )}
         />
-        </Drawer>
+      </Drawer>
 
-    </div>
+      {
+        isMobile && !isDrawerOpen && (
+          <div className="fab-button" onClick={() => openDrawer()}>
+            <PlusOutlined />
+          </div>
+        )
+      }
+    </div >
   );
 };
 
 export default Planning;
+

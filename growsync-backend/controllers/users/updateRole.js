@@ -1,11 +1,18 @@
-// Actualiza el rol de un usuario con reglas de seguridad:
-//  - Role dentro de 0..3
-//  - No permitir que el sistema se quede sin administradores (rol=3)
-
+/**
+ * Controlador: Actualizar Rol
+ * Ubicación: controllers/users/updateRole.js
+ * Descripción:
+ *  Maneja la lógica para cambiar el rol de un usuario.
+ *  Incluye validaciones críticas de seguridad (ej: no eliminar al último admin).
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Estandarización de manejo de errores con `next(err)`.
+ *  - Uso de códigos de error consistentes.
+ */
 // IMPORTACION DE CLIENTE SUPABASE
 const supabase = require('../../db/supabaseClient');
 
-module.exports = async function updateRole(req, res) {
+module.exports = async function updateRole(req, res, next) {
   try {
     const { id } = req.params;
     const newRole = Number(req.body.role);
@@ -22,10 +29,8 @@ module.exports = async function updateRole(req, res) {
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchErr) {
-      console.error('Supabase fetch user error:', fetchErr);
-      return res.status(500).json({ error: 'DbError', message: 'Error al buscar usuario' });
-    }
+    if (fetchErr) throw fetchErr;
+
     if (!target) {
       return res.status(404).json({ error: 'NotFound', message: 'Usuario no encontrado' });
     }
@@ -49,10 +54,8 @@ module.exports = async function updateRole(req, res) {
         .eq('enabled', true)
         .neq('id', target.id); // otros admins
 
-      if (countErr) {
-        console.error('Supabase count admins error:', countErr);
-        return res.status(500).json({ error: 'DbError', message: 'Error verificando administradores' });
-      }
+      if (countErr) throw countErr;
+
       if (!count || count < 1) {
         return res.status(409).json({
           error: 'LastAdminError',
@@ -69,10 +72,8 @@ module.exports = async function updateRole(req, res) {
       .select('id,email,full_name,role,enabled')
       .maybeSingle();
 
-    if (updErr) {
-      console.error('Supabase update role error:', updErr);
-      return res.status(500).json({ error: 'DbError', message: 'Error al actualizar el rol' });
-    }
+    if (updErr) throw updErr;
+
     if (!updated) {
       // Muy raro: no se encontro tras update
       return res.status(404).json({ error: 'NotFound', message: 'Usuario no encontrado tras actualizar' });
@@ -83,7 +84,6 @@ module.exports = async function updateRole(req, res) {
       user: updated,
     });
   } catch (err) {
-    console.error('Unexpected updateRole error:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al actualizar el rol' });
+    next(err);
   }
 };

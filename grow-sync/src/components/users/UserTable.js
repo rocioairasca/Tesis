@@ -1,3 +1,14 @@
+/**
+ * Componente: Tabla de Usuarios
+ * Ubicación: src/components/users/UserTable.js
+ * Descripción:
+ *  Renderiza la lista de usuarios y permite la gestión rápida de roles.
+ *  Incluye lógica de actualización optimista (optimistic updates) para mejorar la UX.
+ * 
+ * Funcionalidad:
+ *  - Listado de usuarios con paginación.
+ *  - Cambio de rol directo desde la tabla.
+ */
 import React, { useEffect, useState } from "react";
 import { Table, Select, message } from "antd";
 import api from "../../services/apiClient";

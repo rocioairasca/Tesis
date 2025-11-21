@@ -1,3 +1,15 @@
+/**
+ * Controlador: Lotes (Principal)
+ * Ubicación: controllers/lots/lot.js
+ * Descripción:
+ *  Maneja el CRUD principal de lotes (Listar, Crear, Editar, Soft Delete).
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Implementación de manejo de errores centralizado.
+ *  - Se reemplazaron los bloques try/catch manuales con respuestas 500 por `next(err)`.
+ *  - Esto delega el manejo de excepciones al middleware `errorHandler.js`, asegurando
+ *    respuestas de error consistentes y reduciendo la duplicación de código.
+ */
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require('../../db/supabaseClient');
 
@@ -6,7 +18,7 @@ const supabase = require('../../db/supabaseClient');
  * Soporta: ?q=&page=&pageSize=&includeDisabled=
  * Devuelve: { data, page, pageSize, total }
  */
-const listLots = async (req, res) => {
+const listLots = async (req, res, next) => {
   try {
     const {
       q,
@@ -15,7 +27,7 @@ const listLots = async (req, res) => {
       includeDisabled = false,
     } = req.query;
 
-    const limit  = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
+    const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     const columns = 'id,name,area,location,enabled,created_at';
@@ -31,10 +43,7 @@ const listLots = async (req, res) => {
 
     const { data, error, count } = await query;
 
-    if (error) {
-      console.error('Error al listar lotes:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al listar lotes' });
-    }
+    if (error) throw error;
 
     return res.json({
       data: data || [],
@@ -43,15 +52,14 @@ const listLots = async (req, res) => {
       total: count ?? (data?.length || 0),
     });
   } catch (err) {
-    console.error('Error inesperado al listar lotes:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al listar lotes' });
+    next(err);
   }
 };
 
 /**
  * CREAR LOTE
  */
-const addLot = async (req, res) => {
+const addLot = async (req, res, next) => {
   try {
     const { name, area, location } = req.body;
 
@@ -61,15 +69,11 @@ const addLot = async (req, res) => {
       .select('id,name,area,location,enabled,created_at')
       .single();
 
-    if (error) {
-      console.error('Error al crear lote:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al crear lote' });
-    }
+    if (error) throw error;
 
     return res.status(201).json({ lot: data });
   } catch (err) {
-    console.error('Error inesperado al crear lote:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al crear lote' });
+    next(err);
   }
 };
 
@@ -77,7 +81,7 @@ const addLot = async (req, res) => {
  * EDITAR LOTE
  * Si no existe el ID → 404
  */
-const editLot = async (req, res) => {
+const editLot = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, area, location } = req.body;
@@ -89,18 +93,15 @@ const editLot = async (req, res) => {
       .select('id,name,area,location,enabled,created_at')
       .maybeSingle();
 
-    if (error) {
-      console.error('Error al editar lote:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al editar lote' });
-    }
+    if (error) throw error;
+
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Lote no encontrado' });
     }
 
     return res.json({ lot: data });
   } catch (err) {
-    console.error('Error inesperado al editar lote:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al editar lote' });
+    next(err);
   }
 };
 
@@ -108,7 +109,7 @@ const editLot = async (req, res) => {
  * DESHABILITAR LOTE (soft delete)
  * Solo cambia enabled=false si esta true. Si no existe o ya esta deshabilitado → 404.
  */
-const softDeleteLot = async (req, res) => {
+const softDeleteLot = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -120,40 +121,33 @@ const softDeleteLot = async (req, res) => {
       .select('id,enabled')
       .maybeSingle();
 
-    if (error) {
-      console.error('Error al deshabilitar lote:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al deshabilitar lote' });
-    }
+    if (error) throw error;
+
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Lote no encontrado o ya deshabilitado' });
     }
 
     return res.status(200).json({ ok: true, id: data.id });
   } catch (err) {
-    console.error('Error inesperado al deshabilitar lote:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al deshabilitar lote' });
+    next(err);
   }
 };
 
 /**
  * CONTAR LOTES HABILITADOS
  */
-const countEnabledLots = async (req, res) => {
+const countEnabledLots = async (req, res, next) => {
   try {
     const { count, error } = await supabase
       .from('lots')
       .select('id', { count: 'exact', head: true })
       .eq('enabled', true);
 
-    if (error) {
-      console.error('Error al contar lotes:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al contar lotes' });
-    }
+    if (error) throw error;
 
     return res.json({ total: count || 0 });
   } catch (err) {
-    console.error('Error inesperado al contar lotes:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al contar lotes' });
+    next(err);
   }
 };
 
@@ -165,3 +159,4 @@ module.exports = {
   softDeleteLot,
   countEnabledLots
 };
+

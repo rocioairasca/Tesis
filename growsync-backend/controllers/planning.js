@@ -1,7 +1,23 @@
+/**
+ * Controlador: Planificación
+ * Ubicación: controllers/planning.js
+ * Descripción:
+ *  Maneja la gestión de planificaciones (actividades agrícolas).
+ *  Incluye listado con filtros avanzados, creación con validación de conflictos,
+ *  edición, y soft-delete.
+ * 
+ * Nota:
+ *  - Ya implementa manejo de errores con `next(e)`.
+ */
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 
-// LISTAR (oculta enabled=false y status='cancelado' por defecto; incluye total para paginado)
+/**
+ * LISTAR PLANIFICACIONES
+ * Soporta filtros: from, to, type, status, responsible, lotId, search
+ * Paginado: page, pageSize
+ * Opciones: includeDisabled, includeCanceled
+ */
 exports.list = async (req, res, next) => {
   try {
     const {
@@ -37,14 +53,16 @@ exports.list = async (req, res, next) => {
     }
 
     if (responsible) { p.push(responsible); w.push(`p.responsible_user = $${p.length}`); }
-    if (lotId) { p.push(lotId); w.push(`EXISTS (
+    if (lotId) {
+      p.push(lotId); w.push(`EXISTS (
       SELECT 1 FROM planning_lots pl WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
-    )`); }
+    )`);
+    }
     if (search) { p.push(`%${search}%`); w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`); }
 
     const whereSql = w.length ? `WHERE ${w.join(' AND ')}` : '';
 
-    const limit  = parsePageSize(pageSize, 20, 1000);
+    const limit = parsePageSize(pageSize, 20, 1000);
     const offset = (parsePage(page, 1) - 1) * limit;
 
     // 1) COUNT total (sin LIMIT/OFFSET)
@@ -101,6 +119,10 @@ exports.list = async (req, res, next) => {
   }
 };
 
+/**
+ * OBTENER UNA PLANIFICACION
+ * Incluye lotes y productos asociados
+ */
 exports.getOne = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -126,6 +148,11 @@ exports.getOne = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+/**
+ * CREAR PLANIFICACION
+ * Valida conflictos de fechas en lotes y vehículos.
+ * Usa transacción para insertar en planning, planning_lots y planning_products.
+ */
 exports.create = async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -183,12 +210,12 @@ exports.create = async (req, res, next) => {
     const id = rows[0].id;
 
     if (lot_ids.length) {
-      const values = lot_ids.map((_, i) => `($1,$${i+2})`).join(',');
+      const values = lot_ids.map((_, i) => `($1,$${i + 2})`).join(',');
       await client.query(`INSERT INTO planning_lots (planning_id, lot_id) VALUES ${values}`, [id, ...lot_ids]);
     }
 
     if (products.length) {
-      const tuples = products.map((_, i) => `($1,$${i*3+2},$${i*3+3},$${i*3+4})`).join(',');
+      const tuples = products.map((_, i) => `($1,$${i * 3 + 2},$${i * 3 + 3},$${i * 3 + 4})`).join(',');
       const params = [id];
       products.forEach(p => params.push(p.product_id, p.amount ?? null, p.unit ?? null));
       await client.query(`INSERT INTO planning_products (planning_id, product_id, amount, unit) VALUES ${tuples}`, params);
@@ -204,6 +231,11 @@ exports.create = async (req, res, next) => {
   }
 };
 
+/**
+ * ACTUALIZAR PLANIFICACION
+ * Revalida conflictos si cambian fechas/lotes/vehículo.
+ * Actualiza relaciones (borra y reinserta lotes/productos).
+ */
 exports.update = async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -268,7 +300,7 @@ exports.update = async (req, res, next) => {
     if (Array.isArray(lot_ids)) {
       await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
       if (lot_ids.length) {
-        const values = lot_ids.map((_, i) => `($1,$${i+2})`).join(',');
+        const values = lot_ids.map((_, i) => `($1,$${i + 2})`).join(',');
         await client.query(`INSERT INTO planning_lots (planning_id, lot_id) VALUES ${values}`, [id, ...lot_ids]);
       }
     }
@@ -276,7 +308,7 @@ exports.update = async (req, res, next) => {
     if (Array.isArray(products)) {
       await client.query('DELETE FROM planning_products WHERE planning_id = $1', [id]);
       if (products.length) {
-        const tuples = products.map((_, i) => `($1,$${i*3+2},$${i*3+3},$${i*3+4})`).join(',');
+        const tuples = products.map((_, i) => `($1,$${i * 3 + 2},$${i * 3 + 3},$${i * 3 + 4})`).join(',');
         const params = [id];
         products.forEach(p => params.push(p.product_id, p.amount ?? null, p.unit ?? null));
         await client.query(`INSERT INTO planning_products (planning_id, product_id, amount, unit) VALUES ${tuples}`, params);
@@ -293,7 +325,10 @@ exports.update = async (req, res, next) => {
   }
 };
 
-// Soft delete: oculta la planificacion y (si no esta completada) la marca como cancelada
+/**
+ * DESHABILITAR PLANIFICACION (Soft Delete)
+ * Oculta la planificación y (si no está completada) la marca como cancelada.
+ */
 exports.remove = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -319,7 +354,9 @@ exports.remove = async (req, res, next) => {
   }
 };
 
-// LISTAR DESHABILITADAS (enabled=false), con paginado y total
+/**
+ * LISTAR PLANIFICACIONES DESHABILITADAS
+ */
 exports.listDisabled = async (req, res, next) => {
   try {
     const {
@@ -334,8 +371,8 @@ exports.listDisabled = async (req, res, next) => {
       p.push(from, to);
       w.push(`p.date_range && tstzrange($${p.length - 1}, $${p.length}, '[]')`);
     }
-    if (type)      { p.push(type);      w.push(`p.activity_type = $${p.length}`); }
-    if (status)    {
+    if (type) { p.push(type); w.push(`p.activity_type = $${p.length}`); }
+    if (status) {
       p.push(status);
       w.push(`(
         CASE
@@ -345,14 +382,16 @@ exports.listDisabled = async (req, res, next) => {
         END
       ) = $${p.length}`);
     }
-    if (responsible){ p.push(responsible); w.push(`p.responsible_user = $${p.length}`); }
-    if (lotId)     { p.push(lotId);     w.push(`EXISTS (
+    if (responsible) { p.push(responsible); w.push(`p.responsible_user = $${p.length}`); }
+    if (lotId) {
+      p.push(lotId); w.push(`EXISTS (
       SELECT 1 FROM planning_lots pl WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
-    )`); }
-    if (search)    { p.push(`%${search}%`); w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`); }
+    )`);
+    }
+    if (search) { p.push(`%${search}%`); w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`); }
 
     const whereSql = `WHERE ${w.join(' AND ')}`;
-    const limit  = parsePageSize(pageSize, 20, 1000);
+    const limit = parsePageSize(pageSize, 20, 1000);
     const offset = (parsePage(page, 1) - 1) * limit;
 
     // COUNT
@@ -409,7 +448,9 @@ exports.listDisabled = async (req, res, next) => {
   }
 };
 
-// HABILITAR (restore) una planificacion: solo cambia enabled=false -> true
+/**
+ * HABILITAR PLANIFICACION (Restaurar)
+ */
 exports.enable = async (req, res, next) => {
   try {
     const { id } = req.params;

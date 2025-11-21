@@ -1,12 +1,23 @@
+/**
+ * Ruta: Usuarios
+ * Ubicación: routes/userRoutes.js
+ * Descripción:
+ *  Define los endpoints para la gestión de usuarios.
+ *  Incluye listado, actualización de roles y búsqueda por email.
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Implementación de manejo de errores centralizado con `next(err)`.
+ *  - Documentación clara de roles y permisos.
+ */
 const router = require('express').Router();
 
-const checkJwt  = require('../middleware/checkJwt');
-const userData  = require('../middleware/userData');
+const checkJwt = require('../middleware/checkJwt');
+const userData = require('../middleware/userData');
 const checkRole = require('../middleware/checkRole');
-const validate  = require('../middleware/validate');
-const schema    = require('../validations/users.schema');
+const validate = require('../middleware/validate');
+const schema = require('../validations/users.schema');
 
-const supabase  = require('../db/supabaseClient');
+const supabase = require('../db/supabaseClient');
 const updateRole = require('../controllers/users/updateRole');
 
 /**
@@ -31,7 +42,7 @@ const updateRole = require('../controllers/users/updateRole');
 router.get('/',
   checkJwt, userData, checkRole(3),
   validate(schema.listQuery),
-  async (req, res) => {
+  async (req, res, next) => {
     try {
       const {
         page = 1,
@@ -40,10 +51,10 @@ router.get('/',
         q,
       } = req.query;
 
-      const limit  = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
+      const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
       const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
       const rangeFrom = offset;
-      const rangeTo   = offset + limit - 1;
+      const rangeTo = offset + limit - 1;
 
       // Selección explicita (evita exponer columnas sensibles si existiesen)
       const columns = 'id,email,full_name,role,enabled,created_at,auth0_id';
@@ -64,10 +75,7 @@ router.get('/',
 
       const { data, error, count } = await query;
 
-      if (error) {
-        console.error('Error al obtener usuarios desde Supabase:', error);
-        return res.status(500).json({ message: 'Error al obtener usuarios' });
-      }
+      if (error) throw error;
 
       return res.json({
         data,
@@ -76,8 +84,7 @@ router.get('/',
         total: count ?? data?.length ?? 0,
       });
     } catch (err) {
-      console.error('Error inesperado al listar usuarios:', err);
-      return res.status(500).json({ message: 'Error al obtener usuarios' });
+      next(err);
     }
   }
 );
@@ -101,7 +108,7 @@ router.put('/:id/role',
 router.get('/email/:email',
   checkJwt, userData,
   validate(schema.emailParam),
-  async (req, res) => {
+  async (req, res, next) => {
     const { email } = req.params;
 
     try {
@@ -121,8 +128,7 @@ router.get('/email/:email',
         if (error.code === 'PGRST116') {
           return res.status(404).json({ message: 'Usuario no encontrado' });
         }
-        console.error('Error al obtener usuario por email:', error);
-        return res.status(500).json({ message: 'Error del servidor' });
+        throw error;
       }
 
       if (!data) {
@@ -131,10 +137,10 @@ router.get('/email/:email',
 
       return res.json(data);
     } catch (err) {
-      console.error('Error inesperado al obtener usuario por email:', err);
-      return res.status(500).json({ message: 'Error del servidor' });
+      next(err);
     }
   }
 );
 
 module.exports = router;
+

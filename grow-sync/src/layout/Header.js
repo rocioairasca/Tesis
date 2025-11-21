@@ -7,7 +7,7 @@ import useIsMobile from "../hooks/useIsMobile";
 const { Header } = Layout;
 
 const AppHeader = () => {
-    const navigate = useNavigate(); 
+    const navigate = useNavigate();
     const isMobile = useIsMobile();
 
     const [user, setUser] = useState(null);
@@ -15,10 +15,10 @@ const AppHeader = () => {
     // cargamos el usuario desde localStorage
     useEffect(() => {
         try {
-        const u = localStorage.getItem("user");
-        setUser(u ? JSON.parse(u) : null);
+            const u = localStorage.getItem("user");
+            setUser(u ? JSON.parse(u) : null);
         } catch {
-        setUser(null);
+            setUser(null);
         }
     }, []);
 
@@ -29,13 +29,13 @@ const AppHeader = () => {
 
     const handleLogout = () => {
         try {
-        // Limpieza completa para que no queden tokens colgados
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("id_token");
-        localStorage.removeItem("auth_email");
-        localStorage.removeItem("user");
-        } catch {}
-        
+            // Limpieza completa para que no queden tokens colgados
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("id_token");
+            localStorage.removeItem("auth_email");
+            localStorage.removeItem("user");
+        } catch { }
+
         navigate("/login", { replace: true });
     };
 
@@ -44,64 +44,69 @@ const AppHeader = () => {
 
     return (
         <Header
-        style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "0 20px",
-            background: "#fff",
-        }}
+            style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "0 20px",
+                background: "#fff",
+                position: "sticky",
+                top: 0,
+                zIndex: 1000,
+                width: "100%",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            }}
         >
-        {/* IZQUIERDA: logo solo en mobile */}
-        {isMobile && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-            <img src="/LogoGrande.png" alt="GrowSync" style={{ height: 50 }} />
-            </div>
-        )}
+            {/* IZQUIERDA: logo solo en mobile */}
+            {isMobile && (
+                <div style={{ display: "flex", alignItems: "center" }}>
+                    <img src="/LogoGrande.png" alt="GrowSync" style={{ height: 50 }} />
+                </div>
+            )}
 
-        {/* ESPACIO ENTRE logo y contenido */}
-        <div style={{ flexGrow: 1 }} />
+            {/* ESPACIO ENTRE logo y contenido */}
+            <div style={{ flexGrow: 1 }} />
 
-        {/* DERECHA: notificaciones + usuario + logout */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            {/* Notificaciones */}
-            <Dropdown menu={{ items: notificationsMenuItems }} placement="bottomRight" arrow>
-            <Badge count={0} showZero offset={[-2, 2]}>
+            {/* DERECHA: notificaciones + usuario + logout */}
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                {/* Notificaciones */}
+                <Dropdown menu={{ items: notificationsMenuItems }} placement="bottomRight" arrow>
+                    <Badge count={0} showZero offset={[-2, 2]}>
+                        <Button
+                            type="text"
+                            icon={<BellOutlined style={{ fontSize: "20px", color: "#1D2A62" }} />}
+                        />
+                    </Badge>
+                </Dropdown>
+
+                {/* Usuario */}
+                <div
+                    style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "default" }}
+                >
+                    <Avatar
+                        src={user?.picture}
+                        icon={!user?.picture && <UserOutlined />}
+                        size="large"
+                    />
+                    <span
+                        style={{
+                            fontSize: "16px",
+                            fontWeight: 500,
+                            color: "#1D2A62",
+                            whiteSpace: "nowrap",
+                        }}
+                        title={displayName}
+                    >
+                        {displayName}
+                    </span>
+                </div>
+
+                {/* Cerrar sesión */}
                 <Button
-                type="text"
-                icon={<BellOutlined style={{ fontSize: "20px", color: "#1D2A62" }} />}
+                    type="text"
+                    icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
+                    onClick={handleLogout}
                 />
-            </Badge>
-            </Dropdown>
-
-            {/* Usuario */}
-            <div
-            style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "default" }}
-            >
-            <Avatar
-                src={user?.picture}
-                icon={!user?.picture && <UserOutlined />}
-                size="large"
-            />
-            <span
-                style={{
-                fontSize: "16px",
-                fontWeight: 500,
-                color: "#1D2A62",
-                whiteSpace: "nowrap",
-                }}
-                title={displayName}
-            >
-                {displayName}
-            </span>
             </div>
-
-            {/* Cerrar sesión */}
-            <Button
-            type="text"
-            icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
-            onClick={handleLogout}
-            />
-        </div>
         </Header>
     );
 };

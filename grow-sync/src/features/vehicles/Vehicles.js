@@ -1,31 +1,42 @@
+/**
+ * Feature: Gestión de Vehículos
+ * Ubicación: src/features/vehicles/Vehicles.js
+ * Descripción:
+ *  Contenedor principal para la gestión de maquinaria y vehículos.
+ *  Maneja el estado (lista, loading) y la lógica CRUD.
+ * 
+ * Refactorización:
+ *  - Extracción de vistas de tabla (Desktop) y lista (Mobile) a componentes.
+ */
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table, Button, Drawer, Form, Input, InputNumber, Select,
-  Dropdown, Space, Popconfirm, Row, Col, Tag, Tooltip, notification
+  Button, Drawer, Form, Input, InputNumber, Select,
+  Dropdown, Space, Row, Col, Tag, notification
 } from "antd";
-import { MoreOutlined, EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined } from "@ant-design/icons";
-import { Truck, IdentificationCard, ClipboardText, Gauge } from "phosphor-react";
+import { MoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import VehicleTable from "./components/VehicleTable";
+import VehicleListMobile from "./components/VehicleListMobile";
 
 // ---- helpers ----
 const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.plate ?? r?.name;
 
 const TYPE_OPTIONS = [
-  { value: "tractor",        label: "Tractor" },
-  { value: "cosechadora",    label: "Cosechadora" },
-  { value: "camioneta",      label: "Camioneta" },
-  { value: "camión",         label: "Camión" },
-  { value: "pulverizadora",  label: "Pulverizadora" },
-  { value: "sembradora",     label: "Sembradora" },
-  { value: "otro",           label: "Otro" },
+  { value: "tractor", label: "Tractor" },
+  { value: "cosechadora", label: "Cosechadora" },
+  { value: "camioneta", label: "Camioneta" },
+  { value: "camión", label: "Camión" },
+  { value: "pulverizadora", label: "Pulverizadora" },
+  { value: "sembradora", label: "Sembradora" },
+  { value: "otro", label: "Otro" },
 ];
 
 const STATUS_OPTIONS = [
-  { value: "activo",          label: "Activo" },
-  { value: "mantenimiento",   label: "Mantenimiento" },
+  { value: "activo", label: "Activo" },
+  { value: "mantenimiento", label: "Mantenimiento" },
   { value: "fuera_de_servicio", label: "Fuera de servicio" },
 ];
 
@@ -79,11 +90,11 @@ const Vehicles = () => {
     setEditingVehicle(veh);
     if (veh) {
       form.setFieldsValue({
-        name:   veh.name ?? "",
-        type:   veh.type ?? undefined,
-        brand:  veh.brand ?? "",
-        model:  veh.model ?? "",
-        plate:  veh.plate ?? "",
+        name: veh.name ?? "",
+        type: veh.type ?? undefined,
+        brand: veh.brand ?? "",
+        model: veh.model ?? "",
+        plate: veh.plate ?? "",
         capacity: veh.capacity ?? undefined,
         status: veh.status ?? "activo",
       });
@@ -138,78 +149,6 @@ const Vehicles = () => {
     }
   };
 
-  // ---- Tabla ----
-  const columns = [
-    {
-      title: "#",
-      dataIndex: "index",
-      key: "index",
-      width: 64,
-      render: (_, __, index) => index + 1,
-    },
-    { title: "Nombre", dataIndex: "name", key: "name" },
-    {
-      title: "Tipo",
-      dataIndex: "type",
-      key: "type",
-      render: (t) => t ? <Tag color="blue">{t[0].toUpperCase() + t.slice(1)}</Tag> : "—",
-    },
-    { title: "Marca", dataIndex: "brand", key: "brand" },
-    { title: "Modelo", dataIndex: "model", key: "model" },
-    {
-      title: "Patente",
-      dataIndex: "plate",
-      key: "plate",
-      render: (p) => (p ? String(p).toUpperCase() : "—"),
-    },
-    {
-      title: "Capacidad",
-      dataIndex: "capacity",
-      key: "capacity",
-      render: (v) => (v != null ? `${numberFmt(v)}` : "—"),
-    },
-    {
-      title: "Estado",
-      dataIndex: "status",
-      key: "status",
-      render: (s) => statusTag(s),
-    },
-    {
-      title: "Acciones",
-      key: "actions",
-      width: 96,
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="Editar">
-            <Button
-              type="text"
-              shape="circle"
-              aria-label="Editar"
-              icon={<EditOutlined />}
-              onClick={() => openDrawer(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title="¿Deshabilitar este vehículo?"
-            okText="Sí"
-            cancelText="No"
-            onConfirm={() => handleDisable(getId(record))}
-          >
-            <Tooltip title="Deshabilitar">
-              <Button
-                type="text"
-                danger
-                shape="circle"
-                aria-label="Deshabilitar"
-                icon={<DeleteOutlined />}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
   const menuItems = [
     {
       key: "1",
@@ -246,38 +185,29 @@ const Vehicles = () => {
 
       {/* Tabla (desktop) */}
       {!isMobile && (
-        <Table
-          scroll={{ x: "max-content" }}
-          columns={columns}
-          dataSource={vehicles}
+        <VehicleTable
+          vehicles={vehicles}
           loading={loading}
-          pagination={{ pageSize: 8, position: ["bottomCenter"] }}
+          onEdit={openDrawer}
+          onDisable={handleDisable}
           rowKey={rowKey}
+          getId={getId}
+          statusTag={statusTag}
+          numberFmt={numberFmt}
         />
       )}
 
       {/* Cards (mobile) */}
       {isMobile && (
-        <div className="inventory-cards-container">
-          {vehicles.map((v) => (
-            <div className="inventory-card" key={rowKey(v)}>
-              <div className="card-header">
-                <h3>{v.name}</h3>
-                <div className="card-icons">
-                  <EditOutlined onClick={() => openDrawer(v)} />
-                  <DeleteOutlined onClick={() => handleDisable(getId(v))} />
-                </div>
-              </div>
-
-              <p className="flex-row"><Truck size={18} /> <strong>Tipo:</strong> {v.type || "-"}</p>
-              <p className="flex-row"><ClipboardText size={18} /> <strong>Marca:</strong> {v.brand || "-"}</p>
-              <p className="flex-row"><ClipboardText size={18} /> <strong>Modelo:</strong> {v.model || "-"}</p>
-              <p className="flex-row"><IdentificationCard size={18} /> <strong>Patente:</strong> {(v.plate || "").toUpperCase() || "-"}</p>
-              <p className="flex-row"><Gauge size={18} /> <strong>Capacidad:</strong> {v.capacity != null ? numberFmt(v.capacity) : "-"} </p>
-              <p><CarOutlined /> <strong>Estado:</strong> {statusTag(v.status)}</p>
-            </div>
-          ))}
-        </div>
+        <VehicleListMobile
+          vehicles={vehicles}
+          onEdit={openDrawer}
+          onDisable={handleDisable}
+          rowKey={rowKey}
+          getId={getId}
+          statusTag={statusTag}
+          numberFmt={numberFmt}
+        />
       )}
 
       {/* Drawer crear/editar */}
@@ -353,3 +283,4 @@ const Vehicles = () => {
 };
 
 export default Vehicles;
+

@@ -1,12 +1,22 @@
-// IMPORTACION DEL CLIENTE SUPABASE
-const supabase = require('../../db/supabaseClient'); 
+/**
+ * Controlador: Productos Deshabilitados
+ * Ubicación: controllers/products/products.disabled.js
+ * Descripción:
+ *  Maneja las operaciones relacionadas con productos deshabilitados (soft-deleted).
+ *  Permite listarlos y restaurarlos (habilitarlos nuevamente).
+ * 
+ * Mejoras de Código (Refactorización):
+ *  - Estandarización de manejo de errores con `next(err)`.
+ *  - Documentación clara de la funcionalidad.
+ */
+const supabase = require('../../db/supabaseClient');
 
 /**
  * LISTAR PRODUCTOS DESHABILITADOS
  * Soporta: ?q=&category=&page=&pageSize=
  * Devuelve: { data, page, pageSize, total }
  */
-const listDisabledProducts = async (req, res) => {
+const listDisabledProducts = async (req, res, next) => {
   try {
     const {
       q,
@@ -15,16 +25,16 @@ const listDisabledProducts = async (req, res) => {
       pageSize = 50,
     } = req.query;
 
-    const limit  = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
+    const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     // Columnas explicitas
     const columns = [
-      'id','name','category','unit',
-      'price','cost',
-      'total_quantity','available_quantity',
-      'expiration_date','acquisition_date',
-      'enabled','created_at'
+      'id', 'name', 'category', 'unit',
+      'price', 'cost',
+      'total_quantity', 'available_quantity',
+      'expiration_date', 'acquisition_date',
+      'enabled', 'created_at'
     ].join(',');
 
     let query = supabase
@@ -42,10 +52,7 @@ const listDisabledProducts = async (req, res) => {
 
     const { data, error, count } = await query;
 
-    if (error) {
-      console.error('Error al listar productos deshabilitados:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al listar productos deshabilitados' });
-    }
+    if (error) throw error;
 
     return res.json({
       data: data || [],
@@ -54,8 +61,7 @@ const listDisabledProducts = async (req, res) => {
       total: count ?? (data?.length || 0),
     });
   } catch (err) {
-    console.error('Error inesperado al listar productos deshabilitados:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al listar productos deshabilitados' });
+    next(err);
   }
 };
 
@@ -64,7 +70,7 @@ const listDisabledProducts = async (req, res) => {
  * Cambia enabled=false -> true.
  * Si no existe o ya esta habilitado, devuelve 404.
  */
-const enableProduct = async (req, res) => {
+const enableProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -76,10 +82,7 @@ const enableProduct = async (req, res) => {
       .select('id,name,enabled')
       .maybeSingle();
 
-    if (error) {
-      console.error('Error al habilitar producto:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al habilitar producto' });
-    }
+    if (error) throw error;
 
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado o ya habilitado' });
@@ -90,13 +93,13 @@ const enableProduct = async (req, res) => {
       product: data,
     });
   } catch (err) {
-    console.error('Error inesperado al habilitar producto:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al habilitar producto' });
+    next(err);
   }
 };
 
 // EXPORTAMOS LAS FUNCIONES PARA SER USADAS EN UNA RUTA (routes/products.js)
 module.exports = {
-    listDisabledProducts, 
-    enableProduct
+  listDisabledProducts,
+  enableProduct
 };
+

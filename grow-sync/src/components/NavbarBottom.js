@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   HomeOutlined,
@@ -10,37 +10,41 @@ import {
   CarOutlined,
   CalendarOutlined
 } from "@ant-design/icons";
-import { Dropdown, Menu } from "antd";
+import { Drawer, List } from "antd";
 import "../css/BottomNavigation.css";
 
 const BottomNavigation = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   const isActive = (path) => currentPath === path;
 
-  const moreMenu = (
-    <Menu
-      items={[
-        {
-          key: "usuarios",
-          label: "Usuarios",
-          icon: <UserOutlined />,
-          onClick: () => navigate("/usuarios"),
-        },
-        {
-          key: "vehiculos",
-          label: "Vehículos",
-          icon: <CarOutlined />,
-          onClick: () => navigate("/vehiculos"),
-        }
-      ]}
-    />
-  );
+  const menuItems = [
+    {
+      key: "vehiculos",
+      label: "Vehículos",
+      icon: <CarOutlined />,
+      onClick: () => {
+        navigate("/vehiculos");
+        setDrawerVisible(false);
+      },
+    },
+    {
+      key: "usuarios",
+      label: "Usuarios",
+      icon: <UserOutlined />,
+      onClick: () => {
+        navigate("/usuarios");
+        setDrawerVisible(false);
+      },
+    }
+  ];
 
   return (
-    <div className="bottom-nav">
+    <>
+      <div className="bottom-nav">
         <HomeOutlined
           onClick={() => navigate("/dashboard")}
           style={{ fontSize: 24, color: isActive("/dashboard") ? "#1D2A62" : "#aaa" }}
@@ -61,10 +65,35 @@ const BottomNavigation = () => {
           onClick={() => navigate("/lotes")}
           style={{ fontSize: 24, color: isActive("/lotes") ? "#1D2A62" : "#aaa" }}
         />
-        <Dropdown overlay={moreMenu} trigger={['click']} placement="topRight">
-          <MoreOutlined style={{ fontSize: 24, cursor: "pointer", color: "#666" }} />
-        </Dropdown>
-    </div>
+        <MoreOutlined
+          onClick={() => setDrawerVisible(true)}
+          style={{ fontSize: 24, cursor: "pointer", color: "#666" }}
+        />
+      </div>
+
+      <Drawer
+        title="Más opciones"
+        placement="left"
+        onClose={() => setDrawerVisible(false)}
+        open={drawerVisible}
+        width={250}
+      >
+        <List
+          dataSource={menuItems}
+          renderItem={(item) => (
+            <List.Item
+              onClick={item.onClick}
+              style={{ cursor: "pointer", padding: "12px 0" }}
+            >
+              <List.Item.Meta
+                avatar={<span style={{ fontSize: 20, color: "#1D2A62" }}>{item.icon}</span>}
+                title={<span style={{ fontSize: 16 }}>{item.label}</span>}
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
+    </>
   );
 };
 
