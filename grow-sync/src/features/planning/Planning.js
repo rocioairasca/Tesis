@@ -15,9 +15,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
   Dropdown, Space, Row, Col, Tag, notification,
-  Calendar as AntCalendar, Segmented, List
+  Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table
 } from "antd";
-import { PlusOutlined, MoreOutlined } from "@ant-design/icons";
+import { PlusOutlined, MoreOutlined, EyeOutlined } from "@ant-design/icons";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +26,7 @@ import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 import PlanningTable from "./components/PlanningTable";
 import PlanningListMobile from "./components/PlanningListMobile";
+import LotMapPreview from "./components/LotMapPreview";
 
 dayjs.extend(isBetween);
 
@@ -59,6 +60,12 @@ const Planning = () => {
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'calendar'
   const [openDay, setOpenDay] = useState(null); // dayjs() o null
 
+  // filtros
+  const [filters, setFilters] = useState({
+    status: null,
+    responsible: null,
+  });
+
   // catálogos para nombres legibles
   const [users, setUsers] = useState([]);
   const [lots, setLots] = useState([]);
@@ -73,6 +80,8 @@ const Planning = () => {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null); // Estado para el detalle
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [form] = Form.useForm();
 
   const isMobile = useIsMobile();
@@ -130,8 +139,8 @@ const Planning = () => {
               title={`${ev.title || "Sin título"} • ${dayjs(ev.start_at).format("DD/MM/YYYY")} → ${dayjs(ev.end_at).format("DD/MM/YYYY")}`}
               onClick={(e) => {
                 e.stopPropagation();
-                // abrimos el drawer de edición que ya tenés
-                openDrawer(ev);
+                // abrimos el detalle (read-only)
+                openDetail(ev);
               }}
             >
               <span className="cal-bar__text">{ev.title || "Sin título"}</span>
@@ -150,7 +159,11 @@ const Planning = () => {
   const fetchPlanning = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/planning"); // ?includeDisabled=0&includeCanceled=0 por default
+      const params = {};
+      if (filters.status) params.status = filters.status;
+      if (filters.responsible) params.responsible = filters.responsible;
+
+      const { data } = await api.get("/planning", { params }); // ?includeDisabled=0&includeCanceled=0 por default
       const items = Array.isArray(data) ? data : data?.items || data?.data || [];
       setList(items);
     } catch (e) {
@@ -159,7 +172,7 @@ const Planning = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -205,7 +218,7 @@ const Planning = () => {
         date_range: [row.start_at ? dayjs(row.start_at) : null, row.end_at ? dayjs(row.end_at) : null],
         responsible_user: row.responsible_user,
         vehicle_id: row.vehicle_id,
-        lot_ids: row.lot_ids || [],
+        lot_ids: row.lot_ids || (row.lots || []).map(l => l.id),
         products: Array.isArray(row.products) ? row.products.map(p => ({
           product_id: p.product_id,
           amount: p.amount,
@@ -224,6 +237,16 @@ const Planning = () => {
     setIsDrawerOpen(false);
     setEditing(null);
     form.resetFields();
+  };
+
+  const openDetail = (row) => {
+    setViewing(row);
+    setIsDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setViewing(null);
   };
 
   const handleSubmit = async (values) => {
@@ -258,7 +281,10 @@ const Planning = () => {
       closeDrawer();
     } catch (e) {
       console.error("→ save planning error:", e);
-      notification.error({ message: "Error al guardar planificación" });
+      const errorMsg = e.response?.data?.error === 'Conflicto de fechas en lotes'
+        ? "Conflicto de fechas: Los lotes seleccionados ya tienen una planificación en ese rango."
+        : (e.response?.data?.message || "Error al guardar planificación");
+      notification.error({ message: errorMsg });
     }
   };
 
@@ -282,6 +308,10 @@ const Planning = () => {
     }
   };
 
+  const handleFilterChange = (key, val) => {
+    setFilters(prev => ({ ...prev, [key]: val }));
+  };
+
   const disabledMenu = [{ key: "1", label: <span onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver Canceladas</span> }];
 
   // ---------- UI ----------
@@ -291,6 +321,15 @@ const Planning = () => {
         <Col><h2>Planificaciones</h2></Col>
         <Col>
           <Space>
+            <Segmented
+              size="middle"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { label: "Tabla", value: "table" },
+                { label: "Calendario", value: "calendar" },
+              ]}
+            />
             {isMobile ? (
               <Dropdown menu={{ items: disabledMenu }} placement="bottomRight" arrow>
                 <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
@@ -301,21 +340,40 @@ const Planning = () => {
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
                   Nueva Planificación
                 </Button>
-
-                <Segmented
-                  size="middle"
-                  value={viewMode}
-                  onChange={setViewMode}
-                  options={[
-                    { label: "Tabla", value: "table" },
-                    { label: "Calendario", value: "calendar" },
-                  ]}
-                />
               </Space>
             )}
           </Space>
         </Col>
       </Row>
+
+      {/* Filtros (Desktop) */}
+      {!isMobile && viewMode === "table" && (
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={6}>
+            <Select
+              style={{ width: "100%" }}
+              placeholder="Filtrar por Estado"
+              allowClear
+              onChange={(v) => handleFilterChange("status", v)}
+              options={[
+                { value: "planificado", label: "Planificado" },
+                { value: "en_progreso", label: "En Progreso" },
+                { value: "completado", label: "Completado" },
+                { value: "cancelado", label: "Cancelado" },
+              ]}
+            />
+          </Col>
+          <Col span={6}>
+            <Select
+              style={{ width: "100%" }}
+              placeholder="Filtrar por Responsable"
+              allowClear
+              onChange={(v) => handleFilterChange("responsible", v)}
+              options={users.map(u => ({ value: u.id ?? u._id, label: userIx[u.id ?? u._id] }))}
+            />
+          </Col>
+        </Row>
+      )}
 
       {/* Tabla (desktop) */}
       {viewMode === "table" && !isMobile && (
@@ -323,6 +381,7 @@ const Planning = () => {
           list={list}
           loading={loading}
           onEdit={openDrawer}
+          onView={openDetail}
           onUpdateStatus={updateStatus}
           onCancel={handleCancel}
           rowKey={rowKey}
@@ -349,6 +408,7 @@ const Planning = () => {
         <PlanningListMobile
           list={list}
           onEdit={openDrawer}
+          onView={openDetail}
           onCancel={handleCancel}
           rowKey={rowKey}
           userIx={userIx}
@@ -479,6 +539,80 @@ const Planning = () => {
         </Form>
       </Drawer>
 
+      {/* Drawer Detalle (Read-only) */}
+      <Drawer
+        title="Detalle de Planificación"
+        placement={isMobile ? "bottom" : "right"}
+        onClose={closeDetail}
+        open={isDetailOpen}
+        height={isMobile ? "85vh" : undefined}
+        width={isMobile ? "100%" : 500}
+        destroyOnClose
+      >
+        {viewing && (
+          <Space direction="vertical" style={{ width: "100%" }} size="large">
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="Título">{viewing.title}</Descriptions.Item>
+              <Descriptions.Item label="Estado">{statusTag(viewing.status)}</Descriptions.Item>
+              <Descriptions.Item label="Actividad">
+                {viewing.activity_type ? viewing.activity_type.toUpperCase() : "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Período">
+                {viewing.start_at ? dayjs(viewing.start_at).format("DD/MM/YYYY") : "—"}
+                {" → "}
+                {viewing.end_at ? dayjs(viewing.end_at).format("DD/MM/YYYY") : "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Responsable">
+                {userIx[viewing.responsible_user] || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Vehículo">
+                {vehIx[viewing.vehicle_id] || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Descripción">
+                {viewing.description || "—"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <h4>Lotes</h4>
+              <List
+                size="small"
+                bordered
+                dataSource={viewing.lots || []}
+                renderItem={item => {
+                  // Buscar el lote completo en el estado 'lots' para obtener la location
+                  const fullLot = lots.find(l => (l.id ?? l._id) === (item.id ?? item._id));
+                  return (
+                    <List.Item style={{ display: 'block' }}>
+                      <div style={{ marginBottom: 8 }}><strong>{item.name}</strong></div>
+                      {fullLot?.location && (
+                        <LotMapPreview location={fullLot.location} allLots={lots} />
+                      )}
+                    </List.Item>
+                  );
+                }}
+                locale={{ emptyText: "Sin lotes asignados" }}
+              />
+            </div>
+            <div>
+              <h4>Productos</h4>
+              <Table
+                size="small"
+                pagination={false}
+                dataSource={viewing.products || []}
+                rowKey="product_id"
+                columns={[
+                  { title: "Producto", dataIndex: "name" },
+                  { title: "Cant.", dataIndex: "amount" },
+                  { title: "Unidad", dataIndex: "unit" },
+                ]}
+                locale={{ emptyText: "Sin productos asignados" }}
+              />
+            </div>
+          </Space>
+        )}
+      </Drawer>
+
       <Drawer
         title={openDay ? `Planificaciones del ${openDay.format("DD/MM/YYYY")}` : ""}
         open={!!openDay}
@@ -495,10 +629,16 @@ const Planning = () => {
             <List.Item
               key={getId(item)}
               actions={[
-                <Button type="link" onClick={() => { setOpenDay(null); openDrawer(item); }}>Editar</Button>,
-                <Button type="link" danger onClick={() => { setOpenDay(null); /* podés llamar a handleCancel(item) si querés */ }}>
-                  Cancelar
-                </Button>,
+                <Button type="link" icon={<EyeOutlined />} onClick={() => { setOpenDay(null); openDetail(item); }}>Ver</Button>,
+                <Popconfirm
+                  title="¿Cancelar planificación?"
+                  description="Esta acción no se puede deshacer."
+                  onConfirm={() => { setOpenDay(null); handleCancel(item); }}
+                  okText="Sí"
+                  cancelText="No"
+                >
+                  <Button type="link" danger>Cancelar</Button>
+                </Popconfirm>,
               ]}
             >
               <List.Item.Meta

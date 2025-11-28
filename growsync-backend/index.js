@@ -24,7 +24,7 @@ const supabase = require('./db/supabaseClient');
 // Middleware
 // ---------------------------------------------------
 app.use(cors({
-  origin: [ "http://localhost:3000" ],
+  origin: ["http://localhost:3000"],
   credentials: true
 }));
 app.use(express.json());
@@ -44,8 +44,8 @@ app.use('/api', authRoutes);
 // 1. checkJwt: valida Authorizarion: Bearer <access_token>
 // 2. userData: busca en bd al user por sub/email y setea req.user = { id, email, role }
 // ---------------------------------------------------
-const checkJwt = require('./middleware/checkJwt');   
-const userData = require('./middleware/userData');   
+const checkJwt = require('./middleware/checkJwt');
+const userData = require('./middleware/userData');
 
 app.use(checkJwt);
 app.use(userData);
@@ -53,23 +53,25 @@ app.use(userData);
 // ---------------------------------------------------
 // Rutas privadas (requieren token y usuario cargado)
 // ---------------------------------------------------
-const userRoutes     = require('./routes/userRoutes');
-const lotRoutes      = require('./routes/lot');
-const productRoutes  = require('./routes/products');
-const usageRoutes    = require('./routes/usage');
-const statsRoutes    = require('./routes/stats');
-const weatherRoutes  = require('./routes/weather');
+const userRoutes = require('./routes/userRoutes');
+const lotRoutes = require('./routes/lot');
+const productRoutes = require('./routes/products');
+const usageRoutes = require('./routes/usage');
+const statsRoutes = require('./routes/stats');
+const weatherRoutes = require('./routes/weather');
 const planningRoutes = require('./routes/planning');
-const vehicleRoutes  = require('./routes/vehicle');
+const vehicleRoutes = require('./routes/vehicle');
+const notificationsRoutes = require('./routes/notifications');
 
-app.use('/api/users',    userRoutes);
-app.use('/api/lots',     lotRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/lots', lotRoutes);
 app.use('/api/products', productRoutes);
-app.use('/api/usages',   usageRoutes);
-app.use('/api/stats',    statsRoutes);
-app.use('/api/weather',  weatherRoutes);
+app.use('/api/usages', usageRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/weather', weatherRoutes);
 app.use('/api/planning', planningRoutes);
 app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // ---------------------------------------------------
 // Manejo de errores
@@ -85,5 +87,12 @@ app.use(errorHandler);
 // ---------------------------------------------------
 // Arranque del servidor
 // ---------------------------------------------------
+// Inicializar Cron Jobs
+require('./cron/scheduler')();
+
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`🔵 Servidor corriendo en el puerto ${PORT}`));
+const server = app.listen(PORT, () => console.log(`🔵 Servidor corriendo en el puerto ${PORT}`));
+
+// Inicializar Socket.io
+const socket = require('./socket');
+socket.init(server);

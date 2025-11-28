@@ -7,6 +7,7 @@ import AppLayout from './layout/Layout.js';
 
 // Hooks y componentes globales
 import MobileBottomNavigationWrapper from './components/MobileBottomNavigationWrapper';
+import { NotificationsProvider } from './context/NotificationsContext';
 
 // Páginas principales
 import Dashboard from './features/dashboard/Dashboard.js';
@@ -44,129 +45,131 @@ function App() {
       useRefreshTokens={true}
       cacheLocation="localstorage"
     >
-      <Router>
-        <Routes>
+      <NotificationsProvider>
+        <Router>
+          <Routes>
 
-          {/* Página de login sin layout */}
-          <Route path="/login" element={<LoginRegister />} />
+            {/* Página de login sin layout */}
+            <Route path="/login" element={<LoginRegister />} />
 
-          {/* Rutas protegidas con layout */}
-          <Route
-            path="/dashboard"
-            element={
-              <GuardedRoute>
-                <AppLayout><Dashboard /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            {/* Rutas protegidas con layout */}
+            <Route
+              path="/dashboard"
+              element={
+                <GuardedRoute>
+                  <AppLayout><Dashboard /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/usuarios"
-            element={
-              <GuardedRoute allowedRoles={[3]}>
-                <AppLayout><Users /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/usuarios"
+              element={
+                <GuardedRoute allowedRoles={[3]}>
+                  <AppLayout><Users /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/inventario"
-            element={
-              <GuardedRoute>
-                <AppLayout><Inventory /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/inventario"
+              element={
+                <GuardedRoute>
+                  <AppLayout><Inventory /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/lotes"
-            element={
-              <GuardedRoute >
-                <AppLayout><Lotes /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/lotes"
+              element={
+                <GuardedRoute >
+                  <AppLayout><Lotes /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/lotes-deshabilitados"
-            element={
-              <GuardedRoute allowedRoles={[3]}>
-                <AppLayout><DisabledLotes /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/lotes-deshabilitados"
+              element={
+                <GuardedRoute allowedRoles={[3]}>
+                  <AppLayout><DisabledLotes /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/productos-deshabilitados"
-            element={
-              <GuardedRoute allowedRoles={[3]}>
-                <AppLayout><DisabledProducts /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/productos-deshabilitados"
+              element={
+                <GuardedRoute allowedRoles={[3]}>
+                  <AppLayout><DisabledProducts /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/usage"
-            element={
-              <GuardedRoute >
-                <AppLayout><Usage /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/usage"
+              element={
+                <GuardedRoute >
+                  <AppLayout><Usage /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/usages-disabled"
-            element={
-              <GuardedRoute allowedRoles={[3]}>
-                <AppLayout><DisabledUsages /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/usages-disabled"
+              element={
+                <GuardedRoute allowedRoles={[3]}>
+                  <AppLayout><DisabledUsages /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/vehiculos"
-            element={
-              <GuardedRoute >
-                <AppLayout><Vehicles /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/vehiculos"
+              element={
+                <GuardedRoute >
+                  <AppLayout><Vehicles /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/vehiculos-deshabilitados"
-            element={
-              <GuardedRoute >
-                <AppLayout><DisabledVehicles /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/vehiculos-deshabilitados"
+              element={
+                <GuardedRoute >
+                  <AppLayout><DisabledVehicles /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/planificaciones"
-            element={
-              <GuardedRoute >
-                <AppLayout><Planning /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/planificaciones"
+              element={
+                <GuardedRoute >
+                  <AppLayout><Planning /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          <Route
-            path="/planificaciones-deshabilitadas"
-            element={
-              <GuardedRoute>
-                <AppLayout><DisabledPlanning /></AppLayout>
-              </GuardedRoute>
-            }
-          />
+            <Route
+              path="/planificaciones-deshabilitadas"
+              element={
+                <GuardedRoute>
+                  <AppLayout><DisabledPlanning /></AppLayout>
+                </GuardedRoute>
+              }
+            />
 
-          {/* Redirección por defecto a login */}
-          <Route path="*" element={<Navigate to="/login" />} />
+            {/* Redirección por defecto a login */}
+            <Route path="*" element={<Navigate to="/login" />} />
 
-        </Routes>
+          </Routes>
 
-        {/* ✅ Navegación inferior solo en móviles */}
-        <MobileBottomNavigationWrapper />
-      </Router>
+          {/* ✅ Navegación inferior solo en móviles */}
+          <MobileBottomNavigationWrapper />
+        </Router>
+      </NotificationsProvider>
     </Auth0Provider>
   );
 }

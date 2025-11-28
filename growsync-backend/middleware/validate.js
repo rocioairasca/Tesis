@@ -10,7 +10,7 @@ module.exports = (schema) => async (req, _res, next) => {
       Object.fromEntries(
         Object.entries(obj || {}).map(([k, v]) => [k, v === '' ? undefined : v])
       );
-    
+
     const payload = {
       body: clean(req.body),
       query: clean(req.query),
@@ -25,10 +25,43 @@ module.exports = (schema) => async (req, _res, next) => {
 
     if (!result.success) {
       // Formato de errores claro para el handler / cliente
-      const details = result.error.errors.map(({ path, message, code }) => ({
-        path: Array.isArray(path) ? path.join('.') : String(path),
-        code,
-        message,
+      // Soporte para Zod v3 y v4
+      let zodErrors = [];
+
+      if (Array.isArray(result.error)) {
+        zodErrors = result.error;
+      } else if (result.error?.errors && Array.isArray(result.error.errors)) {
+        zodErrors = result.error.errors;
+      } else if (result.error?.issues && Array.isArray(result.error.issues)) {
+        zodErrors = result.error.issues;
+      } else if (result.error && typeof result.error[Symbol.iterator] === 'function') {
+        try { zodErrors = Array.from(result.error); } catch (e) { }
+      }
+
+      // Si aun asi no hay errores, pero el objeto error tiene info util
+      if ((!zodErrors || zodErrors.length === 0) && result.error) {
+        // Fallback final: envolver el error crudo
+        zodErrors = [{
+          path: [],
+          code: 'custom',
+          message: result.error.message || 'Error de validación desconocido'
+        }];
+      }
+
+      if (!zodErrors || zodErrors.length === 0) {
+        console.error('❌ Error de validación inesperado (estructura desconocida):', result.error);
+        return next({
+          type: 'validation',
+          status: 400,
+          error: 'ValidationError',
+          message: 'Error de validación inesperado',
+        });
+      }
+
+      const details = zodErrors.map((err) => ({
+        path: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
+        code: err.code,
+        message: err.message,
       }));
 
       return next({
@@ -41,8 +74,8 @@ module.exports = (schema) => async (req, _res, next) => {
 
     // Reinyectar valores parseados/coercionados (útil para numbers/bools en query)
     const { body, query, params } = result.data || {};
-    if (body)   req.body = body;
-    if (query)  req.query = query;
+    if (body) req.body = body;
+    if (query) req.query = query;
     if (params) req.params = params;
 
     return next();

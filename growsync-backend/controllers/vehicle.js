@@ -10,6 +10,7 @@
  */
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
+const { createNotification } = require('./notifications');
 
 const SELECT_COLUMNS = `
   id, name, type, brand, model, plate, capacity, notes, status,
@@ -120,6 +121,19 @@ exports.update = async (req, res, next) => {
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'NotFound', message: 'Vehículo no encontrado' });
+
+    // [NOTIFICACIÓN] Cambio de estado
+    if (req.body.status && rows[0].responsible_user) {
+      createNotification(
+        rows[0].responsible_user,
+        'vehicle_status',
+        'medium',
+        'Estado de vehículo actualizado',
+        `El vehículo ${rows[0].name} ahora está: ${rows[0].status}`,
+        { vehicle_id: rows[0].id, new_status: rows[0].status }
+      ).catch(err => console.error('Error enviando notificación vehículo:', err));
+    }
+
     res.json({ vehicle: rows[0] });
   } catch (e) { next(e); }
 };

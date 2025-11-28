@@ -6,13 +6,15 @@
  *  Renderiza cards con la información clave de cada planificación.
  */
 import React from 'react';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { Popconfirm } from 'antd';
 import { Calendar as CalIcon, User as UserIcon, MapPin, Package, Truck } from 'phosphor-react';
 import dayjs from 'dayjs';
 
 const PlanningListMobile = ({
     list,
     onEdit,
+    onView,
     onCancel,
     rowKey,
     userIx,
@@ -32,8 +34,16 @@ const PlanningListMobile = ({
                         <div className="card-header">
                             <h3>{r.title}</h3>
                             <div className="card-icons">
+                                <EyeOutlined onClick={() => onView(r)} style={{ marginRight: 8 }} />
                                 <EditOutlined onClick={() => onEdit(r)} />
-                                <DeleteOutlined onClick={() => onCancel(r)} />
+                                <Popconfirm
+                                    title="¿Cancelar?"
+                                    onConfirm={() => onCancel(r)}
+                                    okText="Sí"
+                                    cancelText="No"
+                                >
+                                    <DeleteOutlined style={{ color: "red" }} />
+                                </Popconfirm>
                             </div>
                         </div>
                         <p className="flex-row"><CalIcon size={18} /> <strong>Período:</strong> {period}</p>

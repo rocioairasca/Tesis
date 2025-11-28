@@ -7,13 +7,14 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Dropdown, Tag } from 'antd';
-import { EditOutlined, MoreOutlined } from '@ant-design/icons';
+import { EditOutlined, MoreOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 const PlanningTable = ({
     list,
     loading,
     onEdit,
+    onView,
     onUpdateStatus,
     onCancel,
     rowKey,
@@ -77,6 +78,9 @@ const PlanningTable = ({
                 ];
                 return (
                     <Space size="small">
+                        <Tooltip title="Ver detalle">
+                            <Button type="text" shape="circle" icon={<EyeOutlined />} onClick={() => onView(record)} />
+                        </Tooltip>
                         <Tooltip title="Editar">
                             <Button type="text" shape="circle" icon={<EditOutlined />} onClick={() => onEdit(record)} />
                         </Tooltip>

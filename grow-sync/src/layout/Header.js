@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Layout, Avatar, Dropdown, Button, Badge } from "antd";
-import { BellOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { Layout, Avatar, Button } from "antd";
+import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import useIsMobile from "../hooks/useIsMobile";
+import NotificationBell from "../components/NotificationBell";
+import NotificationsDrawer from "../components/NotificationsDrawer";
 
 const { Header } = Layout;
 
@@ -11,6 +13,7 @@ const AppHeader = () => {
     const isMobile = useIsMobile();
 
     const [user, setUser] = useState(null);
+    const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
 
     // cargamos el usuario desde localStorage
     useEffect(() => {
@@ -22,10 +25,6 @@ const AppHeader = () => {
         }
     }, []);
 
-    // Menú de notificaciones
-    const notificationsMenuItems = [
-        { key: "no-notifications", label: "No tienes notificaciones", disabled: true },
-    ];
 
     const handleLogout = () => {
         try {
@@ -69,14 +68,7 @@ const AppHeader = () => {
             {/* DERECHA: notificaciones + usuario + logout */}
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
                 {/* Notificaciones */}
-                <Dropdown menu={{ items: notificationsMenuItems }} placement="bottomRight" arrow>
-                    <Badge count={0} showZero offset={[-2, 2]}>
-                        <Button
-                            type="text"
-                            icon={<BellOutlined style={{ fontSize: "20px", color: "#1D2A62" }} />}
-                        />
-                    </Badge>
-                </Dropdown>
+                <NotificationBell onOpenDrawer={() => setNotificationsDrawerOpen(true)} />
 
                 {/* Usuario */}
                 <div
@@ -107,6 +99,12 @@ const AppHeader = () => {
                     onClick={handleLogout}
                 />
             </div>
+
+            {/* Drawer de notificaciones */}
+            <NotificationsDrawer
+                open={notificationsDrawerOpen}
+                onClose={() => setNotificationsDrawerOpen(false)}
+            />
         </Header>
     );
 };

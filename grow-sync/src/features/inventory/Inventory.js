@@ -22,9 +22,11 @@ import useIsMobile from "../../hooks/useIsMobile";
 import ProductTable from "./components/ProductTable";
 import ProductListMobile from "./components/ProductListMobile";
 
-const ROLE_OPTIONS = [
-  { value: "líquido", label: "Líquido" },
-  { value: "polvo", label: "Polvo" },
+const CATEGORY_OPTIONS = [
+  { value: "semillas", label: "Semillas" },
+  { value: "agroquimicos", label: "Agroquímicos" },
+  { value: "fertilizantes", label: "Fertilizantes" },
+  { value: "combustible", label: "Combustible" },
 ];
 
 // ---- helpers de formato ----
@@ -127,7 +129,7 @@ const Inventory = () => {
       setUnit("");
       form.resetFields();
       form.setFieldsValue({
-        type: undefined,
+        category: undefined,
         unit: "",
         acquisition_date: null,
         total_quantity: undefined,
@@ -140,19 +142,15 @@ const Inventory = () => {
         ? new Date(product.acquisition_date).toISOString().split("T")[0]
         : null;
 
-      const type = ["líquido", "polvo"].includes(product.type)
-        ? product.type
-        : undefined;
-
       form.setFieldsValue({
         name: product.name ?? "",
-        type,
-        unit: product.unit ?? (type === "líquido" ? "litros" : "kg"),
+        category: product.category,
+        unit: product.unit ?? "kg",
         total_quantity: product.total_quantity ?? undefined,
         price: product.price ?? undefined,
         acquisition_date: acquisitionDate,
       });
-      setUnit(product.unit ?? (type === "líquido" ? "litros" : "kg"));
+      setUnit(product.unit ?? "kg");
     }
     setIsDrawerOpen(true);
   };
@@ -167,7 +165,7 @@ const Inventory = () => {
     try {
       const payload = {
         ...values,
-        unit: values.unit || (values.type === "líquido" ? "litros" : "kg"),
+        unit: values.unit || "kg",
         // si es creación, la disponible = total; si es edición, se conserva
         available_quantity: editingProduct
           ? editingProduct.available_quantity
@@ -304,22 +302,24 @@ const Inventory = () => {
           </Form.Item>
 
           <Form.Item
-            name="type"
-            label="Tipo"
-            rules={[{ required: true, message: "Por favor seleccioná el tipo." }]}
+            name="category"
+            label="Categoría"
+            rules={[{ required: true, message: "Por favor seleccioná la categoría." }]}
           >
             <Select
               allowClear
-              placeholder="Seleccioná el tipo de producto"
-              options={ROLE_OPTIONS} // ✅ AntD v5
+              placeholder="Seleccioná la categoría"
+              options={CATEGORY_OPTIONS}
               onChange={(value) => {
-                const nextUnit = value === "líquido" ? "litros" : "kg";
+                let nextUnit = "kg";
+                if (value === "combustible" || value === "agroquimicos") nextUnit = "litros";
+                if (value === "semillas") nextUnit = "bolsas";
+
                 form.setFieldsValue({ unit: nextUnit });
                 setUnit(nextUnit);
               }}
             />
           </Form.Item>
-
           <Form.Item
             name="total_quantity"
             label="Cantidad Total"

@@ -1,5 +1,6 @@
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require("../../db/supabaseClient");
+const { createNotification } = require('../notifications');
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -28,7 +29,7 @@ async function adjustStock(productId, delta) {
   // Fallback: leer-modificar-escribir
   const { data: prod, error: e1 } = await supabase
     .from('products')
-    .select('available_quantity, enabled')
+    .select('name, unit, available_quantity, enabled')
     .eq('id', productId)
     .maybeSingle();
 
@@ -65,6 +66,35 @@ async function adjustStock(productId, delta) {
     err.status = 500;
     throw err;
   }
+
+  // [NOTIFICACIÓN] Low Stock
+  // Si el stock bajó (delta < 0) y cruzó o tocó el umbral de 5
+  if (delta < 0 && current > 5 && next <= 5) {
+    try {
+      // Buscar admins y managers
+      const { data: recipients } = await supabase
+        .from('users')
+        .select('id')
+        .in('role', [1, 2, 3]) // 1=Supervisor, 2=Dueño, 3=Admin
+        .eq('enabled', true);
+
+      if (recipients && recipients.length > 0) {
+        for (const user of recipients) {
+          createNotification(
+            user.id,
+            'low_stock',
+            'high',
+            'Stock Bajo Alerta',
+            `El producto "${prod.name || 'Desconocido'}" tiene stock bajo (${next} ${prod.unit || 'unidades'}).`,
+            { product_id: productId, current_stock: next }
+          ).catch(e => console.error('Error enviando notif low_stock:', e));
+        }
+      }
+    } catch (notifErr) {
+      console.error('Error procesando notificación de stock bajo:', notifErr);
+    }
+  }
+
   return upd.available_quantity;
 }
 
@@ -119,9 +149,9 @@ const listUsages = async (req, res) => {
       .order('date', { ascending: false });
 
     if (!includeDisabled) query = query.eq('enabled', true);
-    if (from && to)       query = query.gte('date', from).lte('date', to);
-    if (product_id)       query = query.eq('product_id', product_id);
-    if (user_id)          query = query.eq('user_id', user_id);
+    if (from && to) query = query.gte('date', from).lte('date', to);
+    if (product_id) query = query.eq('product_id', product_id);
+    if (user_id) query = query.eq('user_id', user_id);
     if (q && q.trim().length >= 2) {
       // busqueda simple por cultivo actual/anterior o unidad
       query = query.or(`previous_crop.ilike.%${q}%,current_crop.ilike.%${q}%,unit.ilike.%${q}%`);
@@ -250,9 +280,9 @@ const editUsage = async (req, res) => {
     } = req.body;
 
     const prevProd = current.product_id;
-    const prevQty  = toNum(current.amount_used, 0);
-    const newProd  = product_id ?? prevProd;
-    const newQty   = amount_used != null ? toNum(amount_used, NaN) : prevQty;
+    const prevQty = toNum(current.amount_used, 0);
+    const newProd = product_id ?? prevProd;
+    const newQty = amount_used != null ? toNum(amount_used, NaN) : prevQty;
 
     if (amount_used != null && (!Number.isFinite(newQty) || newQty <= 0)) {
       return res.status(400).json({ error: 'ValidationError', message: 'amount_used debe ser > 0' });
@@ -276,7 +306,7 @@ const editUsage = async (req, res) => {
       if (newProd !== prevProd) {
         // Reintegrar todo al anterior y descontar todo del nuevo
         if (prevQty > 0) await adjustStock(prevProd, +prevQty);
-        if (newQty > 0)  await adjustStock(newProd, -newQty);
+        if (newQty > 0) await adjustStock(newProd, -newQty);
       } else if (newQty !== prevQty) {
         const delta = newQty - prevQty;
         if (delta !== 0) await adjustStock(newProd, -delta); // delta>0 descuenta; delta<0 reintegra

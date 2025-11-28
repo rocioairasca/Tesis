@@ -14,9 +14,9 @@ module.exports = async function registerUser(req, res) {
   }
 
   const {
-    AUTH0_DOMAIN,               
+    AUTH0_DOMAIN,
     AUTH0_M2M_CLIENT_ID,
-    AUTH0_M2M_CLIENT_SECRET        
+    AUTH0_M2M_CLIENT_SECRET
   } = process.env;
 
   if (!AUTH0_DOMAIN || !AUTH0_M2M_CLIENT_ID || !AUTH0_M2M_CLIENT_SECRET) {
@@ -74,18 +74,18 @@ module.exports = async function registerUser(req, res) {
       password,
       connection: 'Username-Password-Authentication',
       user_metadata: { username: username || null },
-      email_verified: false, 
-      verify_email: true,    
+      email_verified: false,
+      verify_email: true,
     };
     const createRes = await axios.post(createUrl, createPayload, {
       timeout: 10000,
       headers: { Authorization: `Bearer ${mgmtToken}` },
     });
 
-    createdAuth0UserId = createRes.data?.user_id; 
+    createdAuth0UserId = createRes.data?.user_id;
     const nickname = createRes.data?.nickname || null;
-    const picture  = createRes.data?.picture  || null;
-    const name     = createRes.data?.name     || null;
+    const picture = createRes.data?.picture || null;
+    const name = createRes.data?.name || null;
 
     if (!createdAuth0UserId) {
       return res.status(502).json({ error: 'Auth0Response', message: 'Auth0 no devolvió user_id' });
@@ -95,7 +95,7 @@ module.exports = async function registerUser(req, res) {
     const { data, error } = await supabase
       .from('users')
       .insert([{
-        auth0_id: createdAuth0UserId, 
+        auth0_id: createdAuth0UserId,
         email,
         username: username || null,
         role: 0,          // rol por defecto
@@ -119,6 +119,27 @@ module.exports = async function registerUser(req, res) {
       }
       console.error('Supabase insert error:', error);
       return res.status(500).json({ error: 'DbError', message: 'Error al guardar el usuario en la base de datos' });
+    }
+
+    // [NOTIFICACIÓN] Nuevo usuario
+    // Notificar a administradores (role 1 o 2)
+    const { data: admins } = await supabase
+      .from('users')
+      .select('id')
+      .in('role', [1, 2]); // Asumiendo 1=Admin, 2=Supervisor/Manager
+
+    if (admins && admins.length) {
+      const { createNotification } = require('../notifications');
+      for (const admin of admins) {
+        createNotification(
+          admin.id,
+          'new_user',
+          'medium',
+          'Nuevo usuario registrado',
+          `Se ha registrado el usuario: ${email}`,
+          { user_id: data.id, email }
+        ).catch(e => console.error('Error notificando admin:', e));
+      }
     }
 
     // 7) OK

@@ -1,23 +1,14 @@
+const { pool } = require('../db/supabaseClient');
+const { parsePage, parsePageSize } = require('../utils/pagination');
+const { createNotification } = require('./notifications');
+
 /**
  * Controlador: Planificación
  * Ubicación: controllers/planning.js
- * Descripción:
+  * Descripción:
  *  Maneja la gestión de planificaciones (actividades agrícolas).
- *  Incluye listado con filtros avanzados, creación con validación de conflictos,
- *  edición, y soft-delete.
- * 
- * Nota:
- *  - Ya implementa manejo de errores con `next(e)`.
- */
-const { pool } = require('../db/supabaseClient');
-const { parsePage, parsePageSize } = require('../utils/pagination');
-
-/**
- * LISTAR PLANIFICACIONES
- * Soporta filtros: from, to, type, status, responsible, lotId, search
- * Paginado: page, pageSize
  * Opciones: includeDisabled, includeCanceled
- */
+  */
 exports.list = async (req, res, next) => {
   try {
     const {
@@ -222,6 +213,19 @@ exports.create = async (req, res, next) => {
     }
 
     await client.query('COMMIT');
+
+    // [NOTIFICACIÓN] Nueva asignación
+    if (responsible_user) {
+      createNotification(
+        responsible_user,
+        'planning_assigned',
+        'low',
+        'Nueva planificación asignada',
+        `Se te ha asignado la planificación: ${title}`,
+        { planning_id: id, activity_type }
+      ).catch(err => console.error('Error enviando notificación:', err));
+    }
+
     res.status(201).json({ id });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -316,6 +320,27 @@ exports.update = async (req, res, next) => {
     }
 
     await client.query('COMMIT');
+
+    // [NOTIFICACIÓN] Cambio de estado
+    if (status) {
+      let targetUser = responsible_user;
+      if (!targetUser) {
+        const { rows: current } = await client.query('SELECT responsible_user, title FROM planning WHERE id = $1', [id]);
+        targetUser = current[0]?.responsible_user;
+      }
+
+      if (targetUser) {
+        createNotification(
+          targetUser,
+          'state_change',
+          'low',
+          'Cambio de estado en planificación',
+          `La planificación ha cambiado a estado: ${status}`,
+          { planning_id: id, new_status: status }
+        ).catch(err => console.error('Error enviando notificación:', err));
+      }
+    }
+
     res.json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK');

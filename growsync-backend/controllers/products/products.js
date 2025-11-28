@@ -10,6 +10,7 @@
  *  - Documentación detallada de cada función.
  */
 const supabase = require('../../db/supabaseClient');
+const { createNotification } = require('../notifications');
 
 /**
  * LISTAR PRODUCTOS (habilitados por defecto)
@@ -162,6 +163,38 @@ const editProduct = async (req, res, next) => {
 
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado' });
+    }
+
+    // [NOTIFICACIÓN] Low Stock (si se actualizó available_quantity)
+    if (updateData.available_quantity !== undefined) {
+      const newQty = Number(updateData.available_quantity);
+      // Si el nuevo stock es <= 5, notificamos.
+      // Nota: Aquí no verificamos el "anterior" para evitar doble fetch, 
+      // asumimos que si lo editan a un valor bajo es relevante saberlo.
+      if (newQty <= 5) {
+        try {
+          const { data: recipients } = await supabase
+            .from('users')
+            .select('id')
+            .in('role', [1, 2, 3])
+            .eq('enabled', true);
+
+          if (recipients && recipients.length > 0) {
+            for (const user of recipients) {
+              createNotification(
+                user.id,
+                'low_stock',
+                'high',
+                'Stock Bajo (Edición Manual)',
+                `El producto "${data.name}" ha sido actualizado a stock bajo (${newQty} ${data.unit}).`,
+                { product_id: data.id, current_stock: newQty }
+              ).catch(e => console.error('Error enviando notif low_stock manual:', e));
+            }
+          }
+        } catch (notifErr) {
+          console.error('Error procesando notif low_stock manual:', notifErr);
+        }
+      }
     }
 
     return res.json({ product: data });
