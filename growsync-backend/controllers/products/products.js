@@ -19,6 +19,11 @@ const { createNotification } = require('../notifications');
  */
 const listProducts = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const {
       q,
       category,                 // 'semillas' | 'agroquimicos' | 'fertilizantes' | 'combustible'
@@ -41,6 +46,7 @@ const listProducts = async (req, res, next) => {
     let query = supabase
       .from('products')
       .select(columns, { count: 'exact' })
+      .eq('company_id', company_id) // Multi-tenancy filter
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -70,6 +76,11 @@ const listProducts = async (req, res, next) => {
  */
 const addProduct = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const {
       name,
       category,
@@ -97,6 +108,7 @@ const addProduct = async (req, res, next) => {
     const { data, error } = await supabase
       .from('products')
       .insert([{
+        company_id, // Multi-tenancy injection
         name,
         category,
         unit,
@@ -125,6 +137,11 @@ const addProduct = async (req, res, next) => {
  */
 const editProduct = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { id } = req.params;
 
     // Armamos el objeto de update solo con campos definidos
@@ -156,6 +173,7 @@ const editProduct = async (req, res, next) => {
       .from('products')
       .update(updateData)
       .eq('id', id)
+      .eq('company_id', company_id) // Security check: only own products
       .select('id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at')
       .maybeSingle();
 
@@ -176,6 +194,7 @@ const editProduct = async (req, res, next) => {
           const { data: recipients } = await supabase
             .from('users')
             .select('id')
+            .eq('company_id', company_id) // Only notify company users
             .in('role', [1, 2, 3])
             .eq('enabled', true);
 
@@ -187,7 +206,8 @@ const editProduct = async (req, res, next) => {
                 'high',
                 'Stock Bajo (Edición Manual)',
                 `El producto "${data.name}" ha sido actualizado a stock bajo (${newQty} ${data.unit}).`,
-                { product_id: data.id, current_stock: newQty }
+                { product_id: data.id, current_stock: newQty },
+                company_id // Pass company_id
               ).catch(e => console.error('Error enviando notif low_stock manual:', e));
             }
           }
@@ -209,12 +229,18 @@ const editProduct = async (req, res, next) => {
  */
 const disableProduct = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { id } = req.params;
 
     const { data, error } = await supabase
       .from('products')
       .update({ enabled: false })
       .eq('id', id)
+      .eq('company_id', company_id) // Security check
       .eq('enabled', true)
       .select('id,enabled')
       .maybeSingle();

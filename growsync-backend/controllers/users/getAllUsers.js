@@ -13,18 +13,24 @@ const supabase = require('../../db/supabaseClient');
  */
 module.exports = async function getAllUsers(req, res) {
   try {
+    // Multi-tenancy: get company_id from authenticated user
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
+
     // Coerciones suaves (por si el validate no corrio)
-    const page            = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const pageSizeParam   = parseInt(req.query.pageSize, 10);
-    const pageSize        = Math.min(Math.max(pageSizeParam || 50, 1), 1000);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSizeParam = parseInt(req.query.pageSize, 10);
+    const pageSize = Math.min(Math.max(pageSizeParam || 50, 1), 1000);
     const includeDisabled = (String(req.query.includeDisabled).toLowerCase() === 'true') ||
-                            (req.query.includeDisabled === '1');
-    const q               = (req.query.q || '').trim();
-    const roleFilter      = req.query.role != null ? Number(req.query.role) : undefined;
+      (req.query.includeDisabled === '1');
+    const q = (req.query.q || '').trim();
+    const roleFilter = req.query.role != null ? Number(req.query.role) : undefined;
 
     const offset = (page - 1) * pageSize;
     const rangeFrom = offset;
-    const rangeTo   = offset + pageSize - 1;
+    const rangeTo = offset + pageSize - 1;
 
     // Columnas explicitas (evita exponer campos sensibles)
     const columns = 'id,email,full_name,username,role,enabled,created_at,auth0_id';
@@ -32,6 +38,7 @@ module.exports = async function getAllUsers(req, res) {
     let query = supabase
       .from('users')
       .select(columns, { count: 'exact' })
+      .eq('company_id', company_id)  // Filter by company
       .order('created_at', { ascending: false })
       .range(rangeFrom, rangeTo);
 

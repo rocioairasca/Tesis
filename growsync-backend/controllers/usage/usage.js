@@ -25,12 +25,17 @@ const asIdArray = (v) => {
  * Lee available_quantity y la actualiza sumando delta (puede ser negativo).
  * Devuelve la cantidad nueva. Lanza error si no alcanza stock para bajar.
  */
-async function adjustStock(productId, delta) {
+/**
+ * Lee available_quantity y la actualiza sumando delta (puede ser negativo).
+ * Devuelve la cantidad nueva. Lanza error si no alcanza stock para bajar.
+ */
+async function adjustStock(productId, delta, companyId) {
   // Fallback: leer-modificar-escribir
   const { data: prod, error: e1 } = await supabase
     .from('products')
     .select('name, unit, available_quantity, enabled')
     .eq('id', productId)
+    .eq('company_id', companyId)
     .maybeSingle();
 
   if (e1) throw e1;
@@ -57,6 +62,7 @@ async function adjustStock(productId, delta) {
     .from('products')
     .update({ available_quantity: next })
     .eq('id', productId)
+    .eq('company_id', companyId)
     .select('id, available_quantity')
     .maybeSingle();
 
@@ -71,10 +77,11 @@ async function adjustStock(productId, delta) {
   // Si el stock bajó (delta < 0) y cruzó o tocó el umbral de 5
   if (delta < 0 && current > 5 && next <= 5) {
     try {
-      // Buscar admins y managers
+      // Buscar admins y managers de la misma compañia
       const { data: recipients } = await supabase
         .from('users')
         .select('id')
+        .eq('company_id', companyId)
         .in('role', [1, 2, 3]) // 1=Supervisor, 2=Dueño, 3=Admin
         .eq('enabled', true);
 
@@ -86,7 +93,8 @@ async function adjustStock(productId, delta) {
             'high',
             'Stock Bajo Alerta',
             `El producto "${prod.name || 'Desconocido'}" tiene stock bajo (${next} ${prod.unit || 'unidades'}).`,
-            { product_id: productId, current_stock: next }
+            { product_id: productId, current_stock: next },
+            companyId
           ).catch(e => console.error('Error enviando notif low_stock:', e));
         }
       }
@@ -115,6 +123,10 @@ async function upsertUsageLots(usageId, lotIds) {
 // LISTAR RDUs HABILITADOS (con filtros/paginado y joins basicos)
 // GET /api/usages?from=&to=&product_id=&lotId=&user_id=&q=&page=&pageSize=&includeDisabled=0/1
 // ───────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
+// LISTAR RDUs HABILITADOS (con filtros/paginado y joins basicos)
+// GET /api/usages?from=&to=&product_id=&lotId=&user_id=&q=&page=&pageSize=&includeDisabled=0/1
+// ───────────────────────────────────────────────────────────────────────────────
 const listUsages = async (req, res) => {
   try {
     const {
@@ -128,6 +140,9 @@ const listUsages = async (req, res) => {
       pageSize = 50,
       includeDisabled = false,
     } = req.query;
+
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
 
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
@@ -146,6 +161,7 @@ const listUsages = async (req, res) => {
     let query = supabase
       .from('usage_records')
       .select(selectCols, { count: 'exact' })
+      .eq('company_id', company_id)
       .order('date', { ascending: false });
 
     if (!includeDisabled) query = query.eq('enabled', true);
@@ -199,6 +215,9 @@ const createUsage = async (req, res) => {
       date,
     } = req.body;
 
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+
     const qty = toNum(amount_used, NaN);
     if (!product_id || !Number.isFinite(qty) || qty <= 0) {
       return res.status(400).json({ error: 'ValidationError', message: 'product_id y amount_used (>0) son requeridos' });
@@ -216,6 +235,7 @@ const createUsage = async (req, res) => {
         current_crop,
         user_id,
         date,
+        company_id
       }])
       .select('id, product_id, amount_used')
       .single();
@@ -228,7 +248,7 @@ const createUsage = async (req, res) => {
       await upsertUsageLots(usageId, lot_ids);
 
       // 3) Descontar stock
-      await adjustStock(product_id, -qty);
+      await adjustStock(product_id, -qty, company_id);
     } catch (inner) {
       // Rollback simple: borrar el usage y sus lots
       await supabase.from('usage_lots').delete().eq('usage_id', usageId);
@@ -253,15 +273,26 @@ const createUsage = async (req, res) => {
  * - Reemplaza usage_lots si llega lot_ids.
  */
 // ───────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
+// EDITAR UN RDU
+// - Si cambia product_id o amount_used, ajusta stock por diferencia:
+//   - Si cambia de producto: +oldQty al producto viejo, -newQty al nuevo.
+//   - Si cambia cantidad: aplica delta en el mismo producto.
+// - Reemplaza usage_lots si llega lot_ids.
+// ───────────────────────────────────────────────────────────────────────────────
 const editUsage = async (req, res) => {
   try {
     const { id } = req.params;
+
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
 
     // 0) Cargar registro actual
     const { data: current, error: curErr } = await supabase
       .from('usage_records')
       .select('id, product_id, amount_used')
       .eq('id', id)
+      .eq('company_id', company_id)
       .maybeSingle();
 
     if (curErr) throw curErr;
@@ -293,7 +324,7 @@ const editUsage = async (req, res) => {
     for (const [k, v] of Object.entries({ product_id, amount_used, unit, total_area, previous_crop, current_crop, user_id, date })) {
       if (v !== undefined) updateData[k] = v;
     }
-    const { error: upErr } = await supabase.from('usage_records').update(updateData).eq('id', id);
+    const { error: upErr } = await supabase.from('usage_records').update(updateData).eq('id', id).eq('company_id', company_id);
     if (upErr) throw upErr;
 
     // 2) Actualizar lots si viene lot_ids
@@ -305,11 +336,11 @@ const editUsage = async (req, res) => {
     try {
       if (newProd !== prevProd) {
         // Reintegrar todo al anterior y descontar todo del nuevo
-        if (prevQty > 0) await adjustStock(prevProd, +prevQty);
-        if (newQty > 0) await adjustStock(newProd, -newQty);
+        if (prevQty > 0) await adjustStock(prevProd, +prevQty, company_id);
+        if (newQty > 0) await adjustStock(newProd, -newQty, company_id);
       } else if (newQty !== prevQty) {
         const delta = newQty - prevQty;
-        if (delta !== 0) await adjustStock(newProd, -delta); // delta>0 descuenta; delta<0 reintegra
+        if (delta !== 0) await adjustStock(newProd, -delta, company_id); // delta>0 descuenta; delta<0 reintegra
       }
     } catch (stockErr) {
       // Intento dejar el registro coherente si fallo stock 
@@ -335,11 +366,15 @@ const disableUsage = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+
     // 1) Leer registro (solo si esta habilitado)
     const { data: usage, error: fErr } = await supabase
       .from('usage_records')
       .select('id, product_id, amount_used, enabled')
       .eq('id', id)
+      .eq('company_id', company_id)
       .eq('enabled', true)
       .maybeSingle();
 
@@ -349,13 +384,14 @@ const disableUsage = async (req, res) => {
     const qty = toNum(usage.amount_used, 0);
 
     // 2) Reintegrar stock
-    await adjustStock(usage.product_id, +qty);
+    await adjustStock(usage.product_id, +qty, company_id);
 
     // 3) Marcar disabled
     const { data, error: dErr } = await supabase
       .from('usage_records')
       .update({ enabled: false })
       .eq('id', id)
+      .eq('company_id', company_id)
       .select('id, enabled')
       .maybeSingle();
 
@@ -377,12 +413,16 @@ const listDisabledUsages = async (req, res) => {
   try {
     const { page = 1, pageSize = 50 } = req.query;
 
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     const { data, error, count } = await supabase
       .from('usage_records')
       .select('id, date, product_id, amount_used, unit, total_area, previous_crop, current_crop, user_id, enabled, created_at', { count: 'exact' })
+      .eq('company_id', company_id)
       .eq('enabled', false)
       .order('date', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -415,11 +455,15 @@ const enableUsage = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const { company_id } = req.user;
+    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+
     // 1) Leer registro (solo si esta deshabilitado)
     const { data: usage, error: fErr } = await supabase
       .from('usage_records')
       .select('id, product_id, amount_used, enabled')
       .eq('id', id)
+      .eq('company_id', company_id)
       .eq('enabled', false)
       .maybeSingle();
 
@@ -429,13 +473,14 @@ const enableUsage = async (req, res) => {
     const qty = toNum(usage.amount_used, 0);
 
     // 2) Descontar stock nuevamente
-    await adjustStock(usage.product_id, -qty);
+    await adjustStock(usage.product_id, -qty, company_id);
 
     // 3) Marcar enabled
     const { data, error: uErr } = await supabase
       .from('usage_records')
       .update({ enabled: true })
       .eq('id', id)
+      .eq('company_id', company_id)
       .select('id, enabled')
       .maybeSingle();
 

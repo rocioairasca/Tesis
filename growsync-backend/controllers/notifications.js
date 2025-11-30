@@ -130,12 +130,13 @@ const markAllAsRead = async (req, res, next) => {
  * HELPER: Crear una notificación
  * Esta función es para uso interno de otros controladores
  */
-const createNotification = async (userId, type, priority, title, message, data = {}) => {
+const createNotification = async (userId, type, priority, title, message, data = {}, companyId = null) => {
     try {
         const { data: notification, error } = await supabase
             .from('notifications')
             .insert([{
                 user_id: userId,
+                company_id: companyId, // Multi-tenancy
                 type,
                 priority,
                 title,

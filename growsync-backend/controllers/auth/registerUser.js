@@ -30,7 +30,30 @@ module.exports = async function registerUser(req, res) {
   let createdAuth0UserId; // para rollback
 
   try {
-    // 2) Pre-chequeo en BD para evitar usuarios duplicados
+    // 2) Validar Token de Invitacion (Restricted Access)
+    const { token } = req.body;
+    if (!token) {
+      return res.status(403).json({ error: 'Forbidden', message: 'El registro requiere una invitación válida' });
+    }
+
+    // Buscar invitacion valida
+    const { data: invite, error: inviteError } = await supabase
+      .from('invitations')
+      .select('*')
+      .eq('token', token)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (inviteError || !invite) {
+      return res.status(403).json({ error: 'InvalidToken', message: 'Invitación inválida o expirada' });
+    }
+
+    if (invite.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ error: 'BadRequest', message: 'El email no coincide con la invitación' });
+    }
+
+    // 3) Pre-chequeo en BD para evitar usuarios duplicados
     const pre = await supabase
       .from('users')
       .select('id, enabled')
@@ -50,7 +73,7 @@ module.exports = async function registerUser(req, res) {
       });
     }
 
-    // 3) Obtener token de Management API (Client Credentials)
+    // 4) Obtener token de Management API (Client Credentials)
     const tokenUrl = `https://${AUTH0_DOMAIN}/oauth/token`;
     const tokenPayload = {
       grant_type: 'client_credentials',
@@ -67,7 +90,7 @@ module.exports = async function registerUser(req, res) {
       return res.status(502).json({ error: 'Auth0Response', message: 'Auth0 no devolvió access_token de Management' });
     }
 
-    // 4) Crear usuario en Auth0 (Base DB connection)
+    // 5) Crear usuario en Auth0 (Base DB connection)
     const createUrl = `https://${AUTH0_DOMAIN}/api/v2/users`;
     const createPayload = {
       email,
@@ -91,24 +114,25 @@ module.exports = async function registerUser(req, res) {
       return res.status(502).json({ error: 'Auth0Response', message: 'Auth0 no devolvió user_id' });
     }
 
-    // 5) Insert en Supabase
+    // 6) Insert en Supabase (Usando datos de la invitacion)
     const { data, error } = await supabase
       .from('users')
       .insert([{
         auth0_id: createdAuth0UserId,
         email,
         username: username || null,
-        role: 0,          // rol por defecto
+        role: invite.role,          // Rol desde la invitacion
+        company_id: invite.company_id, // Company desde la invitacion
         nickname,
         picture,
         name,
-        enabled: true,    // por defecto habilitado
+        enabled: true,
       }])
       .select()
       .single();
 
     if (error) {
-      // 6) Rollback en Auth0 si falla BD
+      // 7) Rollback en Auth0 si falla BD
       try {
         await axios.delete(
           `https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(createdAuth0UserId)}`,
@@ -121,15 +145,22 @@ module.exports = async function registerUser(req, res) {
       return res.status(500).json({ error: 'DbError', message: 'Error al guardar el usuario en la base de datos' });
     }
 
+    // 8) Marcar invitacion como usada
+    await supabase
+      .from('invitations')
+      .update({ used: true })
+      .eq('id', invite.id);
+
     // [NOTIFICACIÓN] Nuevo usuario
-    // Notificar a administradores (role 1 o 2)
+    // Notificar a administradores (role 1 o 2) DE LA MISMA EMPRESA
     const { data: admins } = await supabase
       .from('users')
       .select('id')
-      .in('role', [1, 2]); // Asumiendo 1=Admin, 2=Supervisor/Manager
+      .eq('company_id', invite.company_id) // Solo admins de esa empresa
+      .in('role', [1, 2]);
 
     if (admins && admins.length) {
-      const { createNotification } = require('../notifications');
+      const { createNotification } = require('../../controllers/notifications'); // Ajuste de path si es necesario
       for (const admin of admins) {
         createNotification(
           admin.id,
@@ -137,12 +168,13 @@ module.exports = async function registerUser(req, res) {
           'medium',
           'Nuevo usuario registrado',
           `Se ha registrado el usuario: ${email}`,
-          { user_id: data.id, email }
+          { user_id: data.id, email },
+          invite.company_id // Pasar company_id a la notificacion
         ).catch(e => console.error('Error notificando admin:', e));
       }
     }
 
-    // 7) OK
+    // 9) OK
     return res.status(201).json({
       message: 'Usuario creado correctamente',
       user: data,

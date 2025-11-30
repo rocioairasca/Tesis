@@ -20,6 +20,11 @@ const supabase = require('../../db/supabaseClient');
  */
 const listLots = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const {
       q,
       page = 1,
@@ -35,6 +40,7 @@ const listLots = async (req, res, next) => {
     let query = supabase
       .from('lots')
       .select(columns, { count: 'exact' })
+      .eq('company_id', company_id) // Multi-tenancy filter
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -61,11 +67,16 @@ const listLots = async (req, res, next) => {
  */
 const addLot = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { name, area, location } = req.body;
 
     const { data, error } = await supabase
       .from('lots')
-      .insert([{ name, area, location }])
+      .insert([{ name, area, location, company_id }])
       .select('id,name,area,location,enabled,created_at')
       .single();
 
@@ -83,6 +94,11 @@ const addLot = async (req, res, next) => {
  */
 const editLot = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { id } = req.params;
     const { name, area, location } = req.body;
 
@@ -90,6 +106,7 @@ const editLot = async (req, res, next) => {
       .from('lots')
       .update({ name, area, location })
       .eq('id', id)
+      .eq('company_id', company_id) // Security check
       .select('id,name,area,location,enabled,created_at')
       .maybeSingle();
 
@@ -111,12 +128,18 @@ const editLot = async (req, res, next) => {
  */
 const softDeleteLot = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { id } = req.params;
 
     const { data, error } = await supabase
       .from('lots')
       .update({ enabled: false })
       .eq('id', id)
+      .eq('company_id', company_id) // Security check
       .eq('enabled', true)
       .select('id,enabled')
       .maybeSingle();
@@ -138,9 +161,15 @@ const softDeleteLot = async (req, res, next) => {
  */
 const countEnabledLots = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { count, error } = await supabase
       .from('lots')
       .select('id', { count: 'exact', head: true })
+      .eq('company_id', company_id) // Multi-tenancy filter
       .eq('enabled', true);
 
     if (error) throw error;

@@ -8,6 +8,7 @@ exports.register = z.object({
     email: Email,
     password: Password,
     full_name: z.string().trim().min(1, 'Nombre requerido').optional(),
+    token: z.string().min(1, 'Token requerido'),
   }),
 });
 

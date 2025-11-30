@@ -142,5 +142,16 @@ router.get('/email/:email',
   }
 );
 
+// ----------------------------------------------------------------------------
+/** Invitar usuario — Admin/Owner
+ * POST /api/users/invite
+ * Body: { email, role }
+ */
+const inviteUser = require('../controllers/auth/inviteUser');
+router.post('/invite',
+  checkJwt, userData, // checkRole se hace dentro del controller para validar company_id tambien
+  inviteUser
+);
+
 module.exports = router;
 
