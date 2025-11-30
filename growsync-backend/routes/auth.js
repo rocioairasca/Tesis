@@ -24,4 +24,8 @@ router.post('/login',
   loginUser
 );
 
+// Obtener información de invitación (público)
+const getInvitation = require('../controllers/auth/getInvitation');
+router.get('/invitations/:token', getInvitation);
+
 module.exports = router;

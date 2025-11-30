@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, Typography } from "antd";
+import { useLocation } from "react-router-dom";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 
@@ -7,6 +8,31 @@ const { Title, Text } = Typography;
 
 const LoginRegister = () => {
   const [activeTab, setActiveTab] = useState("login");
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const token = queryParams.get("token");
+
+  useEffect(() => {
+    if (token) {
+      setActiveTab("register");
+    }
+  }, [token]);
+
+  const items = [
+    {
+      key: "login",
+      label: "Login",
+      children: <LoginForm />,
+    },
+  ];
+
+  if (token) {
+    items.push({
+      key: "register",
+      label: "Register",
+      children: <RegisterForm onSwitchToLogin={() => setActiveTab("login")} token={token} />,
+    });
+  }
 
   return (
     <div
@@ -30,7 +56,7 @@ const LoginRegister = () => {
         }}
       >
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <img src="/LogoGrande.png" alt="GrowSync Logo" style={{ width: 40, marginBottom: 8 }} />
+          <img src="/LogoGrande.png" alt="GrowSync Logo" style={{ width: 40, marginBottom: 8 }} />
           <Title level={3} style={{ marginBottom: 0 }}>Grow Sync</Title>
           <Text>Bienvenido a nuestro software!</Text>
         </div>
@@ -39,18 +65,7 @@ const LoginRegister = () => {
           activeKey={activeTab}
           onChange={setActiveTab}
           centered
-          items={[
-            {
-              key: "login",
-              label: "Login",
-              children: <LoginForm />,
-            },
-            {
-              key: "register",
-              label: "Register",
-              children: <RegisterForm onSwitchToLogin={() => setActiveTab("login")} />,
-            },
-          ]}
+          items={items}
         />
 
         <div style={{ marginTop: 24, textAlign: "center" }}>

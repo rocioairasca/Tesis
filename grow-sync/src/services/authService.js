@@ -40,11 +40,11 @@ export async function loginUser({ email, password }) {
  * REGISTER (POST /api/register)
  * body: { username, email, password }
  */
-export async function registerUser({ username, email, password }) {
+export async function registerUser({ username, email, password, token }) {
   const res = await fetch(`${API_BASE}/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify({ username, email, password, token }),
   });
 
   const data = await safeJson(res);
@@ -72,6 +72,42 @@ export async function getUserDataByEmail(email) {
     throw new Error(err?.message || "No se pudo obtener el usuario");
   }
   return res.json(); // debería incluir { role, ... }
+}
+
+/**
+ * INVITE USER (POST /api/users/invite)
+ * body: { email, role }
+ * Requiere Authorization: Bearer access_token (Admin/Owner)
+ */
+export async function inviteUser({ email, role }) {
+  const res = await fetch(`${API_BASE}/users/invite`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ email, role }),
+  });
+
+  const data = await safeJson(res);
+  if (!res.ok) {
+    throw new Error(data?.message || "Error al crear la invitación");
+  }
+  return data; // { message, inviteLink, token, invitation }
+}
+
+/**
+ * GET INVITATION (GET /api/invitations/:token)
+ * Obtiene información de la invitación (email)
+ */
+export async function getInvitation(token) {
+  const res = await fetch(`${API_BASE}/invitations/${token}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const data = await safeJson(res);
+  if (!res.ok) {
+    throw new Error(data?.message || "Invitación no encontrada");
+  }
+  return data; // { email }
 }
 
 async function safeJson(res) {
