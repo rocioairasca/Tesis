@@ -1,5 +1,5 @@
 import * as turf from '@turf/turf';
-import React, { useState, useEffect, useRef  } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, FeatureGroup, useMap, Tooltip, LayersControl } from 'react-leaflet';
 import { Button } from 'antd';
 import { AimOutlined } from '@ant-design/icons';
@@ -8,23 +8,27 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import useIsMobile from '../hooks/useIsMobile';
 
-const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, insideDrawer = false}) => {
+const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, insideDrawer = false }) => {
   const [userPosition, setUserPosition] = useState(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const mapRef = useRef(null);
   const isMobile = useIsMobile();
-
-  const defaultPosition = [-32.4082, -63.2402]; // esto a tener en cuenta no puede quedar asi
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserPosition({
+        const pos = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
+        };
+        setUserPosition(pos);
+        setIsLoadingLocation(false);
       },
       (error) => {
         console.error("Error al obtener ubicación:", error);
+        // Si falla la geolocalización, usar posición por defecto de Argentina
+        setUserPosition({ lat: -32.4082, lng: -63.2402 });
+        setIsLoadingLocation(false);
       }
     );
   }, []);
@@ -33,7 +37,11 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
     if ((modalOpen || insideDrawer) && mapRef.current) {
       setTimeout(() => {
         mapRef.current.invalidateSize();
-      }, 300);
+      }, 100);
+      // Second call to ensure tiles load
+      setTimeout(() => {
+        mapRef.current.invalidateSize();
+      }, 500);
     }
   }, [modalOpen, insideDrawer]);
 
@@ -45,19 +53,19 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
   const _onCreated = (e) => {
     const layer = e.layer;
     let drawnCoords = layer.getLatLngs();
-  
+
     if (Array.isArray(drawnCoords) && drawnCoords.length > 0) {
       const polygon = drawnCoords[0];
-  
+
       if (polygon.length > 0) {
         const first = roundCoord(polygon[0]);
         const last = roundCoord(polygon[polygon.length - 1]);
-  
+
         // Comparar lat y lng redondeados
         if (first.lat !== last.lat || first.lng !== last.lng) {
           polygon.push(first); // Agregamos el primer punto al final para cerrar
         }
-  
+
         // Transformamos a GeoJSON
         const geojsonPolygon = {
           type: "Polygon",
@@ -65,13 +73,13 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
             polygon.map(coord => [coord.lng, coord.lat]) // Atención: [lng, lat] para turf
           ]
         };
-  
+
         // Calculamos el área
         const areaInMeters = turf.area(geojsonPolygon);
         const areaInHectares = areaInMeters / 10000; // Convertimos a hectáreas
-  
+
         console.log("Área calculada:", areaInHectares.toFixed(2), "ha");
-  
+
         if (onSelect) {
           // Enviamos tanto el polígono como el área
           onSelect({
@@ -93,46 +101,58 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
           return [];
         }
       });
-  
+
       if (allCoordinates.length > 0) {
         mapRef.current.fitBounds(allCoordinates, { padding: [50, 50] });
       }
     }
-  };  
+  };
+
+  // Mostrar loading mientras se obtiene la ubicación
+  if (isLoadingLocation) {
+    return (
+      <div style={{ height: '500px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0', borderRadius: '8px' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '16px', marginBottom: '8px', fontWeight: '500' }}>Obteniendo ubicación...</div>
+          <div style={{ fontSize: '12px', color: '#666' }}>Por favor, permite el acceso a tu ubicación</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ height: '500px', width: '100%' }}>
-      <Button 
-        type="primary" 
+    <div style={{ height: '500px', width: '100%', position: 'relative' }}>
+      <Button
+        type="primary"
         size="small"
-        icon={<AimOutlined />} 
-        style={{ 
-          position: "absolute", 
+        icon={<AimOutlined />}
+        style={{
+          position: "absolute",
           top: insideDrawer
-            ? 190
+            ? 250
             : isMobile
-              ? 260
+              ? 60
               : 60,
           right: insideDrawer
-            ? 35
+            ? 10
             : isMobile
-              ? 67
-              : 24,
-          zIndex: 1000 }}
+              ? 10
+              : 10,
+          zIndex: 1000
+        }}
         onClick={handleRecenter}
       />
 
       <MapContainer
         ref={mapRef}
-        center={userPosition ? [userPosition.lat, userPosition.lng] : defaultPosition}
+        center={[userPosition.lat, userPosition.lng]}
         zoom={13}
-        style={{ height: '100%', width: '100%' }}
-
+        style={{ height: '100%', width: '100%', zIndex: 1 }}
         whenReady={() => {
           if (mapRef.current) {
             setTimeout(() => {
               mapRef.current.invalidateSize();
-            }, 200);
+            }, 100);
           }
         }}
       >
@@ -182,7 +202,7 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
             <Polygon
               key={lot.id}
               positions={coordinates}
-              pathOptions={{ color: color, weight: 2, smoothFactor: 1  }}
+              pathOptions={{ color: color, weight: 2, smoothFactor: 1 }}
             >
               <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
                 {lot.name}

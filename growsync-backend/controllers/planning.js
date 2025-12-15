@@ -9,6 +9,10 @@ const { createNotification } = require('./notifications');
  *  Maneja la gestión de planificaciones (actividades agrícolas).
  * Opciones: includeDisabled, includeCanceled
  */
+
+/**
+ * LISTAR PLANIFICACIONES (habilitadas por defecto)
+ */
 exports.list = async (req, res, next) => {
   try {
     const {
@@ -18,9 +22,11 @@ exports.list = async (req, res, next) => {
     } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
-    // Build WHERE dinamico
+    // Build WHERE dinámico
     let p = [company_id];
     const w = [`p.company_id = $1`];
 
@@ -32,9 +38,13 @@ exports.list = async (req, res, next) => {
       p.push(from, to);
       w.push(`p.date_range && tstzrange($${p.length - 1}, $${p.length}, '[]')`);
     }
-    if (type) { p.push(type); w.push(`p.activity_type = $${p.length}`); }
 
-    // Filtro por estado usa el estado "efectivo" (derivado en_demora si paso end_at)
+    if (type) {
+      p.push(type);
+      w.push(`p.activity_type = $${p.length}`);
+    }
+
+    // Filtro por estado usa el estado "efectivo" (derivado en_demora si pasa end_at)
     if (status) {
       p.push(status);
       w.push(`(
@@ -46,13 +56,24 @@ exports.list = async (req, res, next) => {
       ) = $${p.length}`);
     }
 
-    if (responsible) { p.push(responsible); w.push(`p.responsible_user = $${p.length}`); }
-    if (lotId) {
-      p.push(lotId); w.push(`EXISTS (
-      SELECT 1 FROM planning_lots pl WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
-    )`);
+    if (responsible) {
+      p.push(responsible);
+      w.push(`p.responsible_user = $${p.length}`);
     }
-    if (search) { p.push(`%${search}%`); w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`); }
+
+    if (lotId) {
+      p.push(lotId);
+      w.push(`EXISTS (
+        SELECT 1
+        FROM planning_lots pl
+        WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
+      )`);
+    }
+
+    if (search) {
+      p.push(`%${search}%`);
+      w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`);
+    }
 
     const whereSql = w.length ? `WHERE ${w.join(' AND ')}` : '';
 
@@ -114,58 +135,92 @@ exports.list = async (req, res, next) => {
 };
 
 /**
- * OBTENER UNA PLANIFICACION
+ * OBTENER UNA PLANIFICACIÓN POR ID
  * Incluye lotes y productos asociados
  */
 exports.getOne = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
     const sql = `
-      SELECT p.*,
-             CASE WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
-                  THEN 'en_demora' ELSE p.status END AS status_effective,
-             u.name AS responsible_name,
-             COALESCE((SELECT json_agg(json_build_object('id', l.id, 'name', l.name))
-                       FROM planning_lots pl JOIN lots l ON l.id = pl.lot_id
-                       WHERE pl.planning_id = p.id), '[]') AS lots,
-             COALESCE((SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
-                       FROM planning_products pp JOIN products pr ON pr.id = pp.product_id
-                       WHERE pp.planning_id = p.id), '[]') AS products
-      FROM planning p
-      JOIN users u ON u.id = p.responsible_user
-      WHERE p.id = $1 AND p.company_id = $2
-      LIMIT 1;
+      WITH base AS (
+        SELECT p.*,
+               CASE
+                 WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
+                 THEN 'en_demora' ELSE p.status
+               END AS status_effective,
+               u.name AS responsible_name
+        FROM planning p
+        JOIN users u ON u.id = p.responsible_user
+        WHERE p.id = $1 AND p.company_id = $2
+        LIMIT 1
+      )
+      SELECT b.*,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', l.id, 'name', l.name))
+               FROM planning_lots pl
+               JOIN lots l ON l.id = pl.lot_id
+               WHERE pl.planning_id = b.id
+             ), '[]') AS lots,
+             COALESCE((
+               SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
+               FROM planning_products pp
+               JOIN products pr ON pr.id = pp.product_id
+               WHERE pp.planning_id = b.id
+             ), '[]') AS products
+      FROM base b;
     `;
+
     const { rows } = await pool.query(sql, [id, company_id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
-  } catch (e) { next(e); }
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    return res.json(rows[0]);
+  } catch (e) {
+    next(e);
+  }
 };
 
 /**
- * CREAR PLANIFICACION
- * Valida conflictos de fechas en lotes y vehículos.
- * Usa transacción para insertar en planning, planning_lots y planning_products.
+ * CREAR PLANIFICACIÓN
+ * Valida conflictos de fechas en lotes y vehículo.
+ * Inserta lotes/productos relacionados.
  */
 exports.create = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const {
-      title, description, activity_type, start_at, end_at,
-      responsible_user, status, vehicle_id, lot_ids = [],
-      products = [], created_by
+      title,
+      description,
+      activity_type,
+      start_at,
+      end_at,
+      responsible_user,
+      status = 'pendiente',
+      vehicle_id,
+      lot_ids = [],
+      products = [],
+      created_by, // opcional, si no va el user de req
     } = req.body;
 
-    const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    const { company_id, id: userId } = req.user;
+    if (!company_id) {
+      client.release();
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
+
+    const creator = created_by || userId || null;
 
     await client.query('BEGIN');
 
-    // Conflicto por lotes
-    if (lot_ids.length) {
+    // Revalidar conflictos de lotes
+    if (Array.isArray(lot_ids) && lot_ids.length && start_at && end_at) {
       const q = `
         SELECT DISTINCT pl.lot_id
         FROM planning p
@@ -178,14 +233,19 @@ exports.create = async (req, res, next) => {
       const { rows } = await client.query(q, [lot_ids, start_at, end_at, company_id]);
       if (rows.length) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Conflicto de fechas en lotes', lot_ids_conflict: rows.map(r => r.lot_id) });
+        client.release();
+        return res.status(409).json({
+          error: 'Conflicto de fechas en lotes',
+          lot_ids_conflict: rows.map(r => r.lot_id),
+        });
       }
     }
 
-    // (Opcional) Conflicto por vehículo
-    if (vehicle_id) {
+    // Revalidar conflictos de vehículo
+    if (vehicle_id && start_at && end_at) {
       const q = `
-        SELECT 1 FROM planning p
+        SELECT 1
+        FROM planning p
         WHERE p.vehicle_id = $1
           AND p.status <> 'cancelado'
           AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
@@ -195,34 +255,55 @@ exports.create = async (req, res, next) => {
       const { rows } = await client.query(q, [vehicle_id, start_at, end_at, company_id]);
       if (rows.length) {
         await client.query('ROLLBACK');
+        client.release();
         return res.status(409).json({ error: 'Vehículo ya asignado en ese rango' });
       }
     }
 
     // Insert planning
     const insertSql = `
-      INSERT INTO planning (
+      INSERT INTO planning(
         title, description, activity_type, start_at, end_at,
         responsible_user, status, vehicle_id, created_by, company_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id;
     `;
     const { rows: newPlan } = await client.query(insertSql, [
-      title, description, activity_type, start_at, end_at,
-      responsible_user, status, vehicle_id, created_by, company_id
+      title,
+      description ?? null,
+      activity_type,
+      start_at,
+      end_at,
+      responsible_user,
+      status,
+      vehicle_id ?? null,
+      creator,
+      company_id,
     ]);
     const id = newPlan[0].id;
 
-    if (lot_ids.length) {
+    // Insert lotes
+    if (Array.isArray(lot_ids) && lot_ids.length) {
       const values = lot_ids.map((_, i) => `($1, $${i + 2})`).join(',');
-      await client.query(`INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`, [id, ...lot_ids]);
+      await client.query(
+        `INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`,
+        [id, ...lot_ids]
+      );
     }
 
-    if (products.length) {
-      const tuples = products.map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`).join(',');
+    // Insert productos
+    if (Array.isArray(products) && products.length) {
+      const tuples = products
+        .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
+        .join(',');
       const params = [id];
-      products.forEach(p => params.push(p.product_id, p.amount ?? null, p.unit ?? null));
-      await client.query(`INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`, params);
+      products.forEach(p => {
+        params.push(p.product_id, p.amount ?? null, p.unit ?? null);
+      });
+      await client.query(
+        `INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`,
+        params
+      );
     }
 
     await client.query('COMMIT');
@@ -240,17 +321,19 @@ exports.create = async (req, res, next) => {
       ).catch(err => console.error('Error enviando notificación:', err));
     }
 
-    res.status(201).json({ id });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    next(e);
-  } finally {
     client.release();
+    return res.status(201).json({ id });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    client.release();
+    next(e);
   }
 };
 
 /**
- * ACTUALIZAR PLANIFICACION
+ * ACTUALIZAR PLANIFICACIÓN
  * Revalida conflictos si cambian fechas/lotes/vehículo.
  * Actualiza relaciones (borra y reinserta lotes/productos).
  */
@@ -264,7 +347,10 @@ exports.update = async (req, res, next) => {
     } = req.body;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      client.release();
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
     await client.query('BEGIN');
 
@@ -273,6 +359,7 @@ exports.update = async (req, res, next) => {
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
+      client.release();
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -291,12 +378,18 @@ exports.update = async (req, res, next) => {
       const { rows } = await client.query(q, [lot_ids, start_at, end_at, id, company_id]);
       if (rows.length) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Conflicto de fechas en lotes', lot_ids_conflict: rows.map(r => r.lot_id) });
+        client.release();
+        return res.status(409).json({
+          error: 'Conflicto de fechas en lotes',
+          lot_ids_conflict: rows.map(r => r.lot_id),
+        });
       }
     }
+
     if (vehicle_id && start_at && end_at) {
       const q = `
-        SELECT 1 FROM planning p
+        SELECT 1
+        FROM planning p
         WHERE p.vehicle_id = $1
           AND p.status <> 'cancelado'
           AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
@@ -307,6 +400,7 @@ exports.update = async (req, res, next) => {
       const { rows } = await client.query(q, [vehicle_id, start_at, end_at, id, company_id]);
       if (rows.length) {
         await client.query('ROLLBACK');
+        client.release();
         return res.status(409).json({ error: 'Vehículo ya asignado en ese rango' });
       }
     }
@@ -314,7 +408,10 @@ exports.update = async (req, res, next) => {
     // Update parcial
     const sets = [];
     const vals = [];
-    const push = (v, k) => { vals.push(v); sets.push(`${k} = $${vals.length}`); };
+    const push = (v, k) => {
+      vals.push(v);
+      sets.push(`${k} = $${vals.length}`);
+    };
 
     if (title !== undefined) push(title, 'title');
     if (description !== undefined) push(description, 'description');
@@ -326,27 +423,42 @@ exports.update = async (req, res, next) => {
     if (vehicle_id !== undefined) push(vehicle_id, 'vehicle_id');
 
     if (sets.length > 0) {
-      vals.push(id);
-      vals.push(company_id);
-      const updateSql = `UPDATE planning SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND company_id = $${vals.length}`;
+      vals.push(id, company_id);
+      const updateSql = `
+        UPDATE planning
+        SET ${sets.join(', ')}
+        WHERE id = $${vals.length - 1} AND company_id = $${vals.length};
+      `;
       await client.query(updateSql, vals);
     }
 
+    // Lotes
     if (Array.isArray(lot_ids)) {
       await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
       if (lot_ids.length) {
         const values = lot_ids.map((_, i) => `($1, $${i + 2})`).join(',');
-        await client.query(`INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`, [id, ...lot_ids]);
+        await client.query(
+          `INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`,
+          [id, ...lot_ids]
+        );
       }
     }
 
+    // Productos
     if (Array.isArray(products)) {
       await client.query('DELETE FROM planning_products WHERE planning_id = $1', [id]);
       if (products.length) {
-        const tuples = products.map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`).join(',');
+        const tuples = products
+          .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
+          .join(',');
         const params = [id];
-        products.forEach(p => params.push(p.product_id, p.amount ?? null, p.unit ?? null));
-        await client.query(`INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`, params);
+        products.forEach(p => {
+          params.push(p.product_id, p.amount ?? null, p.unit ?? null);
+        });
+        await client.query(
+          `INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`,
+          params
+        );
       }
     }
 
@@ -356,7 +468,10 @@ exports.update = async (req, res, next) => {
     if (status) {
       let targetUser = responsible_user;
       if (!targetUser) {
-        const { rows: current } = await client.query('SELECT responsible_user, title FROM planning WHERE id = $1', [id]);
+        const { rows: current } = await client.query(
+          'SELECT responsible_user, title FROM planning WHERE id = $1',
+          [id]
+        );
         targetUser = current[0]?.responsible_user;
       }
 
@@ -373,17 +488,19 @@ exports.update = async (req, res, next) => {
       }
     }
 
+    client.release();
     res.json({ ok: true });
   } catch (e) {
-    await client.query('ROLLBACK');
-    next(e);
-  } finally {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
     client.release();
+    next(e);
   }
 };
 
 /**
- * DESHABILITAR PLANIFICACION (Soft Delete)
+ * DESHABILITAR PLANIFICACIÓN (Soft Delete)
  * Oculta la planificación y (si no está completada) la marca como cancelada.
  */
 exports.remove = async (req, res, next) => {
@@ -391,7 +508,10 @@ exports.remove = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      client.release();
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
     await client.query('BEGIN');
 
@@ -400,6 +520,7 @@ exports.remove = async (req, res, next) => {
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
+      client.release();
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -414,17 +535,19 @@ exports.remove = async (req, res, next) => {
     const updateSql = `
       UPDATE planning
       SET enabled = false, status = $1
-      WHERE id = $2 AND company_id = $3
+      WHERE id = $2 AND company_id = $3;
     `;
     await client.query(updateSql, [newStatus, id, company_id]);
 
     await client.query('COMMIT');
+    client.release();
     res.json({ ok: true });
   } catch (e) {
-    await client.query('ROLLBACK');
-    next(e);
-  } finally {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
     client.release();
+    next(e);
   }
 };
 
@@ -439,7 +562,9 @@ exports.listDisabled = async (req, res, next) => {
     } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
     let p = [company_id];
     const w = [`p.enabled IS FALSE`, `p.company_id = $1`];
@@ -448,19 +573,31 @@ exports.listDisabled = async (req, res, next) => {
       p.push(status);
       w.push(`(
         CASE
-          WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
+          WHEN p.status NOT IN ('completado', 'cancelado') AND now() > p.end_at
           THEN 'en_demora'
           ELSE p.status
         END
       ) = $${p.length}`);
     }
-    if (responsible) { p.push(responsible); w.push(`p.responsible_user = $${p.length}`); }
-    if (lotId) {
-      p.push(lotId); w.push(`EXISTS (
-      SELECT 1 FROM planning_lots pl WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
-    )`);
+
+    if (responsible) {
+      p.push(responsible);
+      w.push(`p.responsible_user = $${p.length}`);
     }
-    if (search) { p.push(`%${search}%`); w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`); }
+
+    if (lotId) {
+      p.push(lotId);
+      w.push(`EXISTS (
+        SELECT 1
+        FROM planning_lots pl
+        WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
+      )`);
+    }
+
+    if (search) {
+      p.push(`%${search}%`);
+      w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`);
+    }
 
     const whereSql = `WHERE ${w.join(' AND ')}`;
     const limit = parsePageSize(pageSize, 20, 1000);
@@ -482,7 +619,7 @@ exports.listDisabled = async (req, res, next) => {
       WITH base AS (
         SELECT p.*,
                CASE
-                 WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
+                 WHEN p.status NOT IN ('completado', 'cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
                u.name AS responsible_name
@@ -521,19 +658,21 @@ exports.listDisabled = async (req, res, next) => {
 };
 
 /**
- * HABILITAR PLANIFICACION (Restaurar)
+ * HABILITAR PLANIFICACIÓN (Restaurar)
  */
 exports.enable = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    }
 
     const sql = `
       UPDATE planning
       SET enabled = true
       WHERE id = $1 AND company_id = $2
-      RETURNING id, status
+      RETURNING id, status;
     `;
     const { rows } = await pool.query(sql, [id, company_id]);
 

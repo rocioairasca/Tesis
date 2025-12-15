@@ -50,7 +50,8 @@ const ACTIVITY_OPTIONS = [
   { value: "cosecha", label: "Cosecha" },
   { value: "fertilizacion", label: "Fertilización" },
   { value: "riego", label: "Riego" },
-  { value: "otra", label: "Otra" },
+  { value: "mantenimiento", label: "Mantenimiento" },
+  { value: "otro", label: "Otro" },
 ];
 
 const Planning = () => {
@@ -252,22 +253,36 @@ const Planning = () => {
   const handleSubmit = async (values) => {
     try {
       const [start, end] = values.date_range || [];
+
+      // Build payload conditionally to avoid sending empty strings
       const payload = {
-        title: values.title?.trim(),
-        description: values.description || "",
+        title: values.title?.trim() || "",
         activity_type: values.activity_type,
         start_at: start?.toDate().toISOString(),
         end_at: end?.toDate().toISOString(),
-        responsible_user: values.responsible_user || null,
+        responsible_user: values.responsible_user,
         status: values.status || "planificado",
-        vehicle_id: values.vehicle_id || null,
         lot_ids: values.lot_ids || [],
-        products: (values.products || []).map(p => ({
+      };
+
+      // Only include optional fields if they have values
+      if (values.description?.trim()) {
+        payload.description = values.description.trim();
+      }
+
+      if (values.vehicle_id) {
+        payload.vehicle_id = values.vehicle_id;
+      }
+
+      if (values.products && values.products.length > 0) {
+        payload.products = values.products.map(p => ({
           product_id: p.product_id,
           amount: Number(p.amount ?? 0),
           unit: p.unit || products.find(x => x.id === p.product_id)?.unit || "",
-        })),
-      };
+        }));
+      }
+
+      console.log("📤 Payload a enviar:", JSON.stringify(payload, null, 2));
 
       if (editing && getId(editing)) {
         // actualizar; para status usamos PATCH (según colección)
@@ -446,7 +461,7 @@ const Planning = () => {
             <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
           </Form.Item>
 
-          <Form.Item name="responsible_user" label="Responsable">
+          <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: "Seleccioná un responsable" }]}>
             <Select
               allowClear
               placeholder="Seleccioná un usuario"

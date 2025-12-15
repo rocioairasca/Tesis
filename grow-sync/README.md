@@ -1,70 +1,68 @@
-# Getting Started with Create React App
+# GrowSync - Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Frontend web para GrowSync (React + AntDesing). Maneja UI, navegación, layout, autenticación y control de accesos por rol. Consume la API del backend mediante servicios centralizados.
 
-## Available Scripts
+## Stack
+- React (JS)
+- Ant Design (UI)
+- Routing: React Roter
+- Estado: Context API
+- Servicios HTTP: (fetch/axios) desde `src\services`
 
-In the project directory, you can run:
+## Estructura del proyecto
+**src/**
+- auth/: login, helpers de auth, guards (según tu implementación)
+- components/:  componentes reutilizables UI (tablas, cards mobile, botones, etc.)
+- context/: contextos globales (auth, user, company, theme, etc.)
+- css/: estilos globales o compartidos
+- features/: módulos del negocio (Inventory, Usage, Planning, Lots, Users, etc.)
+- hooks/: hooks custom (responsive, permisos, fetch, etc.)
+- layout/: estructura de la app (Sidebar, Header, Layout principal)
+- routes/: definición de rutas + protección por rol
+- services/: capa de API (llamadas al backend) + helpers de requests
+**App.js**
+**index.js**
 
-### `npm start`
+## Requisitos
+- Node.js >= 18
+- npm (o yarn)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Instalación
+```bash
+npm install
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Variables de entorno
 
-### `npm test`
+Copiar `.env.example` a `.env` y completar con los valores apropiados (Auth0, URL del backend):
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- `REACT_APP_AUTH0_DOMAIN`
+- `REACT_APP_AUTH0_CLIENT_ID`
+- `REACT_APP_AUTH0_API_AUDIENCE`
+- `REACT_APP_URL` (ej: `http://localhost:4000`)
 
-### `npm run build`
+## Ejecución
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- `npm start` inicia la app en `http://localhost:3000`
+- `npm run build` para producción
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Roles y accesos 
+Jerarquía de roles:
+- 0: Empleado
+- 1: Supervisor
+- 2: Dueño de campo
+- 3: Admin
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Las rutas se protegen desde `src/routes` (guards/wrappers) y/o desde `auth`.
 
-### `npm run eject`
+## Convenciones
+- Componentes: `PascalCase`
+- Funciones/variables: `camelCase`
+- Servicios: una función por endpoint (ej: `inventory.service.js`)
+- Evitar lógica de negocio en componentes: va a `features/` + `services/`
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Dónde tocar cosas rápido
+- Navegación / rutas: `src/routes`
+- Layout (sidebar/header): `src/layout`
+- Llamadas al backend: `src/services`
+- Permisos por rol: `src/auth` o `src/routes`

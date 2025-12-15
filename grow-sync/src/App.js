@@ -1,3 +1,16 @@
+/**
+ * Ruteo principal de la app.
+ * 
+ * Reglas:
+ * - /login es público y NO usa AppLayout.
+ * - El resto usa GuardedRoute (requiere usuario autenticado).
+ * - allowedRoles restringe por rol (ej: [3] = Admin).
+ * - MobileBottomNavigationWrapper se renderiza globalmente (solo en móvil).
+ * 
+ * Features principales:
+ * - dashboard, users, inventory, lots, usages, vehicles, planning
+ */
+
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Auth0Provider } from "@auth0/auth0-react";
@@ -137,7 +150,7 @@ function App() {
             <Route
               path="/vehiculos-deshabilitados"
               element={
-                <GuardedRoute >
+                <GuardedRoute allowedRoles={[3]}>
                   <AppLayout><DisabledVehicles /></AppLayout>
                 </GuardedRoute>
               }
@@ -155,7 +168,7 @@ function App() {
             <Route
               path="/planificaciones-deshabilitadas"
               element={
-                <GuardedRoute>
+                <GuardedRoute allowedRoles={[3]}>
                   <AppLayout><DisabledPlanning /></AppLayout>
                 </GuardedRoute>
               }
