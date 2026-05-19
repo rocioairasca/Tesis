@@ -132,3 +132,19 @@ export async function getCurrentUser() {
 
   return data.user;
 }
+
+export async function updateUserPermissions(userId, custom_permissions) {
+  const res = await fetch(`${API_BASE}/users/${userId}/permissions`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify({ custom_permissions }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok) {
+    throw new Error(data?.message || "Error al actualizar permisos");
+  }
+
+  return data;
+}

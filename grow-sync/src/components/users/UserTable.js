@@ -10,8 +10,21 @@
  *  - Cambio de rol directo desde la tabla.
  */
 import React, { useEffect, useState } from "react";
-import { Table, Select, message } from "antd";
+import { 
+  Table, 
+  Select, 
+  message,
+  Button,
+  Drawer,
+  Checkbox,
+  Space,
+  Divider,
+} from "antd";
 import api from "../../services/apiClient";
+import {
+  updateUserPermissions,
+} from '../../services/authService';
+import { PERMISSIONS, ROLE_PERMISSIONS } from '../../constants/permissions';
 
 const ROLE_OPTIONS = [
   { value: 0, label: "Empleado" },
@@ -20,10 +33,71 @@ const ROLE_OPTIONS = [
   { value: 3, label: "Admin" },
 ];
 
+const PERMISSION_GROUPS = {
+  Inventario: [
+    PERMISSIONS.INVENTORY_VIEW,
+    PERMISSIONS.INVENTORY_VIEW_DISABLED,
+    PERMISSIONS.INVENTORY_CREATE,
+    PERMISSIONS.INVENTORY_EDIT,
+    PERMISSIONS.INVENTORY_DISABLE,
+    PERMISSIONS.INVENTORY_ENABLE,
+  ],
+
+  Lotes: [
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.LOTS_CREATE,
+    PERMISSIONS.LOTS_EDIT,
+    PERMISSIONS.LOTS_DISABLE,
+  ],
+
+  Uso: [
+    PERMISSIONS.USAGE_VIEW,
+    PERMISSIONS.USAGE_CREATE,
+    PERMISSIONS.USAGE_EDIT,
+    PERMISSIONS.USAGE_DISABLE,
+  ],
+
+  Cosecha: [
+    PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_CREATE,
+    PERMISSIONS.HARVEST_EDIT,
+    PERMISSIONS.HARVEST_DISABLE,
+  ],
+};
+
+const PERMISSION_LABELS = {
+  [PERMISSIONS.INVENTORY_VIEW]: "Ver inventario",
+  [PERMISSIONS.INVENTORY_VIEW_DISABLED]: "Ver productos deshabilitados",
+  [PERMISSIONS.INVENTORY_CREATE]: "Crear productos",
+  [PERMISSIONS.INVENTORY_EDIT]: "Editar productos",
+  [PERMISSIONS.INVENTORY_DISABLE]: "Deshabilitar productos",
+  [PERMISSIONS.INVENTORY_ENABLE]: "Restaurar productos",
+
+  [PERMISSIONS.LOTS_VIEW]: "Ver lotes",
+  [PERMISSIONS.LOTS_CREATE]: "Crear lotes",
+  [PERMISSIONS.LOTS_EDIT]: "Editar lotes",
+  [PERMISSIONS.LOTS_DISABLE]: "Deshabilitar lotes",
+
+  [PERMISSIONS.USAGE_VIEW]: "Ver registros de uso",
+  [PERMISSIONS.USAGE_CREATE]: "Crear registros de uso",
+  [PERMISSIONS.USAGE_EDIT]: "Editar registros de uso",
+  [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar registros de uso",
+
+  [PERMISSIONS.HARVEST_VIEW]: "Ver cosechas",
+  [PERMISSIONS.HARVEST_CREATE]: "Crear cosechas",
+  [PERMISSIONS.HARVEST_EDIT]: "Editar cosechas",
+  [PERMISSIONS.HARVEST_DISABLE]: "Deshabilitar cosechas",
+};
+
 const UserTable = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+
+  const [permissionsDrawerOpen, setPermissionsDrawerOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedPermissions, setSelectedPermissions] = useState([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
 
   // helpers de id/rowKey robustos
   const getId = (r) => r?.id ?? r?._id;
@@ -54,11 +128,16 @@ const UserTable = () => {
     // Optimistic update + rollback si falla
     const prev = users;
     setUsers((arr) =>
-      arr.map((u) => (getId(u) === userId ? { ...u, role: newRole } : u))
+      arr.map((u) => (getId(u) === userId ? { ...u, role: newRole, custom_permissions: null } : u))
     );
 
     try {
       await api.put(`/users/${userId}/role`, { role: newRole });
+
+      await api.put(`/users/${userId}/permissions`, {
+        custom_permissions: null,
+      });
+
       message.success("Rol actualizado");
     } catch (err) {
       console.error("→ update role error:", err);
@@ -68,6 +147,50 @@ const UserTable = () => {
       setUpdatingId(null);
     }
   };
+
+  const openPermissionsDrawer = (user) => {
+    setSelectedUser(user);
+    
+    const permissionsToShow = Array.isArray(user.custom_permissions)
+      ? user.custom_permissions
+      : ROLE_PERMISSIONS[Number(user.role)] || [];
+
+    setSelectedPermissions(permissionsToShow);
+
+    setPermissionsDrawerOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!selectedUser) return;
+
+    try {
+      setSavingPermissions(true);
+
+      await updateUserPermissions(
+        getId(selectedUser),
+        selectedPermissions
+      );
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          getId(u) === getId(selectedUser)
+            ? { ...u, custom_permissions: selectedPermissions }
+            : u
+        )
+      );
+
+      message.success("Permisos actualizados");
+      setPermissionsDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      message.error(
+        err?.message || "No se pudieron actualizar los permisos"
+      );
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+      
 
   const columns = [
     { title: "Email", dataIndex: "email", key: "email" },
@@ -85,17 +208,94 @@ const UserTable = () => {
         />
       ),
     },
+    {
+      title: "Acciones",
+      key: "actions",
+      render: (_, record) => (
+        <Space>
+          {Number(record.role) !== 3&& (
+            <Button onClick={() => openPermissionsDrawer(record)}>
+              Permisos
+            </Button>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   return (
-    <Table
-      dataSource={users}
-      columns={columns}
-      loading={loading}
-      rowKey={rowKey}
-      pagination={{ position: ["bottomCenter"] }}
-      scroll={{ x: "max-content" }}
-    />
+    <div>
+      <Table
+        dataSource={users}
+        columns={columns}
+        loading={loading}
+        rowKey={rowKey}
+        pagination={{ position: ["bottomCenter"] }}
+        scroll={{ x: "max-content" }}
+      />
+
+      <Drawer
+        title={
+          selectedUser
+          ? `Permisos - ${selectedUser.email}`
+          : "Permisos"
+        }
+        open={permissionsDrawerOpen}
+        onClose={() => setPermissionsDrawerOpen(false)}
+        width={420}
+      >
+        {Object.entries(PERMISSION_GROUPS).map(
+          ([groupName, permissions]) => (
+            <div key={groupName}>
+              <Divider orientation="left">
+                {groupName}
+              </Divider>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                {permissions.map((permission) => (
+                  <Checkbox
+                    key={permission}
+                    checked={selectedPermissions.includes(permission)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+
+                      setSelectedPermissions((prev) => {
+                        if (checked) {
+                          return prev.includes(permission)
+                            ? prev
+                            : [...prev, permission];
+                        }
+
+                        return prev.filter((p) => p !== permission);
+                      });
+                    }}
+                  >
+                    {PERMISSION_LABELS[permission] || permission}
+                  </Checkbox>
+                ))}
+              </div>
+            </div>
+          )
+        )}
+
+        <div style={{ marginTop: 24 }}>
+          <Button
+            type="primary"
+            block
+            loading={savingPermissions}
+            onClick={handleSavePermissions}
+          >
+            Guardar Permisos
+          </Button>
+        </div>
+      </Drawer>
+    </div>
   );
 };
 
