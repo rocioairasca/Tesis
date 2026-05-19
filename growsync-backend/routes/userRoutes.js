@@ -20,6 +20,10 @@ const schema = require('../validations/users.schema');
 const supabase = require('../db/supabaseClient');
 const updateRole = require('../controllers/users/updateRole');
 
+const requirePermission = require('../middleware/requirePermission');
+const { PERMISSIONS } = require('../constants/permissions');
+const updatePermissions = require('../controllers/users/updatePermissions');
+
 /**
  * Roles:
  *  0 = Empleado (logueado)
@@ -57,7 +61,7 @@ router.get('/',
       const rangeTo = offset + limit - 1;
 
       // Selección explicita (evita exponer columnas sensibles si existiesen)
-      const columns = 'id,email,full_name,role,enabled,created_at,auth0_id';
+      const columns = 'id,email,full_name,role,enabled,created_at,auth0_id,custom_permissions,company_id';
 
       let query = supabase
         .from('users')
@@ -97,6 +101,15 @@ router.put('/:id/role',
   checkJwt, userData, checkRole(3),
   validate(schema.updateRole),
   updateRole
+);
+
+router.put(
+  "/:id/permissions",
+  checkJwt,
+  userData,
+  checkRole(3),
+  requirePermission(PERMISSIONS.USERS_PERMISSIONS),
+  updatePermissions
 );
 
 // ----------------------------------------------------------------------------

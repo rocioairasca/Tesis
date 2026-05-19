@@ -33,7 +33,7 @@ module.exports = async function getAllUsers(req, res) {
     const rangeTo = offset + pageSize - 1;
 
     // Columnas explicitas (evita exponer campos sensibles)
-    const columns = 'id,email,full_name,username,role,enabled,created_at,auth0_id';
+    const columns = 'id,email,full_name,username,role,enabled,created_at,auth0_id,custom_permissions,company_id';
 
     let query = supabase
       .from('users')
