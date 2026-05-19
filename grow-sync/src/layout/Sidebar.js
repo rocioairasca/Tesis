@@ -36,7 +36,7 @@ const Sidebar = () => {
       key: "planning",
       icon: <CalendarOutlined />,
       label: <Link to="/planificaciones">Planificaciones</Link>,
-      show: true,
+      show: hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW),
     },
     {
       key: "harvest",
@@ -66,7 +66,7 @@ const Sidebar = () => {
       key: "vehiculos",
       icon: <CarOutlined />,
       label: <Link to="/vehiculos">Vehículos</Link>,
-      show: true,
+      show: hasPermission(currentUser, PERMISSIONS.VEHICLES_VIEW),
     },
     {
       key: "usuarios",

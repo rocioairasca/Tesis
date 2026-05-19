@@ -67,7 +67,7 @@ function App() {
             {/* Página de login sin layout */}
             <Route path="/login" element={<LoginRegister />} />
 
-            {/* Rutas protegidas con layout */}
+            {/* Dashboard */}
             <Route
               path="/dashboard"
               element={
@@ -80,7 +80,7 @@ function App() {
             <Route
               path="/usuarios"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.USERS_VIEW}>
                   <AppLayout><Users /></AppLayout>
                 </GuardedRoute>
               }
@@ -89,7 +89,7 @@ function App() {
             <Route
               path="/harvest"
               element={
-                <GuardedRoute>
+                <GuardedRoute requiredPermission={PERMISSIONS.HARVEST_VIEW}>
                   <AppLayout><Harvest /></AppLayout>
                 </GuardedRoute>
               }
@@ -107,7 +107,7 @@ function App() {
             <Route
               path="/lotes"
               element={
-                <GuardedRoute >
+                <GuardedRoute requiredPermission={PERMISSIONS.LOTS_VIEW}>
                   <AppLayout><Lotes /></AppLayout>
                 </GuardedRoute>
               }
@@ -116,7 +116,7 @@ function App() {
             <Route
               path="/lotes-deshabilitados"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.LOTS_VIEW_DISABLED}>
                   <AppLayout><DisabledLotes /></AppLayout>
                 </GuardedRoute>
               }
@@ -125,7 +125,7 @@ function App() {
             <Route
               path="/productos-deshabilitados"
               element={
-                <GuardedRoute requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+                <GuardedRoute requiredPermission={PERMISSIONS.INVENTORY_VIEW_DISABLED}>
                   <AppLayout><DisabledProducts /></AppLayout>
                 </GuardedRoute>
               }
@@ -134,7 +134,7 @@ function App() {
             <Route
               path="/usage"
               element={
-                <GuardedRoute >
+                <GuardedRoute requiredPermission={PERMISSIONS.USAGE_VIEW}>
                   <AppLayout><Usage /></AppLayout>
                 </GuardedRoute>
               }
@@ -143,7 +143,7 @@ function App() {
             <Route
               path="/usages-disabled"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.USAGE_VIEW_DISABLED}>
                   <AppLayout><DisabledUsages /></AppLayout>
                 </GuardedRoute>
               }
@@ -152,7 +152,7 @@ function App() {
             <Route
               path="/vehiculos"
               element={
-                <GuardedRoute >
+                <GuardedRoute requiredPermission={PERMISSIONS.VEHICLES_VIEW}>
                   <AppLayout><Vehicles /></AppLayout>
                 </GuardedRoute>
               }
@@ -161,7 +161,7 @@ function App() {
             <Route
               path="/vehiculos-deshabilitados"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.VEHICLES_VIEW_DISABLED}>
                   <AppLayout><DisabledVehicles /></AppLayout>
                 </GuardedRoute>
               }
@@ -170,7 +170,7 @@ function App() {
             <Route
               path="/planificaciones"
               element={
-                <GuardedRoute >
+                <GuardedRoute requiredPermission={PERMISSIONS.PLANNING_VIEW}>
                   <AppLayout><Planning /></AppLayout>
                 </GuardedRoute>
               }
@@ -179,7 +179,7 @@ function App() {
             <Route
               path="/planificaciones-deshabilitadas"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.PLANNING_VIEW_DISABLED}>
                   <AppLayout><DisabledPlanning /></AppLayout>
                 </GuardedRoute>
               }

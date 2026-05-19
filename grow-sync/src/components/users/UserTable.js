@@ -34,6 +34,15 @@ const ROLE_OPTIONS = [
 ];
 
 const PERMISSION_GROUPS = {
+    Planificaciones: [
+    PERMISSIONS.PLANNING_VIEW,
+    PERMISSIONS.PLANNING_CREATE,
+    PERMISSIONS.PLANNING_EDIT,
+    PERMISSIONS.PLANNING_DISABLE,
+    PERMISSIONS.PLANNING_ENABLE,
+    PERMISSIONS.PLANNING_VIEW_DISABLED,
+  ],
+
   Inventario: [
     PERMISSIONS.INVENTORY_VIEW,
     PERMISSIONS.INVENTORY_VIEW_DISABLED,
@@ -45,27 +54,51 @@ const PERMISSION_GROUPS = {
 
   Lotes: [
     PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.LOTS_VIEW_DISABLED,
     PERMISSIONS.LOTS_CREATE,
     PERMISSIONS.LOTS_EDIT,
     PERMISSIONS.LOTS_DISABLE,
+    PERMISSIONS.LOTS_ENABLE,
   ],
 
   Uso: [
     PERMISSIONS.USAGE_VIEW,
+    PERMISSIONS.USAGE_VIEW_DISABLED,
     PERMISSIONS.USAGE_CREATE,
     PERMISSIONS.USAGE_EDIT,
     PERMISSIONS.USAGE_DISABLE,
+    PERMISSIONS.USAGE_ENABLE,
   ],
 
   Cosecha: [
     PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_VIEW_DISABLED,
     PERMISSIONS.HARVEST_CREATE,
     PERMISSIONS.HARVEST_EDIT,
     PERMISSIONS.HARVEST_DISABLE,
+    PERMISSIONS.HARVEST_ENABLE,
+  ],
+
+    Vehículos: [
+    PERMISSIONS.VEHICLES_VIEW,
+    PERMISSIONS.VEHICLES_VIEW_DISABLED,
+    PERMISSIONS.VEHICLES_CREATE,
+    PERMISSIONS.VEHICLES_EDIT,
+    PERMISSIONS.VEHICLES_DISABLE,
+    PERMISSIONS.VEHICLES_ENABLE,
   ],
 };
 
 const PERMISSION_LABELS = {
+  // Planificaciones
+  [PERMISSIONS.PLANNING_VIEW]: "Ver planificaciones",
+  [PERMISSIONS.PLANNING_VIEW_DISABLED]: "Ver planificaciones deshabilitadas",
+  [PERMISSIONS.PLANNING_CREATE]: "Crear planificaciones",
+  [PERMISSIONS.PLANNING_EDIT]: "Editar planificaciones",
+  [PERMISSIONS.PLANNING_DISABLE]: "Deshabilitar planificaciones",
+  [PERMISSIONS.PLANNING_ENABLE]: "Restaurar planificaciones",
+
+  // Inventario
   [PERMISSIONS.INVENTORY_VIEW]: "Ver inventario",
   [PERMISSIONS.INVENTORY_VIEW_DISABLED]: "Ver productos deshabilitados",
   [PERMISSIONS.INVENTORY_CREATE]: "Crear productos",
@@ -73,20 +106,37 @@ const PERMISSION_LABELS = {
   [PERMISSIONS.INVENTORY_DISABLE]: "Deshabilitar productos",
   [PERMISSIONS.INVENTORY_ENABLE]: "Restaurar productos",
 
+  // Lotes
   [PERMISSIONS.LOTS_VIEW]: "Ver lotes",
+  [PERMISSIONS.LOTS_VIEW_DISABLED]: "Ver lotes deshabilitados",
   [PERMISSIONS.LOTS_CREATE]: "Crear lotes",
   [PERMISSIONS.LOTS_EDIT]: "Editar lotes",
   [PERMISSIONS.LOTS_DISABLE]: "Deshabilitar lotes",
+  [PERMISSIONS.LOTS_ENABLE]: "Restaurar lotes",
 
+  // Uso
   [PERMISSIONS.USAGE_VIEW]: "Ver registros de uso",
+  [PERMISSIONS.USAGE_VIEW_DISABLED]: "Ver registros deshabilitados",
   [PERMISSIONS.USAGE_CREATE]: "Crear registros de uso",
   [PERMISSIONS.USAGE_EDIT]: "Editar registros de uso",
   [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar registros de uso",
+  [PERMISSIONS.USAGE_ENABLE]: "Restaurar registros de uso",
 
+  // Cosecha
   [PERMISSIONS.HARVEST_VIEW]: "Ver cosechas",
+  [PERMISSIONS.HARVEST_VIEW_DISABLED]: "Ver cosechas deshabilitadas",
   [PERMISSIONS.HARVEST_CREATE]: "Crear cosechas",
   [PERMISSIONS.HARVEST_EDIT]: "Editar cosechas",
   [PERMISSIONS.HARVEST_DISABLE]: "Deshabilitar cosechas",
+  [PERMISSIONS.HARVEST_ENABLE]: "Restaurar cosechas",
+
+  // Vehículos
+  [PERMISSIONS.VEHICLES_VIEW]: "Ver vehículos",
+  [PERMISSIONS.VEHICLES_VIEW_DISABLED]: "Ver vehículos deshabilitados",
+  [PERMISSIONS.VEHICLES_CREATE]: "Crear vehículos",
+  [PERMISSIONS.VEHICLES_EDIT]: "Editar vehículos",
+  [PERMISSIONS.VEHICLES_DISABLE]: "Deshabilitar vehículos",
+  [PERMISSIONS.VEHICLES_ENABLE]: "Restaurar vehículos",
 };
 
 const UserTable = () => {
