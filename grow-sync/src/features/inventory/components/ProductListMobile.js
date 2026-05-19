@@ -10,7 +10,7 @@ import { Tag } from 'antd';
 import {
     EditOutlined, DeleteOutlined, AppstoreOutlined, InboxOutlined,
     DollarOutlined, CalendarOutlined, ExclamationCircleOutlined
-} from "@ant-design/icons";
+} from '../../../components/AppIcons';
 
 const ProductListMobile = ({
     products,

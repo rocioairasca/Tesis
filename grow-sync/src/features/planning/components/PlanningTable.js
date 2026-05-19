@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Dropdown, Tag } from 'antd';
-import { EditOutlined, MoreOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, MoreOutlined, EyeOutlined } from '../../../components/AppIcons';
 import dayjs from 'dayjs';
 
 const PlanningTable = ({

@@ -6,9 +6,9 @@
  *  Renderiza cards con la información clave de cada planificación.
  */
 import React from 'react';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '../../../components/AppIcons';
 import { Popconfirm } from 'antd';
-import { Calendar as CalIcon, User as UserIcon, MapPin, Package, Truck } from 'phosphor-react';
+import { Calendar as CalIcon, User as UserIcon, MapPin, Package, Truck } from '../../../components/AppIcons';
 import dayjs from 'dayjs';
 
 const PlanningListMobile = ({

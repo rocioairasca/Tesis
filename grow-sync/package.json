@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@ant-design/plots": "^2.6.8",
+    "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@auth0/auth0-react": "^2.3.0",
     "@fullcalendar/core": "^6.1.17",
     "@fullcalendar/daygrid": "^6.1.17",
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
+    "@geoman-io/leaflet-geoman-free": "^2.19.3",
+    "@hugeicons/core-free-icons": "^4.1.4",
+    "@hugeicons/react": "^1.1.6",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -19,11 +24,10 @@
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
-    "phosphor-react": "^1.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",
-    "react-leaflet-draw": "^0.20.6",
+    "react-leaflet-geoman-v2": "^1.0.3",
     "react-responsive": "^10.0.1",
     "react-router-dom": "^7.4.0",
     "react-scripts": "5.0.1",
@@ -53,5 +57,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "source-map-loader": "^5.0.0"
   }
 }

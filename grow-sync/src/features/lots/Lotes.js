@@ -14,7 +14,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Dropdown, Button, Drawer, Form, Input, InputNumber, Space, notification, Row, Col } from "antd";
-import { MoreOutlined, PlusOutlined } from "@ant-design/icons";
+import { MoreOutlined, PlusOutlined } from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import MapSelector from '../../components/MapSelector';

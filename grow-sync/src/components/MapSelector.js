@@ -1,34 +1,49 @@
 import * as turf from '@turf/turf';
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, FeatureGroup, useMap, Tooltip, LayersControl } from 'react-leaflet';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import {
+  MapContainer,
+  TileLayer,
+  Polygon,
+  useMap,
+  Tooltip,
+  LayersControl,
+} from 'react-leaflet';
 import { Button } from 'antd';
-import { AimOutlined } from '@ant-design/icons';
-import { EditControl } from 'react-leaflet-draw';
+import { AimOutlined } from './AppIcons';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import '@geoman-io/leaflet-geoman-free';
 import useIsMobile from '../hooks/useIsMobile';
 
-const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, insideDrawer = false }) => {
+const FALLBACK_POSITION = [-32.4082, -63.2402];
+
+const MapSelector = ({
+  lots = [],
+  selectedLocation = null,
+  onSelect,
+  modalOpen,
+  insideDrawer = false,
+}) => {
   const [userPosition, setUserPosition] = useState(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const mapRef = useRef(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    if (!navigator.geolocation) return;
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const pos = {
+        setUserPosition({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        };
-        setUserPosition(pos);
-        setIsLoadingLocation(false);
+        });
       },
       (error) => {
-        console.error("Error al obtener ubicación:", error);
-        // Si falla la geolocalización, usar posición por defecto de Argentina
-        setUserPosition({ lat: -32.4082, lng: -63.2402 });
-        setIsLoadingLocation(false);
+        console.error('Error al obtener ubicación:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
       }
     );
   }, []);
@@ -37,88 +52,111 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
     if ((modalOpen || insideDrawer) && mapRef.current) {
       setTimeout(() => {
         mapRef.current.invalidateSize();
-      }, 100);
-      // Second call to ensure tiles load
-      setTimeout(() => {
-        mapRef.current.invalidateSize();
-      }, 500);
+      }, 350);
     }
   }, [modalOpen, insideDrawer]);
 
-  const roundCoord = (coord) => ({
+  const roundCoord = useCallback((coord) => ({
     lat: parseFloat(coord.lat.toFixed(6)),
-    lng: parseFloat(coord.lng.toFixed(6))
-  });
+    lng: parseFloat(coord.lng.toFixed(6)),
+  }), []);
 
-  const _onCreated = (e) => {
-    const layer = e.layer;
-    let drawnCoords = layer.getLatLngs();
+  const normalizePolygon = useCallback((latlngs) => {
+    if (!Array.isArray(latlngs) || latlngs.length === 0) return null;
 
-    if (Array.isArray(drawnCoords) && drawnCoords.length > 0) {
-      const polygon = drawnCoords[0];
+    const ring = Array.isArray(latlngs[0]) ? [...latlngs[0]] : [...latlngs];
+    if (ring.length === 0) return null;
 
-      if (polygon.length > 0) {
-        const first = roundCoord(polygon[0]);
-        const last = roundCoord(polygon[polygon.length - 1]);
+    const normalized = ring.map(roundCoord);
 
-        // Comparar lat y lng redondeados
-        if (first.lat !== last.lat || first.lng !== last.lng) {
-          polygon.push(first); // Agregamos el primer punto al final para cerrar
-        }
+    const first = normalized[0];
+    const last = normalized[normalized.length - 1];
 
-        // Transformamos a GeoJSON
-        const geojsonPolygon = {
-          type: "Polygon",
-          coordinates: [
-            polygon.map(coord => [coord.lng, coord.lat]) // Atención: [lng, lat] para turf
-          ]
-        };
-
-        // Calculamos el área
-        const areaInMeters = turf.area(geojsonPolygon);
-        const areaInHectares = areaInMeters / 10000; // Convertimos a hectáreas
-
-        console.log("Área calculada:", areaInHectares.toFixed(2), "ha");
-
-        if (onSelect) {
-          // Enviamos tanto el polígono como el área
-          onSelect({
-            location: JSON.stringify(drawnCoords),
-            calculatedArea: areaInHectares.toFixed(2) // dejamos 2 decimales
-          });
-        }
-      }
+    if (first.lat !== last.lat || first.lng !== last.lng) {
+      normalized.push(first);
     }
-  };
+
+    return normalized;
+  }, [roundCoord]);
+
+  const emitPolygonData = useCallback((layer) => {
+    const latlngs = layer.getLatLngs();
+    const polygon = normalizePolygon(latlngs);
+
+    if (!polygon || polygon.length < 4) return;
+
+    const geojsonPolygon = {
+      type: 'Polygon',
+      coordinates: [polygon.map((coord) => [coord.lng, coord.lat])],
+    };
+
+    const areaInMeters = turf.area(geojsonPolygon);
+    const areaInHectares = areaInMeters / 10000;
+
+    if (onSelect) {
+      onSelect({
+        location: JSON.stringify([polygon]),
+        calculatedArea: areaInHectares.toFixed(2),
+      });
+    }
+  }, [normalizePolygon, onSelect]);
+
+  const initialCenter = useMemo(() => {
+    if (selectedLocation?.[0]?.[0]) {
+      return [selectedLocation[0][0].lat, selectedLocation[0][0].lng];
+    }
+
+    const firstLotWithCoords = lots.find((lot) => {
+      try {
+        const parsed = JSON.parse(lot.location);
+        return parsed?.[0]?.[0];
+      } catch {
+        return false;
+      }
+    });
+
+    if (firstLotWithCoords) {
+      const parsed = JSON.parse(firstLotWithCoords.location);
+      return [parsed[0][0].lat, parsed[0][0].lng];
+    }
+
+    if (userPosition) {
+      return [userPosition.lat, userPosition.lng];
+    }
+
+    return FALLBACK_POSITION;
+  }, [selectedLocation, lots, userPosition]);
 
   const handleRecenter = () => {
-    if (mapRef.current && lots.length > 0) {
-      const allCoordinates = lots.flatMap(lot => {
-        try {
-          const parsed = JSON.parse(lot.location);
-          return parsed[0].map(({ lat, lng }) => [lat, lng]);
-        } catch (e) {
-          return [];
-        }
-      });
+    if (!mapRef.current) return;
 
-      if (allCoordinates.length > 0) {
-        mapRef.current.fitBounds(allCoordinates, { padding: [50, 50] });
-      }
+    if (selectedLocation?.[0]?.length) {
+      const bounds = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
+      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+      return;
     }
-  };
 
-  // Mostrar loading mientras se obtiene la ubicación
-  if (isLoadingLocation) {
-    return (
-      <div style={{ height: '500px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0', borderRadius: '8px' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '16px', marginBottom: '8px', fontWeight: '500' }}>Obteniendo ubicación...</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>Por favor, permite el acceso a tu ubicación</div>
-        </div>
-      </div>
-    );
-  }
+    const allCoordinates = lots.flatMap((lot) => {
+      try {
+        const parsed = JSON.parse(lot.location);
+        return parsed?.[0]?.map(({ lat, lng }) => [lat, lng]) || [];
+      } catch {
+        return [];
+      }
+    });
+
+    if (allCoordinates.length > 0) {
+      mapRef.current.fitBounds(allCoordinates, { padding: [50, 50] });
+      return;
+    }
+
+    if (userPosition) {
+      mapRef.current.setView([userPosition.lat, userPosition.lng], 15);
+      return;
+    }
+
+    mapRef.current.setView(FALLBACK_POSITION, 13);
+  };
 
   return (
     <div style={{ height: '500px', width: '100%', position: 'relative' }}>
@@ -127,46 +165,50 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
         size="small"
         icon={<AimOutlined />}
         style={{
-          position: "absolute",
-          top: insideDrawer
-            ? 250
-            : isMobile
-              ? 60
-              : 60,
-          right: insideDrawer
-            ? 10
-            : isMobile
-              ? 10
-              : 10,
-          zIndex: 1000
+          position: 'absolute',
+          top: insideDrawer ? 190 : isMobile ? 260 : 60,
+          right: insideDrawer ? 35 : isMobile ? 67 : 24,
+          zIndex: 1000,
         }}
         onClick={handleRecenter}
       />
 
       <MapContainer
         ref={mapRef}
-        center={[userPosition.lat, userPosition.lng]}
+        center={initialCenter}
         zoom={13}
-        style={{ height: '100%', width: '100%', zIndex: 1 }}
+        style={{ height: '100%', width: '100%' }}
         whenReady={() => {
           if (mapRef.current) {
             setTimeout(() => {
               mapRef.current.invalidateSize();
-            }, 100);
+            }, 250);
           }
         }}
       >
+        <GeomanControls
+          enabled={!!onSelect}
+          selectedLocation={selectedLocation}
+          emitPolygonData={emitPolygonData}
+        />
+
+        <AutoFitMap
+          selectedLocation={selectedLocation}
+          lots={lots}
+          userPosition={userPosition}
+        />
+
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Mapa Callejero">
             <TileLayer
-              attribution='&copy; OpenStreetMap contributors'
+              attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
           </LayersControl.BaseLayer>
 
           <LayersControl.BaseLayer name="Satélite">
             <TileLayer
-              attribution='Imagery © NASA'
+              attribution="Imagery © Esri"
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             />
           </LayersControl.BaseLayer>
@@ -175,7 +217,7 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
         {selectedLocation && (
           <Polygon
             positions={selectedLocation}
-            pathOptions={{ color: "#FF5733", weight: 2 }}
+            pathOptions={{ color: '#FF5733', weight: 2 }}
           />
         )}
 
@@ -186,23 +228,31 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
           try {
             coordinates = JSON.parse(lot.location);
           } catch (error) {
-            console.error("Error al parsear coordenadas del lote:", error);
+            console.error('Error al parsear coordenadas del lote:', error);
             return null;
           }
 
-          if (!Array.isArray(coordinates) || coordinates.length === 0 || !coordinates[0][0]) {
-            console.warn("Coordenadas inválidas para el lote:", lot.id);
+          if (!Array.isArray(coordinates) || coordinates.length === 0 || !coordinates[0]?.[0]) {
+            console.warn('Coordenadas inválidas para el lote:', lot.id);
             return null;
           }
 
-          const colors = ["#437118", "#FF5733", "#3498db", "#f39c12", "#9b59b6", "#1abc9c", "#e74c3c"];
+          const colors = [
+            '#437118',
+            '#FF5733',
+            '#3498db',
+            '#f39c12',
+            '#9b59b6',
+            '#1abc9c',
+            '#e74c3c',
+          ];
           const color = colors[index % colors.length];
 
           return (
             <Polygon
               key={lot.id}
               positions={coordinates}
-              pathOptions={{ color: color, weight: 2, smoothFactor: 1 }}
+              pathOptions={{ color, weight: 2, smoothFactor: 1 }}
             >
               <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
                 {lot.name}
@@ -210,44 +260,124 @@ const MapSelector = ({ lots = [], selectedLocation = null, onSelect, modalOpen, 
             </Polygon>
           );
         })}
-
-        {selectedLocation && <FlyToSelectedLocation selectedLocation={selectedLocation} />}
-
-        {onSelect && (
-          <FeatureGroup>
-            <EditControl
-              position="topright"
-              draw={{
-                rectangle: false,
-                circle: false,
-                circlemarker: false,
-                marker: false,
-                polyline: false,
-                polygon: { shapeOptions: { color: '#437118' } },
-              }}
-              edit={{ edit: false, remove: false }}
-              onCreated={_onCreated}
-            />
-          </FeatureGroup>
-        )}
       </MapContainer>
     </div>
   );
 };
 
-const FlyToSelectedLocation = ({ selectedLocation }) => {
+const GeomanControls = ({ enabled, selectedLocation, emitPolygonData }) => {
+  const map = useMap();
+  const editableLayerRef = useRef(null);
+
+  useEffect(() => {
+    if (!enabled || !map?.pm) return;
+
+    map.pm.addControls({
+      position: 'topright',
+      drawMarker: false,
+      drawCircleMarker: false,
+      drawPolyline: false,
+      drawRectangle: false,
+      drawCircle: false,
+      drawText: false,
+      dragMode: false,
+      cutPolygon: false,
+      rotateMode: false,
+      removalMode: false,
+      editMode: true,
+      drawPolygon: true,
+    });
+
+    map.pm.setGlobalOptions({
+      continueDrawing: false,
+      pathOptions: {
+        color: '#437118',
+        weight: 2,
+      },
+    });
+
+    const clearEditableLayer = () => {
+      if (editableLayerRef.current && map.hasLayer(editableLayerRef.current)) {
+        map.removeLayer(editableLayerRef.current);
+      }
+      editableLayerRef.current = null;
+    };
+
+    const createEditableLayerFromSelected = () => {
+      if (!selectedLocation?.[0]?.length) return;
+
+      clearEditableLayer();
+
+      const latlngs = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
+      const polygon = L.polygon(latlngs, { color: '#437118', weight: 2 }).addTo(map);
+      polygon.pm.enable();
+
+      editableLayerRef.current = polygon;
+    };
+
+    const handleCreate = (e) => {
+      clearEditableLayer();
+
+      editableLayerRef.current = e.layer;
+      editableLayerRef.current.pm.enable();
+
+      emitPolygonData(e.layer);
+    };
+
+    const handleEdit = (e) => {
+      emitPolygonData(e.layer);
+    };
+
+    createEditableLayerFromSelected();
+
+    map.on('pm:create', handleCreate);
+    map.on('pm:edit', handleEdit);
+
+    return () => {
+      map.off('pm:create', handleCreate);
+      map.off('pm:edit', handleEdit);
+
+      if (map.pm) {
+        map.pm.removeControls();
+      }
+
+      clearEditableLayer();
+    };
+  }, [map, enabled, selectedLocation, emitPolygonData]);
+
+  return null;
+};
+
+const AutoFitMap = ({ selectedLocation, lots, userPosition }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (selectedLocation && selectedLocation.length > 0) {
+    if (selectedLocation?.[0]?.length) {
       const bounds = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
-      map.fitBounds(bounds, { padding: [50, 50] });
+      map.fitBounds(bounds, { padding: [40, 40] });
+      return;
     }
-  }, [selectedLocation, map]);
+
+    const allCoordinates = lots.flatMap((lot) => {
+      try {
+        const parsed = JSON.parse(lot.location);
+        return parsed?.[0]?.map(({ lat, lng }) => [lat, lng]) || [];
+      } catch {
+        return [];
+      }
+    });
+
+    if (allCoordinates.length > 0) {
+      map.fitBounds(allCoordinates, { padding: [50, 50] });
+      return;
+    }
+
+    if (userPosition) {
+      map.setView([userPosition.lat, userPosition.lng], 15);
+    }
+  }, [map, selectedLocation, lots, userPosition]);
 
   return null;
 };
 
 export default MapSelector;
-
-

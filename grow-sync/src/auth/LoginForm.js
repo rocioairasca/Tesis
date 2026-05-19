@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import { Form, Input, Button, message } from "antd";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { UserOutlined, LockOutlined } from "../components/AppIcons";
 import { loginUser, getUserDataByEmail } from "../services/authService"; // Asegúrate de que la ruta sea correcta
 import { useNavigate } from "react-router-dom"; // Importa useNavigate para redireccionar
 import { jwtDecode } from 'jwt-decode';

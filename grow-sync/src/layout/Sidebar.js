@@ -1,89 +1,116 @@
-import React, {useState} from "react";
+import React, { useMemo, useState } from "react";
 import { Layout, Menu } from "antd";
-import { CalendarOutlined, CarOutlined, UserOutlined, DashboardOutlined, AppstoreOutlined, EnvironmentOutlined, FormOutlined} from "@ant-design/icons";
+import {
+  CalendarOutlined,
+  CarOutlined,
+  UserOutlined,
+  DashboardOutlined,
+  HarvestOutlined,
+  AppstoreOutlined,
+  EnvironmentOutlined,
+  FormOutlined,
+} from '../components/AppIcons';
 import { Link, useLocation } from "react-router-dom";
+
+import { PERMISSIONS } from "../constants/permissions";
+import { hasPermission } from "../utils/permissions";
 
 const { Sider } = Layout;
 
 const Sidebar = () => {
-    const [collapsed, setCollapsed] = useState(false);
-    const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
 
-    // Maneja el evento de colapso
-    const onCollapse = (collapsed) => {
-        setCollapsed(collapsed);
-    };
+  const currentUser = useMemo(() => {
+    return JSON.parse(localStorage.getItem("user") || "null");
+  }, []);
 
-    return(
-        <Sider
-            breakpoint="md"
-            // collapsedWidth="0"
-            // onBreakpoint={(broken) => setCollapsed(broken)}
-            collapsible 
-            collapsed={collapsed} onCollapse={onCollapse}
-        >
-            <div style={{ padding: "16px", display: "flex", alignItems: "center" }}>
-                {/* Logo visible siempre, nombre solo cuando la sidebar está expandida */}
-                <img 
-                src="/LogoGrande.png" 
-                alt="Logo"
-                style={{ width: "45px", height: "auto", transition: "all 0.3s" }}
-                />
-                {!collapsed && (
-                <div style={{ marginTop: "10px", color: "white", fontSize: "25px" }}>
-                    GrowSync
-                </div>
-                )}
-            </div>
+  const allItems = [
+    {
+      key: "dashboard",
+      icon: <DashboardOutlined />,
+      label: <Link to="/dashboard">Dashboard</Link>,
+      show: true,
+    },
+    {
+      key: "planning",
+      icon: <CalendarOutlined />,
+      label: <Link to="/planificaciones">Planificaciones</Link>,
+      show: true,
+    },
+    {
+      key: "harvest",
+      icon: <HarvestOutlined />,
+      label: <Link to="/harvest">Cosechas</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
+    },
+    {
+      key: "usage",
+      icon: <FormOutlined />,
+      label: <Link to="/usage">Registros de Uso</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
+    },
+    {
+      key: "inventario",
+      icon: <AppstoreOutlined />,
+      label: <Link to="/inventario">Inventario</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
+    },
+    {
+      key: "lotes",
+      icon: <EnvironmentOutlined />,
+      label: <Link to="/lotes">Lotes</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.LOTS_VIEW),
+    },
+    {
+      key: "vehiculos",
+      icon: <CarOutlined />,
+      label: <Link to="/vehiculos">Vehículos</Link>,
+      show: true,
+    },
+    {
+      key: "usuarios",
+      icon: <UserOutlined />,
+      label: <Link to="/usuarios">Usuarios</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.USERS_VIEW),
+    },
+  ];
 
-            <Menu
-                theme="dark"
-                mode="inline"
-                inlineCollapsed={collapsed}
-                selectedKeys={[location.pathname.split("/")[1] || "dashboard"]}  
-                style={{
-                background: "#1D2A62", 
-                }}
-                items={[
-                    {
-                        key: "dashboard",
-                        icon: <DashboardOutlined />,
-                        label: <Link to="/dashboard">Dashboard</Link>,
-                    },
-                    {
-                        key: "planning",
-                        icon: <CalendarOutlined />,
-                        label: <Link to="/planificaciones">Planificaciones</Link>,
-                    },
-                    {
-                        key: "usage",
-                        icon: <FormOutlined />, 
-                        label: <Link to="/usage">Registros de Uso</Link>,
-                    },
-                    {
-                        key: "inventario",
-                        icon: <AppstoreOutlined />,
-                        label: <Link to="/inventario">Inventario</Link>,
-                    },
-                    {
-                        key: "lotes",
-                        icon: <EnvironmentOutlined />,
-                        label: <Link to="/lotes">Lotes</Link>,
-                    },
-                    {
-                        key: "vehiculos",
-                        icon: <CarOutlined />,
-                        label: <Link to="/vehiculos">Vehículos</Link>,
-                    },
-                    {
-                        key: "usuarios",
-                        icon: <UserOutlined />,
-                        label: <Link to="/usuarios">Usuarios</Link>,
-                    },
-                ]}
-            />
-        </Sider>
-    );
+  const menuItems = allItems
+    .filter((item) => item.show)
+    .map(({ show, ...item }) => item);
+
+  return (
+    <Sider
+      breakpoint="md"
+      collapsible
+      collapsed={collapsed}
+      onCollapse={setCollapsed}
+    >
+      <div style={{ padding: "16px", display: "flex", alignItems: "center" }}>
+        <img
+          src="/LogoGrande.png"
+          alt="Logo"
+          style={{ width: "45px", height: "auto", transition: "all 0.3s" }}
+        />
+
+        {!collapsed && (
+          <div style={{ marginTop: "10px", color: "white", fontSize: "25px" }}>
+            GrowSync
+          </div>
+        )}
+      </div>
+
+      <Menu
+        theme="dark"
+        mode="inline"
+        inlineCollapsed={collapsed}
+        selectedKeys={[location.pathname.split("/")[1] || "dashboard"]}
+        style={{ background: "#1D2A62" }}
+        items={menuItems}
+      />
+    </Sider>
+  );
 };
 
 export default Sidebar;

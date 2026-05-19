@@ -14,6 +14,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Auth0Provider } from "@auth0/auth0-react";
+import { PERMISSIONS } from "./constants/permissions";
 
 // Layout y diseño
 import AppLayout from './layout/Layout.js';
@@ -35,6 +36,7 @@ import Vehicles from './features/vehicles/Vehicles.js';
 import DisabledVehicles from './features/vehicles/DisabledVehicles.js';
 import Planning from './features/planning/Planning.js';
 import DisabledPlanning from './features/planning/DisabledPlanning.js';
+import Harvest from './features/harvest/Harvest.js';
 
 // Páginas de autenticación
 import LoginRegister from "./auth/LoginRegister.js";
@@ -85,9 +87,18 @@ function App() {
             />
 
             <Route
-              path="/inventario"
+              path="/harvest"
               element={
                 <GuardedRoute>
+                  <AppLayout><Harvest /></AppLayout>
+                </GuardedRoute>
+              }
+            />
+
+            <Route
+              path="/inventario"
+              element={
+                <GuardedRoute requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
                   <AppLayout><Inventory /></AppLayout>
                 </GuardedRoute>
               }
@@ -114,7 +125,7 @@ function App() {
             <Route
               path="/productos-deshabilitados"
               element={
-                <GuardedRoute allowedRoles={[3]}>
+                <GuardedRoute requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
                   <AppLayout><DisabledProducts /></AppLayout>
                 </GuardedRoute>
               }

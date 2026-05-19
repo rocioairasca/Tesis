@@ -1,38 +1,70 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
+import { hasPermission } from "../utils/permissions";
 
-export default function GuardedRoute({ children, allowedRoles }) {
-  const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const email =
-    (typeof window !== "undefined" ? localStorage.getItem("auth_email") : null) ||
-    (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null")?.email : null);
+export default function GuardedRoute({
+  children,
+  allowedRoles,
+  requiredPermission,
+}) {
+  const accessToken =
+    typeof window !== "undefined"
+      ? localStorage.getItem("access_token")
+      : null;
 
-  const apiBase = useMemo(() => (process.env.REACT_APP_API_URL || "http://localhost:4000") + "/api", []);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(!!accessToken);
 
-  const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const apiBase =
+    (process.env.REACT_APP_API_URL || "http://localhost:4000") + "/api";
 
   useEffect(() => {
     let cancelled = false;
-    const needRole = Array.isArray(allowedRoles) && allowedRoles.length > 0;
 
-    // MODO SEGURO: si no hay email, NO bloqueamos la UI, sólo avisamos.
-    if (!needRole || !accessToken || !email) return;
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
-    fetch(`${apiBase}/users/email/${encodeURIComponent(email)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+
+    fetch(`${apiBase}/debug/me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data) => !cancelled && setRole(data?.role ?? null))
-      .catch((err) => console.warn("[Guard] fallo fetch rol:", err))
-      .finally(() => !cancelled && setLoading(false));
+      .then((res) => {
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+
+        const currentUser = data?.user || null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          localStorage.setItem("user", JSON.stringify(currentUser));
+        }
+      })
+      .catch((err) => {
+        console.warn("[Guard] fallo fetch usuario actual:", err);
+        setUser(null);
+        localStorage.removeItem("user");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [allowedRoles, accessToken, email, apiBase]);
+  }, [accessToken, apiBase]);
+
+  if (requiredPermission && !hasPermission(user, requiredPermission)) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   if (loading) {
     return (
@@ -42,18 +74,25 @@ export default function GuardedRoute({ children, allowedRoles }) {
     );
   }
 
-  // Regla mínima: si NO hay token -> a login
   if (!accessToken) {
-    console.warn("[Guard] No hay access_token -> /login");
     return <Navigate to="/login" replace />;
   }
 
-  // MODO SEGURO: si hay restricción por rol pero no hay email/rol aún, NO bloqueamos.
-  if (allowedRoles?.length && role != null && !allowedRoles.includes(role)) {
-    console.warn("[Guard] Rol no permitido. role=", role, "allowed=", allowedRoles);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (
+    Array.isArray(allowedRoles) &&
+    allowedRoles.length > 0 &&
+    !allowedRoles.includes(Number(user.role))
+  ) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Renderizamos el contenido
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return children;
 }

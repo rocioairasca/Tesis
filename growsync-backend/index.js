@@ -24,9 +24,12 @@ const supabase = require('./db/supabaseClient');
 // Middleware
 // ---------------------------------------------------
 app.use(cors({
-  origin: ["http://localhost:3000"],
+  origin: process.env.NODE_ENV === 'production'
+    ? [process.env.FRONTEND_URL]
+    : ["http://localhost:3000"],
   credentials: true
 }));
+
 app.use(express.json());
 
 // ---------------------------------------------------
@@ -50,6 +53,13 @@ const userData = require('./middleware/userData');
 app.use(checkJwt);
 app.use(userData);
 
+app.get("/api/debug/me", checkJwt, userData, (req, res) => {
+  res.json({
+    message: "Usuario autenticado correctamente",
+    user: req.user,
+  });
+});
+
 // ---------------------------------------------------
 // Rutas privadas (requieren token y usuario cargado)
 // ---------------------------------------------------
@@ -62,6 +72,7 @@ const weatherRoutes = require('./routes/weather');
 const planningRoutes = require('./routes/planning');
 const vehicleRoutes = require('./routes/vehicle');
 const notificationsRoutes = require('./routes/notifications');
+const harvestRecordsRoutes = require('./routes/harvestRecords');
 
 app.use('/api/users', userRoutes);
 app.use('/api/lots', lotRoutes);
@@ -72,6 +83,7 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/planning', planningRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/harvest-records', harvestRecordsRoutes);
 
 // ---------------------------------------------------
 // Manejo de errores

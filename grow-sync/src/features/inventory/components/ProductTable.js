@@ -7,7 +7,22 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '../../../components/AppIcons';
+
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+
+const canDisable = hasPermission(
+  currentUser,
+  PERMISSIONS.INVENTORY_DISABLE
+);
+
+const canEdit = hasPermission(
+  currentUser,
+  PERMISSIONS.INVENTORY_EDIT
+);
 
 const ProductTable = ({
     products,
@@ -84,13 +99,15 @@ const ProductTable = ({
             render: (_, record) => (
                 <Space size="small">
                     <Tooltip title="Editar">
-                        <Button
-                            type="text"
-                            shape="circle"
-                            icon={<EditOutlined />}
-                            aria-label="Editar"
-                            onClick={() => onEdit(record)}
-                        />
+                        {canEdit && (
+                            <Button
+                                type="text"
+                                shape="circle"
+                                icon={<EditOutlined />}
+                                aria-label="Editar"
+                                onClick={() => onEdit(record)}
+                            />
+                        )}
                     </Tooltip>
 
                     <Popconfirm
@@ -100,13 +117,15 @@ const ProductTable = ({
                         onConfirm={() => onDelete(getId(record))}
                     >
                         <Tooltip title="Deshabilitar">
-                            <Button
-                                type="text"
-                                danger
-                                shape="circle"
-                                icon={<DeleteOutlined />}
-                                aria-label="Deshabilitar"
-                            />
+                            {canDisable && (
+                                <Button
+                                    type="text"
+                                    danger
+                                    shape="circle"
+                                    icon={<DeleteOutlined />}
+                                    aria-label="Deshabilitar"
+                                />
+                            )}
                         </Tooltip>
                     </Popconfirm>
                 </Space>

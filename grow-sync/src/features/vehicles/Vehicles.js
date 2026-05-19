@@ -13,7 +13,7 @@ import {
   Button, Drawer, Form, Input, InputNumber, Select,
   Dropdown, Space, Row, Col, Tag, notification
 } from "antd";
-import { MoreOutlined, PlusOutlined } from "@ant-design/icons";
+import { MoreOutlined, PlusOutlined } from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";

@@ -9,7 +9,7 @@ import {
   UserOutlined,
   CarOutlined,
   CalendarOutlined
-} from "@ant-design/icons";
+} from './AppIcons';
 import { Drawer, List } from "antd";
 import "../css/BottomNavigation.css";
 

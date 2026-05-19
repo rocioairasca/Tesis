@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, Space, Popconfirm, notification, Row, Col, Tooltip } from "antd";
-import { LeftOutlined, CheckOutlined, EnvironmentOutlined, AimOutlined } from "@ant-design/icons";
+import { LeftOutlined, CheckOutlined, EnvironmentOutlined, AimOutlined } from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";

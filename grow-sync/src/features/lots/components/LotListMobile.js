@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import { Button } from 'antd';
-import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined } from '../../../components/AppIcons';
 
 const LotListMobile = ({
     lots,

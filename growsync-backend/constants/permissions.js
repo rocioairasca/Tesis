@@ -1,0 +1,90 @@
+const PERMISSIONS = {
+  INVENTORY_VIEW: "inventory.view",
+  INVENTORY_CREATE: "inventory.create",
+  INVENTORY_EDIT: "inventory.edit",
+  INVENTORY_DISABLE: "inventory.disable",
+  INVENTORY_ENABLE: "inventory.enable",
+  INVENTORY_VIEW_DISABLED: "inventory.view_disabled",
+
+  LOTS_VIEW: "lots.view",
+  LOTS_CREATE: "lots.create",
+  LOTS_EDIT: "lots.edit",
+  LOTS_DISABLE: "lots.disable",
+
+  USAGE_VIEW: "usage.view",
+  USAGE_CREATE: "usage.create",
+  USAGE_EDIT: "usage.edit",
+  USAGE_DISABLE: "usage.disable",
+
+  HARVEST_VIEW: "harvest.view",
+  HARVEST_CREATE: "harvest.create",
+  HARVEST_EDIT: "harvest.edit",
+  HARVEST_DISABLE: "harvest.disable",
+
+  USERS_VIEW: "users.view",
+  USERS_INVITE: "users.invite",
+  USERS_CHANGE_ROLE: "users.changeRole",
+  USERS_PERMISSIONS: "users.permissions",
+};
+
+const ROLE_PERMISSIONS = {
+  0: [
+    PERMISSIONS.INVENTORY_VIEW,
+    PERMISSIONS.USAGE_CREATE,
+    PERMISSIONS.LOTS_VIEW,
+  ],
+
+  1: [
+    PERMISSIONS.INVENTORY_VIEW,
+    PERMISSIONS.USAGE_VIEW,
+    PERMISSIONS.USAGE_CREATE,
+    PERMISSIONS.USAGE_EDIT,
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.HARVEST_VIEW,
+  ],
+
+  2: [
+    PERMISSIONS.INVENTORY_VIEW,
+    PERMISSIONS.INVENTORY_CREATE,
+    PERMISSIONS.INVENTORY_EDIT,
+    PERMISSIONS.INVENTORY_DISABLE,
+    PERMISSIONS.INVENTORY_ENABLE,
+    PERMISSIONS.INVENTORY_VIEW_DISABLED,
+
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.LOTS_CREATE,
+    PERMISSIONS.LOTS_EDIT,
+    PERMISSIONS.LOTS_DISABLE,
+
+    PERMISSIONS.USAGE_VIEW,
+    PERMISSIONS.USAGE_CREATE,
+    PERMISSIONS.USAGE_EDIT,
+    PERMISSIONS.USAGE_DISABLE,
+
+    PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_CREATE,
+    PERMISSIONS.HARVEST_EDIT,
+    PERMISSIONS.HARVEST_DISABLE,
+  ],
+
+  3: ["all"],
+};
+
+const getDefaultPermissionsByRole = (role) => {
+  return ROLE_PERMISSIONS[Number(role)] || [];
+};
+
+const getEffectivePermissions = (user) => {
+  if (Array.isArray(user.custom_permissions)) {
+    return user.custom_permissions;
+  }
+
+  return getDefaultPermissionsByRole(user.role);
+};
+
+module.exports = {
+  PERMISSIONS,
+  ROLE_PERMISSIONS,
+  getDefaultPermissionsByRole,
+  getEffectivePermissions,
+};

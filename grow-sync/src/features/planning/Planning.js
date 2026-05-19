@@ -17,7 +17,7 @@ import {
   Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table
 } from "antd";
-import { PlusOutlined, MoreOutlined, EyeOutlined } from "@ant-design/icons";
+import { PlusOutlined, MoreOutlined, EyeOutlined } from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { useNavigate } from "react-router-dom";

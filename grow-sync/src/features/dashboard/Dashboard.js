@@ -7,7 +7,36 @@ import {
   EnvironmentOutlined,
   CloudOutlined,
   ArrowUpOutlined,
-} from "@ant-design/icons";
+} from '../../components/AppIcons';
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  AlertCircleIcon,
+  CloudAngledRainIcon,
+  CloudAngledRainZapIcon,
+  CloudAngledZapIcon,
+  CloudBigRainIcon,
+  CloudFastWindIcon,
+  CloudHailstoneIcon,
+  CloudIcon,
+  CloudLittleRainIcon,
+  CloudMidRainIcon,
+  CloudSnowIcon,
+  EyeIcon,
+  Moon02Icon,
+  MoonCloudAngledRainIcon,
+  MoonCloudAngledZapIcon,
+  MoonCloudFastWindIcon,
+  MoonCloudHailstoneIcon,
+  MoonCloudIcon,
+  MoonCloudSnowIcon,
+  Sun03Icon,
+  SunCloud02Icon,
+  TemperatureIcon,
+  ThermometerColdIcon,
+  ThermometerWarmIcon,
+  Tornado01Icon,
+  Uv01Icon,
+} from "@hugeicons/core-free-icons";
 import api from "../../services/apiClient";
 
 const { Text, Title } = Typography;
@@ -25,87 +54,132 @@ function degToCompass(deg) {
   return dirs[ix];
 }
 
-// ---- Weather icon SVGs (simple y lindos) ----
-const Svg = ({ children, size = 56 }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    {children}
-  </svg>
-);
+const weatherIcons = {
+  sunny: Sun03Icon,
+  clearNight: Moon02Icon,
+  cloud: CloudIcon,
+  cloudNight: MoonCloudIcon,
+  partly: SunCloud02Icon,
+  partlyNight: MoonCloudIcon,
+  lightRain: CloudLittleRainIcon,
+  midRain: CloudMidRainIcon,
+  heavyRain: CloudBigRainIcon,
+  rain: CloudAngledRainIcon,
+  rainNight: MoonCloudAngledRainIcon,
+  storm: CloudAngledZapIcon,
+  stormRain: CloudAngledRainZapIcon,
+  stormNight: MoonCloudAngledZapIcon,
+  wind: CloudFastWindIcon,
+  windNight: MoonCloudFastWindIcon,
+  snow: CloudSnowIcon,
+  snowNight: MoonCloudSnowIcon,
+  hail: CloudHailstoneIcon,
+  hailNight: MoonCloudHailstoneIcon,
+  fog: EyeIcon,
+  tornado: Tornado01Icon,
+  hot: ThermometerWarmIcon,
+  cold: ThermometerColdIcon,
+  uv: Uv01Icon,
+  temperature: TemperatureIcon,
+  alert: AlertCircleIcon,
+};
 
-const IconSunny = ({ size }) => (
-  <Svg size={size}>
-    <circle cx="32" cy="32" r="10" fill="currentColor" opacity="0.1" />
-    <circle cx="32" cy="32" r="10" />
-    {Array.from({ length: 8 }).map((_, i) => {
-      const a = (i * Math.PI) / 4;
-      const x1 = 32 + Math.cos(a) * 16, y1 = 32 + Math.sin(a) * 16;
-      const x2 = 32 + Math.cos(a) * 22, y2 = 32 + Math.sin(a) * 22;
-      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
-    })}
-  </Svg>
-);
+function valueFrom(d, keys, fallback = null) {
+  for (const key of keys) {
+    const v = key.split(".").reduce((acc, part) => acc?.[part], d);
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
+}
 
-const IconCloud = ({ size }) => (
-  <Svg size={size}>
-    <path d="M20 40h24a10 10 0 0 0 0-20 14 14 0 0 0-27.3 3.5A8 8 0 0 0 20 40Z" />
-  </Svg>
-);
+function textFrom(d, keys) {
+  for (const key of keys) {
+    const v = key.split(".").reduce((acc, part) => acc?.[part], d);
+    if (v != null && String(v).trim()) return String(v).toLowerCase();
+  }
+  return "";
+}
 
-const IconPartly = ({ size }) => (
-  <Svg size={size}>
-    {/* sol */}
-    <circle cx="22" cy="24" r="7" />
-    {Array.from({ length: 6 }).map((_, i) => {
-      const a = (i * Math.PI) / 3;
-      const x1 = 22 + Math.cos(a) * 12, y1 = 24 + Math.sin(a) * 12;
-      const x2 = 22 + Math.cos(a) * 16, y2 = 24 + Math.sin(a) * 16;
-      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
-    })}
-    {/* nube */}
-    <path d="M26 42h20a8 8 0 0 0 0-16 12 12 0 0 0-23.2 3" />
-  </Svg>
-);
+function isNightWeather(d) {
+  if (typeof d?.is_day === "boolean") return !d.is_day;
+  if (d?.is_day === 0 || d?.isDay === 0) return true;
+  if (d?.is_day === 1 || d?.isDay === 1) return false;
 
-const IconRain = ({ size }) => (
-  <Svg size={size}>
-    <path d="M20 34h24a9 9 0 0 0 0-18 13 13 0 0 0-25 3" />
-    <line x1="24" y1="42" x2="20" y2="50" />
-    <line x1="32" y1="42" x2="28" y2="50" />
-    <line x1="40" y1="42" x2="36" y2="50" />
-  </Svg>
-);
+  const icon = textFrom(d, ["icon", "weather_icon", "weather.0.icon"]);
+  if (icon.endsWith("n")) return true;
+  if (icon.endsWith("d")) return false;
 
-const IconStorm = ({ size }) => (
-  <Svg size={size}>
-    <path d="M20 34h24a9 9 0 0 0 0-18 13 13 0 0 0-25 3" />
-    <polyline points="28,40 22,50 30,50 26,58" />
-    <polyline points="38,40 32,50 40,50 36,58" />
-  </Svg>
-);
+  const now = valueFrom(d, ["dt", "timestamp"], null);
+  const sunrise = valueFrom(d, ["sunrise", "sys.sunrise"], null);
+  const sunset = valueFrom(d, ["sunset", "sys.sunset"], null);
+  return now != null && sunrise != null && sunset != null ? now < sunrise || now > sunset : false;
+}
 
 // ---- Regla simple para elegir icono + label (ES) ----
 function getWeatherPresentation(d) {
-  const t = Number(d?.temperature);
-  const h = Number(d?.humidity) || 0;
-  const r = Number(d?.rainfall) || 0;
-  const wind = Number(d?.wind_speed) || 0;
+  if (!d) return { kind: "alert", label: "Sin datos" };
 
-  if (r >= 8) return { kind: "storm", label: "Tormenta" };
-  if (r > 0.2) return { kind: "rain", label: "Lluvioso" };
+  const t = valueFrom(d, ["temperature", "temp", "main.temp"], null);
+  const h = valueFrom(d, ["humidity", "main.humidity"], 0);
+  const r = valueFrom(d, ["rainfall", "rain", "precipitation", "rain.1h", "rain.3h"], 0);
+  const snow = valueFrom(d, ["snowfall", "snow", "snow.1h", "snow.3h"], 0);
+  const wind = valueFrom(d, ["wind_speed", "windSpeed", "wind.speed"], 0);
+  const gust = valueFrom(d, ["wind_gust", "windGust", "wind.gust"], 0);
+  const clouds = valueFrom(d, ["cloud_cover", "cloudCover", "clouds", "clouds.all"], null);
+  const uv = valueFrom(d, ["uv_index", "uvIndex", "uvi"], null);
+  const visibility = valueFrom(d, ["visibility"], null);
+  const code = valueFrom(d, ["weather_code", "weatherCode", "weather.0.id", "id"], null);
+  const text = textFrom(d, ["condition", "weather", "main", "description", "weather.0.main", "weather.0.description"]);
+  const night = isNightWeather(d);
+
+  if (code >= 200 && code < 300) return { kind: night ? "stormNight" : r > 0 ? "stormRain" : "storm", label: "Tormenta" };
+  if (code >= 300 && code < 400) return { kind: "lightRain", label: "Llovizna" };
+  if (code >= 500 && code < 600) {
+    if (code >= 502 || r >= 8) return { kind: "heavyRain", label: "Lluvia fuerte" };
+    if (code === 501 || r >= 2) return { kind: "midRain", label: "Lluvia moderada" };
+    return { kind: night ? "rainNight" : "lightRain", label: "Lluvia leve" };
+  }
+  if (code >= 600 && code < 700) return { kind: night ? "snowNight" : "snow", label: "Nieve" };
+  if (code >= 700 && code < 800) return { kind: "fog", label: "Neblina" };
+  if (code === 800) return { kind: night ? "clearNight" : "sunny", label: night ? "Despejado" : "Soleado" };
+  if (code > 800 && code < 900) return { kind: night ? "cloudNight" : clouds >= 75 ? "cloud" : "partly", label: clouds >= 75 ? "Nublado" : "Parcialmente nublado" };
+
+  if (text.includes("tornado")) return { kind: "tornado", label: "Tornado" };
+  if (text.includes("thunder") || text.includes("storm") || text.includes("tormenta")) return { kind: night ? "stormNight" : r > 0 ? "stormRain" : "storm", label: "Tormenta" };
+  if (text.includes("hail") || text.includes("granizo")) return { kind: night ? "hailNight" : "hail", label: "Granizo" };
+  if (text.includes("snow") || text.includes("sleet") || text.includes("nieve")) return { kind: night ? "snowNight" : "snow", label: "Nieve" };
+  if (text.includes("drizzle") || text.includes("llovizna")) return { kind: "lightRain", label: "Llovizna" };
+  if (text.includes("rain") || text.includes("lluvia")) return { kind: night ? "rainNight" : "rain", label: "Lluvioso" };
+  if (text.includes("fog") || text.includes("mist") || text.includes("haze") || text.includes("smoke") || text.includes("dust") || text.includes("niebla") || text.includes("neblina")) return { kind: "fog", label: "Neblina" };
+  if (text.includes("clear") || text.includes("despejado")) return { kind: night ? "clearNight" : "sunny", label: night ? "Despejado" : "Soleado" };
+  if (text.includes("cloud") || text.includes("nube") || text.includes("nublado")) return { kind: night ? "cloudNight" : "cloud", label: "Nublado" };
+
+  if (snow > 0) return { kind: night ? "snowNight" : "snow", label: "Nieve" };
+  if (r >= 8) return { kind: "heavyRain", label: "Lluvia fuerte" };
+  if (r >= 2) return { kind: "midRain", label: "Lluvia moderada" };
+  if (r > 0.2) return { kind: night ? "rainNight" : "lightRain", label: "Lluvia leve" };
+  if (gust >= 45 || wind >= 35) return { kind: night ? "windNight" : "wind", label: "Viento fuerte" };
+  if (visibility != null && visibility < 2000) return { kind: "fog", label: "Baja visibilidad" };
+  if (uv != null && uv >= 8) return { kind: "uv", label: "UV alto" };
+  if (t != null && t >= 34) return { kind: "hot", label: "Caluroso" };
+  if (t != null && t <= 5) return { kind: "cold", label: "Frio" };
+  if (clouds != null && clouds >= 75) return { kind: night ? "cloudNight" : "cloud", label: "Nublado" };
+  if (clouds != null && clouds >= 25) return { kind: night ? "partlyNight" : "partly", label: "Parcialmente nublado" };
   if (h >= 80) return { kind: "cloud", label: "Nublado" };
   if (t >= 26 && h < 70) return { kind: "sunny", label: "Soleado" };
-  if (wind >= 25 && h < 75) return { kind: "partly", label: "Parcialmente nublado" };
-  return { kind: "partly", label: "Parcialmente nublado" };
+  if (wind >= 25 && h < 75) return { kind: night ? "windNight" : "wind", label: "Ventoso" };
+  return { kind: night ? "partlyNight" : "partly", label: "Parcialmente nublado" };
 }
 
 function WeatherIcon({ kind, size = 56 }) {
-  switch (kind) {
-    case "sunny": return <IconSunny size={size} />;
-    case "cloud": return <IconCloud size={size} />;
-    case "rain":  return <IconRain size={size} />;
-    case "storm": return <IconStorm size={size} />;
-    default:      return <IconPartly size={size} />;
-  }
+  return (
+    <HugeiconsIcon
+      icon={weatherIcons[kind] || SunCloud02Icon}
+      size={size}
+      strokeWidth={1.8}
+    />
+  );
 }
 
 const Dashboard = () => {

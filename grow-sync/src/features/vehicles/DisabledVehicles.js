@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, Row, Col, Tag, Tooltip, notification } from "antd";
-import { ArrowLeftOutlined, CheckOutlined, CarOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CheckOutlined, CarOutlined } from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import useIsMobile from "../../hooks/useIsMobile";
 import api from "../../services/apiClient";

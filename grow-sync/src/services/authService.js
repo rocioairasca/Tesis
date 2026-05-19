@@ -113,3 +113,22 @@ export async function getInvitation(token) {
 async function safeJson(res) {
   try { return await res.json(); } catch { return null; }
 }
+
+/**
+ * GET CURRENT USER (GET /api/debug/me o /api/auth/me)
+ * Requiere Authorization: Bearer access_token
+ */
+export async function getCurrentUser() {
+  const res = await fetch(`${API_BASE}/debug/me`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo obtener el usuario actual");
+  }
+
+  return data.user;
+}

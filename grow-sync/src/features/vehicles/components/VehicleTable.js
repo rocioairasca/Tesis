@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '../../../components/AppIcons';
 
 const VehicleTable = ({
     vehicles,

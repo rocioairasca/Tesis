@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Badge, Dropdown, Button, Empty } from 'antd';
-import { BellOutlined } from '@ant-design/icons';
+import { BellOutlined } from './AppIcons';
 import { useNotifications } from '../context/NotificationsContext';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';

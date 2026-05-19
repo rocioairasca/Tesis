@@ -8,7 +8,7 @@ import {
     UserAddOutlined,
     ClockCircleOutlined,
     InfoCircleOutlined
-} from '@ant-design/icons';
+} from './AppIcons';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationsContext';
 import dayjs from 'dayjs';

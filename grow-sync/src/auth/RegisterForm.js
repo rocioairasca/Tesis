@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Form, Input, Button, message } from "antd";
-import { UserOutlined, LockOutlined, MailOutlined } from "@ant-design/icons";
+import { UserOutlined, LockOutlined, MailOutlined } from '../components/AppIcons';
 import { registerUser, getInvitation } from "../services/authService";
 
 const RegisterForm = ({ onSwitchToLogin, token }) => {

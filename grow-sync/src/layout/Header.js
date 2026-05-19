@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Layout, Avatar, Button } from "antd";
-import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { LogoutOutlined, UserOutlined } from '../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import useIsMobile from "../hooks/useIsMobile";
 import NotificationBell from "../components/NotificationBell";

@@ -30,7 +30,7 @@ router.get(
 router.post(
   '/update',
   validate(schema.updateQuery), // valida lat/lon/units/lang si vienen
-  checkRole(1),                 // Supervisor+
+  checkRole(0),                 // Supervisor+
   fetchWeather
 );
 

@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '../../../components/AppIcons';
 
 const LotTable = ({
     lots,

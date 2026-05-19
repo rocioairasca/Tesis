@@ -5,10 +5,10 @@ import {
 } from "antd";
 import {
   PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined,
-} from "@ant-design/icons";
+} from '../../components/AppIcons';
 import {
   Package, MapPin, Ruler, Leaf, User as UserIcon, Calendar as CalendarIcon,
-} from "phosphor-react";
+} from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import api from "../../services/apiClient";

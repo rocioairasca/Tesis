@@ -8,7 +8,7 @@ import {
   AppstoreOutlined,
   ExclamationCircleOutlined,
   CheckOutlined,
-} from "@ant-design/icons";
+} from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";

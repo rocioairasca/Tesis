@@ -6,8 +6,8 @@
  *  Utiliza tarjetas (cards) para mostrar la información de manera responsive.
  */
 import React from 'react';
-import { EditOutlined, DeleteOutlined, CarOutlined } from "@ant-design/icons";
-import { Truck, IdentificationCard, ClipboardText, Gauge } from "phosphor-react";
+import { EditOutlined, DeleteOutlined, CarOutlined } from '../../../components/AppIcons';
+import { Truck, IdentificationCard, ClipboardText, Gauge } from '../../../components/AppIcons';
 
 const VehicleListMobile = ({
     vehicles,

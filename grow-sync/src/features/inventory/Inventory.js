@@ -16,11 +16,14 @@ import {
 } from "antd";
 import {
   PlusOutlined, MoreOutlined
-} from "@ant-design/icons";
+} from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import ProductTable from "./components/ProductTable";
 import ProductListMobile from "./components/ProductListMobile";
+
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const CATEGORY_OPTIONS = [
   { value: "semillas", label: "Semillas" },
@@ -59,6 +62,10 @@ const daysTo = (d) => {
 const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
 const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
 
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+
+const canCreate = hasPermission(currentUser, PERMISSIONS.INVENTORY_CREATE);
+const canViewDisabled = hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW_DISABLED);
 
 const Inventory = () => {
   // ------------------------- STATE -------------------------
@@ -237,12 +244,16 @@ const Inventory = () => {
             )}
             {!isMobile && (
               <Space>
-                <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
-                  Ver Productos Deshabilitados
-                </Button>
-                <Button type="primary" onClick={() => openDrawer(null)}>
-                  Agregar Producto
-                </Button>
+                {canViewDisabled && (
+                  <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
+                    Ver Productos Deshabilitados
+                  </Button>
+                )}
+                {canCreate && (
+                  <Button type="primary" onClick={() => openDrawer(null)}>
+                    Agregar Producto
+                  </Button>
+                )}
               </Space>
             )}
           </Space>

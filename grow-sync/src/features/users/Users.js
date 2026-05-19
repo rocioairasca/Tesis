@@ -7,7 +7,7 @@
  */
 import React, { useState } from "react";
 import { Button, Modal, Form, Input, Select, message, Space } from "antd";
-import { UserAddOutlined, CopyOutlined } from "@ant-design/icons";
+import { UserAddOutlined, CopyOutlined } from '../../components/AppIcons';
 import UserTable from "../../components/users/UserTable";
 import { inviteUser } from "../../services/authService";
 
