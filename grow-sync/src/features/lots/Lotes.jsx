@@ -1,6 +1,6 @@
 /**
  * Feature: Gestión de Lotes
- * Ubicación: src/features/lots/Lotes.js
+ * Ubicación: src/features/lots/Lotes.jsx
  * Descripción:
  *  Contenedor principal para la gestión de lotes.
  *  Maneja el estado de la aplicación (lista de lotes, loading, modales) y la lógica de negocio (CRUD).

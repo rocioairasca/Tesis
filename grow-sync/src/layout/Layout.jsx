@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Layout, Typography } from "antd";
 import Sidebar from "./Sidebar";
 import AppHeader from "./Header";
@@ -9,14 +9,21 @@ const { Text } = Typography;
 
 const AppLayout = ({ children }) => {
   const isMobile = useIsMobile();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarWidth = sidebarCollapsed ? 80 : 200;
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {!isMobile && (
-        <Sidebar />
+        <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} />
       )}
 
-      <Layout>
+      <Layout
+        style={{
+          marginLeft: isMobile ? 0 : sidebarWidth,
+          transition: "margin-left 0.2s",
+        }}
+      >
         <AppHeader />
         <Content
           style={{

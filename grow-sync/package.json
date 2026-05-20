@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@ant-design/plots": "^2.6.8",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@auth0/auth0-react": "^2.3.0",
     "@fullcalendar/core": "^6.1.17",
@@ -20,7 +19,6 @@
     "@turf/turf": "^7.2.0",
     "antd": "^5.24.5",
     "axios": "^1.8.4",
-    "dependencies": "^0.0.1",
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
@@ -30,21 +28,14 @@
     "react-leaflet-geoman-v2": "^1.0.3",
     "react-responsive": "^10.0.1",
     "react-router-dom": "^7.4.0",
-    "react-scripts": "5.0.1",
+    "recharts": "^3.8.1",
     "socket.io-client": "^4.8.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "browserslist": {
     "production": [
@@ -59,6 +50,7 @@
     ]
   },
   "devDependencies": {
-    "source-map-loader": "^5.0.0"
+    "@vitejs/plugin-react": "^6.0.2",
+    "vite": "^8.0.13"
   }
 }

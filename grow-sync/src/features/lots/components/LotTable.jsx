@@ -1,11 +1,11 @@
 /**
  * Componente: LotTable
- * Ubicación: src/features/lots/components/LotTable.js
+ * Ubicación: src/features/lots/components/LotTable.jsx
  * Descripción: 
- *  Este componente fue extraído de Lotes.js para modularizar la vista de escritorio.
+ *  Este componente fue extraído de Lotes.jsx para modularizar la vista de escritorio.
  *  Se encarga de renderizar la tabla de Ant Design con los lotes.
  *  Recibe las funciones de acción (editar, eliminar, ver ubicación) como props
- *  para mantener la lógica en el contenedor padre (Lotes.js).
+ *  para mantener la lógica en el contenedor padre (Lotes.jsx).
  * 
  * Cambios recientes:
  *  - Extracción de la lógica de renderizado de la tabla.

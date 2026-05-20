@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Tabs, Typography } from "antd";
 import { useLocation } from "react-router-dom";
-import LoginForm from "./LoginForm";
-import RegisterForm from "./RegisterForm";
+import LoginForm from "./LoginForm.jsx";
+import RegisterForm from "./RegisterForm.jsx";
 
 const { Title, Text } = Typography;
 

@@ -1,6 +1,6 @@
 /**
  * Feature: Gestión de Usuarios
- * Ubicación: src/features/users/Users.js
+ * Ubicación: src/features/users/Users.jsx
  * Descripción:
  *  Vista principal para la administración de usuarios del sistema.
  *  Incluye funcionalidad para invitar nuevos usuarios.

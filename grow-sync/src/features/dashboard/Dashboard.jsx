@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Card, Row, Col, Statistic, Progress, Space, Tag, Typography, Tooltip } from "antd";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { Card, Row, Col, Statistic, Progress, Space, Tag, Typography, Tooltip, Select, Button } from "antd";
 import {
   UserOutlined,
   InboxOutlined,
@@ -7,6 +7,8 @@ import {
   EnvironmentOutlined,
   CloudOutlined,
   ArrowUpOutlined,
+  CalendarOutlined,
+  AlertOutlined,
 } from '../../components/AppIcons';
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -38,6 +40,27 @@ import {
   Uv01Icon,
 } from "@hugeicons/core-free-icons";
 import api from "../../services/apiClient";
+
+import {
+  getHarvestFilters,
+  getHarvestSummary,
+  getHarvestByCrop,
+  getHarvestByCampaign,
+} from '../../services/harvestService';
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
+  LineChart,
+  Line,
+} from "recharts";
+
 
 const { Text, Title } = Typography;
 
@@ -182,8 +205,34 @@ function WeatherIcon({ kind, size = 56 }) {
   );
 }
 
+const chartColors = {
+  primary: "#437118",
+  primaryDark: "#36590f",
+  secondary: "#1D2A62",
+  accent: "#87AECE",
+  grid: "#d9d9d9",
+  text: "#595959",
+  background: "#edf4e4",
+};
+
+const cropColors = [
+  "#437118", // verde principal
+  "#1D2A62", // azul sidebar
+  "#87AECE", // azul claro
+  "#6b8e23", // oliva
+  "#4f6fad", // azul medio
+  "#5b8c00", // verde intenso
+];
+
 const Dashboard = () => {
-  const [stats, setStats] = useState({ users: 0, products: 0, lots: 0, usages: 0 });
+  const [stats, setStats] = useState({
+    products: 0,
+    lots: 0,
+    usages: 0,
+    planningActive: 0,
+    planningDelayed: 0,
+    planningCompleted: 0,
+  });
   const [weather, setWeather] = useState(null);
 
   // valores “seguros” para mostrar en UI
@@ -201,6 +250,58 @@ const Dashboard = () => {
   const updatedAt = weather?.updated_at || weather?.updatedAt || null;
   const weatherView = useMemo(() => getWeatherPresentation(weather), [weather]);
 
+  const [harvestSummary, setHarvestSummary] = useState(null);
+  const [harvestByCrop, setHarvestByCrop] = useState([]);
+  const [harvestByCampaign, setHarvestByCampaign] = useState([]);
+
+  const [harvestFilters, setHarvestFilters] = useState({
+    campaigns: [],
+    crops: [],
+  });
+
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [selectedCrop, setSelectedCrop] = useState(null);
+
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const canViewHarvestStats = Number(user?.role) >=1;
+
+  const fetchHarvestStats = useCallback(async (filters = {}) => {
+    if (!canViewHarvestStats) return;
+
+    try {
+      const [summary, byCrop, byCampaign] = await Promise.all([
+        getHarvestSummary(filters),
+        getHarvestByCrop({ campaign: filters.campaign || undefined }),
+        getHarvestByCampaign({ crop: filters.crop || undefined }),
+      ]);
+
+      setHarvestSummary(summary || null);
+
+      setHarvestByCrop(
+        (byCrop || []).map((item) => ({
+          ...item,
+          production_kg: Number(item.production_kg || 0),
+          area_ha: Number(item.area_ha || 0),
+          yield_kg_ha: Number(item.yield_kg_ha || 0),
+        }))
+      );
+
+      setHarvestByCampaign(
+        (byCampaign || []).map((item) => ({
+          ...item,
+          production_kg: Number(item.production_kg || 0),
+          area_ha: Number(item.area_ha || 0),
+          yield_kg_ha: Number(item.yield_kg_ha || 0),
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "Error al cargar estadísticas de cosecha:",
+        error?.response?.data || error
+      );
+    }
+  }, [canViewHarvestStats]);
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -212,10 +313,12 @@ const Dashboard = () => {
         const kpis = data?.kpis || {};
 
         setStats({
-          users: kpis.users ?? 0,
           products: kpis.products ?? 0,
           lots: kpis.lots ?? 0,
           usages: kpis.usages ?? 0,
+          planningActive: kpis.planning?.active ?? 0,
+          planningDelayed: kpis.planning?.delayed ?? 0,
+          planningCompleted: kpis.planning?.completed ?? 0,
         });
 
       } catch (error) {
@@ -224,6 +327,21 @@ const Dashboard = () => {
           `status=${error?.response?.status ?? "?"}`,
           error?.response?.data || error
         );
+      }
+    };
+
+    const fetchHarvestFiltersData = async () => {
+      if (!canViewHarvestStats) return;
+
+      try {
+        const data = await getHarvestFilters();
+
+        setHarvestFilters({
+          campaigns: data?.campaigns || [],
+          crops: data?.crops || [],
+        });
+      } catch (error) {
+        console.error("Error filtros cosecha:", error?.response?.data || error);
       }
     };
 
@@ -261,7 +379,9 @@ const Dashboard = () => {
           }
         },
         (err) => {
-          console.error("Geo error:", err);
+          if (import.meta.env.DEV) {
+            console.warn("No se pudo obtener la ubicación del navegador:", err?.message || err);
+          }
           fetchWeatherFallback();
         }
       );
@@ -269,29 +389,41 @@ const Dashboard = () => {
 
     fetchStats();
     fetchWeatherWithLocation();
-  }, []);
+    fetchHarvestStats();
+    fetchHarvestFiltersData();
+  }, [fetchHarvestStats, canViewHarvestStats]);
 
   return (
     <div style={{ padding: 24 }}>
-      <Row gutter={16}>
-        <Col xs={24} sm={12} md={6}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
-            <Statistic title="Usuarios Registrados" value={stats.users} prefix={<UserOutlined />} />
+            <Statistic title="Productos activos" value={stats.products} prefix={<InboxOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
-            <Statistic title="Productos en Inventario" value={stats.products} prefix={<InboxOutlined />} />
+            <Statistic title="Lotes activos" value={stats.lots} prefix={<EnvironmentOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
-            <Statistic title="Lotes Registrados" value={stats.lots} prefix={<EnvironmentOutlined />} />
+            <Statistic title="Registros de uso" value={stats.usages} prefix={<FileTextOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
-            <Statistic title="Registros de Uso" value={stats.usages} prefix={<FileTextOutlined />} />
+            <Statistic title="Planificaciones activas" value={stats.planningActive} prefix={<CalendarOutlined />} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic title="Planificaciones demoradas" value={stats.planningDelayed} prefix={<AlertOutlined />} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic title="Planificaciones completadas" value={stats.planningCompleted} prefix={<UserOutlined />} />
           </Card>
         </Col>
       </Row>
@@ -366,6 +498,152 @@ const Dashboard = () => {
         </Row>
 
       </Card>
+
+      {canViewHarvestStats && (
+        <Card
+          style={{ marginTop: 24, borderRadius: 12 }}
+          title="Estadísticas de cosecha"
+        >
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} md={8}>
+              <Select
+                allowClear
+                placeholder="Filtrar por campaña"
+                style={{ width: "100%" }}
+                value={selectedCampaign}
+                onChange={(value) => setSelectedCampaign(value)}
+                options={harvestFilters.campaigns.map((campaign) => ({
+                  label: campaign,
+                  value: campaign,
+                }))}
+              />
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Select
+                allowClear
+                placeholder="Filtrar por cultivo"
+                style={{ width: "100%" }}
+                value={selectedCrop}
+                onChange={(value) => setSelectedCrop(value)}
+                options={harvestFilters.crops.map((crop) => ({
+                  label: crop,
+                  value: crop,
+                }))}
+              />
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Space wrap>
+                <Button
+                  type="primary"
+                  onClick={() =>
+                    fetchHarvestStats({
+                      campaign: selectedCampaign,
+                      crop: selectedCrop,
+                    })
+                  }
+                >
+                  Aplicar filtros
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setSelectedCampaign(null);
+                    setSelectedCrop(null);
+                    fetchHarvestStats();
+                  }}
+                >
+                  Limpiar
+                </Button>
+              </Space>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} md={6}>
+              <Statistic title="Registros" value={harvestSummary?.total_records || 0} />
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Statistic
+                title="Producción total"
+                value={Number(harvestSummary?.total_production_kg || 0)}
+                suffix="kg"
+              />
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Statistic
+                title="Superficie cosechada"
+                value={Number(harvestSummary?.total_area_ha || 0)}
+                suffix="ha"
+              />
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Statistic
+                title="Rendimiento promedio"
+                value={Number(harvestSummary?.avg_yield_kg_ha || 0)}
+                suffix="kg/ha"
+              />
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+            <Col xs={24} lg={12}>
+              <Card title="Rendimiento por cultivo">
+                <div style={{ width: "100%", height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart data={harvestByCrop}>
+                      <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                      <XAxis dataKey="crop" tickFormatter={(value) => value.charAt(0).toUpperCase() + value.slice(1)} tick={{ fill: chartColors.text }} />
+                      <YAxis tick={{ fill: chartColors.text }} />
+                      <RechartsTooltip />
+                      <Bar
+                        dataKey="yield_kg_ha"
+                        name="Kg/ha"
+                        radius={[8, 8, 0, 0]}
+                      >
+                        {harvestByCrop.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={cropColors[index % cropColors.length]}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={12}>
+              <Card title="Rendimiento por campaña">
+                <div style={{ width: "100%", height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <LineChart data={harvestByCampaign}>
+                      <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                      <XAxis dataKey="campaign" tick={{ fill: chartColors.text }} />
+                      <YAxis tick={{ fill: chartColors.text }} />
+                      <RechartsTooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="yield_kg_ha"
+                        name="Kg/ha"
+                        stroke={chartColors.secondary}
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: chartColors.secondary }}
+                        activeDot={{ r: 7, fill: chartColors.accent }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </Col>
+          </Row>
+        </Card>
+      )}
     </div>
   );
 };

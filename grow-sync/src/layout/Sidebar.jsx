@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Layout, Menu } from "antd";
 import {
   CalendarOutlined,
@@ -17,8 +17,7 @@ import { hasPermission } from "../utils/permissions";
 
 const { Sider } = Layout;
 
-const Sidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+const Sidebar = ({ collapsed, onCollapse }) => {
   const location = useLocation();
 
   const currentUser = useMemo(() => {
@@ -82,10 +81,11 @@ const Sidebar = () => {
 
   return (
     <Sider
+      className="grow-sidebar"
       breakpoint="md"
       collapsible
       collapsed={collapsed}
-      onCollapse={setCollapsed}
+      onCollapse={onCollapse}
     >
       <div style={{ padding: "16px", display: "flex", alignItems: "center" }}>
         <img

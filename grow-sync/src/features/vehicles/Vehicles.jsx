@@ -1,6 +1,6 @@
 /**
  * Feature: Gestión de Vehículos
- * Ubicación: src/features/vehicles/Vehicles.js
+ * Ubicación: src/features/vehicles/Vehicles.jsx
  * Descripción:
  *  Contenedor principal para la gestión de maquinaria y vehículos.
  *  Maneja el estado (lista, loading) y la lógica CRUD.
@@ -30,23 +30,22 @@ const TYPE_OPTIONS = [
   { value: "tractor", label: "Tractor" },
   { value: "cosechadora", label: "Cosechadora" },
   { value: "camioneta", label: "Camioneta" },
-  { value: "camión", label: "Camión" },
-  { value: "pulverizadora", label: "Pulverizadora" },
-  { value: "sembradora", label: "Sembradora" },
+  { value: "camion", label: "Camion" },
+  { value: "fumigadora", label: "Fumigadora" },
   { value: "otro", label: "Otro" },
 ];
 
 const STATUS_OPTIONS = [
   { value: "activo", label: "Activo" },
   { value: "mantenimiento", label: "Mantenimiento" },
-  { value: "fuera_de_servicio", label: "Fuera de servicio" },
+  { value: "inactivo", label: "Inactivo" },
 ];
 
 const statusTag = (s) => {
   switch (s) {
     case "activo": return <Tag color="green">Activo</Tag>;
     case "mantenimiento": return <Tag color="gold">Mantenimiento</Tag>;
-    case "fuera_de_servicio": return <Tag color="red">Fuera de servicio</Tag>;
+    case "inactivo": return <Tag color="red">Inactivo</Tag>;
     default: return <Tag>—</Tag>;
   }
 };
@@ -119,10 +118,10 @@ const Vehicles = () => {
     const payload = {
       name: values.name?.trim(),
       type: values.type,
-      brand: values.brand?.trim(),
-      model: values.model?.trim(),
-      plate: (values.plate || "").toUpperCase().trim(),
-      capacity: Number(values.capacity ?? 0),
+      brand: values.brand?.trim() || null,
+      model: values.model?.trim() || null,
+      plate: values.plate ? values.plate.toUpperCase().trim() : null,
+      capacity: values.capacity == null ? null : Number(values.capacity),
       status: values.status,
     };
 

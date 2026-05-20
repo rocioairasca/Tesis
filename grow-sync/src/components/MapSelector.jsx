@@ -13,20 +13,39 @@ import { AimOutlined } from './AppIcons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
-import useIsMobile from '../hooks/useIsMobile';
 
 const FALLBACK_POSITION = [-32.4082, -63.2402];
+
+const parseLocation = (location) => {
+  if (!location) return null;
+  if (typeof location === "object") return location;
+  try {
+    return JSON.parse(location);
+  } catch {
+    return null;
+  }
+};
+
+const getLocationRing = (location) => {
+  const parsed = parseLocation(location);
+  return Array.isArray(parsed) && Array.isArray(parsed[0]) && parsed[0].length
+    ? parsed[0]
+    : null;
+};
 
 const MapSelector = ({
   lots = [],
   selectedLocation = null,
+  initialLocation = null,
   onSelect,
   modalOpen,
   insideDrawer = false,
+  mapRef: externalMapRef,
 }) => {
   const [userPosition, setUserPosition] = useState(null);
-  const mapRef = useRef(null);
-  const isMobile = useIsMobile();
+  const internalMapRef = useRef(null);
+  const mapRef = externalMapRef || internalMapRef;
+  const activeLocation = selectedLocation || initialLocation;
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -39,6 +58,10 @@ const MapSelector = ({
         });
       },
       (error) => {
+        if (import.meta.env.DEV) {
+          console.warn('No se pudo obtener la ubicación del navegador:', error?.message || error);
+        }
+        return;
         console.error('Error al obtener ubicación:', error);
       },
       {
@@ -54,7 +77,7 @@ const MapSelector = ({
         mapRef.current.invalidateSize();
       }, 350);
     }
-  }, [modalOpen, insideDrawer]);
+  }, [modalOpen, insideDrawer, mapRef]);
 
   const roundCoord = useCallback((coord) => ({
     lat: parseFloat(coord.lat.toFixed(6)),
@@ -102,22 +125,18 @@ const MapSelector = ({
   }, [normalizePolygon, onSelect]);
 
   const initialCenter = useMemo(() => {
-    if (selectedLocation?.[0]?.[0]) {
-      return [selectedLocation[0][0].lat, selectedLocation[0][0].lng];
+    if (activeLocation?.[0]?.[0]) {
+      return [activeLocation[0][0].lat, activeLocation[0][0].lng];
     }
 
     const firstLotWithCoords = lots.find((lot) => {
-      try {
-        const parsed = JSON.parse(lot.location);
-        return parsed?.[0]?.[0];
-      } catch {
-        return false;
-      }
+      const ring = getLocationRing(lot.location);
+      return ring?.[0];
     });
 
     if (firstLotWithCoords) {
-      const parsed = JSON.parse(firstLotWithCoords.location);
-      return [parsed[0][0].lat, parsed[0][0].lng];
+      const ring = getLocationRing(firstLotWithCoords.location);
+      return [ring[0].lat, ring[0].lng];
     }
 
     if (userPosition) {
@@ -125,24 +144,20 @@ const MapSelector = ({
     }
 
     return FALLBACK_POSITION;
-  }, [selectedLocation, lots, userPosition]);
+  }, [activeLocation, lots, userPosition]);
 
   const handleRecenter = () => {
     if (!mapRef.current) return;
 
-    if (selectedLocation?.[0]?.length) {
-      const bounds = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
+    if (activeLocation?.[0]?.length) {
+      const bounds = activeLocation[0].map(({ lat, lng }) => [lat, lng]);
       mapRef.current.fitBounds(bounds, { padding: [40, 40] });
       return;
     }
 
     const allCoordinates = lots.flatMap((lot) => {
-      try {
-        const parsed = JSON.parse(lot.location);
-        return parsed?.[0]?.map(({ lat, lng }) => [lat, lng]) || [];
-      } catch {
-        return [];
-      }
+      const ring = getLocationRing(lot.location);
+      return ring?.map(({ lat, lng }) => [lat, lng]) || [];
     });
 
     if (allCoordinates.length > 0) {
@@ -166,8 +181,8 @@ const MapSelector = ({
         icon={<AimOutlined />}
         style={{
           position: 'absolute',
-          top: insideDrawer ? 190 : isMobile ? 260 : 60,
-          right: insideDrawer ? 35 : isMobile ? 67 : 24,
+          top: 12,
+          right: 12,
           zIndex: 1000,
         }}
         onClick={handleRecenter}
@@ -189,11 +204,12 @@ const MapSelector = ({
         <GeomanControls
           enabled={!!onSelect}
           selectedLocation={selectedLocation}
+          initialLocation={initialLocation}
           emitPolygonData={emitPolygonData}
         />
 
         <AutoFitMap
-          selectedLocation={selectedLocation}
+          selectedLocation={activeLocation}
           lots={lots}
           userPosition={userPosition}
         />
@@ -214,9 +230,9 @@ const MapSelector = ({
           </LayersControl.BaseLayer>
         </LayersControl>
 
-        {selectedLocation && (
+        {activeLocation && (
           <Polygon
-            positions={selectedLocation}
+            positions={activeLocation}
             pathOptions={{ color: '#FF5733', weight: 2 }}
           />
         )}
@@ -224,15 +240,11 @@ const MapSelector = ({
         {lots.map((lot, index) => {
           if (!lot.location) return null;
 
-          let coordinates;
-          try {
-            coordinates = JSON.parse(lot.location);
-          } catch (error) {
-            console.error('Error al parsear coordenadas del lote:', error);
-            return null;
-          }
+          const ring = getLocationRing(lot.location);
 
-          if (!Array.isArray(coordinates) || coordinates.length === 0 || !coordinates[0]?.[0]) {
+          if (!ring) return null;
+
+          if (!ring) {
             console.warn('Coordenadas inválidas para el lote:', lot.id);
             return null;
           }
@@ -251,7 +263,7 @@ const MapSelector = ({
           return (
             <Polygon
               key={lot.id}
-              positions={coordinates}
+              positions={[ring]}
               pathOptions={{ color, weight: 2, smoothFactor: 1 }}
             >
               <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
@@ -265,9 +277,10 @@ const MapSelector = ({
   );
 };
 
-const GeomanControls = ({ enabled, selectedLocation, emitPolygonData }) => {
+const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygonData }) => {
   const map = useMap();
   const editableLayerRef = useRef(null);
+  const activeLocation = selectedLocation || initialLocation;
 
   useEffect(() => {
     if (!enabled || !map?.pm) return;
@@ -304,11 +317,11 @@ const GeomanControls = ({ enabled, selectedLocation, emitPolygonData }) => {
     };
 
     const createEditableLayerFromSelected = () => {
-      if (!selectedLocation?.[0]?.length) return;
+      if (!activeLocation?.[0]?.length) return;
 
       clearEditableLayer();
 
-      const latlngs = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
+      const latlngs = activeLocation[0].map(({ lat, lng }) => [lat, lng]);
       const polygon = L.polygon(latlngs, { color: '#437118', weight: 2 }).addTo(map);
       polygon.pm.enable();
 
@@ -343,7 +356,7 @@ const GeomanControls = ({ enabled, selectedLocation, emitPolygonData }) => {
 
       clearEditableLayer();
     };
-  }, [map, enabled, selectedLocation, emitPolygonData]);
+  }, [map, enabled, activeLocation, emitPolygonData]);
 
   return null;
 };
@@ -359,12 +372,8 @@ const AutoFitMap = ({ selectedLocation, lots, userPosition }) => {
     }
 
     const allCoordinates = lots.flatMap((lot) => {
-      try {
-        const parsed = JSON.parse(lot.location);
-        return parsed?.[0]?.map(({ lat, lng }) => [lat, lng]) || [];
-      } catch {
-        return [];
-      }
+      const ring = getLocationRing(lot.location);
+      return ring?.map(({ lat, lng }) => [lat, lng]) || [];
     });
 
     if (allCoordinates.length > 0) {

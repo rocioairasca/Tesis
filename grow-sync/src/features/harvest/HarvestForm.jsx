@@ -20,7 +20,7 @@ import {
   CloseOutlined
 } from '../../components/AppIcons';
 
-import { createHarvestRecord } from '../../services/harvestService';
+import { createHarvestRecord, updateHarvestRecord } from '../../services/harvestService';
 import { calculateYieldKgHa, formatNumber } from '../../utils/harvestUtils';
 
 const { Option } = Select;
@@ -37,6 +37,7 @@ const initialItem = {
 const HarvestForm = ({
   lots = [],
   loadingLots = false,
+  initialRecord = null,
   onSuccess,
   onCancel
 }) => {
@@ -44,13 +45,29 @@ const HarvestForm = ({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (initialRecord) {
+      form.setFieldsValue({
+        harvest_date: initialRecord.harvest_date ? dayjs(initialRecord.harvest_date) : dayjs(),
+        campaign: initialRecord.campaign || '',
+        notes: initialRecord.notes || '',
+        items: [{
+          lot_id: initialRecord.lot_id,
+          crop: initialRecord.crop || '',
+          harvested_area_ha: initialRecord.harvested_area_ha,
+          production_kg: initialRecord.production_kg,
+          notes: initialRecord.notes || ''
+        }]
+      });
+      return;
+    }
+
     form.setFieldsValue({
       harvest_date: dayjs(),
       campaign: '',
       notes: '',
       items: [initialItem]
     });
-  }, [form]);
+  }, [form, initialRecord]);
 
   const resetForm = () => {
     form.resetFields();
@@ -84,8 +101,9 @@ const HarvestForm = ({
         return;
       }
 
-      for (const item of items) {
-        await createHarvestRecord({
+      if (initialRecord) {
+        const item = items[0];
+        await updateHarvestRecord(initialRecord.id, {
           lot_id: item.lot_id,
           crop: item.crop,
           campaign,
@@ -94,10 +112,22 @@ const HarvestForm = ({
           harvested_area_ha: item.harvested_area_ha,
           notes: item.notes || notes || null
         });
+      } else {
+        for (const item of items) {
+          await createHarvestRecord({
+            lot_id: item.lot_id,
+            crop: item.crop,
+            campaign,
+            harvest_date: dayjs(harvest_date).format('YYYY-MM-DD'),
+            production_kg: item.production_kg,
+            harvested_area_ha: item.harvested_area_ha,
+            notes: item.notes || notes || null
+          });
+        }
       }
 
       notification.success({
-        message: 'Cosecha registrada correctamente'
+        message: initialRecord ? 'Cosecha actualizada correctamente' : 'Cosecha registrada correctamente'
       });
 
       resetForm();
@@ -108,7 +138,7 @@ const HarvestForm = ({
       console.error('Response status:', error?.response?.status);
 
       const backendMessage =
-        error?.response?.data?.message || 'Error al registrar la cosecha';
+        error?.response?.data?.message || 'Error al guardar la cosecha';
 
       notification.error({
         message: 'No se pudo guardar la cosecha',
@@ -163,13 +193,16 @@ const HarvestForm = ({
         {(fields, { add, remove }) => (
           <>
             <Space direction="vertical" style={{ width: '100%' }} size={16}>
-              {fields.map((field, index) => (
+              {fields.map((field, index) => {
+                const { key, ...fieldProps } = field;
+
+                return (
                 <Card
-                  key={field.key}
+                  key={key}
                   size="small"
                   title={`Registro ${index + 1}`}
                   extra={
-                    fields.length > 1 ? (
+                    !initialRecord && fields.length > 1 ? (
                       <Button
                         danger
                         type="text"
@@ -182,7 +215,7 @@ const HarvestForm = ({
                   <Row gutter={[16, 16]}>
                     <Col xs={24} md={6}>
                       <Form.Item
-                        {...field}
+                        {...fieldProps}
                         label="Lote"
                         name={[field.name, 'lot_id']}
                         rules={[{ required: true, message: 'Seleccioná un lote' }]}
@@ -208,7 +241,7 @@ const HarvestForm = ({
 
                     <Col xs={24} md={6}>
                       <Form.Item
-                        {...field}
+                        {...fieldProps}
                         label="Cultivo"
                         name={[field.name, 'crop']}
                         rules={[{ required: true, message: 'Ingresá el cultivo' }]}
@@ -219,7 +252,7 @@ const HarvestForm = ({
 
                     <Col xs={24} md={4}>
                       <Form.Item
-                        {...field}
+                        {...fieldProps}
                         label="Superficie cosechada (ha)"
                         name={[field.name, 'harvested_area_ha']}
                         rules={[{ required: true, message: 'Ingresá la superficie' }]}
@@ -235,7 +268,7 @@ const HarvestForm = ({
 
                     <Col xs={24} md={4}>
                       <Form.Item
-                        {...field}
+                        {...fieldProps}
                         label="Producción (kg)"
                         name={[field.name, 'production_kg']}
                         rules={[{ required: true, message: 'Ingresá la producción' }]}
@@ -283,7 +316,7 @@ const HarvestForm = ({
 
                     <Col xs={24}>
                       <Form.Item
-                        {...field}
+                        {...fieldProps}
                         label="Observaciones del registro"
                         name={[field.name, 'notes']}
                       >
@@ -295,7 +328,8 @@ const HarvestForm = ({
                     </Col>
                   </Row>
                 </Card>
-              ))}
+                );
+              })}
             </Space>
 
             <Button
@@ -304,6 +338,7 @@ const HarvestForm = ({
               onClick={() => add(initialItem)}
               icon={<PlusOutlined />}
               block
+              disabled={!!initialRecord}
             >
               Agregar otro registro
             </Button>

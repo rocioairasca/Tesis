@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
 import { hasPermission } from "../utils/permissions";
+import { getApiBaseUrl } from "../services/apiBase";
 
 export default function GuardedRoute({
   children,
@@ -16,8 +17,7 @@ export default function GuardedRoute({
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(!!accessToken);
 
-  const apiBase =
-    (process.env.REACT_APP_API_URL || "http://localhost:4000") + "/api";
+  const apiBase = getApiBaseUrl();
 
   useEffect(() => {
     let cancelled = false;

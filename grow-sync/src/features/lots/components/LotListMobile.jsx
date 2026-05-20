@@ -1,13 +1,13 @@
 /**
  * Componente: LotListMobile
- * Ubicación: src/features/lots/components/LotListMobile.js
+ * Ubicación: src/features/lots/components/LotListMobile.jsx
  * Descripción:
  *  Este componente maneja la visualización de lotes en dispositivos móviles.
  *  Reemplaza la tabla por una lista de tarjetas (cards) para mejorar la UX en pantallas pequeñas.
  *  Al igual que LotTable, es un componente presentacional que recibe datos y acciones vía props.
  * 
  * Cambios recientes:
- *  - Extracción de la vista móvil desde Lotes.js.
+ *  - Extracción de la vista móvil desde Lotes.jsx.
  *  - Organización del código para separar responsabilidades de UI.
  */
 import React from 'react';

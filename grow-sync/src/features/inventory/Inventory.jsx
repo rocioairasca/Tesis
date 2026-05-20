@@ -1,6 +1,6 @@
 /**
  * Feature: Gestión de Inventario (Productos)
- * Ubicación: src/features/inventory/Inventory.js
+ * Ubicación: src/features/inventory/Inventory.jsx
  * Descripción:
  *  Contenedor principal para la gestión de productos/insumos.
  *  Maneja el estado (lista, loading, alertas de vencimiento) y la lógica CRUD.
@@ -31,6 +31,26 @@ const CATEGORY_OPTIONS = [
   { value: "fertilizantes", label: "Fertilizantes" },
   { value: "combustible", label: "Combustible" },
 ];
+
+const UNIT_OPTIONS_BY_CATEGORY = {
+  semillas: [
+    { value: "bolsas", label: "Bolsas" },
+    { value: "kg", label: "kg" },
+  ],
+  agroquimicos: [
+    { value: "litros", label: "Litros" },
+    { value: "kg", label: "kg" },
+  ],
+  fertilizantes: [
+    { value: "kg", label: "kg" },
+    { value: "litros", label: "Litros" },
+  ],
+  combustible: [
+    { value: "litros", label: "Litros" },
+  ],
+};
+
+const defaultUnitForCategory = (category) => UNIT_OPTIONS_BY_CATEGORY[category]?.[0]?.value || "kg";
 
 // ---- helpers de formato ----
 const UNIT_DISPLAY = {
@@ -75,8 +95,9 @@ const Inventory = () => {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [unit, setUnit] = useState("");
   const [form] = Form.useForm();
+  const selectedCategory = Form.useWatch("category", form);
+  const unitOptions = UNIT_OPTIONS_BY_CATEGORY[selectedCategory] || [];
 
   const isMobile = useIsMobile();
 
@@ -133,7 +154,6 @@ const Inventory = () => {
   const openDrawer = (product = null) => {
     if (!product) {
       setEditingProduct(null);
-      setUnit("");
       form.resetFields();
       form.setFieldsValue({
         category: undefined,
@@ -157,7 +177,6 @@ const Inventory = () => {
         price: product.price ?? undefined,
         acquisition_date: acquisitionDate,
       });
-      setUnit(product.unit ?? "kg");
     }
     setIsDrawerOpen(true);
   };
@@ -322,12 +341,7 @@ const Inventory = () => {
               placeholder="Seleccioná la categoría"
               options={CATEGORY_OPTIONS}
               onChange={(value) => {
-                let nextUnit = "kg";
-                if (value === "combustible" || value === "agroquimicos") nextUnit = "litros";
-                if (value === "semillas") nextUnit = "bolsas";
-
-                form.setFieldsValue({ unit: nextUnit });
-                setUnit(nextUnit);
+                form.setFieldsValue({ unit: defaultUnitForCategory(value) });
               }}
             />
           </Form.Item>
@@ -344,8 +358,16 @@ const Inventory = () => {
             />
           </Form.Item>
 
-          <Form.Item name="unit" label="Unidad">
-            <Input disabled value={unit} />
+          <Form.Item
+            name="unit"
+            label="Unidad"
+            rules={[{ required: true, message: "Por favor seleccionÃ¡ la unidad." }]}
+          >
+            <Select
+              placeholder="SeleccionÃ¡ la unidad"
+              disabled={!selectedCategory}
+              options={unitOptions}
+            />
           </Form.Item>
 
           <Form.Item
@@ -364,6 +386,10 @@ const Inventory = () => {
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve();
+                  if (editingProduct?.acquisition_date) {
+                    const currentValue = new Date(editingProduct.acquisition_date).toISOString().split("T")[0];
+                    if (value === currentValue) return Promise.resolve();
+                  }
                   const inputTs = new Date(value).getTime();
                   const todayMidnight = new Date().setHours(0, 0, 0, 0);
                   return inputTs >= todayMidnight

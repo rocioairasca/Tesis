@@ -3,6 +3,7 @@ import { notification as antNotification } from 'antd';
 import io from 'socket.io-client';
 import api from '../services/apiClient';
 import { getUserDataByEmail } from '../services/authService';
+import { getApiOrigin } from '../services/apiBase';
 
 const NotificationsContext = createContext();
 
@@ -87,11 +88,7 @@ export const NotificationsProvider = ({ children }) => {
                 const userData = await getUserDataByEmail(email);
                 const userId = userData.id;
 
-                const socketUrl = process.env.REACT_APP_API_URL
-                    ? process.env.REACT_APP_API_URL.replace('/api', '')
-                    : 'http://localhost:4000';
-
-                newSocket = io(socketUrl);
+                newSocket = io(getApiOrigin());
 
                 newSocket.on('connect', () => {
                     console.log('Conectado al servidor de notificaciones');

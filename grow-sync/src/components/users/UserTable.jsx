@@ -1,6 +1,6 @@
 /**
  * Componente: Tabla de Usuarios
- * Ubicación: src/components/users/UserTable.js
+ * Ubicación: src/components/users/UserTable.jsx
  * Descripción:
  *  Renderiza la lista de usuarios y permite la gestión rápida de roles.
  *  Incluye lógica de actualización optimista (optimistic updates) para mejorar la UX.

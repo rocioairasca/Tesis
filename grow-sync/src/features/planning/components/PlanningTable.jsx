@@ -1,6 +1,6 @@
 /**
  * Componente: PlanningTable
- * Ubicación: src/features/planning/components/PlanningTable.js
+ * Ubicación: src/features/planning/components/PlanningTable.jsx
  * Descripción:
  *  Componente presentacional para la tabla de planificaciones en versión escritorio.
  *  Maneja la visualización de columnas, tags de estado y acciones.
@@ -90,8 +90,8 @@ const PlanningTable = ({
                         {canEdit && <Tooltip title="Editar">
                             <Button type="text" shape="circle" icon={<EditOutlined />} onClick={() => onEdit(record)} />
                         </Tooltip>}
-                        {menuItems.length > 0 && <Dropdown menu={{ items: menuItems }} placement="bottomRight">
-                            <Button type="text" shape="circle" icon={<MoreOutlined />} />
+                        {menuItems.length > 0 && <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={["click"]}>
+                            <Button type="text" shape="circle" icon={<MoreOutlined />} aria-label="Más acciones" />
                         </Dropdown>}
                     </Space>
                 );

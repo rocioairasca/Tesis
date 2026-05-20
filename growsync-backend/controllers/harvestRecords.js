@@ -479,8 +479,8 @@ exports.updateHarvestRecord = async (req, res, next) => {
         production_kg = $5,
         harvested_area_ha = $6,
         notes = $7
-      WHERE id = $9
-        AND company_id = $10
+      WHERE id = $8
+        AND company_id = $9
       RETURNING *
       `,
       [

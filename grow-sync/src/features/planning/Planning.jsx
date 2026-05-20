@@ -1,14 +1,14 @@
 /**
  * Componente: Planning
- * Ubicación: src/features/planning/Planning.js
+ * Ubicación: src/features/planning/Planning.jsx
  * Descripción:
  *  Contenedor principal para la gestión de planificaciones.
  *  Maneja la lógica de estado, llamadas a API, y renderizado condicional
  *  de vistas (Tabla Desktop, Lista Mobile, Calendario).
  * 
  * Refactorización:
- *  - Se extrajo la tabla desktop a `components/PlanningTable.js`.
- *  - Se extrajo la lista mobile a `components/PlanningListMobile.js`.
+ *  - Se extrajo la tabla desktop a `components/PlanningTable.jsx`.
+ *  - Se extrajo la lista mobile a `components/PlanningListMobile.jsx`.
  *  - Se mantiene la lógica de estado y handlers aquí.
  */
 import React, { useState, useEffect, useCallback } from "react";
@@ -384,7 +384,6 @@ const Planning = () => {
                 { value: "planificado", label: "Planificado" },
                 { value: "en_progreso", label: "En Progreso" },
                 { value: "completado", label: "Completado" },
-                { value: "cancelado", label: "Cancelado" },
               ]}
             />
           </Col>
@@ -422,7 +421,9 @@ const Planning = () => {
         <div style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
           <AntCalendar
             fullscreen={!isMobile}
-            dateCellRender={renderDateCell}
+            cellRender={(current, info) => (
+              info.type === "date" ? renderDateCell(current) : info.originNode
+            )}
             onSelect={(d) => setOpenDay(d)} // click en día abre detalle
           />
         </div>

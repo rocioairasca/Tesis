@@ -1,6 +1,6 @@
 /**
  * Componente: ProductTable
- * Ubicación: src/features/inventory/components/ProductTable.js
+ * Ubicación: src/features/inventory/components/ProductTable.jsx
  * Descripción:
  *  Componente presentacional para la tabla de productos en versión escritorio.
  *  Maneja la visualización de columnas, formateo de datos (fechas, monedas) y acciones.

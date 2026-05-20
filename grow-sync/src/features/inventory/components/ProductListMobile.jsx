@@ -1,6 +1,6 @@
 /**
  * Componente: ProductListMobile
- * Ubicación: src/features/inventory/components/ProductListMobile.js
+ * Ubicación: src/features/inventory/components/ProductListMobile.jsx
  * Descripción:
  *  Componente presentacional para la lista de productos en versión móvil.
  *  Utiliza tarjetas (cards) para mostrar la información de manera responsive.

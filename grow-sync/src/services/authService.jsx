@@ -1,5 +1,7 @@
-// src/services/authService.js
-const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:4000") + "/api";
+// src/services/authService.jsx
+import { getApiBaseUrl } from "./apiBase";
+
+const API_BASE = getApiBaseUrl();
 
 // Helper para headers con Bearer
 function authHeaders() {

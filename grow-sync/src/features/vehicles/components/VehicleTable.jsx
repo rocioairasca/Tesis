@@ -1,6 +1,6 @@
 /**
  * Componente: VehicleTable
- * Ubicación: src/features/vehicles/components/VehicleTable.js
+ * Ubicación: src/features/vehicles/components/VehicleTable.jsx
  * Descripción:
  *  Componente presentacional para la tabla de vehículos en versión escritorio.
  *  Maneja la visualización de columnas, tags de estado y acciones.

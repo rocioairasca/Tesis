@@ -1,6 +1,6 @@
 /**
  * Componente: VehicleListMobile
- * Ubicación: src/features/vehicles/components/VehicleListMobile.js
+ * Ubicación: src/features/vehicles/components/VehicleListMobile.jsx
  * Descripción:
  *  Componente presentacional para la lista de vehículos en versión móvil.
  *  Utiliza tarjetas (cards) para mostrar la información de manera responsive.

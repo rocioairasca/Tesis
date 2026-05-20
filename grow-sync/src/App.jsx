@@ -2,29 +2,29 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Auth0Provider } from "@auth0/auth0-react";
 import { Spin } from "antd";
-import { PERMISSIONS } from "./constants/permissions";
+import { PERMISSIONS } from "./constants/permissions.jsx";
 
-import AppLayout from './layout/Layout.js';
-import MobileBottomNavigationWrapper from './components/MobileBottomNavigationWrapper';
-import { NotificationsProvider } from './context/NotificationsContext';
-import GuardedRoute from './routes/GuardedRoute.js';
+import AppLayout from './layout/Layout.jsx';
+import MobileBottomNavigationWrapper from './components/MobileBottomNavigationWrapper.jsx';
+import { NotificationsProvider } from './context/NotificationsContext.jsx';
+import GuardedRoute from './routes/GuardedRoute.jsx';
 
 import './App.css';
 
-const Dashboard = lazy(() => import('./features/dashboard/Dashboard.js'));
-const Users = lazy(() => import('./features/users/Users.js'));
-const Inventory = lazy(() => import('./features/inventory/Inventory.js'));
-const Lotes = lazy(() => import('./features/lots/Lotes.js'));
-const DisabledLotes = lazy(() => import('./features/lots/DisabledLotes.js'));
-const DisabledProducts = lazy(() => import('./features/inventory/DisabledInventory.js'));
-const Usage = lazy(() => import('./features/usages/Usage.js'));
-const DisabledUsages = lazy(() => import('./features/usages/DisabledUsages.js'));
-const Vehicles = lazy(() => import('./features/vehicles/Vehicles.js'));
-const DisabledVehicles = lazy(() => import('./features/vehicles/DisabledVehicles.js'));
-const Planning = lazy(() => import('./features/planning/Planning.js'));
-const DisabledPlanning = lazy(() => import('./features/planning/DisabledPlanning.js'));
-const Harvest = lazy(() => import('./features/harvest/Harvest.js'));
-const LoginRegister = lazy(() => import("./auth/LoginRegister.js"));
+const Dashboard = lazy(() => import('./features/dashboard/Dashboard.jsx'));
+const Users = lazy(() => import('./features/users/Users.jsx'));
+const Inventory = lazy(() => import('./features/inventory/Inventory.jsx'));
+const Lotes = lazy(() => import('./features/lots/Lotes.jsx'));
+const DisabledLotes = lazy(() => import('./features/lots/DisabledLotes.jsx'));
+const DisabledProducts = lazy(() => import('./features/inventory/DisabledInventory.jsx'));
+const Usage = lazy(() => import('./features/usages/Usage.jsx'));
+const DisabledUsages = lazy(() => import('./features/usages/DisabledUsages.jsx'));
+const Vehicles = lazy(() => import('./features/vehicles/Vehicles.jsx'));
+const DisabledVehicles = lazy(() => import('./features/vehicles/DisabledVehicles.jsx'));
+const Planning = lazy(() => import('./features/planning/Planning.jsx'));
+const DisabledPlanning = lazy(() => import('./features/planning/DisabledPlanning.jsx'));
+const Harvest = lazy(() => import('./features/harvest/Harvest.jsx'));
+const LoginRegister = lazy(() => import("./auth/LoginRegister.jsx"));
 
 const PageLoader = () => (
   <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
@@ -35,11 +35,11 @@ const PageLoader = () => (
 function App() {
   return (
     <Auth0Provider
-      domain={process.env.REACT_APP_AUTH0_DOMAIN}
-      clientId={process.env.REACT_APP_AUTH0_CLIENT_ID}
+      domain={import.meta.env.VITE_AUTH0_DOMAIN}
+      clientId={import.meta.env.VITE_AUTH0_CLIENT_ID}
       authorizationParams={{
         redirect_uri: window.location.origin,
-        audience: process.env.REACT_APP_AUTH0_API_AUDIENCE,
+        audience: import.meta.env.VITE_AUTH0_API_AUDIENCE,
         scope: "openid profile email",
       }}
       useRefreshTokens={true}

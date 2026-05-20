@@ -4,19 +4,20 @@ import {
   Card,
   Col,
   Empty,
-  Input,
   Popconfirm,
   Row,
   Select,
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   notification,
 } from "antd";
 import {
   CheckCircleOutlined,
-  StopOutlined,
+  DeleteOutlined,
+  EditOutlined,
 } from '../../components/AppIcons';
 
 import dayjs from "dayjs";
@@ -24,6 +25,7 @@ import dayjs from "dayjs";
 import {
   disableHarvestRecord,
   enableHarvestRecord,
+  getHarvestFilters,
   getHarvestRecords,
 } from "../../services/harvestService";
 
@@ -32,14 +34,13 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 
 const { Text } = Typography;
-const { Option } = Select;
 
 const formatDateDDMMYYYY = (date) => {
   if (!date) return "-";
   return dayjs(date).format("DD/MM/YYYY");
 };
 
-const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
+const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState([]);
 
@@ -55,7 +56,9 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
     crop: null,
     includeDisabled: false,
   });
+  const [filterOptions, setFilterOptions] = useState({ campaigns: [], crops: [] });
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEdit = hasPermission(currentUser, PERMISSIONS.HARVEST_EDIT);
   const canDisable = hasPermission(currentUser, PERMISSIONS.HARVEST_DISABLE);
   const canEnable = hasPermission(currentUser, PERMISSIONS.HARVEST_ENABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW_DISABLED);
@@ -97,6 +100,22 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
     fetchRecords();
   }, [fetchRecords, refreshKey]);
 
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const data = await getHarvestFilters();
+        setFilterOptions({
+          campaigns: data?.campaigns || [],
+          crops: data?.crops || [],
+        });
+      } catch (error) {
+        console.error("Error al cargar filtros de cosecha:", error);
+      }
+    };
+
+    fetchFilterOptions();
+  }, [refreshKey]);
+
   const handleDisable = useCallback(async (id) => {
     try {
       await disableHarvestRecord(id);
@@ -130,6 +149,59 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
       });
     }
   }, [fetchRecords]);
+
+  const renderHarvestAction = useCallback((record, block = false) => {
+    if (record.enabled && canDisable) {
+      return (
+        <Popconfirm
+          title="Deshabilitar registro"
+          description="¿Querés deshabilitar este registro de cosecha?"
+          onConfirm={() => handleDisable(record.id)}
+          okText="Sí"
+          cancelText="No"
+        >
+          <Tooltip title="Deshabilitar">
+            <Button
+              danger
+              type={block ? "default" : "text"}
+              shape={block ? undefined : "circle"}
+              icon={<DeleteOutlined />}
+              block={block}
+              aria-label="Deshabilitar"
+            >
+              {block ? "Deshabilitar" : null}
+            </Button>
+          </Tooltip>
+        </Popconfirm>
+      );
+    }
+
+    if (!record.enabled && canEnable) {
+      return (
+        <Popconfirm
+          title="Habilitar registro"
+          description="¿Querés volver a habilitar este registro de cosecha?"
+          onConfirm={() => handleEnable(record.id)}
+          okText="Sí"
+          cancelText="No"
+        >
+          <Tooltip title="Habilitar">
+            <Button
+              type={block ? "default" : "text"}
+              shape={block ? undefined : "circle"}
+              icon={<CheckCircleOutlined />}
+              block={block}
+              aria-label="Habilitar"
+            >
+              {block ? "Habilitar" : null}
+            </Button>
+          </Tooltip>
+        </Popconfirm>
+      );
+    }
+
+    return null;
+  }, [canDisable, canEnable, handleDisable, handleEnable]);
 
   const columns = useMemo(() => {
     return [
@@ -186,41 +258,29 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
             <Tag color="default">Deshabilitado</Tag>
           ),
       },
-      (canDisable || canEnable) && {
+      (canEdit || canDisable || canEnable) && {
         title: "Acciones",
         key: "actions",
+        width: 96,
         render: (_, record) => (
-          <Space>
-            {record.enabled ? (
-              canDisable && (
-              <Popconfirm
-                title="Deshabilitar registro"
-                description="¿Querés deshabilitar este registro de cosecha?"
-                onConfirm={() => handleDisable(record.id)}
-                okText="Sí"
-                cancelText="No"
-              >
-                <Button icon={<StopOutlined />} danger />
-              </Popconfirm>
-              )
-            ) : (
-              canEnable && (
-              <Popconfirm
-                title="Habilitar registro"
-                description="¿Querés volver a habilitar este registro de cosecha?"
-                onConfirm={() => handleEnable(record.id)}
-                okText="Sí"
-                cancelText="No"
-              >
-                <Button icon={<CheckCircleOutlined />} />
-              </Popconfirm>
-              )
+          <Space size="small">
+            {record.enabled && canEdit && (
+              <Tooltip title="Editar">
+                <Button
+                  type="text"
+                  shape="circle"
+                  icon={<EditOutlined />}
+                  onClick={() => onEdit?.(record)}
+                  aria-label={`Editar cosecha ${record.crop || ""}`}
+                />
+              </Tooltip>
             )}
+            {renderHarvestAction(record)}
           </Space>
         ),
       },
     ].filter(Boolean);
-  }, [canDisable, canEnable, handleDisable, handleEnable]);
+  }, [canDisable, canEnable, canEdit, onEdit, renderHarvestAction]);
 
   const renderMobileCards = () => {
     if (!records.length) {
@@ -265,35 +325,18 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
                 ) : null}
 
                 <div style={{ marginTop: 8 }}>
-                {record.enabled ? (
-                  canDisable && (
-                  <Popconfirm
-                      title="Deshabilitar registro"
-                      description="¿Querés deshabilitar este registro de cosecha?"
-                      onConfirm={() => handleDisable(record.id)}
-                      okText="Sí"
-                      cancelText="No"
-                    >
-                      <Button danger icon={<StopOutlined />} block>
-                        Deshabilitar
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {record.enabled && canEdit && (
+                      <Button
+                        block
+                        icon={<EditOutlined />}
+                        onClick={() => onEdit?.(record)}
+                      >
+                        Editar
                       </Button>
-                    </Popconfirm>
-                  )
-                ) : (
-                  canEnable && (
-                  <Popconfirm
-                      title="Habilitar registro"
-                      description="¿Querés volver a habilitar este registro de cosecha?"
-                      onConfirm={() => handleEnable(record.id)}
-                      okText="Sí"
-                      cancelText="No"
-                    >
-                      <Button icon={<CheckCircleOutlined />} block>
-                        Habilitar
-                      </Button>
-                    </Popconfirm>
-                  )
-                )}
+                    )}
+                    {renderHarvestAction(record, true)}
+                  </Space>
                 </div>
               </Space>
             </Card>
@@ -306,50 +349,67 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <Card>
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
-            <Input
-              placeholder="Filtrar por campaña"
-              value={filters.campaign || ""}
-              onChange={(e) => {
-                setPagination((prev) => ({ ...prev, page: 1 }));
-                setFilters((prev) => ({
-                  ...prev,
-                  campaign: e.target.value || null,
-                }));
-              }}
-            />
+        <Row justify="space-between" align="middle" gutter={[12, 12]}>
+          <Col xs={24} md={16}>
+            <Space wrap size={12}>
+              <Select
+                style={{ width: 180 }}
+                placeholder="Filtrar por campaña"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                value={filters.campaign || undefined}
+                onChange={(value) => {
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                  setFilters((prev) => ({
+                    ...prev,
+                    campaign: value || null,
+                  }));
+                }}
+                options={filterOptions.campaigns.map((campaign) => ({
+                  value: campaign,
+                  label: campaign,
+                }))}
+              />
+
+              <Select
+                style={{ width: 180 }}
+                placeholder="Filtrar por cultivo"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                value={filters.crop || undefined}
+                onChange={(value) => {
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                  setFilters((prev) => ({
+                    ...prev,
+                    crop: value || null,
+                  }));
+                }}
+                options={filterOptions.crops.map((crop) => ({
+                  value: crop,
+                  label: formatCropLabel(crop),
+                }))}
+              />
+            </Space>
           </Col>
 
-          <Col xs={24} md={8}>
-            <Input
-              placeholder="Filtrar por cultivo"
-              value={filters.crop || ""}
-              onChange={(e) => {
-                setPagination((prev) => ({ ...prev, page: 1 }));
-                setFilters((prev) => ({
-                  ...prev,
-                  crop: e.target.value || null,
-                }));
-              }}
-            />
-          </Col>
-
-          <Col xs={24} md={8}>
-            <Select
-              value={filters.includeDisabled ? "all" : "enabled"}
-              style={{ width: "100%" }}
-              onChange={(value) => {
-                setPagination((prev) => ({ ...prev, page: 1 }));
-                setFilters((prev) => ({
-                  ...prev,
-                  includeDisabled: value === "all",
-                }));
-              }}
-            >
-              <Option value="enabled">Solo activos</Option>
-              {canViewDisabled && <Option value="all">Activos y deshabilitados</Option>}
-            </Select>
+          <Col xs={24} md={8} style={{ textAlign: isMobile ? "left" : "right" }}>
+            {canViewDisabled && (
+              <Button
+                style={{ width: isMobile ? "100%" : 180 }}
+                type={filters.includeDisabled ? "primary" : "default"}
+                onClick={() => {
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                  setFilters((prev) => ({
+                    ...prev,
+                    includeDisabled: !prev.includeDisabled,
+                  }));
+                }}
+              >
+                {filters.includeDisabled ? "Ver solo activos" : "Ver deshabilitados"}
+              </Button>
+            )}
           </Col>
         </Row>
       </Card>
@@ -405,7 +465,8 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
             current: pagination.page,
             pageSize: pagination.pageSize,
             total: pagination.total,
-            showSizeChanger: true,
+            position: ["bottomCenter"],
+            showSizeChanger: false,
             onChange: (page, pageSize) => {
               setPagination((prev) => ({
                 ...prev,

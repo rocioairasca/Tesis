@@ -53,6 +53,16 @@ html {
   /* Fondo de la sidebar */
 }
 
+.grow-sidebar {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  overflow: auto;
+  z-index: 1000;
+}
+
 .ant-menu-item-selected {
   background-color: #87AECE !important;
   /* Color de los ítems seleccionados */
