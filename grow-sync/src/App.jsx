@@ -11,6 +11,9 @@ import GuardedRoute from './routes/GuardedRoute.jsx';
 
 import './App.css';
 
+const LandingPage = lazy(() => import("./features/public/landingPage.jsx"));
+const RegisterCompany = lazy(() => import("./features/public/registerCompany.jsx"));
+
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard.jsx'));
 const Users = lazy(() => import('./features/users/Users.jsx'));
 const Inventory = lazy(() => import('./features/inventory/Inventory.jsx'));
@@ -49,7 +52,9 @@ function App() {
         <Router>
           <Suspense fallback={<PageLoader />}>
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginRegister />} />
+              <Route path="/register-company" element={<RegisterCompany />} />
 
               <Route
                 path="/dashboard"
@@ -168,7 +173,7 @@ function App() {
                 }
               />
 
-              <Route path="*" element={<Navigate to="/login" />} />
+              <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </Suspense>
 

@@ -38,6 +38,9 @@ app.use(express.json());
 app.get('/', (_req, res) => res.send('GrowSync Backend funcionando'));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+const publicRoutes = require('./routes/public.routes');
+app.use('/api/public', publicRoutes);
+
 // Auth publica (login/register)
 const authRoutes = require('./routes/auth');
 app.use('/api', authRoutes);
