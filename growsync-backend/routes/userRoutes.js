@@ -132,7 +132,21 @@ router.get('/email/:email',
 
       const { data, error } = await supabase
         .from('users')
-        .select('id,email,full_name,role,enabled,created_at,auth0_id')
+        .select(`
+          id,
+          email,
+          full_name,
+          role,
+          enabled,
+          created_at,
+          auth0_id,
+          company_id,
+          custom_permissions,
+          companies (
+            id,
+            name
+          )
+        `)
         .eq('email', email)
         .maybeSingle();
 
@@ -148,7 +162,13 @@ router.get('/email/:email',
         return res.status(404).json({ message: 'Usuario no encontrado' });
       }
 
-      return res.json(data);
+      const formattedUser = {
+        ...data,
+        company_name: data.companies?.name || null,
+      };
+
+      return res.json(formattedUser);
+      
     } catch (err) {
       next(err);
     }

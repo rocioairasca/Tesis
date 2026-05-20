@@ -33,7 +33,7 @@ module.exports = async function getAllUsers(req, res) {
     const rangeTo = offset + pageSize - 1;
 
     // Columnas explicitas (evita exponer campos sensibles)
-    const columns = 'id,email,full_name,username,role,enabled,created_at,auth0_id,custom_permissions,company_id';
+    const columns = 'id,email,full_name,username,role,enabled,created_at,auth0_id,custom_permissions,company_id,companies(id, name)';
 
     let query = supabase
       .from('users')
@@ -56,15 +56,24 @@ module.exports = async function getAllUsers(req, res) {
 
     if (error) {
       console.error('Error al obtener usuarios desde Supabase:', error);
-      return res.status(500).json({ error: 'DbError', message: 'Error al obtener usuarios' });
+      return res.status(500).json({
+        error: 'DbError',
+        message: 'Error al obtener usuarios',
+      });
     }
 
+    const formattedUsers = (data || []).map((user) => ({
+      ...user,
+      company_name: user.companies?.name || null,
+    }));
+
     return res.status(200).json({
-      data: data || [],
+      data: formattedUsers,
       page,
       pageSize,
-      total: count ?? (data?.length || 0),
+      total: count ?? (formattedUsers.length || 0),
     });
+    
   } catch (err) {
     console.error('Error inesperado al obtener usuarios:', err);
     return res.status(500).json({ error: 'InternalServerError', message: 'Error al obtener usuarios' });

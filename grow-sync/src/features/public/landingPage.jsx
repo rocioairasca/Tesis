@@ -1,12 +1,14 @@
 import React from "react";
 import { Button, Card, Col, Row, Space, Typography } from "antd";
 import {
-  BarChartOutlined,
-  DropboxOutlined,
+  DashboardOutlined,
+  Package,
   EnvironmentOutlined,
   CalendarOutlined,
-  TeamOutlined,
-} from "@ant-design/icons";
+  UserOutlined,
+  HarvestOutlined,
+  Leaf,
+} from "../../components/AppIcons.jsx";
 import { useNavigate } from "react-router-dom";
 
 const { Title, Paragraph } = Typography;
@@ -19,7 +21,7 @@ const features = [
       "Administrá campos, superficies y ubicaciones de manera simple.",
   },
   {
-    icon: <DropboxOutlined style={{ fontSize: 32 }} />,
+    icon: <Package style={{ fontSize: 32 }} />,
     title: "Inventario",
     description:
       "Controlá productos, stock y movimientos en tiempo real.",
@@ -27,17 +29,21 @@ const features = [
   {
     icon: <CalendarOutlined style={{ fontSize: 32 }} />,
     title: "Planificaciones",
-    description:
-      "Organizá tareas agrícolas y actividades operativas.",
+    description: "Organizá tareas agrícolas y actividades operativas.",
+  },
+{
+    icon: <HarvestOutlined size={32} />,
+    title: "Cosechas",
+    description: "Registrá producción, superficie cosechada y rendimiento por campaña.",
   },
   {
-    icon: <BarChartOutlined style={{ fontSize: 32 }} />,
+    icon: <DashboardOutlined style={{ fontSize: 32 }} />,
     title: "Dashboard",
     description:
       "Visualizá estadísticas, rendimientos y métricas productivas.",
   },
   {
-    icon: <TeamOutlined style={{ fontSize: 32 }} />,
+    icon: <UserOutlined style={{ fontSize: 32 }} />,
     title: "Multiempresa",
     description:
       "Cada empresa administra sus propios datos de forma segura.",

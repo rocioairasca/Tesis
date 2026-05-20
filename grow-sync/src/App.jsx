@@ -11,8 +11,8 @@ import GuardedRoute from './routes/GuardedRoute.jsx';
 
 import './App.css';
 
-const LandingPage = lazy(() => import("./features/public/landingPage.jsx"));
-const RegisterCompany = lazy(() => import("./features/public/registerCompany.jsx"));
+import LandingPage from "./features/public/landingPage.jsx";
+import RegisterCompany from "./features/public/registerCompany.jsx";
 
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard.jsx'));
 const Users = lazy(() => import('./features/users/Users.jsx'));

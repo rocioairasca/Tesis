@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
+
 import { hasPermission } from "../utils/permissions";
 import { getApiBaseUrl } from "../services/apiBase";
+import { getUserDataByEmail } from "../services/authService";
 
 export default function GuardedRoute({
   children,
@@ -38,15 +40,23 @@ export default function GuardedRoute({
         if (!res.ok) throw new Error(`Error ${res.status}`);
         return res.json();
       })
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
 
         const currentUser = data?.user || null;
-        setUser(currentUser);
 
-        if (currentUser) {
-          localStorage.setItem("user", JSON.stringify(currentUser));
+        if (!currentUser?.email) {
+          setUser(null);
+          localStorage.removeItem("user");
+          return;
         }
+
+        const fullUser = await getUserDataByEmail(currentUser.email);
+
+        if (cancelled) return;
+
+        setUser(fullUser);
+        localStorage.setItem("user", JSON.stringify(fullUser));
       })
       .catch((err) => {
         console.warn("[Guard] fallo fetch usuario actual:", err);

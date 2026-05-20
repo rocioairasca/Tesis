@@ -8,7 +8,7 @@ import NotificationsDrawer from "../components/NotificationsDrawer";
 
 const { Header } = Layout;
 
-const AppHeader = () => {
+const AppHeader = ({ companyName }) => {
     const navigate = useNavigate();
     const isMobile = useIsMobile();
 
@@ -56,6 +56,18 @@ const AppHeader = () => {
             }}
         >
             {/* IZQUIERDA: logo solo en mobile */}
+
+            <div
+                style={{
+                    flex: 1,
+                    paddingLeft: 24,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: "#26356f",
+                }}
+            >
+                {companyName}
+            </div>
             {isMobile && (
                 <div style={{ display: "flex", alignItems: "center" }}>
                     <img src="/LogoGrande.png" alt="GrowSync" style={{ height: 50 }} />
