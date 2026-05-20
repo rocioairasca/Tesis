@@ -25,6 +25,7 @@ import {
   updateUserPermissions,
 } from '../../services/authService';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '../../constants/permissions';
+import { hasPermission } from "../../utils/permissions";
 
 const ROLE_OPTIONS = [
   { value: 0, label: "Empleado" },
@@ -148,6 +149,9 @@ const UserTable = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canChangeRole = hasPermission(currentUser, PERMISSIONS.USERS_CHANGE_ROLE);
+  const canManagePermissions = hasPermission(currentUser, PERMISSIONS.USERS_PERMISSIONS);
 
   // helpers de id/rowKey robustos
   const getId = (r) => r?.id ?? r?._id;
@@ -253,6 +257,7 @@ const UserTable = () => {
           value={role}
           options={ROLE_OPTIONS}            // ✅ AntD v5: usar options, no <Option>
           style={{ minWidth: 180 }}
+          disabled={!canChangeRole}
           loading={updatingId === getId(record)}
           onChange={(value) => handleRoleChange(getId(record), value)}
         />
@@ -263,7 +268,7 @@ const UserTable = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          {Number(record.role) !== 3&& (
+          {canManagePermissions && Number(record.role) !== 3&& (
             <Button onClick={() => openPermissionsDrawer(record)}>
               Permisos
             </Button>

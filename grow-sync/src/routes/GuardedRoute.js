@@ -62,10 +62,6 @@ export default function GuardedRoute({
     };
   }, [accessToken, apiBase]);
 
-  if (requiredPermission && !hasPermission(user, requiredPermission)) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
@@ -90,7 +86,7 @@ export default function GuardedRoute({
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (requiredPermission && !hasPermission(requiredPermission)) {
+  if (requiredPermission && !hasPermission(user, requiredPermission)) {
     return <Navigate to="/dashboard" replace />;
   }
 

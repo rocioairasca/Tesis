@@ -14,6 +14,12 @@
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined } from '../../../components/AppIcons';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canEdit = hasPermission(currentUser, PERMISSIONS.LOTS_EDIT);
+const canDisable = hasPermission(currentUser, PERMISSIONS.LOTS_DISABLE);
 
 const LotTable = ({
     lots,
@@ -58,13 +64,13 @@ const LotTable = ({
                 );
             },
         },
-        {
+        (canEdit || canDisable) && {
             title: "Acciones",
             key: "actions",
             width: 96,
             render: (_, record) => (
                 <Space size="small">
-                    <Tooltip title="Editar">
+                    {canEdit && <Tooltip title="Editar">
                         <Button
                             type="text"
                             shape="circle"
@@ -72,8 +78,8 @@ const LotTable = ({
                             onClick={() => onEdit(record)}
                             aria-label="Editar"
                         />
-                    </Tooltip>
-                    <Popconfirm
+                    </Tooltip>}
+                    {canDisable && <Popconfirm
                         title="¿Deshabilitar este lote?"
                         okText="Sí"
                         cancelText="No"
@@ -88,11 +94,11 @@ const LotTable = ({
                                 aria-label="Deshabilitar"
                             />
                         </Tooltip>
-                    </Popconfirm>
+                    </Popconfirm>}
                 </Space>
             ),
         },
-    ];
+    ].filter(Boolean);
 
     return (
         <Table

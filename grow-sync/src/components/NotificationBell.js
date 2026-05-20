@@ -105,6 +105,7 @@ const NotificationBell = ({ onOpenDrawer }) => {
             <Badge count={unreadCount} overflowCount={99}>
                 <Button
                     type="text"
+                    aria-label="Notificaciones"
                     icon={<BellOutlined style={{ fontSize: 20 }} />}
                     style={{ border: 'none' }}
                 />

@@ -9,6 +9,12 @@ import React from 'react';
 import { Table, Button, Space, Tooltip, Dropdown, Tag } from 'antd';
 import { EditOutlined, MoreOutlined, EyeOutlined } from '../../../components/AppIcons';
 import dayjs from 'dayjs';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
+const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
 
 const PlanningTable = ({
     list,
@@ -67,26 +73,26 @@ const PlanningTable = ({
             width: 140,
             render: (_, record) => {
                 const menuItems = [
-                    { key: "prog", label: "Marcar en progreso", onClick: () => onUpdateStatus(record, "en_progreso") },
-                    { key: "done", label: "Marcar completado", onClick: () => onUpdateStatus(record, "completado") },
-                    { type: "divider" },
-                    {
+                    canEdit && { key: "prog", label: "Marcar en progreso", onClick: () => onUpdateStatus(record, "en_progreso") },
+                    canEdit && { key: "done", label: "Marcar completado", onClick: () => onUpdateStatus(record, "completado") },
+                    (canEdit && canDisable) && { type: "divider" },
+                    canDisable && {
                         key: "cancel",
                         label: <span style={{ color: "#ff4d4f" }}>Cancelar</span>,
                         onClick: () => onCancel(record),
                     },
-                ];
+                ].filter(Boolean);
                 return (
                     <Space size="small">
                         <Tooltip title="Ver detalle">
                             <Button type="text" shape="circle" icon={<EyeOutlined />} onClick={() => onView(record)} />
                         </Tooltip>
-                        <Tooltip title="Editar">
+                        {canEdit && <Tooltip title="Editar">
                             <Button type="text" shape="circle" icon={<EditOutlined />} onClick={() => onEdit(record)} />
-                        </Tooltip>
-                        <Dropdown menu={{ items: menuItems }} placement="bottomRight">
+                        </Tooltip>}
+                        {menuItems.length > 0 && <Dropdown menu={{ items: menuItems }} placement="bottomRight">
                             <Button type="text" shape="circle" icon={<MoreOutlined />} />
-                        </Dropdown>
+                        </Dropdown>}
                     </Space>
                 );
             },

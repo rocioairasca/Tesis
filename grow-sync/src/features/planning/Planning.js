@@ -27,6 +27,8 @@ import isBetween from "dayjs/plugin/isBetween";
 import PlanningTable from "./components/PlanningTable";
 import PlanningListMobile from "./components/PlanningListMobile";
 import LotMapPreview from "./components/LotMapPreview";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 dayjs.extend(isBetween);
 
@@ -87,6 +89,10 @@ const Planning = () => {
 
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
+  const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
   //helpers
   // planificaciones que "tocan" un día (inicio/fin inclusivo)
@@ -327,7 +333,9 @@ const Planning = () => {
     setFilters(prev => ({ ...prev, [key]: val }));
   };
 
-  const disabledMenu = [{ key: "1", label: <span onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver Canceladas</span> }];
+  const disabledMenu = [
+    canViewDisabled && { key: "1", label: <span onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver canceladas</span> }
+  ].filter(Boolean);
 
   // ---------- UI ----------
   return (
@@ -346,15 +354,17 @@ const Planning = () => {
               ]}
             />
             {isMobile ? (
-              <Dropdown menu={{ items: disabledMenu }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
+              disabledMenu.length > 0 ? (
+                <Dropdown menu={{ items: disabledMenu }} placement="bottomRight" arrow>
+                  <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+                </Dropdown>
+              ) : null
             ) : (
               <Space>
-                <Button onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver Canceladas</Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
+                {canViewDisabled && <Button onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver canceladas</Button>}
+                {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
                   Nueva Planificación
-                </Button>
+                </Button>}
               </Space>
             )}
           </Space>
@@ -645,7 +655,7 @@ const Planning = () => {
               key={getId(item)}
               actions={[
                 <Button type="link" icon={<EyeOutlined />} onClick={() => { setOpenDay(null); openDetail(item); }}>Ver</Button>,
-                <Popconfirm
+                canDisable && <Popconfirm
                   title="¿Cancelar planificación?"
                   description="Esta acción no se puede deshacer."
                   onConfirm={() => { setOpenDay(null); handleCancel(item); }}
@@ -654,7 +664,7 @@ const Planning = () => {
                 >
                   <Button type="link" danger>Cancelar</Button>
                 </Popconfirm>,
-              ]}
+              ].filter(Boolean)}
             >
               <List.Item.Meta
                 title={<span>{statusTag(item.status)} <strong>{item.title || "Sin título"}</strong></span>}
@@ -672,10 +682,15 @@ const Planning = () => {
       </Drawer>
 
       {
-        isMobile && !isDrawerOpen && (
-          <div className="fab-button" onClick={() => openDrawer()}>
+        isMobile && !isDrawerOpen && canCreate && (
+          <button
+            type="button"
+            className="fab-button"
+            aria-label="Nueva planificacion"
+            onClick={() => openDrawer()}
+          >
             <PlusOutlined />
-          </div>
+          </button>
         )
       }
     </div >

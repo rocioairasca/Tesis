@@ -21,7 +21,7 @@ const LoginRegister = () => {
   const items = [
     {
       key: "login",
-      label: "Login",
+      label: "Iniciar sesion",
       children: <LoginForm />,
     },
   ];
@@ -29,7 +29,7 @@ const LoginRegister = () => {
   if (token) {
     items.push({
       key: "register",
-      label: "Register",
+      label: "Registrarse",
       children: <RegisterForm onSwitchToLogin={() => setActiveTab("login")} token={token} />,
     });
   }
@@ -58,7 +58,7 @@ const LoginRegister = () => {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <img src="/LogoGrande.png" alt="GrowSync Logo" style={{ width: 40, marginBottom: 8 }} />
           <Title level={3} style={{ marginBottom: 0 }}>Grow Sync</Title>
-          <Text>Bienvenido a nuestro software!</Text>
+          <Text>Bienvenido a Grow Sync</Text>
         </div>
 
         <Tabs

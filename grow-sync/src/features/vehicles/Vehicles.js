@@ -19,6 +19,8 @@ import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import VehicleTable from "./components/VehicleTable";
 import VehicleListMobile from "./components/VehicleListMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // ---- helpers ----
 const getId = (r) => r?.id ?? r?._id;
@@ -65,6 +67,9 @@ const Vehicles = () => {
   const [form] = Form.useForm();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canCreate = hasPermission(currentUser, PERMISSIONS.VEHICLES_CREATE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.VEHICLES_VIEW_DISABLED);
 
   // ---- API ----
   const fetchVehicles = useCallback(async () => {
@@ -150,11 +155,11 @@ const Vehicles = () => {
   };
 
   const menuItems = [
-    {
+    canViewDisabled && {
       key: "1",
       label: <span onClick={() => navigate("/vehiculos-deshabilitados")}>Ver Vehículos Deshabilitados</span>,
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -166,17 +171,19 @@ const Vehicles = () => {
         <Col>
           <Space>
             {isMobile ? (
-              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
+              menuItems.length > 0 ? (
+                <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
+                  <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+                </Dropdown>
+              ) : null
             ) : (
               <Space>
-                <Button onClick={() => navigate("/vehiculos-deshabilitados")}>
+                {canViewDisabled && <Button onClick={() => navigate("/vehiculos-deshabilitados")}>
                   Ver Vehículos Deshabilitados
-                </Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
+                </Button>}
+                {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
                   Agregar Vehículo
-                </Button>
+                </Button>}
               </Space>
             )}
           </Space>
@@ -273,10 +280,15 @@ const Vehicles = () => {
         </Form>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && (
-        <div className="fab-button" onClick={() => openDrawer()}>
+      {isMobile && !isDrawerOpen && canCreate && (
+        <button
+          type="button"
+          className="fab-button"
+          aria-label="Agregar vehiculo"
+          onClick={() => openDrawer()}
+        >
           <PlusOutlined />
-        </div>
+        </button>
       )}
     </div>
   );

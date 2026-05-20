@@ -72,18 +72,18 @@ html {
 }
 
 /* Botones Secundarios */
-.ant-btn-default {
-  background-color: #AFD06E;
-  border-color: #AFD06E;
-  color: white !important;
+.ant-btn-default:not(.ant-btn-dangerous) {
+  background-color: #fff;
+  border-color: #437118;
+  color: #437118 !important;
 }
 
 /* Botones Secundarios Hover */
-.ant-btn-default:hover,
-.ant-btn-default:focus {
-  background-color: #95ba56 !important;
-  border-color: #95ba56 !important;
-  color: white !important;
+.ant-btn-default:not(.ant-btn-dangerous):hover,
+.ant-btn-default:not(.ant-btn-dangerous):focus {
+  background-color: #edf4e4 !important;
+  border-color: #36590f !important;
+  color: #36590f !important;
 }
 
 .danger-button {
@@ -133,7 +133,8 @@ html {
 /* íconos de acción */
 .card-icons {
   display: flex;
-  gap: 12px;
+  gap: 4px;
+  align-items: center;
   font-size: 18px;
   color: #1d2a62;
   cursor: pointer;
@@ -168,10 +169,16 @@ html {
   z-index: 2000;
   cursor: pointer;
   transition: background 0.3s;
+  border: 0;
 }
 
 .fab-button:hover {
   background-color: #2c3a85;
+}
+
+.fab-button:focus-visible {
+  outline: 2px solid #437118;
+  outline-offset: 3px;
 }
 
 .flex-row {

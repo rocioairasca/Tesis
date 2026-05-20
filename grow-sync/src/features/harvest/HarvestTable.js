@@ -28,6 +28,8 @@ import {
 } from "../../services/harvestService";
 
 import { formatCropLabel, formatNumber } from "../../utils/harvestUtils";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -53,6 +55,10 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
     crop: null,
     includeDisabled: false,
   });
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canDisable = hasPermission(currentUser, PERMISSIONS.HARVEST_DISABLE);
+  const canEnable = hasPermission(currentUser, PERMISSIONS.HARVEST_ENABLE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW_DISABLED);
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -91,7 +97,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
     fetchRecords();
   }, [fetchRecords, refreshKey]);
 
-  const handleDisable = async (id) => {
+  const handleDisable = useCallback(async (id) => {
     try {
       await disableHarvestRecord(id);
       notification.success({
@@ -106,9 +112,9 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
           "No se pudo deshabilitar el registro",
       });
     }
-  };
+  }, [fetchRecords]);
 
-  const handleEnable = async (id) => {
+  const handleEnable = useCallback(async (id) => {
     try {
       await enableHarvestRecord(id);
       notification.success({
@@ -123,7 +129,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
           "No se pudo habilitar el registro",
       });
     }
-  };
+  }, [fetchRecords]);
 
   const columns = useMemo(() => {
     return [
@@ -180,12 +186,13 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
             <Tag color="default">Deshabilitado</Tag>
           ),
       },
-      {
+      (canDisable || canEnable) && {
         title: "Acciones",
         key: "actions",
         render: (_, record) => (
           <Space>
             {record.enabled ? (
+              canDisable && (
               <Popconfirm
                 title="Deshabilitar registro"
                 description="¿Querés deshabilitar este registro de cosecha?"
@@ -195,7 +202,9 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
               >
                 <Button icon={<StopOutlined />} danger />
               </Popconfirm>
+              )
             ) : (
+              canEnable && (
               <Popconfirm
                 title="Habilitar registro"
                 description="¿Querés volver a habilitar este registro de cosecha?"
@@ -205,12 +214,13 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
               >
                 <Button icon={<CheckCircleOutlined />} />
               </Popconfirm>
+              )
             )}
           </Space>
         ),
       },
-    ];
-  }, []);
+    ].filter(Boolean);
+  }, [canDisable, canEnable, handleDisable, handleEnable]);
 
   const renderMobileCards = () => {
     if (!records.length) {
@@ -255,8 +265,9 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
                 ) : null}
 
                 <div style={{ marginTop: 8 }}>
-                  {record.enabled ? (
-                    <Popconfirm
+                {record.enabled ? (
+                  canDisable && (
+                  <Popconfirm
                       title="Deshabilitar registro"
                       description="¿Querés deshabilitar este registro de cosecha?"
                       onConfirm={() => handleDisable(record.id)}
@@ -267,8 +278,10 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
                         Deshabilitar
                       </Button>
                     </Popconfirm>
-                  ) : (
-                    <Popconfirm
+                  )
+                ) : (
+                  canEnable && (
+                  <Popconfirm
                       title="Habilitar registro"
                       description="¿Querés volver a habilitar este registro de cosecha?"
                       onConfirm={() => handleEnable(record.id)}
@@ -279,7 +292,8 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
                         Habilitar
                       </Button>
                     </Popconfirm>
-                  )}
+                  )
+                )}
                 </div>
               </Space>
             </Card>
@@ -334,7 +348,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false }) => {
               }}
             >
               <Option value="enabled">Solo activos</Option>
-              <Option value="all">Activos y deshabilitados</Option>
+              {canViewDisabled && <Option value="all">Activos y deshabilitados</Option>}
             </Select>
           </Col>
         </Row>

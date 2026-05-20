@@ -8,6 +8,12 @@
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined } from '../../../components/AppIcons';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canEdit = hasPermission(currentUser, PERMISSIONS.VEHICLES_EDIT);
+const canDisable = hasPermission(currentUser, PERMISSIONS.VEHICLES_DISABLE);
 
 const VehicleTable = ({
     vehicles,
@@ -21,7 +27,7 @@ const VehicleTable = ({
 }) => {
 
     const columns = [
-        {
+        (canEdit || canDisable) && {
             title: "#",
             dataIndex: "index",
             key: "index",
@@ -61,7 +67,7 @@ const VehicleTable = ({
             width: 96,
             render: (_, record) => (
                 <Space size="small">
-                    <Tooltip title="Editar">
+                    {canEdit && <Tooltip title="Editar">
                         <Button
                             type="text"
                             shape="circle"
@@ -69,8 +75,8 @@ const VehicleTable = ({
                             icon={<EditOutlined />}
                             onClick={() => onEdit(record)}
                         />
-                    </Tooltip>
-                    <Popconfirm
+                    </Tooltip>}
+                    {canDisable && <Popconfirm
                         title="¿Deshabilitar este vehículo?"
                         okText="Sí"
                         cancelText="No"
@@ -85,11 +91,11 @@ const VehicleTable = ({
                                 icon={<DeleteOutlined />}
                             />
                         </Tooltip>
-                    </Popconfirm>
+                    </Popconfirm>}
                 </Space>
             ),
         },
-    ];
+    ].filter(Boolean);
 
     return (
         <Table

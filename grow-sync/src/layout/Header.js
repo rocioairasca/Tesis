@@ -95,6 +95,7 @@ const AppHeader = () => {
                 {/* Cerrar sesión */}
                 <Button
                     type="text"
+                    aria-label="Cerrar sesion"
                     icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
                     onClick={handleLogout}
                 />

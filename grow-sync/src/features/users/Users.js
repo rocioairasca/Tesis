@@ -10,6 +10,8 @@ import { Button, Modal, Form, Input, Select, message, Space } from "antd";
 import { UserAddOutlined, CopyOutlined } from '../../components/AppIcons';
 import UserTable from "../../components/users/UserTable";
 import { inviteUser } from "../../services/authService";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const ROLE_OPTIONS = [
   { value: 0, label: "Empleado" },
@@ -22,6 +24,8 @@ const Users = () => {
   const [loading, setLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
   const [form] = Form.useForm();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canInvite = hasPermission(currentUser, PERMISSIONS.USERS_INVITE);
 
   const handleInvite = async (values) => {
     try {
@@ -41,7 +45,7 @@ const Users = () => {
   const handleCopyLink = () => {
     if (inviteLink) {
       navigator.clipboard.writeText(inviteLink);
-      message.success("Link copiado al portapapeles");
+      message.success("Enlace copiado al portapapeles");
     }
   };
 
@@ -55,20 +59,20 @@ const Users = () => {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1>Gestión de Usuarios</h1>
-        <Button
+        {canInvite && <Button
           type="primary"
           icon={<UserAddOutlined />}
           onClick={() => setIsModalOpen(true)}
           style={{ backgroundColor: "#437118", borderColor: "#437118" }}
         >
-          Invitar Usuario
-        </Button>
+          Invitar usuario
+        </Button>}
       </div>
 
       <UserTable />
 
       <Modal
-        title="Invitar Nuevo Usuario"
+        title="Invitar nuevo usuario"
         open={isModalOpen}
         onCancel={handleCloseModal}
         footer={null}
@@ -113,7 +117,7 @@ const Users = () => {
           </Form>
         ) : (
           <div>
-            <p style={{ marginBottom: 8, fontWeight: 500 }}>Link de invitación generado:</p>
+            <p style={{ marginBottom: 8, fontWeight: 500 }}>Enlace de invitacion generado:</p>
             <Input.TextArea
               value={inviteLink}
               readOnly
@@ -127,14 +131,14 @@ const Users = () => {
                 onClick={handleCopyLink}
                 style={{ backgroundColor: "#437118", borderColor: "#437118" }}
               >
-                Copiar Link
+                Copiar enlace
               </Button>
               <Button onClick={handleCloseModal}>
                 Cerrar
               </Button>
             </Space>
             <p style={{ marginTop: 16, fontSize: 12, color: "#888" }}>
-              Comparte este link con el nuevo usuario. El link expira en 7 días.
+              Comparte este enlace con el nuevo usuario. El enlace expira en 7 dias.
             </p>
           </div>
         )}

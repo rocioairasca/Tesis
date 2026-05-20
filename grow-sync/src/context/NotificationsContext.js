@@ -18,7 +18,6 @@ export const NotificationsProvider = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [socket, setSocket] = useState(null);
 
     // Fetch notifications
     const fetchNotifications = useCallback(async (filters = {}) => {
@@ -93,7 +92,6 @@ export const NotificationsProvider = ({ children }) => {
                     : 'http://localhost:4000';
 
                 newSocket = io(socketUrl);
-                setSocket(newSocket);
 
                 newSocket.on('connect', () => {
                     console.log('Conectado al servidor de notificaciones');

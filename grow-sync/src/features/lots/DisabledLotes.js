@@ -4,6 +4,8 @@ import { LeftOutlined, CheckOutlined, EnvironmentOutlined, AimOutlined } from '.
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // helpers
 const getId = (r) => r?.id ?? r?._id;
@@ -14,6 +16,8 @@ const DisabledLots = () => {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEnable = hasPermission(currentUser, PERMISSIONS.LOTS_ENABLE);
 
   const fetchDisabledLots = useCallback(async () => {
     setLoading(true);
@@ -54,7 +58,7 @@ const DisabledLots = () => {
     },
     { title: "Nombre del Lote", dataIndex: "name", key: "name" },
     { title: "Área Total (ha)", dataIndex: "area", key: "area" },
-    {
+    canEnable && {
       title: "Acciones",
       key: "actions",
       width: 72,
@@ -78,7 +82,7 @@ const DisabledLots = () => {
         </Space>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -126,9 +130,9 @@ const DisabledLots = () => {
                 {lot.location ? "Asignada" : "No asignada"}
               </p>
 
-              <Button type="primary" block style={{ marginTop: 12 }} onClick={() => handleEnable(getId(lot))}>
+              {canEnable && <Button type="primary" block style={{ marginTop: 12 }} onClick={() => handleEnable(getId(lot))}>
                 Habilitar Lote
-              </Button>
+              </Button>}
             </div>
           ))}
         </div>

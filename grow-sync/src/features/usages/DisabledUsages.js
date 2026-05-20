@@ -6,6 +6,8 @@ import dayjs from "dayjs";
 import useIsMobile from "../../hooks/useIsMobile";
 import { Package, MapPin, Ruler } from '../../components/AppIcons';
 import api from "../../services/apiClient";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // helpers
 const getId = (r) => r?.id ?? r?._id;
@@ -24,6 +26,8 @@ const DisabledUsages = () => {
 
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEnable = hasPermission(currentUser, PERMISSIONS.USAGE_ENABLE);
 
   const fetchDisabledUsages = useCallback(async () => {
     try {
@@ -127,7 +131,7 @@ const DisabledUsages = () => {
       key: "date",
       render: (text) => (text ? dayjs(text).format("DD/MM/YYYY") : "-"),
     },
-    {
+    canEnable && {
       title: "Acciones",
       key: "actions",
       width: 72,
@@ -143,7 +147,7 @@ const DisabledUsages = () => {
         </Tooltip>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -205,11 +209,11 @@ const DisabledUsages = () => {
                   <CalendarOutlined style={{ marginRight: 8 }} /> <strong>Fecha:</strong> {date}
                 </p>
 
-                <div style={{ marginTop: 12 }}>
+                {canEnable && <div style={{ marginTop: 12 }}>
                   <Button type="primary" block onClick={() => handleEnable(getId(usage))}>
                     Habilitar Registro
                   </Button>
-                </div>
+                </div>}
               </div>
             );
           })}

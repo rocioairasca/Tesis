@@ -12,6 +12,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // ---- helpers de formato (mismos criterios que Inventory) ----
 const UNIT_DISPLAY = {
@@ -51,6 +53,8 @@ const DisabledInventory = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEnable = hasPermission(currentUser, PERMISSIONS.INVENTORY_ENABLE);
 
   const fetchDisabledProducts = useCallback(async () => {
     setLoading(true);
@@ -125,7 +129,7 @@ const DisabledInventory = () => {
         );
       },
     },
-    {
+    canEnable && {
       title: "Acciones",
       key: "actions",
       width: 72,
@@ -141,7 +145,7 @@ const DisabledInventory = () => {
         </Tooltip>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -212,11 +216,11 @@ const DisabledInventory = () => {
                 )}
               </p>
 
-              <div style={{ marginTop: 12 }}>
+              {canEnable && <div style={{ marginTop: 12 }}>
                 <Button type="primary" block onClick={() => handleEnable(getId(product))}>
                   Habilitar Producto
                 </Button>
-              </div>
+              </div>}
             </div>
           ))}
         </div>

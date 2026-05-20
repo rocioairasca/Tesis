@@ -11,8 +11,14 @@
  *  - Organización del código para separar responsabilidades de UI.
  */
 import React from 'react';
-import { Button } from 'antd';
+import { Button, Popconfirm, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined } from '../../../components/AppIcons';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canEdit = hasPermission(currentUser, PERMISSIONS.LOTS_EDIT);
+const canDisable = hasPermission(currentUser, PERMISSIONS.LOTS_DISABLE);
 
 const LotListMobile = ({
     lots,
@@ -30,8 +36,32 @@ const LotListMobile = ({
                     <div className="card-header">
                         <h3>{lot.name}</h3>
                         <div className="card-icons">
-                            <EditOutlined onClick={() => onEdit(lot)} />
-                            <DeleteOutlined onClick={() => onDelete(getId(lot))} />
+                            {canEdit && <Tooltip title="Editar">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    aria-label={`Editar ${lot.name}`}
+                                    icon={<EditOutlined />}
+                                    onClick={() => onEdit(lot)}
+                                />
+                            </Tooltip>}
+                            {canDisable && <Popconfirm
+                                title="Deshabilitar lote"
+                                description="Esta accion se puede revertir desde lotes deshabilitados."
+                                okText="Si"
+                                cancelText="No"
+                                onConfirm={() => onDelete(getId(lot))}
+                            >
+                                <Tooltip title="Deshabilitar">
+                                    <Button
+                                        type="text"
+                                        danger
+                                        shape="circle"
+                                        aria-label={`Deshabilitar ${lot.name}`}
+                                        icon={<DeleteOutlined />}
+                                    />
+                                </Tooltip>
+                            </Popconfirm>}
                         </div>
                     </div>
 

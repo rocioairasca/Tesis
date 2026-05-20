@@ -4,6 +4,8 @@ import { ArrowLeftOutlined, CheckOutlined } from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.title ?? String(Math.random());
@@ -14,6 +16,8 @@ const DisabledPlanning = () => {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEnable = hasPermission(currentUser, PERMISSIONS.PLANNING_ENABLE);
 
   const fetchDisabled = useCallback(async () => {
     setLoading(true);
@@ -47,7 +51,7 @@ const DisabledPlanning = () => {
     { title: "Título", dataIndex: "title" },
     { title: "Actividad", dataIndex: "activity_type", render: (t) => <Tag color="blue">{t || "—"}</Tag> },
     { title: "Estado", dataIndex: "status", render: (s) => <Tag color={STATUS_COLORS[s] || "default"}>{s}</Tag> },
-    {
+    canEnable && {
       title: "Acciones",
       key: "actions",
       width: 72,
@@ -63,7 +67,7 @@ const DisabledPlanning = () => {
         </Tooltip>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>

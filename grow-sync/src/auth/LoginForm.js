@@ -59,7 +59,7 @@ const LoginForm = () => {
           loading={loading}
           style={{ backgroundColor: "#437118", borderColor: "#437118" }}
         >
-          Login
+          Iniciar sesion
         </Button>
       </Form.Item>
     </Form>

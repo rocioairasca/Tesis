@@ -6,11 +6,17 @@
  *  Utiliza tarjetas (cards) para mostrar la información de manera responsive.
  */
 import React from 'react';
-import { Tag } from 'antd';
+import { Button, Popconfirm, Tag, Tooltip } from 'antd';
 import {
     EditOutlined, DeleteOutlined, AppstoreOutlined, InboxOutlined,
     DollarOutlined, CalendarOutlined, ExclamationCircleOutlined
 } from '../../../components/AppIcons';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canDisable = hasPermission(currentUser, PERMISSIONS.INVENTORY_DISABLE);
+const canEdit = hasPermission(currentUser, PERMISSIONS.INVENTORY_EDIT);
 
 const ProductListMobile = ({
     products,
@@ -32,8 +38,32 @@ const ProductListMobile = ({
                         <div className="card-header">
                             <h3>{product.name}</h3>
                             <div className="card-icons">
-                                <EditOutlined onClick={() => onEdit(product)} />
-                                <DeleteOutlined onClick={() => onDelete(getId(product))} />
+                                {canEdit && <Tooltip title="Editar">
+                                    <Button
+                                        type="text"
+                                        shape="circle"
+                                        aria-label={`Editar ${product.name}`}
+                                        icon={<EditOutlined />}
+                                        onClick={() => onEdit(product)}
+                                    />
+                                </Tooltip>}
+                                {canDisable && <Popconfirm
+                                    title="Deshabilitar producto"
+                                    description="Esta accion se puede revertir desde productos deshabilitados."
+                                    okText="Si"
+                                    cancelText="No"
+                                    onConfirm={() => onDelete(getId(product))}
+                                >
+                                    <Tooltip title="Deshabilitar">
+                                        <Button
+                                            type="text"
+                                            danger
+                                            shape="circle"
+                                            aria-label={`Deshabilitar ${product.name}`}
+                                            icon={<DeleteOutlined />}
+                                        />
+                                    </Tooltip>
+                                </Popconfirm>}
                             </div>
                         </div>
 

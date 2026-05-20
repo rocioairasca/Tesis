@@ -7,9 +7,13 @@ import HarvestTable from "./HarvestTable";
 import HarvestForm from "./HarvestForm";
 
 import api from "../../services/apiClient";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const Harvest = () => {
     const isMobile = useIsMobile();
+    const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+    const canCreate = hasPermission(currentUser, PERMISSIONS.HARVEST_CREATE);
 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -75,7 +79,7 @@ const Harvest = () => {
 
         <Col>
           <Space>
-            {!isMobile && (
+            {!isMobile && canCreate && (
               <Button type="primary" onClick={openDrawer}>
                 Agregar Registro
               </Button>
@@ -104,10 +108,15 @@ const Harvest = () => {
         />
       </Drawer>
 
-      {isMobile && !isDrawerOpen && (
-        <div className="fab-button" onClick={openDrawer}>
+      {isMobile && !isDrawerOpen && canCreate && (
+        <button
+          type="button"
+          className="fab-button"
+          aria-label="Agregar registro de cosecha"
+          onClick={openDrawer}
+        >
           <PlusOutlined />
-        </div>
+        </button>
       )}
     </div>
   );

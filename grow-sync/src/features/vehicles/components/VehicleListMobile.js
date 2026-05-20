@@ -8,6 +8,13 @@
 import React from 'react';
 import { EditOutlined, DeleteOutlined, CarOutlined } from '../../../components/AppIcons';
 import { Truck, IdentificationCard, ClipboardText, Gauge } from '../../../components/AppIcons';
+import { Button, Popconfirm, Tooltip } from 'antd';
+import { PERMISSIONS } from "../../../constants/permissions";
+import { hasPermission } from "../../../utils/permissions";
+
+const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+const canEdit = hasPermission(currentUser, PERMISSIONS.VEHICLES_EDIT);
+const canDisable = hasPermission(currentUser, PERMISSIONS.VEHICLES_DISABLE);
 
 const VehicleListMobile = ({
     vehicles,
@@ -25,8 +32,32 @@ const VehicleListMobile = ({
                     <div className="card-header">
                         <h3>{v.name}</h3>
                         <div className="card-icons">
-                            <EditOutlined onClick={() => onEdit(v)} />
-                            <DeleteOutlined onClick={() => onDisable(getId(v))} />
+                            {canEdit && <Tooltip title="Editar">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    aria-label={`Editar ${v.name}`}
+                                    icon={<EditOutlined />}
+                                    onClick={() => onEdit(v)}
+                                />
+                            </Tooltip>}
+                            {canDisable && <Popconfirm
+                                title="Deshabilitar vehiculo"
+                                description="Esta accion se puede revertir desde vehiculos deshabilitados."
+                                okText="Si"
+                                cancelText="No"
+                                onConfirm={() => onDisable(getId(v))}
+                            >
+                                <Tooltip title="Deshabilitar">
+                                    <Button
+                                        type="text"
+                                        danger
+                                        shape="circle"
+                                        aria-label={`Deshabilitar ${v.name}`}
+                                        icon={<DeleteOutlined />}
+                                    />
+                                </Tooltip>
+                            </Popconfirm>}
                         </div>
                     </div>
 

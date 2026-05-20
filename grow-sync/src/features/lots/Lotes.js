@@ -20,6 +20,8 @@ import useIsMobile from "../../hooks/useIsMobile";
 import MapSelector from '../../components/MapSelector';
 import LotTable from "./components/LotTable";
 import LotListMobile from "./components/LotListMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // -------- helpers --------
 const getId = (r) => r?.id ?? r?._id;
@@ -49,6 +51,9 @@ const Lotes = () => {
   const mapRef = useRef();
 
   const isMobile = useIsMobile();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canCreate = hasPermission(currentUser, PERMISSIONS.LOTS_CREATE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.LOTS_VIEW_DISABLED);
 
   // cargamos los lotes desde el back
   const fetchLots = useCallback(async () => {
@@ -127,7 +132,7 @@ const Lotes = () => {
   };
 
   const menuItems = [
-    {
+    canViewDisabled && {
       key: "1",
       label: (
         <span onClick={() => (window.location.href = "/lotes-deshabilitados")}>
@@ -135,7 +140,7 @@ const Lotes = () => {
         </span>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -147,17 +152,19 @@ const Lotes = () => {
         <Col>
           <Space>
             {isMobile ? (
-              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
+              menuItems.length > 0 ? (
+                <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
+                  <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+                </Dropdown>
+              ) : null
             ) : (
               <Space>
-                <Button onClick={() => window.location.href = "/lotes-deshabilitados"}>
+                {canViewDisabled && <Button onClick={() => window.location.href = "/lotes-deshabilitados"}>
                   Ver Lotes Deshabilitados
-                </Button>
-                <Button type="primary" onClick={() => openDrawer()}>
+                </Button>}
+                {canCreate && <Button type="primary" onClick={() => openDrawer()}>
                   Agregar Lote
-                </Button>
+                </Button>}
               </Space>
             )}
           </Space>
@@ -277,10 +284,15 @@ const Lotes = () => {
         </Drawer>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && (
-        <div className="fab-button" onClick={() => openDrawer()}>
+      {isMobile && !isDrawerOpen && canCreate && (
+        <button
+          type="button"
+          className="fab-button"
+          aria-label="Agregar lote"
+          onClick={() => openDrawer()}
+        >
           <PlusOutlined />
-        </div>
+        </button>
       )}
     </div>
   );

@@ -13,6 +13,8 @@ import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 const Usage = () => {
   const [usages, setUsages] = useState([]);
@@ -28,6 +30,11 @@ const Usage = () => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canCreate = hasPermission(currentUser, PERMISSIONS.USAGE_CREATE);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.USAGE_EDIT);
+  const canDisable = hasPermission(currentUser, PERMISSIONS.USAGE_DISABLE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.USAGE_VIEW_DISABLED);
 
   const getId = (r) => r?.id ?? r?._id;
   const rowKey = (r) => getId(r) ?? `${r?.product_id}-${r?.date}`;
@@ -248,13 +255,13 @@ const Usage = () => {
       key: "date",
       render: (text) => (text ? dayjs(text).format("DD/MM/YYYY") : "-"),
     },
-    {
+    (canEdit || canDisable) && {
       title: "Acciones",
       key: "actions",
       width: 96,
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="Editar">
+          {canEdit && <Tooltip title="Editar">
             <Button
               type="text"
               shape="circle"
@@ -262,8 +269,8 @@ const Usage = () => {
               icon={<EditOutlined />}
               onClick={() => openDrawer(record)}
             />
-          </Tooltip>
-          <Popconfirm
+          </Tooltip>}
+          {canDisable && <Popconfirm
             title="¿Deshabilitar este registro?"
             okText="Sí"
             cancelText="No"
@@ -278,18 +285,18 @@ const Usage = () => {
                 icon={<DeleteOutlined />}
               />
             </Tooltip>
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   const menuItems = [
-    {
+    canViewDisabled && {
       key: "1",
       label: <span onClick={() => navigate("/usages-disabled")}>Ver Registros Deshabilitados</span>,
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -300,17 +307,19 @@ const Usage = () => {
         <Col>
           <Space>
             {isMobile ? (
-              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
+              menuItems.length > 0 ? (
+                <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
+                  <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+                </Dropdown>
+              ) : null
             ) : (
               <Space>
-                <Button onClick={() => navigate("/usages-disabled")}>
+                {canViewDisabled && <Button onClick={() => navigate("/usages-disabled")}>
                   Ver Registros Deshabilitados
-                </Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
+                </Button>}
+                {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
                   Agregar Registro
-                </Button>
+                </Button>}
               </Space>
             )}
           </Space>
@@ -346,8 +355,32 @@ const Usage = () => {
                 <div className="card-header">
                   <h3>{product?.name || "Producto"}</h3>
                   <div className="card-icons">
-                    <EditOutlined onClick={() => openDrawer(usage)} />
-                    <DeleteOutlined onClick={() => handleDelete(getId(usage))} />
+                    {canEdit && <Tooltip title="Editar">
+                      <Button
+                        type="text"
+                        shape="circle"
+                        aria-label={`Editar ${product?.name || "registro de uso"}`}
+                        icon={<EditOutlined />}
+                        onClick={() => openDrawer(usage)}
+                      />
+                    </Tooltip>}
+                    {canDisable && <Popconfirm
+                      title="Deshabilitar registro"
+                      description="Esta accion se puede revertir desde registros deshabilitados."
+                      okText="Si"
+                      cancelText="No"
+                      onConfirm={() => handleDelete(getId(usage))}
+                    >
+                      <Tooltip title="Deshabilitar">
+                        <Button
+                          type="text"
+                          danger
+                          shape="circle"
+                          aria-label={`Deshabilitar ${product?.name || "registro de uso"}`}
+                          icon={<DeleteOutlined />}
+                        />
+                      </Tooltip>
+                    </Popconfirm>}
                   </div>
                 </div>
 
@@ -474,10 +507,15 @@ const Usage = () => {
         </Form>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && (
-        <div className="fab-button" onClick={() => openDrawer()}>
+      {isMobile && !isDrawerOpen && canCreate && (
+        <button
+          type="button"
+          className="fab-button"
+          aria-label="Agregar registro de uso"
+          onClick={() => openDrawer()}
+        >
           <PlusOutlined />
-        </div>
+        </button>
       )}
     </div>
   );

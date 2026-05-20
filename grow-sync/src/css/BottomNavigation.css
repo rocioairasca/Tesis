@@ -7,18 +7,37 @@
     background: #fff;
     border-top: 1px solid #eee;
     display: flex;
-    justify-content: space-evenly; 
+    justify-content: space-evenly;
     align-items: center;
     padding: 0 10px;
     z-index: 1000;
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
     gap: 18px;
 }
-  
-/* Estilo general para íconos */
-.bottom-nav svg {
-    font-size: 30px !important;
-    color: #1d2a62;
+
+.bottom-nav__button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    color: #666;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    border-radius: 8px;
 }
-  
+
+.bottom-nav__button:focus-visible {
+    outline: 2px solid #437118;
+    outline-offset: 2px;
+}
+
+.bottom-nav__button--active {
+    color: #1D2A62;
+    background: #edf4e4;
+}
+
+.bottom-nav__button svg {
+    font-size: 30px !important;
+}

@@ -214,7 +214,7 @@ const Inventory = () => {
   };
 
   const menuItems = [
-    {
+    canViewDisabled && {
       key: "1",
       label: (
         <span onClick={() => (window.location.href = "/productos-deshabilitados")}>
@@ -222,7 +222,7 @@ const Inventory = () => {
         </span>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   // ------------------------- RENDER -------------------------
   return (
@@ -237,7 +237,7 @@ const Inventory = () => {
         </Col>
         <Col>
           <Space>
-            {isMobile && (
+            {isMobile && menuItems.length > 0 && (
               <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
                 <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
               </Dropdown>
@@ -384,10 +384,15 @@ const Inventory = () => {
         </Form>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && (
-        <div className="fab-button" onClick={() => openDrawer(null)}>
+      {isMobile && !isDrawerOpen && canCreate && (
+        <button
+          type="button"
+          className="fab-button"
+          aria-label="Agregar producto"
+          onClick={() => openDrawer(null)}
+        >
           <PlusOutlined />
-        </div>
+        </button>
       )}
     </div>
   );

@@ -4,6 +4,8 @@ import { ArrowLeftOutlined, CheckOutlined, CarOutlined } from '../../components/
 import { useNavigate } from "react-router-dom";
 import useIsMobile from "../../hooks/useIsMobile";
 import api from "../../services/apiClient";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 // ---- helpers ----
 const getId = (r) => r?.id ?? r?._id;
@@ -28,6 +30,8 @@ const DisabledVehicles = () => {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const canEnable = hasPermission(currentUser, PERMISSIONS.VEHICLES_ENABLE);
 
   const fetchDisabledVehicles = useCallback(async () => {
     setLoading(true);
@@ -59,7 +63,7 @@ const DisabledVehicles = () => {
   };
 
   const columns = [
-    {
+    canEnable && {
       title: "#",
       dataIndex: "index",
       key: "index",
@@ -109,7 +113,7 @@ const DisabledVehicles = () => {
         </Tooltip>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div style={{ padding: 24 }}>
@@ -158,11 +162,11 @@ const DisabledVehicles = () => {
               <p><strong>Capacidad:</strong> {v.capacity != null ? numberFmt(v.capacity) : "—"}</p>
               <p><strong>Estado:</strong> {statusTag(v.status)}</p>
 
-              <div style={{ marginTop: 12 }}>
+              {canEnable && <div style={{ marginTop: 12 }}>
                 <Button type="primary" block onClick={() => handleEnable(getId(v))}>
                   Habilitar Vehículo
                 </Button>
-              </div>
+              </div>}
             </div>
           ))}
         </div>
