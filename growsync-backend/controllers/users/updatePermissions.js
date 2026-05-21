@@ -19,6 +19,7 @@ module.exports = async function updatePermissions(req, res, next) {
             .from('users')
             .select('id,email,role,company_id,custom_permissions')
             .eq('id', id)
+            .eq('company_id', req.user.company_id)
             .maybeSingle();
         
         if (fetchErr) throw fetchErr;
@@ -48,6 +49,7 @@ module.exports = async function updatePermissions(req, res, next) {
             .from('users')
             .update({ custom_permissions })
             .eq('id', id)
+            .eq('company_id', req.user.company_id)
             .select('id,email,full_name,role,enabled,company_id,custom_permissions')
             .maybeSingle();
 

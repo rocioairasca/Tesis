@@ -25,8 +25,9 @@ module.exports = async function updateRole(req, res, next) {
     // 2) Traer usuario destino
     const { data: target, error: fetchErr } = await supabase
       .from('users')
-      .select('id,email,full_name,role,enabled')
+      .select('id,email,full_name,role,enabled,company_id')
       .eq('id', id)
+      .eq('company_id', req.user.company_id)
       .maybeSingle();
 
     if (fetchErr) throw fetchErr;
@@ -52,6 +53,7 @@ module.exports = async function updateRole(req, res, next) {
         .select('id', { count: 'exact', head: true })
         .eq('role', 3)
         .eq('enabled', true)
+        .eq('company_id', req.user.company_id)
         .neq('id', target.id); // otros admins
 
       if (countErr) throw countErr;
@@ -69,7 +71,8 @@ module.exports = async function updateRole(req, res, next) {
       .from('users')
       .update({ role: newRole })
       .eq('id', id)
-      .select('id,email,full_name,role,enabled')
+      .eq('company_id', req.user.company_id)
+      .select('id,email,full_name,role,enabled,company_id')
       .maybeSingle();
 
     if (updErr) throw updErr;

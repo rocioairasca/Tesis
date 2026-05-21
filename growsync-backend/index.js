@@ -62,14 +62,17 @@ app.use('/api', authRoutes);
 // ---------------------------------------------------
 const checkJwt = require('./middleware/checkJwt');
 const userData = require('./middleware/userData');
+const requireTenant = require('./middleware/requireTenant');
 
 app.use(checkJwt);
 app.use(userData);
+app.use(requireTenant);
 
-app.get("/api/debug/me", checkJwt, userData, (req, res) => {
+app.get("/api/debug/me", (req, res) => {
   res.json({
     message: "Usuario autenticado correctamente",
     user: req.user,
+    tenant: req.tenant,
   });
 });
 

@@ -66,6 +66,7 @@ router.get('/',
       let query = supabase
         .from('users')
         .select(columns, { count: 'exact' })
+        .eq('company_id', req.user.company_id)
         .order('created_at', { ascending: false });
 
       if (!includeDisabled) query = query.eq('enabled', true);
@@ -148,6 +149,7 @@ router.get('/email/:email',
           )
         `)
         .eq('email', email)
+        .eq('company_id', req.user.company_id)
         .maybeSingle();
 
       if (error) {
