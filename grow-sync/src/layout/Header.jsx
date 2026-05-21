@@ -105,12 +105,17 @@ const AppHeader = ({ companyName }) => {
                 </div>
 
                 {/* Cerrar sesión */}
-                <Button
-                    type="text"
-                    aria-label="Cerrar sesion"
-                    icon={<LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />}
-                    onClick={handleLogout}
-                />
+                <Popconfirm
+                    title="Cerrar sesión"
+                    description="¿Estás seguro de que quieres cerrar sesión?"
+                    okText="Sí"
+                    cancelText="Cancelar"
+                    onConfirm={handleLogout}
+                >
+                    <Button>
+                        <LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />
+                    </Button>
+                </Popconfirm>
             </div>
 
             {/* Drawer de notificaciones */}

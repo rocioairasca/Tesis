@@ -155,6 +155,11 @@ const MapSelector = ({
       return;
     }
 
+    if (userPosition) {
+      mapRef.current.setView([userPosition.lat, userPosition.lng], 15);
+      return;
+    }
+
     const allCoordinates = lots.flatMap((lot) => {
       const ring = getLocationRing(lot.location);
       return ring?.map(({ lat, lng }) => [lat, lng]) || [];
@@ -162,11 +167,6 @@ const MapSelector = ({
 
     if (allCoordinates.length > 0) {
       mapRef.current.fitBounds(allCoordinates, { padding: [50, 50] });
-      return;
-    }
-
-    if (userPosition) {
-      mapRef.current.setView([userPosition.lat, userPosition.lng], 15);
       return;
     }
 
@@ -371,6 +371,11 @@ const AutoFitMap = ({ selectedLocation, lots, userPosition }) => {
       return;
     }
 
+    if (userPosition) {
+      map.setView([userPosition.lat, userPosition.lng], 15);
+      return;
+    }
+
     const allCoordinates = lots.flatMap((lot) => {
       const ring = getLocationRing(lot.location);
       return ring?.map(({ lat, lng }) => [lat, lng]) || [];
@@ -378,11 +383,6 @@ const AutoFitMap = ({ selectedLocation, lots, userPosition }) => {
 
     if (allCoordinates.length > 0) {
       map.fitBounds(allCoordinates, { padding: [50, 50] });
-      return;
-    }
-
-    if (userPosition) {
-      map.setView([userPosition.lat, userPosition.lng], 15);
     }
   }, [map, selectedLocation, lots, userPosition]);
 

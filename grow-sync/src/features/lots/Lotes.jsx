@@ -85,6 +85,31 @@ const Lotes = () => {
       });
     } else {
       form.resetFields();
+
+      navigator.geolocation?.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+
+          const userLocation = {
+            type: "Point",
+            coordinates: [longitude, latitude],
+          };
+
+          form.setFieldsValue({
+            location: JSON.stringify(userLocation),
+          });
+
+          
+        },
+        (error) => {
+          console.warn("No se pudo obtener la ubicación del usuario:", error.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
     }
     setIsDrawerOpen(true);
   };
