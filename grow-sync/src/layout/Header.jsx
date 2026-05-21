@@ -45,67 +45,92 @@ const AppHeader = ({ companyName }) => {
     return (
         <Header
             style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "0 20px",
-                background: "#fff",
-                position: "sticky",
-                top: 0,
-                zIndex: 1000,
-                width: "100%",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: isMobile ? "0 12px" : "0 20px",
+            background: "#fff",
+            position: "sticky",
+            top: 0,
+            zIndex: 1000,
+            width: "100%",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            overflow: "hidden",
             }}
         >
-            {/* IZQUIERDA: logo solo en mobile */}
-
+            {/* IZQUIERDA */}
             <div
                 style={{
-                    flex: 1,
-                    paddingLeft: 24,
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: "#26356f",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    minWidth: 0,
                 }}
             >
-                {companyName}
-            </div>
-            {isMobile && (
-                <div style={{ display: "flex", alignItems: "center" }}>
-                    <img src="/LogoGrande.png" alt="GrowSync" style={{ height: 50 }} />
-                </div>
-            )}
+                <img
+                    src="/LogoGrande.png"
+                    alt="GrowSync"
+                    style={{
+                    height: isMobile ? 36 : 42,
+                    flexShrink: 0,
+                    }}
+                />
 
-            {/* ESPACIO ENTRE logo y contenido */}
-            <div style={{ flexGrow: 1 }} />
-
-            {/* DERECHA: notificaciones + usuario + logout */}
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                {/* Notificaciones */}
-                <NotificationBell onOpenDrawer={() => setNotificationsDrawerOpen(true)} />
-
-                {/* Usuario */}
                 <div
-                    style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "default" }}
+                    style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    minWidth: 0,
+                    }}
                 >
-                    <Avatar
-                        src={user?.picture}
-                        icon={!user?.picture && <UserOutlined />}
-                        size="large"
-                    />
                     <span
                         style={{
-                            fontSize: "16px",
-                            fontWeight: 500,
-                            color: "#1D2A62",
-                            whiteSpace: "nowrap",
+                            fontWeight: 700,
+                            color: "#26356f",
+                            fontSize: isMobile ? 14 : 16,
+                            lineHeight: 1.1,
                         }}
-                        title={displayName}
                     >
-                        {displayName}
+                        GrowSync
+                    </span>
+
+                    <span
+                        style={{
+                            fontSize: isMobile ? 11 : 13,
+                            color: "#666",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: isMobile ? 120 : 240,
+                        }}
+                    >
+                        {companyName}
                     </span>
                 </div>
+            </div>
 
-                {/* Cerrar sesión */}
+            {/* DERECHA */}
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: isMobile ? 10 : 18,
+                    flexShrink: 0,
+                }}
+            >
+                {/* Campanita */}
+                <NotificationBell
+                    onOpenDrawer={() => setNotificationsDrawerOpen(true)}
+                />
+
+                {/* Avatar */}
+                <Avatar
+                    src={user?.picture}
+                    icon={!user?.picture && <UserOutlined />}
+                    size={isMobile ? "default" : "large"}
+                />
+
+                {/* Logout */}
                 <Popconfirm
                     title="Cerrar sesión"
                     description="¿Estás seguro de que quieres cerrar sesión?"
@@ -113,13 +138,21 @@ const AppHeader = ({ companyName }) => {
                     cancelText="Cancelar"
                     onConfirm={handleLogout}
                 >
-                    <Button>
-                        <LogoutOutlined style={{ fontSize: "20px", color: "#ff4d4f" }} />
-                    </Button>
+                    <Button
+                        type="text"
+                        icon={
+                            <LogoutOutlined
+                                style={{
+                                    fontSize: 20,
+                                    color: "#ff4d4f",
+                                }}
+                            />
+                        }
+                    />
                 </Popconfirm>
             </div>
 
-            {/* Drawer de notificaciones */}
+            {/* Drawer */}
             <NotificationsDrawer
                 open={notificationsDrawerOpen}
                 onClose={() => setNotificationsDrawerOpen(false)}
