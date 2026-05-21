@@ -45,17 +45,19 @@ const AppHeader = ({ companyName }) => {
     return (
         <Header
             style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: isMobile ? "0 12px" : "0 20px",
-            background: "#fff",
-            position: "sticky",
-            top: 0,
-            zIndex: 1000,
-            width: "100%",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-            overflow: "hidden",
+                height: 64,
+                lineHeight: 'normal',
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: isMobile ? "0 12px" : "0 20px",
+                background: "#fff",
+                position: "sticky",
+                top: 0,
+                zIndex: 1000,
+                width: "100%",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                overflow: "hidden",
             }}
         >
             {/* IZQUIERDA */}
@@ -71,8 +73,8 @@ const AppHeader = ({ companyName }) => {
                     src="/LogoGrande.png"
                     alt="GrowSync"
                     style={{
-                    height: isMobile ? 36 : 42,
-                    flexShrink: 0,
+                        height: isMobile ? 36 : 42,
+                        flexShrink: 0,
                     }}
                 />
 
@@ -83,16 +85,18 @@ const AppHeader = ({ companyName }) => {
                     minWidth: 0,
                     }}
                 >
-                    <span
-                        style={{
-                            fontWeight: 700,
-                            color: "#26356f",
-                            fontSize: isMobile ? 14 : 16,
-                            lineHeight: 1.1,
-                        }}
-                    >
-                        GrowSync
-                    </span>
+                    {!isMobile && (
+                        <span
+                            style={{
+                                fontWeight: 700,
+                                color: "#26356f",
+                                fontSize: 16,
+                                lineHeight: 1.1,
+                            }}
+                        >
+                            GrowSync
+                        </span>
+                    )}
 
                     <span
                         style={{
