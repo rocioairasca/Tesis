@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Tabs, Typography } from "antd";
-import { useLocation } from "react-router-dom";
+import { Button, Tabs, Typography } from "antd";
+import { useLocation, useNavigate } from "react-router-dom";
 import LoginForm from "./LoginForm.jsx";
 import RegisterForm from "./RegisterForm.jsx";
 
@@ -9,6 +9,7 @@ const { Title, Text } = Typography;
 const LoginRegister = () => {
   const [activeTab, setActiveTab] = useState("login");
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const token = queryParams.get("token");
 
@@ -67,6 +68,10 @@ const LoginRegister = () => {
           centered
           items={items}
         />
+
+        <Button block type="default" onClick={() => navigate("/")}>
+          Volver a la landing
+        </Button>
 
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Text type="secondary">Copyright © 2024 - Grow Sync</Text>
