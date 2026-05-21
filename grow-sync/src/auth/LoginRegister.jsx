@@ -70,7 +70,7 @@ const LoginRegister = () => {
         />
 
         <Button block type="default" onClick={() => navigate("/")}>
-          Volver a la landing
+          Landing Page
         </Button>
 
         <div style={{ marginTop: 24, textAlign: "center" }}>

@@ -261,6 +261,7 @@ const RegisterCompany = () => {
                   Iniciar sesión
                 </Button>
               </div>
+
             </Space>
           </Card>
         </Col>

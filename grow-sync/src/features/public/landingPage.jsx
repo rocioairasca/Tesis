@@ -130,6 +130,7 @@ const LandingPage = () => {
                 >
                   Iniciar Sesión
                 </Button>
+
               </Space>
             </Space>
           </Card>
