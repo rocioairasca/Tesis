@@ -40,18 +40,11 @@ const BottomNavigation = () => {
       show: hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW),
     },
     {
-      key: "inventario",
-      path: "/inventario",
-      label: "Inventario",
-      icon: <AppstoreOutlined />,
-      show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
-    },
-    {
-      key: "usage",
-      path: "/usage",
-      label: "Registros de uso",
-      icon: <FormOutlined />,
-      show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
+      key: "cosecha",
+      path: "/cosechas",
+      label: "Cosechas",
+      icon: <HarvestOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
     },
     {
       key: "lotes",
@@ -63,6 +56,26 @@ const BottomNavigation = () => {
   ].filter((item) => item.show);
 
   const menuItems = [
+    {
+      key: "inventario",
+      label: "Inventario",
+      icon: <AppstoreOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
+      onClick: () => {
+        navigate("/inventario");
+        setDrawerVisible(false);
+      },
+    },
+    {
+      key: "usage",
+      label: "Registros de Uso",
+      icon: <FormOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
+      onClick: () => {
+        navigate("/usage");
+        setDrawerVisible(false);
+      },
+    },
     {
       key: "vehiculos",
       label: "Vehiculos",
