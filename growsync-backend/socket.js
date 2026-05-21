@@ -6,8 +6,14 @@ module.exports = {
     init: (httpServer) => {
         io = new Server(httpServer, {
             cors: {
-                origin: ["http://localhost:3000"],
-                methods: ["GET", "POST"]
+                origin: [
+                    "https://tesis-seven-phi.vercel.app",
+                    process.env.FRONTEND_URL,
+                    "http://localhost:3000",
+                    "http://localhost:5173",
+                ].filter(Boolean),
+                methods: ["GET", "POST"],
+                credentials: true,
             }
         });
 
