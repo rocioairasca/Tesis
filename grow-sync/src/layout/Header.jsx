@@ -69,14 +69,17 @@ const AppHeader = ({ companyName }) => {
                     minWidth: 0,
                 }}
             >
-                <img
-                    src="/LogoGrande.png"
-                    alt="GrowSync"
-                    style={{
-                        height: isMobile ? 36 : 42,
-                        flexShrink: 0,
-                    }}
-                />
+                {isMobile && (
+
+                    <img
+                        src="/LogoGrande.png"
+                        alt="GrowSync"
+                        style={{
+                            height: isMobile ? 36 : 42,
+                            flexShrink: 0,
+                        }}
+                    />
+                )}
 
                 <div
                     style={{
@@ -85,18 +88,6 @@ const AppHeader = ({ companyName }) => {
                     minWidth: 0,
                     }}
                 >
-                    {!isMobile && (
-                        <span
-                            style={{
-                                fontWeight: 700,
-                                color: "#26356f",
-                                fontSize: 16,
-                                lineHeight: 1.1,
-                            }}
-                        >
-                            GrowSync
-                        </span>
-                    )}
 
                     <span
                         style={{
