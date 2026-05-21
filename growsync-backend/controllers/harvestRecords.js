@@ -180,6 +180,7 @@ exports.listHarvestRecords = async (req, res, next) => {
       lot_id,
       from,
       to,
+      onlyDisabled = 'false',
       includeDisabled = 'false',
       page = 1,
       pageSize = 10
@@ -192,7 +193,9 @@ exports.listHarvestRecords = async (req, res, next) => {
     const params = [company_id];
     const where = [`hr.company_id = $1`];
 
-    if (includeDisabled !== 'true') {
+    if (onlyDisabled === 'true') {
+      where.push(`hr.enabled = FALSE`);
+    } else if (includeDisabled !== 'true') {
       where.push(`hr.enabled = TRUE`);
     }
 

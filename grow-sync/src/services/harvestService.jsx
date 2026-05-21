@@ -25,6 +25,11 @@ export const getHarvestRecords = async (params = {}) => {
   return res.data;
 };
 
+export const getDisabledHarvestRecords = async (params = {}) => {
+  const res = await api.get('/harvest-records/disabled', { params });
+  return res.data;
+};
+
 export const getHarvestRecordById = async (id) => {
   const res = await api.get(`/harvest-records/${id}`);
   return res.data;

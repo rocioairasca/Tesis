@@ -27,6 +27,7 @@ const DisabledVehicles = lazy(() => import('./features/vehicles/DisabledVehicles
 const Planning = lazy(() => import('./features/planning/Planning.jsx'));
 const DisabledPlanning = lazy(() => import('./features/planning/DisabledPlanning.jsx'));
 const Harvest = lazy(() => import('./features/harvest/Harvest.jsx'));
+const DisabledHarvest = lazy(() => import('./features/harvest/DisabledHarvest.jsx'));
 const LoginRegister = lazy(() => import("./auth/LoginRegister.jsx"));
 
 const PageLoader = () => (
@@ -79,6 +80,15 @@ function App() {
                 element={
                   <GuardedRoute requiredPermission={PERMISSIONS.HARVEST_VIEW}>
                     <AppLayout><Harvest /></AppLayout>
+                  </GuardedRoute>
+                }
+              />
+
+              <Route
+                path="/harvest-deshabilitadas"
+                element={
+                  <GuardedRoute requiredPermission={PERMISSIONS.HARVEST_VIEW_DISABLED}>
+                    <AppLayout><DisabledHarvest /></AppLayout>
                   </GuardedRoute>
                 }
               />

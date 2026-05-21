@@ -46,6 +46,17 @@ router.get(
 );
 
 router.get(
+  '/disabled',
+  checkJwt,
+  userData,
+  (req, _res, next) => {
+    req.query.onlyDisabled = 'true';
+    next();
+  },
+  harvestRecordsController.listHarvestRecords
+);
+
+router.get(
   '/:id',
   checkJwt,
   userData,

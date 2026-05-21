@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { Button, Col, Drawer, Row, Space, notification } from "antd";
-import { PlusOutlined } from "../../components/AppIcons";
+import { Button, Col, Drawer, Dropdown, Row, Space, notification } from "antd";
+import { MoreOutlined, PlusOutlined } from "../../components/AppIcons";
+import { useNavigate } from "react-router-dom";
 
 import useIsMobile from "../../hooks/useIsMobile";
 import HarvestTable from "./HarvestTable";
@@ -12,8 +13,10 @@ import { hasPermission } from "../../utils/permissions";
 
 const Harvest = () => {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.HARVEST_CREATE);
+  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW_DISABLED);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -68,6 +71,17 @@ const Harvest = () => {
     fetchLots();
   }, [fetchLots]);
 
+  const disabledMenu = [
+    canViewDisabled && {
+      key: "disabled",
+      label: (
+        <span onClick={() => navigate("/harvest-deshabilitadas")}>
+          Ver cosechas deshabilitadas
+        </span>
+      ),
+    },
+  ].filter(Boolean);
+
   return (
     <div style={{ padding: 12 }}>
       <Row
@@ -80,11 +94,24 @@ const Harvest = () => {
         </Col>
 
         <Col>
-          {!isMobile && canCreate && (
+          {isMobile ? (
+            disabledMenu.length > 0 ? (
+              <Dropdown menu={{ items: disabledMenu }} placement="bottomRight" arrow>
+                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
+              </Dropdown>
+            ) : null
+          ) : (
             <Space>
-              <Button type="primary" onClick={() => openDrawer()}>
-                Agregar Cosecha
-              </Button>
+              {canViewDisabled && (
+                <Button onClick={() => navigate("/harvest-deshabilitadas")}>
+                  Ver cosechas deshabilitadas
+                </Button>
+              )}
+              {canCreate && (
+                <Button type="primary" onClick={() => openDrawer()}>
+                  Agregar Cosecha
+                </Button>
+              )}
             </Space>
           )}
         </Col>

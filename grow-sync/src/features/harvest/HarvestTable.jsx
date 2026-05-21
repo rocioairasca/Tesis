@@ -15,9 +15,14 @@ import {
   notification,
 } from "antd";
 import {
+  CalendarOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  HarvestOutlined,
+  MapPin,
+  Package,
+  Ruler,
 } from '../../components/AppIcons';
 
 import dayjs from "dayjs";
@@ -61,7 +66,6 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
   const canEdit = hasPermission(currentUser, PERMISSIONS.HARVEST_EDIT);
   const canDisable = hasPermission(currentUser, PERMISSIONS.HARVEST_DISABLE);
   const canEnable = hasPermission(currentUser, PERMISSIONS.HARVEST_ENABLE);
-  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW_DISABLED);
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -288,6 +292,76 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
     }
 
     return (
+      <div className="inventory-cards-container">
+        {records.map((record) => (
+          <div className="inventory-card" key={record.id}>
+            <div className="card-header">
+              <h3>{formatCropLabel(record.crop)} - {record.campaign || "-"}</h3>
+              <div className="card-icons">
+                {record.enabled && canEdit && (
+                  <Tooltip title="Editar">
+                    <Button
+                      type="text"
+                      shape="circle"
+                      icon={<EditOutlined />}
+                      onClick={() => onEdit?.(record)}
+                      aria-label={`Editar cosecha ${record.crop || ""}`}
+                    />
+                  </Tooltip>
+                )}
+                {renderHarvestAction(record)}
+              </div>
+            </div>
+
+            <p className="flex-row">
+              <CalendarOutlined size={18} /> <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
+            </p>
+            <p className="flex-row">
+              <MapPin size={18} /> <strong>Lote:</strong> {record.lot_name || "-"}
+            </p>
+            <p className="flex-row">
+              <Package size={18} /> <strong>Produccion:</strong> {formatNumber(record.production_kg, 0)} kg
+            </p>
+            <p className="flex-row">
+              <Ruler size={18} /> <strong>Superficie:</strong> {formatNumber(record.harvested_area_ha)} ha
+            </p>
+            <p className="flex-row">
+              <HarvestOutlined size={18} /> <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha
+            </p>
+            <p>
+              <strong>Estado:</strong>{" "}
+              {record.enabled ? (
+                <Tag color="success">Activo</Tag>
+              ) : (
+                <Tag color="default">Deshabilitado</Tag>
+              )}
+            </p>
+            {record.notes ? (
+              <p>
+                <strong>Notas:</strong> {record.notes}
+              </p>
+            ) : null}
+
+            {record.enabled && canEdit && (
+              <div style={{ marginTop: 12 }}>
+                <Button
+                  block
+                  icon={<EditOutlined />}
+                  onClick={() => onEdit?.(record)}
+                >
+                  Editar
+                </Button>
+              </div>
+            )}
+            <div style={{ marginTop: record.enabled && canEdit ? 8 : 12 }}>
+              {renderHarvestAction(record, true)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
+    return (
       <Row gutter={[16, 16]}>
         {records.map((record) => (
           <Col xs={24} key={record.id}>
@@ -394,23 +468,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
             </Space>
           </Col>
 
-          <Col xs={24} md={8} style={{ textAlign: isMobile ? "left" : "right" }}>
-            {canViewDisabled && (
-              <Button
-                style={{ width: isMobile ? "100%" : 180 }}
-                type={filters.includeDisabled ? "primary" : "default"}
-                onClick={() => {
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                  setFilters((prev) => ({
-                    ...prev,
-                    includeDisabled: !prev.includeDisabled,
-                  }));
-                }}
-              >
-                {filters.includeDisabled ? "Ver solo activos" : "Ver deshabilitados"}
-              </Button>
-            )}
-          </Col>
+          <Col xs={24} md={8} />
         </Row>
       </Card>
 
