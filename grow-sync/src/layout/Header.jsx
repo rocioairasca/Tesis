@@ -125,6 +125,23 @@ const AppHeader = ({ companyName }) => {
                     size={isMobile ? "default" : "large"}
                 />
 
+                {!isMobile && (
+                    <span
+                        style={{
+                            fontSize: 14,
+                            color: "#1D2A62",
+                            fontWeight: 500,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: 180,
+                        }}
+                        title={displayName}
+                    >
+                        {displayName}
+                    </span>
+                )}
+
                 {/* Logout */}
                 <Popconfirm
                     title="Cerrar sesión"
