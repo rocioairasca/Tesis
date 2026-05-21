@@ -8,6 +8,7 @@ import {
   MoreOutlined,
   UserOutlined,
   CarOutlined,
+  HarvestOutlined,
   CalendarOutlined
 } from './AppIcons';
 import { Drawer, List } from "antd";
