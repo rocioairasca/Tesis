@@ -42,7 +42,7 @@ const BottomNavigation = () => {
     },
     {
       key: "cosecha",
-      path: "/cosechas",
+      path: "/harvest",
       label: "Cosechas",
       icon: <HarvestOutlined />,
       show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
