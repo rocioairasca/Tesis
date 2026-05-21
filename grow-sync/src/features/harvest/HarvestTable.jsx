@@ -342,20 +342,6 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
               </p>
             ) : null}
 
-            {record.enabled && canEdit && (
-              <div style={{ marginTop: 12 }}>
-                <Button
-                  block
-                  icon={<EditOutlined />}
-                  onClick={() => onEdit?.(record)}
-                >
-                  Editar
-                </Button>
-              </div>
-            )}
-            <div style={{ marginTop: record.enabled && canEdit ? 8 : 12 }}>
-              {renderHarvestAction(record, true)}
-            </div>
           </div>
         ))}
       </div>
