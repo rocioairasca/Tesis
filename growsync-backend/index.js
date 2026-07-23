@@ -51,30 +51,26 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 const publicRoutes = require('./routes/public.routes');
 app.use('/api/public', publicRoutes);
 
+const mercadoPagoRoutes = require('./routes/mercadoPagoRoutes');
+console.log("MercadoPago router montado en /api/public/payments/mercadopago");
+app.use('/api/public/payments/mercadopago', mercadoPagoRoutes);
+
 // Auth publica (login/register)
 const authRoutes = require('./routes/auth');
 app.use('/api', authRoutes);
 
 // ---------------------------------------------------
-// Proteccion con token + carga d usuario/rol
-// 1. checkJwt: valida Authorizarion: Bearer <access_token>
-// 2. userData: busca en bd al user por sub/email y setea req.user = { id, email, role }
+// Protección para rutas privadas
 // ---------------------------------------------------
 const checkJwt = require('./middleware/checkJwt');
 const userData = require('./middleware/userData');
 const requireTenant = require('./middleware/requireTenant');
 
-app.use(checkJwt);
-app.use(userData);
-app.use(requireTenant);
-
-app.get("/api/debug/me", (req, res) => {
-  res.json({
-    message: "Usuario autenticado correctamente",
-    user: req.user,
-    tenant: req.tenant,
-  });
-});
+const privateMiddlewares = [
+  checkJwt,
+  userData,
+  requireTenant,
+];
 
 // ---------------------------------------------------
 // Rutas privadas (requieren token y usuario cargado)
@@ -89,23 +85,38 @@ const planningRoutes = require('./routes/planning');
 const vehicleRoutes = require('./routes/vehicle');
 const notificationsRoutes = require('./routes/notifications');
 const harvestRecordsRoutes = require('./routes/harvestRecords');
+const rainRecordsRoutes = require('./routes/rainRecords');
 
-app.use('/api/users', userRoutes);
-app.use('/api/lots', lotRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/usages', usageRoutes);
-app.use('/api/stats', statsRoutes);
-app.use('/api/weather', weatherRoutes);
-app.use('/api/planning', planningRoutes);
-app.use('/api/vehicles', vehicleRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/harvest-records', harvestRecordsRoutes);
+app.get(
+  "/api/debug/me",
+  ...privateMiddlewares,
+  (req, res) => {
+    res.json({
+      message: "Usuario autenticado correctamente",
+      user: req.user,
+      tenant: req.tenant,
+    });
+  }
+);
+
+app.use('/api/users', ...privateMiddlewares, userRoutes);
+app.use('/api/lots', ...privateMiddlewares, lotRoutes);
+app.use('/api/products', ...privateMiddlewares, productRoutes);
+app.use('/api/usages', ...privateMiddlewares, usageRoutes);
+app.use('/api/stats', ...privateMiddlewares, statsRoutes);
+app.use('/api/weather', ...privateMiddlewares, weatherRoutes);
+app.use('/api/planning', ...privateMiddlewares, planningRoutes);
+app.use('/api/vehicles', ...privateMiddlewares, vehicleRoutes);
+app.use('/api/notifications', ...privateMiddlewares, notificationsRoutes);
+app.use('/api/harvest-records', ...privateMiddlewares, harvestRecordsRoutes);
+app.use('/api/rain-records', ...privateMiddlewares, rainRecordsRoutes);
 
 // ---------------------------------------------------
 // Manejo de errores
 // ---------------------------------------------------
 app.use((req, res, next) => {
   if (res.headersSent) return next();
+  console.log("[404 Express]", req.method, req.originalUrl);
   return res.status(404).json({ error: 'Not Found' });
 });
 

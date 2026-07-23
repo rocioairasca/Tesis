@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Card, Row, Col, Statistic, Progress, Space, Tag, Typography, Tooltip, Select, Button } from "antd";
+import { Alert, Card, Row, Col, Statistic, Progress, Space, Tag, Typography, Tooltip, Select, Button } from "antd";
+import { useNavigate } from "react-router-dom";
 import {
   UserOutlined,
   InboxOutlined,
@@ -40,6 +41,8 @@ import {
   Uv01Icon,
 } from "@hugeicons/core-free-icons";
 import api from "../../services/apiClient";
+import { PERMISSIONS } from "../../constants/permissions";
+import { hasPermission } from "../../utils/permissions";
 
 import {
   getHarvestFilters,
@@ -107,6 +110,51 @@ const weatherIcons = {
   alert: AlertCircleIcon,
 };
 
+const openMeteoWeatherCodes = {
+  0: { kind: "sunny", label: "Despejado" },
+  1: { kind: "partly", label: "Mayormente despejado" },
+  2: { kind: "partly", label: "Parcialmente nublado" },
+  3: { kind: "cloud", label: "Nublado" },
+  45: { kind: "fog", label: "Niebla" },
+  48: { kind: "fog", label: "Niebla con escarcha" },
+  51: { kind: "lightRain", label: "Llovizna leve" },
+  53: { kind: "lightRain", label: "Llovizna moderada" },
+  55: { kind: "midRain", label: "Llovizna intensa" },
+  56: { kind: "hail", label: "Llovizna helada leve" },
+  57: { kind: "hail", label: "Llovizna helada intensa" },
+  61: { kind: "lightRain", label: "Lluvia leve" },
+  63: { kind: "midRain", label: "Lluvia moderada" },
+  65: { kind: "heavyRain", label: "Lluvia fuerte" },
+  66: { kind: "hail", label: "Lluvia helada leve" },
+  67: { kind: "hail", label: "Lluvia helada intensa" },
+  71: { kind: "snow", label: "Nevada leve" },
+  73: { kind: "snow", label: "Nevada moderada" },
+  75: { kind: "snow", label: "Nevada fuerte" },
+  77: { kind: "snow", label: "Granizo de nieve" },
+  80: { kind: "rain", label: "Chaparrones leves" },
+  81: { kind: "midRain", label: "Chaparrones moderados" },
+  82: { kind: "heavyRain", label: "Chaparrones fuertes" },
+  85: { kind: "snow", label: "Chaparrones de nieve leves" },
+  86: { kind: "snow", label: "Chaparrones de nieve fuertes" },
+  95: { kind: "storm", label: "Tormenta" },
+  96: { kind: "stormRain", label: "Tormenta con granizo leve" },
+  99: { kind: "stormRain", label: "Tormenta con granizo fuerte" },
+};
+
+function withNightIcon(kind, night) {
+  if (!night) return kind;
+  return ({
+    sunny: "clearNight",
+    cloud: "cloudNight",
+    partly: "partlyNight",
+    rain: "rainNight",
+    storm: "stormNight",
+    snow: "snowNight",
+    hail: "hailNight",
+    wind: "windNight",
+  })[kind] || kind;
+}
+
 function valueFrom(d, keys, fallback = null) {
   for (const key of keys) {
     const v = key.split(".").reduce((acc, part) => acc?.[part], d);
@@ -155,6 +203,14 @@ function getWeatherPresentation(d) {
   const code = valueFrom(d, ["weather_code", "weatherCode", "weather.0.id", "id"], null);
   const text = textFrom(d, ["condition", "weather", "main", "description", "weather.0.main", "weather.0.description"]);
   const night = isNightWeather(d);
+  const openMeteoMatch = openMeteoWeatherCodes[code];
+
+  if (openMeteoMatch) {
+    return {
+      kind: withNightIcon(openMeteoMatch.kind, night),
+      label: openMeteoMatch.label,
+    };
+  }
 
   if (code >= 200 && code < 300) return { kind: night ? "stormNight" : r > 0 ? "stormRain" : "storm", label: "Tormenta" };
   if (code >= 300 && code < 400) return { kind: "lightRain", label: "Llovizna" };
@@ -224,7 +280,14 @@ const cropColors = [
   "#5b8c00", // verde intenso
 ];
 
+const harvestUnitOptions = [
+  { value: "kg", label: "Kilogramos", suffix: "kg", yieldSuffix: "kg/ha" },
+  { value: "tn", label: "Toneladas", suffix: "tn", yieldSuffix: "tn/ha" },
+  { value: "qq", label: "Quintales", suffix: "qq", yieldSuffix: "qq/ha" },
+];
+
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     products: 0,
     lots: 0,
@@ -234,6 +297,13 @@ const Dashboard = () => {
     planningCompleted: 0,
   });
   const [weather, setWeather] = useState(null);
+  const [weatherStatus, setWeatherStatus] = useState({
+    location: "idle",
+    weather: "idle",
+    locationError: null,
+    weatherError: null,
+    usingFallback: false,
+  });
 
   // valores “seguros” para mostrar en UI
   const temp = useMemo(() => {
@@ -249,6 +319,8 @@ const Dashboard = () => {
   const rainfall = useMemo(() => toNumber(weather?.rainfall, 0), [weather]);
   const updatedAt = weather?.updated_at || weather?.updatedAt || null;
   const weatherView = useMemo(() => getWeatherPresentation(weather), [weather]);
+  const isLoadingLocation = weatherStatus.location === "loading";
+  const isLoadingWeather = weatherStatus.weather === "loading";
 
   const [harvestSummary, setHarvestSummary] = useState(null);
   const [harvestByCrop, setHarvestByCrop] = useState([]);
@@ -261,18 +333,25 @@ const Dashboard = () => {
 
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [selectedCrop, setSelectedCrop] = useState(null);
+  const [selectedHarvestUnit, setSelectedHarvestUnit] = useState("kg");
+  const selectedHarvestUnitMeta = useMemo(
+    () => harvestUnitOptions.find((option) => option.value === selectedHarvestUnit) || harvestUnitOptions[0],
+    [selectedHarvestUnit]
+  );
 
   const user = JSON.parse(localStorage.getItem("user") || "null");
   const canViewHarvestStats = Number(user?.role) >=1;
+  const canViewRainRecords = hasPermission(user, PERMISSIONS.RAIN_RECORDS_VIEW);
 
   const fetchHarvestStats = useCallback(async (filters = {}) => {
     if (!canViewHarvestStats) return;
 
     try {
+      const unit = filters.unit || selectedHarvestUnit;
       const [summary, byCrop, byCampaign] = await Promise.all([
-        getHarvestSummary(filters),
-        getHarvestByCrop({ campaign: filters.campaign || undefined }),
-        getHarvestByCampaign({ crop: filters.crop || undefined }),
+        getHarvestSummary({ ...filters, unit }),
+        getHarvestByCrop({ campaign: filters.campaign || undefined, unit }),
+        getHarvestByCampaign({ crop: filters.crop || undefined, unit }),
       ]);
 
       setHarvestSummary(summary || null);
@@ -300,7 +379,16 @@ const Dashboard = () => {
         error?.response?.data || error
       );
     }
-  }, [canViewHarvestStats]);
+  }, [canViewHarvestStats, selectedHarvestUnit]);
+
+  const handleHarvestUnitChange = (unit) => {
+    setSelectedHarvestUnit(unit);
+    fetchHarvestStats({
+      campaign: selectedCampaign,
+      crop: selectedCrop,
+      unit,
+    });
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -345,10 +433,16 @@ const Dashboard = () => {
       }
     };
 
+    const updateWeatherStatus = (patch) => {
+      setWeatherStatus((current) => ({ ...current, ...patch }));
+    };
+
     const fetchWeatherFallback = async () => {
+      updateWeatherStatus({ weather: "loading", usingFallback: true });
       try {
         const { data } = await api.get("/weather/latest"); 
         setWeather(data || null);
+        updateWeatherStatus({ weather: "success" });
       } catch (error) {
         console.error(
           "Error al cargar clima (fallback):",
@@ -356,25 +450,46 @@ const Dashboard = () => {
           error?.response?.data || error
         );
         setWeather(null);
+        updateWeatherStatus({
+          weather: "error",
+          weatherError: "No se pudo obtener el clima actual ni el ultimo registro guardado.",
+        });
       }
     };
 
     const fetchWeatherWithLocation = () => {
       if (!("geolocation" in navigator)) {
+        updateWeatherStatus({
+          location: "error",
+          locationError: "Tu navegador no permite obtener la ubicacion actual.",
+        });
         fetchWeatherFallback();
         return;
       }
+      updateWeatherStatus({
+        location: "loading",
+        weather: "idle",
+        locationError: null,
+        weatherError: null,
+        usingFallback: false,
+      });
       navigator.geolocation.getCurrentPosition(
-        async ({ coords: { latitude: lat, longitude: lon } }) => {
+        async ({ coords: { latitude, longitude } }) => {
+          updateWeatherStatus({ location: "success", weather: "loading" });
           try {
-            const { data } = await api.post("/weather/update", {}, { params: { lat, lon } });
+            const { data } = await api.post("/weather/update", {}, { params: { latitude, longitude } });
             setWeather(data || null);
+            updateWeatherStatus({ weather: "success" });
           } catch (error) {
             console.error(
               "Error al obtener clima con ubicación:",
               `status=${error?.response?.status ?? "?"}`,
               error?.response?.data || error
             );
+            updateWeatherStatus({
+              weather: "error",
+              weatherError: error?.response?.data?.message || "No se pudo obtener el clima actual desde Open-Meteo.",
+            });
             fetchWeatherFallback();
           }
         },
@@ -382,16 +497,27 @@ const Dashboard = () => {
           if (import.meta.env.DEV) {
             console.warn("No se pudo obtener la ubicación del navegador:", err?.message || err);
           }
+          updateWeatherStatus({
+            location: "error",
+            locationError: err?.code === 1
+              ? "Permiso de ubicacion denegado. Se muestra el ultimo clima guardado."
+              : "No se pudo obtener tu ubicacion actual. Se muestra el ultimo clima guardado.",
+          });
           fetchWeatherFallback();
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
       );
     };
 
     fetchStats();
     fetchWeatherWithLocation();
-    fetchHarvestStats();
+    fetchHarvestStats({ unit: selectedHarvestUnit });
     fetchHarvestFiltersData();
-  }, [fetchHarvestStats, canViewHarvestStats]);
+  }, [canViewHarvestStats]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -438,8 +564,35 @@ const Dashboard = () => {
             <span>Clima Actual</span>
           </Space>
         }
-        extra={updatedAt ? <Tag color="default">Actualizado: {new Date(updatedAt).toLocaleString()}</Tag> : null}
+        extra={
+          <Space wrap>
+            {updatedAt ? <Tag color="default">Actualizado: {new Date(updatedAt).toLocaleString()}</Tag> : null}
+            {canViewRainRecords && (
+              <Button size="small" onClick={() => navigate("/registro-lluvias")}>
+                Registro de lluvias
+              </Button>
+            )}
+          </Space>
+        }
       >
+        <Space direction="vertical" size={8} style={{ width: "100%", marginBottom: 12 }}>
+          {isLoadingLocation && (
+            <Alert type="info" showIcon message="Obteniendo ubicacion actual..." />
+          )}
+          {isLoadingWeather && (
+            <Alert type="info" showIcon message="Cargando clima actual..." />
+          )}
+          {weatherStatus.locationError && (
+            <Alert type="warning" showIcon message={weatherStatus.locationError} />
+          )}
+          {weatherStatus.weatherError && (
+            <Alert type={weather ? "warning" : "error"} showIcon message={weatherStatus.weatherError} />
+          )}
+          {weatherStatus.usingFallback && weather && (
+            <Alert type="info" showIcon message="Mostrando el ultimo clima guardado." />
+          )}
+        </Space>
+
         <Row gutter={[16, 16]} align="middle">
           {/* IZQ: Temp + Viento + Lluvia */}
           <Col xs={24} md={9}>
@@ -505,7 +658,7 @@ const Dashboard = () => {
           title="Estadísticas de cosecha"
         >
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
               <Select
                 allowClear
                 placeholder="Filtrar por campaña"
@@ -519,7 +672,7 @@ const Dashboard = () => {
               />
             </Col>
 
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
               <Select
                 allowClear
                 placeholder="Filtrar por cultivo"
@@ -533,7 +686,17 @@ const Dashboard = () => {
               />
             </Col>
 
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
+              <Select
+                placeholder="Unidad"
+                style={{ width: "100%" }}
+                value={selectedHarvestUnit}
+                onChange={handleHarvestUnitChange}
+                options={harvestUnitOptions.map(({ value, label }) => ({ value, label }))}
+              />
+            </Col>
+
+            <Col xs={24} md={6}>
               <Space wrap>
                 <Button
                   type="primary"
@@ -541,6 +704,7 @@ const Dashboard = () => {
                     fetchHarvestStats({
                       campaign: selectedCampaign,
                       crop: selectedCrop,
+                      unit: selectedHarvestUnit,
                     })
                   }
                 >
@@ -551,7 +715,7 @@ const Dashboard = () => {
                   onClick={() => {
                     setSelectedCampaign(null);
                     setSelectedCrop(null);
-                    fetchHarvestStats();
+                    fetchHarvestStats({ unit: selectedHarvestUnit });
                   }}
                 >
                   Limpiar
@@ -569,7 +733,7 @@ const Dashboard = () => {
               <Statistic
                 title="Producción total"
                 value={Number(harvestSummary?.total_production_kg || 0)}
-                suffix="kg"
+                suffix={selectedHarvestUnitMeta.suffix}
               />
             </Col>
 
@@ -585,24 +749,24 @@ const Dashboard = () => {
               <Statistic
                 title="Rendimiento promedio"
                 value={Number(harvestSummary?.avg_yield_kg_ha || 0)}
-                suffix="kg/ha"
+                suffix={selectedHarvestUnitMeta.yieldSuffix}
               />
             </Col>
           </Row>
 
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24} lg={12}>
-              <Card title="Rendimiento por cultivo">
+              <Card title={`Rendimiento por cultivo (${selectedHarvestUnitMeta.yieldSuffix})`}>
                 <div style={{ width: "100%", height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart data={harvestByCrop}>
                       <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
                       <XAxis dataKey="crop" tickFormatter={(value) => value.charAt(0).toUpperCase() + value.slice(1)} tick={{ fill: chartColors.text }} />
                       <YAxis tick={{ fill: chartColors.text }} />
-                      <RechartsTooltip />
+                      <RechartsTooltip formatter={(value) => [`${Number(value || 0).toFixed(2)} ${selectedHarvestUnitMeta.yieldSuffix}`, "Rendimiento"]} />
                       <Bar
                         dataKey="yield_kg_ha"
-                        name="Kg/ha"
+                        name={selectedHarvestUnitMeta.yieldSuffix}
                         radius={[8, 8, 0, 0]}
                       >
                         {harvestByCrop.map((entry, index) => (
@@ -619,18 +783,18 @@ const Dashboard = () => {
             </Col>
 
             <Col xs={24} lg={12}>
-              <Card title="Rendimiento por campaña">
+              <Card title={`Rendimiento por campaña (${selectedHarvestUnitMeta.yieldSuffix})`}>
                 <div style={{ width: "100%", height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <LineChart data={harvestByCampaign}>
                       <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
                       <XAxis dataKey="campaign" tick={{ fill: chartColors.text }} />
                       <YAxis tick={{ fill: chartColors.text }} />
-                      <RechartsTooltip />
+                      <RechartsTooltip formatter={(value) => [`${Number(value || 0).toFixed(2)} ${selectedHarvestUnitMeta.yieldSuffix}`, "Rendimiento"]} />
                       <Line
                         type="monotone"
                         dataKey="yield_kg_ha"
-                        name="Kg/ha"
+                        name={selectedHarvestUnitMeta.yieldSuffix}
                         stroke={chartColors.secondary}
                         strokeWidth={3}
                         dot={{ r: 4, fill: chartColors.secondary }}

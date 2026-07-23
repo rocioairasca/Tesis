@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -12,7 +12,7 @@ import {
   notification,
 } from "antd";
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   Leaf,
@@ -21,15 +21,66 @@ import {
   UserOutlined,
 } from "../../components/AppIcons";
 
-import { registerCompany } from "../../services/publicService";
+import {
+  getMercadoPagoPaymentByReference,
+  getSimulatedPayment,
+  registerCompany,
+} from "../../services/publicService";
 
 const { Title, Paragraph, Text } = Typography;
 
 const RegisterCompany = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [payment, setPayment] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(true);
+  const mercadoPagoExternalReference =
+    searchParams.get("externalReference") ||
+    localStorage.getItem("growsync_mp_external_reference");
+  const paymentId = mercadoPagoExternalReference
+    ? null
+    : searchParams.get("paymentId") ||
+      localStorage.getItem("growsync_payment_id");
+  const paymentApproved = payment?.status === "approved";
+
+  useEffect(() => {
+    const verifyPayment = async () => {
+      if (!paymentId && !mercadoPagoExternalReference) {
+        setCheckingPayment(false);
+        return;
+      }
+
+      try {
+        if (paymentId) {
+          const response = await getSimulatedPayment(paymentId);
+          setPayment(response.payment || null);
+          return;
+        }
+
+        const response = await getMercadoPagoPaymentByReference(
+          mercadoPagoExternalReference
+        );
+
+        setPayment(
+          response.found
+            ? {
+                ...response.payment,
+                provider: "mercadopago",
+              }
+            : null
+        );
+      } catch {
+        setPayment(null);
+      } finally {
+        setCheckingPayment(false);
+      }
+    };
+
+    verifyPayment();
+  }, [paymentId, mercadoPagoExternalReference]);
 
   const handleSubmit = async (values) => {
     try {
@@ -40,15 +91,19 @@ const RegisterCompany = () => {
         adminName: values.adminName,
         email: values.email,
         password: values.password,
+        paymentId,
+        mercadoPagoExternalReference,
       });
 
       notification.success({
         message: "Empresa creada correctamente",
-        description:
-          "Ya podés iniciar sesión con el administrador creado.",
+        description: "Ya podes iniciar sesion con el administrador creado.",
       });
 
       form.resetFields();
+      localStorage.removeItem("growsync_payment_id");
+      localStorage.removeItem("growsync_mp_external_reference");
+      localStorage.removeItem("growsync_mp_preference_id");
 
       navigate("/login");
     } catch (error) {
@@ -58,7 +113,7 @@ const RegisterCompany = () => {
         message: "No se pudo crear la empresa",
         description:
           error?.response?.data?.message ||
-          "Ocurrió un error inesperado",
+          "Ocurrio un error inesperado",
       });
     } finally {
       setLoading(false);
@@ -112,15 +167,26 @@ const RegisterCompany = () => {
                 </Title>
 
                 <Paragraph type="secondary">
-                  Registrá tu empresa y comenzá a utilizar GrowSync.
+                  Registra tu empresa y comenza a utilizar GrowSync.
                 </Paragraph>
               </div>
 
               <Alert
-                type="info"
+                type={paymentApproved ? "success" : "warning"}
                 showIcon
-                message="El primer usuario creado tendrá permisos de administrador."
+                message={paymentApproved ? "Pago aprobado verificado" : "Pago requerido"}
+                description={
+                  paymentApproved
+                    ? `Operacion ${payment.transaction_number || payment.id}. El primer usuario creado tendra permisos de administrador.`
+                    : "Para registrar una empresa, primero confirma el pago desde la seleccion de plan."
+                }
               />
+
+              {!checkingPayment && !paymentApproved && (
+                <Button type="primary" block onClick={() => navigate("/select-plan")}>
+                  Elegir plan y pagar
+                </Button>
+              )}
 
               <Form
                 form={form}
@@ -131,28 +197,15 @@ const RegisterCompany = () => {
                 <Form.Item
                   label="Nombre de la Empresa"
                   name="companyName"
-                  rules={[
-                    {
-                      required: true,
-                      message: "Ingresá el nombre de la empresa",
-                    },
-                  ]}
+                  rules={[{ required: true, message: "Ingresa el nombre de la empresa" }]}
                 >
-                  <Input
-                    size="large"
-                    placeholder="Ej: Campo La Esperanza"
-                  />
+                  <Input size="large" placeholder="Ej: Campo La Esperanza" />
                 </Form.Item>
 
                 <Form.Item
                   label="Nombre del Administrador"
                   name="adminName"
-                  rules={[
-                    {
-                      required: true,
-                      message: "Ingresá el nombre del administrador",
-                    },
-                  ]}
+                  rules={[{ required: true, message: "Ingresa el nombre del administrador" }]}
                 >
                   <Input
                     size="large"
@@ -165,14 +218,8 @@ const RegisterCompany = () => {
                   label="Email"
                   name="email"
                   rules={[
-                    {
-                      required: true,
-                      message: "Ingresá un email",
-                    },
-                    {
-                      type: "email",
-                      message: "Ingresá un email válido",
-                    },
+                    { required: true, message: "Ingresa un email" },
+                    { type: "email", message: "Ingresa un email valido" },
                   ]}
                 >
                   <Input
@@ -183,18 +230,11 @@ const RegisterCompany = () => {
                 </Form.Item>
 
                 <Form.Item
-                  label="Contraseña"
+                  label="Contrasena"
                   name="password"
                   rules={[
-                    {
-                      required: true,
-                      message: "Ingresá una contraseña",
-                    },
-                    {
-                      min: 8,
-                      message:
-                        "La contraseña debe tener al menos 8 caracteres",
-                    },
+                    { required: true, message: "Ingresa una contrasena" },
+                    { min: 8, message: "La contrasena debe tener al menos 8 caracteres" },
                   ]}
                 >
                   <Input.Password
@@ -205,26 +245,18 @@ const RegisterCompany = () => {
                 </Form.Item>
 
                 <Form.Item
-                  label="Confirmar Contraseña"
+                  label="Confirmar Contrasena"
                   name="confirmPassword"
                   dependencies={["password"]}
                   rules={[
-                    {
-                      required: true,
-                      message: "Confirmá la contraseña",
-                    },
+                    { required: true, message: "Confirma la contrasena" },
                     ({ getFieldValue }) => ({
                       validator(_, value) {
-                        if (
-                          !value ||
-                          getFieldValue("password") === value
-                        ) {
+                        if (!value || getFieldValue("password") === value) {
                           return Promise.resolve();
                         }
 
-                        return Promise.reject(
-                          new Error("Las contraseñas no coinciden")
-                        );
+                        return Promise.reject(new Error("Las contrasenas no coinciden"));
                       },
                     }),
                   ]}
@@ -243,6 +275,7 @@ const RegisterCompany = () => {
                     size="large"
                     block
                     loading={loading}
+                    disabled={checkingPayment || !paymentApproved}
                   >
                     Crear Empresa
                   </Button>
@@ -251,17 +284,16 @@ const RegisterCompany = () => {
 
               <div style={{ textAlign: "center" }}>
                 <Text type="secondary">
-                  ¿Ya tenés cuenta?
+                  Ya tenes cuenta?
                 </Text>
 
                 <Button
                   type="link"
                   onClick={() => navigate("/login")}
                 >
-                  Iniciar sesión
+                  Iniciar sesion
                 </Button>
               </div>
-
             </Space>
           </Card>
         </Col>

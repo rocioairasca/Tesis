@@ -8,7 +8,17 @@ const MobileBottomNavigationWrapper = () => {
   const location = useLocation();
   const isMobile = useIsMobile();
 
-  const hiddenRoutes = ['/', '/login', '/register', '/register-company'];
+  const hiddenRoutes = [
+    '/',
+    '/login',
+    '/register',
+    '/register-company',
+    '/select-plan',
+    '/payment',
+    '/payment/success',
+    '/payment/pending',
+    '/payment/failure',
+  ];
   const shouldHide = hiddenRoutes.includes(location.pathname);
 
   if (!isMobile || shouldHide) return null;

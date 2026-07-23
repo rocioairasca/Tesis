@@ -1,33 +1,26 @@
 const { z } = require('zod');
 
-// Unidades y lenguaje soportados por OpenWeather
-const Units = z.enum(['standard', 'metric', 'imperial']).optional().default('metric');
-const Lang  = z.enum(['es','en','pt','fr','it']).optional().default('es');
+const Latitude = z.coerce.number().min(-90).max(90);
+const Longitude = z.coerce.number().min(-180).max(180);
 
-// Coordenadas: latitud y longitud
-const Coord = z.object({
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lon: z.coerce.number().min(-180).max(180).optional(),
-  city: z.string().trim().min(1).optional(),
-});
-
-// Regla: o bien (lat y lon), o bien city, o nada
-const CoordRefined = Coord.refine(
-  (v) => (v.lat != null && v.lon != null) || !!v.city || (v.lat == null && v.lon == null && !v.city),
-  { message: 'Debes enviar (lat y lon) o city, o ninguno para usar la ubicación por defecto.' }
+const LocationQuery = z.object({
+  latitude: Latitude.optional(),
+  longitude: Longitude.optional(),
+  lat: Latitude.optional(),
+  lon: Longitude.optional(),
+}).refine(
+  (v) => (
+    (v.latitude != null && v.longitude != null)
+    || (v.lat != null && v.lon != null)
+  ),
+  { message: 'Debes enviar latitude y longitude para obtener el clima actual.' }
 );
 
 exports.updateQuery = z.object({
-  // admitimos params tanto en query (GET) como en body (POST); aquí solo modelamos query
-  query: CoordRefined.extend({
-    units: Units,
-    lang: Lang,
-  })
+  query: LocationQuery,
 });
 
-// Query para obtener el último clima registrado
+// Query para obtener el ultimo clima registrado como fallback historico
 exports.latestQuery = z.object({
-  query: z.object({
-    city: z.string().trim().min(1).optional(),
-  })
+  query: z.object({}),
 });

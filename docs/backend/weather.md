@@ -1,17 +1,16 @@
-# Weather (OpenWeather)
+# Weather (Open-Meteo)
 
 Base: `/api/weather`
 
 **GET `/api/weather/latest`**
-- Descripción: Obtener el último clima registrado en la BD o por `city`.
+- Descripcion: obtener el ultimo clima registrado en la BD como fallback historico.
 - Acceso: login (checkRole(0)).
-- Query params: `city` (opcional)
-- Respuesta: objeto con datos de clima (source, timestamp, temperatura, condiciones, etc.).
+- Respuesta: objeto con datos de clima guardados.
 
 **POST `/api/weather/update`**
-- Descripción: Consultar OpenWeather y almacenar último clima.
-- Acceso: Supervisor+ (checkRole(1)).
-- Query params / Body: `lat`,`lon` o `city`. Opcionales `units` (`metric` por defecto) y `lang` (`es` por defecto).
-- Respuesta: objeto con datos recién guardados.
+- Descripcion: consultar Open-Meteo con la ubicacion real del usuario y almacenar el ultimo clima.
+- Acceso: login (checkRole(0)).
+- Query params: `latitude`, `longitude`. Tambien acepta `lat`, `lon` por compatibilidad.
+- Respuesta: mantiene los campos consumidos por el frontend (`temperature`, `humidity`, `wind_speed`, `wind_direction`, `rainfall`) y agrega `weather_code`, `condition`, `icon`, `source`, `observed_at`.
 
 Referencias: `validations/weather.schema.js`, `controllers/openWeatherMap.js`

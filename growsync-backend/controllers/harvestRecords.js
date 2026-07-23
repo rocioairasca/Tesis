@@ -8,6 +8,28 @@ function normalizeCrop(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+const HARVEST_UNITS = {
+  kg: { divisor: 1, label: 'kg', yieldLabel: 'kg/ha' },
+  tn: { divisor: 1000, label: 'tn', yieldLabel: 'tn/ha' },
+  qq: { divisor: 100, label: 'qq', yieldLabel: 'qq/ha' },
+};
+
+function getHarvestUnitConfig(req, res) {
+  const unit = req.query.unit || 'kg';
+  const config = HARVEST_UNITS[unit];
+
+  if (!config) {
+    res.status(400).json({
+      error: 'InvalidHarvestUnit',
+      message: 'Unidad invalida. Valores permitidos: kg, tn, qq',
+      allowedUnits: Object.keys(HARVEST_UNITS),
+    });
+    return null;
+  }
+
+  return { unit, ...config };
+}
+
 exports.createHarvestRecord = async (req, res, next) => {
   try {
     const { company_id, id: authUserId } = req.user;
@@ -623,6 +645,9 @@ exports.getHarvestSummary = async (req, res, next) => {
   try {
     const { company_id } = req.user;
     const { campaign, crop } = req.query;
+    const unitConfig = getHarvestUnitConfig(req, res);
+
+    if (!unitConfig) return;
 
     if (!company_id) {
       return res.status(400).json({
@@ -637,11 +662,11 @@ exports.getHarvestSummary = async (req, res, next) => {
       `
       SELECT
         COUNT(*) AS total_records,
-        COALESCE(SUM(hr.production_kg), 0) AS total_production_kg,
+        ROUND(COALESCE(SUM(hr.production_kg), 0) / $4::numeric, 2) AS total_production_kg,
         COALESCE(SUM(hr.harvested_area_ha), 0) AS total_area_ha,
         CASE
           WHEN COALESCE(SUM(hr.harvested_area_ha), 0) = 0 THEN 0
-          ELSE ROUND(SUM(hr.production_kg) / SUM(hr.harvested_area_ha), 2)
+          ELSE ROUND((SUM(hr.production_kg) / $4::numeric) / SUM(hr.harvested_area_ha), 2)
         END AS avg_yield_kg_ha
       FROM harvest_records hr
       WHERE hr.company_id = $1
@@ -649,10 +674,15 @@ exports.getHarvestSummary = async (req, res, next) => {
         AND ($2::text IS NULL OR hr.campaign = $2)
         AND ($3::text IS NULL OR hr.crop = $3)
       `,
-      [company_id, campaign || null, normalizedCrop]
+      [company_id, campaign || null, normalizedCrop, unitConfig.divisor]
     );
 
-    return res.json(result.rows[0]);
+    return res.json({
+      ...result.rows[0],
+      unit: unitConfig.unit,
+      unit_label: unitConfig.label,
+      yield_unit_label: unitConfig.yieldLabel,
+    });
   } catch (error) {
     next(error);
   }
@@ -662,6 +692,9 @@ exports.getHarvestStatsByCrop = async (req, res, next) => {
   try {
     const { company_id } = req.user;
     const { campaign } = req.query;
+    const unitConfig = getHarvestUnitConfig(req, res);
+
+    if (!unitConfig) return;
 
     if (!company_id) {
       return res.status(400).json({
@@ -674,23 +707,28 @@ exports.getHarvestStatsByCrop = async (req, res, next) => {
       `
       SELECT
         hr.crop,
-        ROUND(SUM(hr.production_kg), 2) AS production_kg,
+        ROUND(SUM(hr.production_kg) / $2::numeric, 2) AS production_kg,
         ROUND(SUM(hr.harvested_area_ha), 2) AS area_ha,
         CASE
           WHEN SUM(hr.harvested_area_ha) = 0 THEN 0
-          ELSE ROUND(SUM(hr.production_kg) / SUM(hr.harvested_area_ha), 2)
+          ELSE ROUND((SUM(hr.production_kg) / $2::numeric) / SUM(hr.harvested_area_ha), 2)
         END AS yield_kg_ha
       FROM harvest_records hr
       WHERE hr.company_id = $1
         AND hr.enabled = TRUE
-        AND ($2::text IS NULL OR hr.campaign = $2)
+        AND ($3::text IS NULL OR hr.campaign = $3)
       GROUP BY hr.crop
       ORDER BY hr.crop ASC
       `,
-      [company_id, campaign || null]
+      [company_id, unitConfig.divisor, campaign || null]
     );
 
-    return res.json(result.rows);
+    return res.json(result.rows.map((row) => ({
+      ...row,
+      unit: unitConfig.unit,
+      unit_label: unitConfig.label,
+      yield_unit_label: unitConfig.yieldLabel,
+    })));
   } catch (error) {
     next(error);
   }
@@ -700,6 +738,9 @@ exports.getHarvestStatsByCampaign = async (req, res, next) => {
   try {
     const { company_id } = req.user;
     const { crop } = req.query;
+    const unitConfig = getHarvestUnitConfig(req, res);
+
+    if (!unitConfig) return;
 
     if (!company_id) {
       return res.status(400).json({
@@ -714,11 +755,11 @@ exports.getHarvestStatsByCampaign = async (req, res, next) => {
       `
       SELECT
         hr.campaign,
-        ROUND(SUM(hr.production_kg), 2) AS production_kg,
+        ROUND(SUM(hr.production_kg) / $3::numeric, 2) AS production_kg,
         ROUND(SUM(hr.harvested_area_ha), 2) AS area_ha,
         CASE
           WHEN SUM(hr.harvested_area_ha) = 0 THEN 0
-          ELSE ROUND(SUM(hr.production_kg) / SUM(hr.harvested_area_ha), 2)
+          ELSE ROUND((SUM(hr.production_kg) / $3::numeric) / SUM(hr.harvested_area_ha), 2)
         END AS yield_kg_ha
       FROM harvest_records hr
       WHERE hr.company_id = $1
@@ -727,10 +768,15 @@ exports.getHarvestStatsByCampaign = async (req, res, next) => {
       GROUP BY hr.campaign
       ORDER BY hr.campaign ASC
       `,
-      [company_id, normalizedCrop]
+      [company_id, normalizedCrop, unitConfig.divisor]
     );
 
-    return res.json(result.rows);
+    return res.json(result.rows.map((row) => ({
+      ...row,
+      unit: unitConfig.unit,
+      unit_label: unitConfig.label,
+      yield_unit_label: unitConfig.yieldLabel,
+    })));
   } catch (error) {
     next(error);
   }

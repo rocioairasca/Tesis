@@ -1,9 +1,12 @@
 const supabase = require("../db/supabaseClient");
 const axios = require("axios");
+const { Payment } = require("mercadopago");
+const mercadoPagoClient = require("../src/config/mercadoPago");
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_M2M_CLIENT_ID;
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_M2M_CLIENT_SECRET;
+const mercadoPagoPaymentClient = new Payment(mercadoPagoClient);
 
 const getAuth0ManagementToken = async () => {
   const { data } = await axios.post(`https://${AUTH0_DOMAIN}/oauth/token`, {
@@ -18,12 +21,55 @@ const getAuth0ManagementToken = async () => {
 
 exports.registerCompany = async (req, res) => {
   try {
-    const { companyName, adminName, email, password } = req.body;
+    const {
+      companyName,
+      adminName,
+      email,
+      password,
+      paymentId,
+      mercadoPagoExternalReference,
+    } = req.body;
 
-    if (!companyName || !adminName || !email || !password) {
+    if (
+      !companyName ||
+      !adminName ||
+      !email ||
+      !password ||
+      (!paymentId && !mercadoPagoExternalReference)
+    ) {
       return res.status(400).json({
         error: "BadRequest",
         message: "Faltan datos obligatorios",
+      });
+    }
+
+    let paymentApproved = false;
+
+    if (paymentId) {
+      const { data: payment, error: paymentError } = await supabase
+        .from("payments")
+        .select("id,status")
+        .eq("id", paymentId)
+        .maybeSingle();
+
+      if (paymentError) throw paymentError;
+
+      paymentApproved = payment?.status === "approved";
+    } else {
+      const searchResponse = await mercadoPagoPaymentClient.search({
+        options: {
+          external_reference: mercadoPagoExternalReference,
+        },
+      });
+
+      const mercadoPagoPayment = searchResponse.results?.[0];
+      paymentApproved = mercadoPagoPayment?.status === "approved";
+    }
+
+    if (!paymentApproved) {
+      return res.status(402).json({
+        error: "PaymentRequired",
+        message: "Debes confirmar el pago antes de registrar la empresa",
       });
     }
 

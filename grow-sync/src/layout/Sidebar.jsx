@@ -6,6 +6,7 @@ import {
   UserOutlined,
   DashboardOutlined,
   HarvestOutlined,
+  CloudOutlined,
   AppstoreOutlined,
   EnvironmentOutlined,
   FormOutlined,
@@ -42,6 +43,12 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       icon: <HarvestOutlined />,
       label: <Link to="/harvest">Cosechas</Link>,
       show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
+    },
+    {
+      key: "registro-lluvias",
+      icon: <CloudOutlined />,
+      label: <Link to="/registro-lluvias">Registro de lluvias</Link>,
+      show: hasPermission(currentUser, PERMISSIONS.RAIN_RECORDS_VIEW),
     },
     {
       key: "usage",

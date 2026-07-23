@@ -119,7 +119,7 @@ const LandingPage = () => {
                 <Button
                   type="primary"
                   size="large"
-                  onClick={() => navigate("/register-company")}
+                  onClick={() => navigate("/select-plan")}
                 >
                   Crear Empresa
                 </Button>

@@ -8,6 +8,7 @@ import {
   MoreOutlined,
   UserOutlined,
   CarOutlined,
+  CloudOutlined,
   HarvestOutlined,
   CalendarOutlined
 } from './AppIcons';
@@ -74,6 +75,16 @@ const BottomNavigation = () => {
       show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
       onClick: () => {
         navigate("/usage");
+        setDrawerVisible(false);
+      },
+    },
+    {
+      key: "rain-records",
+      label: "Registro de lluvias",
+      icon: <CloudOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.RAIN_RECORDS_VIEW),
+      onClick: () => {
+        navigate("/registro-lluvias");
         setDrawerVisible(false);
       },
     },

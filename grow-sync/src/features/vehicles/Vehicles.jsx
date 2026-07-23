@@ -19,6 +19,7 @@ import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import VehicleTable from "./components/VehicleTable";
 import VehicleListMobile from "./components/VehicleListMobile";
+import FuelControlPanel from "./components/FuelControlPanel";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 
@@ -69,6 +70,7 @@ const Vehicles = () => {
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.VEHICLES_CREATE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.VEHICLES_VIEW_DISABLED);
+  const canManageFuel = !!currentUser && (Number(currentUser.role) >= 1 || hasPermission(currentUser, "all"));
 
   // ---- API ----
   const fetchVehicles = useCallback(async () => {
@@ -188,6 +190,13 @@ const Vehicles = () => {
           </Space>
         </Col>
       </Row>
+
+      <FuelControlPanel
+        vehicles={vehicles}
+        numberFmt={numberFmt}
+        isMobile={isMobile}
+        canManageFuel={canManageFuel}
+      />
 
       {/* Tabla (desktop) */}
       {!isMobile && (

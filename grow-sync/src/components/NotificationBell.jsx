@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationsContext';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es';
+import useIsMobile from '../hooks/useIsMobile';
 
 dayjs.extend(relativeTime);
 dayjs.locale('es');
@@ -12,8 +13,8 @@ dayjs.locale('es');
 const NotificationBell = ({ onOpenDrawer }) => {
     const { notifications, unreadCount, markAsRead, fetchNotifications } = useNotifications();
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const isMobile = useIsMobile();
 
-    // Fetch recent notifications when dropdown opens
     const handleDropdownOpenChange = async (open) => {
         setDropdownOpen(open);
         if (open) {
@@ -26,7 +27,6 @@ const NotificationBell = ({ onOpenDrawer }) => {
             await markAsRead(notification.id);
         }
         setDropdownOpen(false);
-        // Aquí podrías agregar navegación basada en el tipo de notificación
     };
 
     const getPriorityColor = (priority) => {
@@ -37,6 +37,22 @@ const NotificationBell = ({ onOpenDrawer }) => {
             default: return '#1890ff';
         }
     };
+
+    const bellButton = (
+        <Badge count={unreadCount} overflowCount={99}>
+            <Button
+                type="text"
+                aria-label="Notificaciones"
+                icon={<BellOutlined style={{ fontSize: 20 }} />}
+                style={{ border: 'none' }}
+                onClick={isMobile ? onOpenDrawer : undefined}
+            />
+        </Badge>
+    );
+
+    if (isMobile) {
+        return bellButton;
+    }
 
     const dropdownMenu = {
         items: notifications.length > 0 ? [
@@ -50,6 +66,8 @@ const NotificationBell = ({ onOpenDrawer }) => {
                             borderLeft: `3px solid ${getPriorityColor(notification.priority)}`,
                             paddingLeft: 8,
                             backgroundColor: notification.read ? 'transparent' : '#f0f5ff',
+                            maxWidth: '100%',
+                            wordBreak: 'break-word',
                         }}
                     >
                         <div style={{ fontWeight: notification.read ? 'normal' : 'bold', marginBottom: 4 }}>
@@ -102,14 +120,7 @@ const NotificationBell = ({ onOpenDrawer }) => {
             placement="bottomRight"
             overlayStyle={{ width: 350, maxHeight: 400, overflow: 'auto' }}
         >
-            <Badge count={unreadCount} overflowCount={99}>
-                <Button
-                    type="text"
-                    aria-label="Notificaciones"
-                    icon={<BellOutlined style={{ fontSize: 20 }} />}
-                    style={{ border: 'none' }}
-                />
-            </Badge>
+            {bellButton}
         </Dropdown>
     );
 };

@@ -103,4 +103,9 @@ module.exports = (err, req, res, _next) => {
       details: err.details,
     });
   }
+
+  return res.status(err.status || 500).json({
+    error: err.name || 'InternalServerError',
+    message: err.message || 'Error interno del servidor',
+  });
 };

@@ -7,9 +7,11 @@
  */
 const router = require('express').Router();
 const ctrl = require('../controllers/vehicle');
+const fuelCtrl = require('../controllers/vehicleFuel');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
 const schema = require('../validations/vehicle.schema');
+const fuelSchema = require('../validations/vehicleFuel.schema');
 
 /**
  * Roles (referencia)
@@ -40,6 +42,28 @@ router.put('/enable/:id',
   validate(schema.idParam),
   checkRole(2),
   ctrl.enable);
+
+// ----------------------------------------------------------------------------
+// CONTROL DE COMBUSTIBLE
+// ----------------------------------------------------------------------------
+
+// Historial de cargas por vehiculo
+router.get('/:vehicleId/fuel-records',
+  validate(fuelSchema.listByVehicle),
+  checkRole(0),
+  fuelCtrl.listByVehicle);
+
+// Registrar una carga de combustible
+router.post('/:vehicleId/fuel-records',
+  validate(fuelSchema.createSchema),
+  checkRole(1),
+  fuelCtrl.create);
+
+// Eliminar una carga registrada
+router.delete('/:vehicleId/fuel-records/:recordId',
+  validate(fuelSchema.recordParam),
+  checkRole(1),
+  fuelCtrl.remove);
 
 // ----------------------------------------------------------------------------
 // CRUD PRINCIPAL
