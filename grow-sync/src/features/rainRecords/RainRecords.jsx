@@ -60,9 +60,10 @@ const SOURCE_LABELS = {
 
 const formatDate = (value) => {
   if (!value) return "-";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("es-AR");
+  const dateText = String(value).slice(0, 10);
+  const [year, month, day] = dateText.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 };
 
 const toDateInput = (value) => {
