@@ -59,6 +59,10 @@ app.use('/api/public/payments/mercadopago', mercadoPagoRoutes);
 const authRoutes = require('./routes/auth');
 app.use('/api', authRoutes);
 
+const adminCompanyRoutes = require("./routes/adminCompanyRoutes");
+const requireAdminSecret = require('./middleware/requireAdminSecret');
+app.use("/api/admin/company-invitations", requireAdminSecret, adminCompanyRoutes);
+
 // ---------------------------------------------------
 // Protección para rutas privadas
 // ---------------------------------------------------

@@ -7,6 +7,7 @@ exports.register = z.object({
   body: z.object({
     email: Email,
     password: Password,
+    username: z.string().trim().min(1, 'Nombre requerido').optional(),
     full_name: z.string().trim().min(1, 'Nombre requerido').optional(),
     token: z.string().min(1, 'Token requerido'),
   }),

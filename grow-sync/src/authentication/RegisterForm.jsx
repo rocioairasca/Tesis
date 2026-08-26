@@ -1,21 +1,36 @@
 import React, { useState, useEffect } from "react";
-import { Form, Input, Button, message } from "antd";
+import { Alert, Form, Input, Button, message, Typography } from "antd";
 import { UserOutlined, LockOutlined, MailOutlined } from '../components/AppIcons';
 import { registerUser, getInvitation } from "../services/authService";
 
+const { Text } = Typography;
+
 const RegisterForm = ({ onSwitchToLogin, token }) => {
     const [loading, setLoading] = useState(false);
+    const [invitation, setInvitation] = useState(null);
+    const [invitationLoading, setInvitationLoading] = useState(false);
+    const [invitationError, setInvitationError] = useState(null);
     const [form] = Form.useForm();
 
     useEffect(() => {
         if (token) {
+            setInvitationLoading(true);
+            setInvitationError(null);
+
             // Obtener email de la invitación y autocompletar
             getInvitation(token)
                 .then(data => {
+                    setInvitation(data);
                     form.setFieldsValue({ email: data.email });
                 })
                 .catch(err => {
                     console.error("Error fetching invitation:", err);
+                    setInvitation(null);
+                    setInvitationError(err?.message || "Invitación inválida o expirada");
+                    message.error(err?.message || "Invitación inválida o expirada");
+                })
+                .finally(() => {
+                    setInvitationLoading(false);
                 });
         }
     }, [token, form]);
@@ -24,6 +39,11 @@ const RegisterForm = ({ onSwitchToLogin, token }) => {
         try {
             setLoading(true);
             const { username, email, password } = values;
+            if (token && !invitation) {
+                message.error("Primero debe validarse la invitación");
+                return;
+            }
+
             const response = await registerUser({ username, email, password, token });
 
             message.success(response?.message || "Usuario registrado con éxito 🚀");
@@ -41,6 +61,30 @@ const RegisterForm = ({ onSwitchToLogin, token }) => {
 
     return (
         <Form name="register_form" onFinish={onFinish} layout="vertical" form={form}>
+            {token && invitation && (
+                <Alert
+                    type="success"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Invitación validada"
+                    description={
+                        <Text>
+                            Vas a crear la cuenta administradora de {invitation.companyName || "la empresa invitada"}.
+                        </Text>
+                    }
+                />
+            )}
+
+            {token && invitationError && (
+                <Alert
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="No se pudo validar la invitación"
+                    description={invitationError}
+                />
+            )}
+
             <Form.Item name="username" rules={[{ required: true, message: "Por favor ingrese un nombre de usuario" }]}>
                 <Input prefix={<UserOutlined />} placeholder="Nombre de usuario" />
             </Form.Item>
@@ -81,7 +125,8 @@ const RegisterForm = ({ onSwitchToLogin, token }) => {
                     type="primary"
                     htmlType="submit"
                     block
-                    loading={loading}
+                    loading={loading || invitationLoading}
+                    disabled={!!token && (!invitation || invitationLoading)}
                     style={{ backgroundColor: "#437118", borderColor: "#437118" }}
                 >
                     Registrarse

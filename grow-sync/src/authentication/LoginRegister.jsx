@@ -74,7 +74,7 @@ const LoginRegister = () => {
         </Button>
 
         <div style={{ marginTop: 24, textAlign: "center" }}>
-          <Text type="secondary">Copyright © 2024 - Grow Sync</Text>
+          <Text type="secondary">Copyright © 2026 - Grow Sync</Text>
         </div>
       </div>
     </div>

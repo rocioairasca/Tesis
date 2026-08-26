@@ -15,7 +15,7 @@ module.exports = async function getInvitation(req, res) {
     try {
         const { data: invite, error } = await supabase
             .from('invitations')
-            .select('email')
+            .select('email, role, expires_at, companies(name)')
             .eq('token', token)
             .eq('used', false)
             .gt('expires_at', new Date().toISOString())
@@ -26,7 +26,10 @@ module.exports = async function getInvitation(req, res) {
         }
 
         return res.status(200).json({
-            email: invite.email
+            email: invite.email,
+            role: invite.role,
+            companyName: invite.companies?.name || null,
+            expiresAt: invite.expires_at
         });
 
     } catch (err) {

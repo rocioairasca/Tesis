@@ -5,6 +5,38 @@
 const axios = require('axios');
 const supabase = require('../../db/supabaseClient');
 
+function mapAuth0RegisterError(err) {
+  const status = err.response?.status;
+  const body = err.response?.data || {};
+  const code = body.error || err.code || 'Auth0Error';
+  const description = body.error_description || body.message || err.message || 'Error de Auth0';
+
+  if (/The user already exists/i.test(description)) {
+    return {
+      status: 409,
+      error: 'Conflict',
+      message: 'El usuario ya existe en Auth0',
+      details: description,
+    };
+  }
+
+  if (status === 400 || status === 401 || status === 403 || status === 409) {
+    return {
+      status,
+      error: code,
+      message: description,
+      details: description,
+    };
+  }
+
+  return {
+    status: 500,
+    error: 'RegisterError',
+    message: 'No se pudo crear el usuario',
+    details: description,
+  };
+}
+
 module.exports = async function registerUser(req, res) {
   const { email, password, username } = req.body;
 
@@ -181,21 +213,19 @@ module.exports = async function registerUser(req, res) {
     });
 
   } catch (err) {
-    // Mapeo fino de errores de Auth0
-    const ax = err.response?.data || {};
-    const code = ax.error || err.code;
-    const description = ax.error_description || err.message;
+    const mappedError = mapAuth0RegisterError(err);
 
-    // Usuario ya existe en Auth0
-    if (code === 'invalid_request' && /The user already exists/i.test(description)) {
-      return res.status(409).json({ error: 'Conflict', message: 'El usuario ya existe en Auth0' });
-    }
+    console.error('Register error:', {
+      status: err.response?.status,
+      code: mappedError.error,
+      description: mappedError.details,
+      auth0: err.response?.data,
+    });
 
-    console.error('Register error:', { status: err.response?.status, code, description });
-    return res.status(500).json({
-      error: 'RegisterError',
-      message: 'No se pudo crear el usuario',
-      details: description,
+    return res.status(mappedError.status).json({
+      error: mappedError.error,
+      message: mappedError.message,
+      details: mappedError.details,
     });
   }
 };
