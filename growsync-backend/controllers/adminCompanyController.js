@@ -8,6 +8,65 @@ function normalizeFrontendUrl(req) {
     return (process.env.FRONTEND_URL || origin || 'https://growsync.com.ar').replace(/\/+$/, '');
 }
 
+function normalizeComparable(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function publicInvitation(invitation) {
+    return {
+        id: invitation.id,
+        email: invitation.email,
+        company_id: invitation.company_id,
+        role: invitation.role,
+        expires_at: invitation.expires_at,
+        used: invitation.used,
+    };
+}
+
+async function respondWithInvitationEmail(req, res, {
+    statusWhenSent,
+    messageWhenSent,
+    messageWhenEmailFails,
+    company,
+    invitation,
+}) {
+    const inviteLink = `${normalizeFrontendUrl(req)}/login?token=${invitation.token}`;
+
+    try {
+        const emailResult = await sendCompanyInvitationEmail({
+            to: invitation.email,
+            companyName: company.name,
+            inviteLink,
+        });
+
+        return res.status(statusWhenSent).json({
+            message: messageWhenSent,
+            company,
+            invitation: publicInvitation(invitation),
+            inviteLink,
+            email: {
+                sent: true,
+                provider: 'resend',
+                id: emailResult?.id || null,
+            },
+        });
+    } catch (emailError) {
+        console.error('Error enviando invitacion por email:', emailError.response?.data || emailError.message);
+
+        return res.status(202).json({
+            message: messageWhenEmailFails,
+            company,
+            invitation: publicInvitation(invitation),
+            inviteLink,
+            email: {
+                sent: false,
+                provider: 'resend',
+                error: emailError.code || emailError.response?.data?.message || emailError.message,
+            },
+        });
+    }
+}
+
 const createCompanyInvitation = async (req, res) => {
     try {
         const { companyName, email, plan } = req.body;
@@ -39,7 +98,7 @@ const createCompanyInvitation = async (req, res) => {
 
         const existingInvitation = await supabase
             .from('invitations')
-            .select('id, company_id, expires_at')
+            .select('*, companies(*)')
             .eq('email', normalizedEmail)
             .eq('used', false)
             .gt('expires_at', new Date().toISOString())
@@ -49,9 +108,26 @@ const createCompanyInvitation = async (req, res) => {
             throw existingInvitation.error;
         }
         if (existingInvitation.data) {
+            const invitedCompany = existingInvitation.data.companies;
+
+            if (
+                invitedCompany &&
+                normalizeComparable(invitedCompany.name) === normalizeComparable(normalizedCompanyName)
+            ) {
+                const { companies: _companies, ...invitation } = existingInvitation.data;
+
+                return respondWithInvitationEmail(req, res, {
+                    statusWhenSent: 200,
+                    messageWhenSent: 'La invitacion ya existia. Email reenviado.',
+                    messageWhenEmailFails: 'La invitacion ya existia, pero no se pudo enviar el email',
+                    company: invitedCompany,
+                    invitation,
+                });
+            }
+
             return res.status(409).json({
                 error: 'Conflict',
-                message: 'Ya existe una invitacion vigente para ese email',
+                message: 'Ya existe una invitacion vigente para ese email asociada a otra empresa',
             });
         }
 
@@ -70,27 +146,47 @@ const createCompanyInvitation = async (req, res) => {
             );
 
             if (existingCompany.rows.length) {
-                await client.query('ROLLBACK');
-                return res.status(409).json({
-                    error: 'Conflict',
-                    message: 'Ya existe una empresa con ese nombre',
-                });
-            }
+                const usersInCompany = await client.query(
+                    'SELECT id FROM users WHERE company_id = $1 LIMIT 1',
+                    [existingCompany.rows[0].id]
+                );
 
-            const companyResult = await client.query(
-                `INSERT INTO companies (
-                    name,
-                    plan,
-                    subscription_status,
-                    subscription_started_at,
-                    subscription_expires_at,
-                    subscription_source
-                )
-                VALUES ($1, $2, 'active', NOW(), NULL, 'manual')
-                RETURNING *`,
-                [normalizedCompanyName, plan]
-            );
-            company = companyResult.rows[0];
+                if (usersInCompany.rows.length) {
+                    await client.query('ROLLBACK');
+                    return res.status(409).json({
+                        error: 'Conflict',
+                        message: 'Ya existe una empresa con ese nombre y usuarios asociados',
+                    });
+                }
+
+                const companyResult = await client.query(
+                    `UPDATE companies
+                    SET plan = $2,
+                        subscription_status = 'active',
+                        subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                        subscription_expires_at = NULL,
+                        subscription_source = 'manual'
+                    WHERE id = $1
+                    RETURNING *`,
+                    [existingCompany.rows[0].id, plan]
+                );
+                company = companyResult.rows[0];
+            } else {
+                const companyResult = await client.query(
+                    `INSERT INTO companies (
+                        name,
+                        plan,
+                        subscription_status,
+                        subscription_started_at,
+                        subscription_expires_at,
+                        subscription_source
+                    )
+                    VALUES ($1, $2, 'active', NOW(), NULL, 'manual')
+                    RETURNING *`,
+                    [normalizedCompanyName, plan]
+                );
+                company = companyResult.rows[0];
+            }
 
             const invitationResult = await client.query(
                 `INSERT INTO invitations (email, token, company_id, role, expires_at, used)
@@ -108,55 +204,13 @@ const createCompanyInvitation = async (req, res) => {
             client.release();
         }
 
-        const inviteLink = `${normalizeFrontendUrl(req)}/login?token=${token}`;
-
-        try {
-            const emailResult = await sendCompanyInvitationEmail({
-                to: normalizedEmail,
-                companyName: normalizedCompanyName,
-                inviteLink,
-            });
-
-            return res.status(201).json({
-                message: 'Empresa e invitacion creadas correctamente. Email enviado.',
-                company,
-                invitation: {
-                    id: invitation.id,
-                    email: invitation.email,
-                    company_id: invitation.company_id,
-                    role: invitation.role,
-                    expires_at: invitation.expires_at,
-                    used: invitation.used,
-                },
-                inviteLink,
-                email: {
-                    sent: true,
-                    provider: 'resend',
-                    id: emailResult?.id || null,
-                },
-            });
-        } catch (emailError) {
-            console.error('Error enviando invitacion por email:', emailError.response?.data || emailError.message);
-
-            return res.status(202).json({
-                message: 'Empresa e invitacion creadas, pero no se pudo enviar el email',
-                company,
-                invitation: {
-                    id: invitation.id,
-                    email: invitation.email,
-                    company_id: invitation.company_id,
-                    role: invitation.role,
-                    expires_at: invitation.expires_at,
-                    used: invitation.used,
-                },
-                inviteLink,
-                email: {
-                    sent: false,
-                    provider: 'resend',
-                    error: emailError.code || emailError.response?.data?.message || emailError.message,
-                },
-            });
-        }
+        return respondWithInvitationEmail(req, res, {
+            statusWhenSent: 201,
+            messageWhenSent: 'Empresa e invitacion creadas correctamente. Email enviado.',
+            messageWhenEmailFails: 'Empresa e invitacion creadas, pero no se pudo enviar el email',
+            company,
+            invitation,
+        });
 
     } catch (error) {
         console.error('Error creando invitacion de empresa:', error);
