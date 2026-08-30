@@ -2,22 +2,25 @@ const { pool } = require('../../db/supabaseClient');
 
 const EDITABLE_STATUSES = new Set(['draft']);
 const TERMINAL_STATUSES = new Set(['locked', 'archived']);
+const CONTAINMENT_TOLERANCE_METERS = 0.75;
+const CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA = 0.0025; // 25 m2.
 
-function httpError(status, message, error = 'BadRequest') {
+function httpError(status, message, error = 'BadRequest', details = null) {
   const err = new Error(message);
   err.status = status;
   err.name = error;
+  if (details) err.details = details;
   return err;
 }
 
 function toGeoJsonText(value, fieldName = 'geom') {
-  if (!value) throw httpError(400, `${fieldName} es requerido`);
+  if (!value) throw httpError(400, fieldName === 'geom' ? 'El contorno es requerido.' : `${fieldName} es requerido`);
   if (typeof value === 'string') {
     try {
       JSON.parse(value);
       return value;
     } catch {
-      throw httpError(400, `${fieldName} debe ser GeoJSON valido`);
+      throw httpError(400, fieldName === 'geom' ? 'El contorno recibido no es válido.' : `${fieldName} no es válido`);
     }
   }
   return JSON.stringify(value);
@@ -27,6 +30,24 @@ function parseJsonValue(value) {
   if (!value) return null;
   if (typeof value === 'string') return JSON.parse(value);
   return value;
+}
+
+function layoutStatusLabel(status) {
+  return ({
+    draft: 'en edición',
+    active: 'activa',
+    locked: 'histórica',
+    archived: 'archivada',
+  })[status] || status;
+}
+
+function nextSubLotCode(subLots = []) {
+  const used = new Set(subLots.map((subLot) => String(subLot.code || '').toUpperCase()));
+  for (let index = 0; index < 26; index += 1) {
+    const code = String.fromCharCode(65 + index);
+    if (!used.has(code)) return code;
+  }
+  return String(subLots.length + 1);
 }
 
 function mapLayout(row) {
@@ -118,18 +139,18 @@ async function getLayout(client, lotId, layoutId, companyId) {
 
 async function assertEditableLayout(client, lotId, layoutId, companyId) {
   const layout = await getLayout(client, lotId, layoutId, companyId);
-  if (!layout) throw httpError(404, 'Layout no encontrado', 'NotFound');
+  if (!layout) throw httpError(404, 'División no encontrada', 'NotFound');
   if (!EDITABLE_STATUSES.has(layout.status)) {
-    throw httpError(409, `El layout en estado ${layout.status} no puede modificarse`, 'Conflict');
+    throw httpError(409, `Esta división está ${layoutStatusLabel(layout.status)}. Creá una nueva división para realizar cambios.`, 'Conflict');
   }
   return layout;
 }
 
-async function assertSubLotGeometryCanBeSaved(client, lotId, layoutId, companyId, geoJsonText, ignoreSubLotId = null) {
+async function normalizeSubLotGeometryForSave(client, lotId, layoutId, companyId, geoJsonText, ignoreSubLotId = null) {
   const geometryResult = await client.query(
     `
     WITH candidate AS (
-      SELECT ST_SetSRID(ST_GeomFromGeoJSON($4), 4326)::geometry(Polygon, 4326) AS geom
+      SELECT ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON($4)), 4326)::geometry(Polygon, 4326) AS geom
     ),
     layout_scope AS (
       SELECT parent_geom_snapshot, tolerance_ha
@@ -138,30 +159,145 @@ async function assertSubLotGeometryCanBeSaved(client, lotId, layoutId, companyId
         AND lot_id = $2
         AND company_id = $3
       LIMIT 1
+    ),
+    outside AS (
+      SELECT ST_Difference(candidate.geom, layout_scope.parent_geom_snapshot) AS geom
+      FROM candidate
+      CROSS JOIN layout_scope
+    ),
+    containment AS (
+      SELECT
+        candidate.geom AS candidate_geom,
+        layout_scope.parent_geom_snapshot,
+        layout_scope.tolerance_ha,
+        ST_IsValid(candidate.geom) AS is_valid,
+        (ST_Area(candidate.geom::geography) / 10000)::numeric AS area_ha,
+        ST_Covers(layout_scope.parent_geom_snapshot, candidate.geom) AS is_strictly_contained,
+        ST_Covers(
+          ST_Buffer(layout_scope.parent_geom_snapshot::geography, $5::numeric)::geometry,
+          candidate.geom
+        ) AS is_contained_with_tolerance,
+        COALESCE((ST_Area(outside.geom::geography) / 10000), 0)::numeric AS outside_area_ha,
+        CASE
+          WHEN ST_IsEmpty(outside.geom) THEN 0
+          ELSE ST_Distance(ST_PointOnSurface(outside.geom)::geography, layout_scope.parent_geom_snapshot::geography)
+        END::numeric AS outside_distance_m
+      FROM candidate
+      CROSS JOIN layout_scope
+      CROSS JOIN outside
+    ),
+    normalized_source AS (
+      SELECT
+        *,
+        CASE
+          WHEN is_strictly_contained THEN candidate_geom
+          WHEN is_contained_with_tolerance AND outside_area_ha <= $6::numeric
+            THEN ST_Intersection(candidate_geom, parent_geom_snapshot)
+          ELSE candidate_geom
+        END AS geom
+      FROM containment
+    ),
+    normalized_polygons AS (
+      SELECT
+        *,
+        ST_CollectionExtract(ST_MakeValid(geom), 3) AS polygon_geom
+      FROM normalized_source
+    ),
+    normalized_parts AS (
+      SELECT
+        (dumped).path[1] AS part_index,
+        (dumped).geom::geometry(Polygon, 4326) AS geom
+      FROM (
+        SELECT ST_Dump(polygon_geom) AS dumped
+        FROM normalized_polygons
+        WHERE NOT ST_IsEmpty(polygon_geom)
+      ) source
     )
     SELECT
-      ST_IsValid(candidate.geom) AS is_valid,
-      (ST_Area(candidate.geom::geography) / 10000)::numeric AS area_ha,
-      ST_Covers(layout_scope.parent_geom_snapshot, candidate.geom) AS is_contained,
-      layout_scope.tolerance_ha AS tolerance_ha
-    FROM candidate
-    CROSS JOIN layout_scope
+      normalized_polygons.is_valid,
+      normalized_polygons.area_ha,
+      normalized_polygons.is_strictly_contained,
+      normalized_polygons.is_contained_with_tolerance,
+      normalized_polygons.outside_area_ha,
+      normalized_polygons.outside_distance_m,
+      normalized_polygons.tolerance_ha,
+      COUNT(normalized_parts.geom)::int AS normalized_parts_count,
+      COALESCE((SUM(ST_Area(normalized_parts.geom::geography)) / 10000), 0)::numeric AS normalized_area_ha,
+      (
+        SELECT ST_AsGeoJSON(np.geom)::json
+        FROM normalized_parts np
+        ORDER BY np.part_index
+        LIMIT 1
+      ) AS normalized_geom
+    FROM normalized_polygons
+    LEFT JOIN normalized_parts ON TRUE
+    GROUP BY
+      normalized_polygons.is_valid,
+      normalized_polygons.area_ha,
+      normalized_polygons.is_strictly_contained,
+      normalized_polygons.is_contained_with_tolerance,
+      normalized_polygons.outside_area_ha,
+      normalized_polygons.outside_distance_m,
+      normalized_polygons.tolerance_ha
     `,
-    [layoutId, lotId, companyId, geoJsonText]
+    [
+      layoutId,
+      lotId,
+      companyId,
+      geoJsonText,
+      CONTAINMENT_TOLERANCE_METERS,
+      CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+    ]
   );
 
   const geometry = geometryResult.rows[0];
-  if (!geometry) throw httpError(404, 'Layout no encontrado', 'NotFound');
-  if (geometry.is_valid !== true) throw httpError(400, 'La geometria del sublote no es valida');
+  if (!geometry) throw httpError(404, 'División no encontrada', 'NotFound');
+  if (geometry.is_valid !== true) throw httpError(400, 'El contorno del sublote necesita ajustes.');
   if (Number(geometry.area_ha || 0) <= 0) throw httpError(400, 'La superficie del sublote debe ser mayor a 0');
-  if (geometry.is_contained !== true) {
-    throw httpError(400, 'El sublote debe estar completamente contenido dentro del lote padre');
+  const outsideAreaHa = Number(geometry.outside_area_ha || 0);
+  const isWithinContainmentTolerance =
+    geometry.is_contained_with_tolerance === true &&
+    outsideAreaHa <= CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA;
+
+  if (!isWithinContainmentTolerance) {
+    const details = {
+      area_ha: Number(geometry.area_ha || 0),
+      outside_area_ha: outsideAreaHa,
+      outside_distance_m: Number(geometry.outside_distance_m || 0),
+      containment_tolerance_meters: CONTAINMENT_TOLERANCE_METERS,
+      outside_area_tolerance_ha: CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+      is_strictly_contained: geometry.is_strictly_contained === true,
+    };
+
+    console.warn('Sub-lot containment rejected', {
+      lotId,
+      layoutId,
+      companyId,
+      ignoreSubLotId,
+      ...details,
+    });
+
+    throw httpError(400, 'Parte del sublote quedó fuera de los límites del lote. Ajustá el contorno e intentá nuevamente.', 'BadRequest', {
+      ...details,
+    });
   }
+
+  if (Number(geometry.normalized_parts_count || 0) !== 1 || !geometry.normalized_geom) {
+    throw httpError(400, 'El contorno del sublote necesita ajustes antes de guardarse.', 'BadRequest', {
+      outside_area_ha: outsideAreaHa,
+      outside_distance_m: Number(geometry.outside_distance_m || 0),
+      normalized_parts_count: Number(geometry.normalized_parts_count || 0),
+      containment_tolerance_meters: CONTAINMENT_TOLERANCE_METERS,
+      outside_area_tolerance_ha: CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+    });
+  }
+
+  const normalizedGeoJsonText = JSON.stringify(geometry.normalized_geom);
 
   const overlapResult = await client.query(
     `
     WITH candidate AS (
-      SELECT ST_SetSRID(ST_GeomFromGeoJSON($4), 4326)::geometry(Polygon, 4326) AS geom
+      SELECT ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON($4)), 4326)::geometry(Polygon, 4326) AS geom
     )
     SELECT
       sl.id,
@@ -180,17 +316,19 @@ async function assertSubLotGeometryCanBeSaved(client, lotId, layoutId, companyId
     ORDER BY intersection_area_ha DESC
     LIMIT 1
     `,
-    [layoutId, lotId, companyId, geoJsonText, ignoreSubLotId]
+    [layoutId, lotId, companyId, normalizedGeoJsonText, ignoreSubLotId]
   );
 
   if (overlapResult.rows.length) {
     const overlap = overlapResult.rows[0];
     throw httpError(
       409,
-      `El sublote se superpone con ${overlap.code} en ${Number(overlap.intersection_area_ha || 0).toFixed(4)} ha`,
+      `Este sublote se superpone con otro ya creado (${overlap.code}).`,
       'Conflict'
     );
   }
+
+  return normalizedGeoJsonText;
 }
 
 async function validateLayoutById(client, lotId, layoutId, companyId) {
@@ -207,26 +345,50 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
   );
 
   const layout = layoutResult.rows[0];
-  if (!layout) throw httpError(404, 'Layout no encontrado', 'NotFound');
+  if (!layout) throw httpError(404, 'División no encontrada', 'NotFound');
 
   const summaryResult = await client.query(
     `
+    WITH scoped_sub_lots AS (
+      SELECT
+        sl.*,
+        ll.parent_geom_snapshot
+      FROM sub_lots sl
+      JOIN lot_layouts ll ON ll.id = sl.layout_id
+      WHERE sl.layout_id = $3
+        AND sl.enabled = TRUE
+    ),
+    outside AS (
+      SELECT
+        id,
+        ST_Difference(geom, parent_geom_snapshot) AS geom,
+        parent_geom_snapshot
+      FROM scoped_sub_lots
+    )
     SELECT
       COUNT(*)::int AS sub_lots_count,
-      COALESCE(SUM(area_ha), 0)::numeric AS sum_area_ha,
-      COALESCE((ST_Area(ST_UnaryUnion(ST_Collect(geom))::geography) / 10000), 0)::numeric AS union_area_ha,
-      bool_and(ST_IsValid(geom)) AS all_valid,
-      bool_and(ST_Covers((
-        SELECT parent_geom_snapshot
-        FROM lot_layouts
-        WHERE id = $3 AND lot_id = $1 AND company_id = $2
-      ), geom)) AS all_contained,
-      bool_and(lot_id = $1 AND company_id = $2 AND layout_id = $3) AS all_same_scope
-    FROM sub_lots
-    WHERE layout_id = $3
-      AND enabled = TRUE
+      COALESCE(SUM(scoped_sub_lots.area_ha), 0)::numeric AS sum_area_ha,
+      COALESCE((ST_Area(ST_UnaryUnion(ST_Collect(scoped_sub_lots.geom))::geography) / 10000), 0)::numeric AS union_area_ha,
+      bool_and(ST_IsValid(scoped_sub_lots.geom)) AS all_valid,
+      bool_and(
+        ST_Covers(
+          ST_Buffer(scoped_sub_lots.parent_geom_snapshot::geography, $4::numeric)::geometry,
+          scoped_sub_lots.geom
+        )
+        AND COALESCE((ST_Area(outside.geom::geography) / 10000), 0) <= $5::numeric
+      ) AS all_contained,
+      bool_and(scoped_sub_lots.lot_id = $1 AND scoped_sub_lots.company_id = $2 AND scoped_sub_lots.layout_id = $3) AS all_same_scope,
+      COALESCE(SUM(ST_Area(outside.geom::geography) / 10000), 0)::numeric AS outside_area_ha,
+      COALESCE(MAX(
+        CASE
+          WHEN ST_IsEmpty(outside.geom) THEN 0
+          ELSE ST_Distance(ST_PointOnSurface(outside.geom)::geography, outside.parent_geom_snapshot::geography)
+        END
+      ), 0)::numeric AS outside_distance_m
+    FROM scoped_sub_lots
+    LEFT JOIN outside ON outside.id = scoped_sub_lots.id
     `,
-    [lotId, companyId, layoutId]
+    [lotId, companyId, layoutId, CONTAINMENT_TOLERANCE_METERS, CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA]
   );
 
   const summary = summaryResult.rows[0];
@@ -264,7 +426,7 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
     return {
       valid: true,
       mode: 'full_lot',
-      message: 'Layout sin sublotes: representa el lote completo sin division real.',
+      message: 'Esta división representa el lote completo.',
       summary: {
         sub_lots_count: 0,
         parent_area_ha: parentAreaHa,
@@ -275,21 +437,28 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
   }
 
   if (summary.all_valid !== true) {
-    issues.push({ code: 'invalid_geometry', message: 'Uno o mas sublotes tienen geometria invalida' });
+    issues.push({ code: 'invalid_geometry', message: 'Hay un sublote con un contorno que necesita ajustes.' });
   }
 
   if (summary.all_contained !== true) {
-    issues.push({ code: 'not_contained', message: 'Uno o mas sublotes no estan completamente contenidos en el lote padre' });
+    issues.push({
+      code: 'not_contained',
+      message: 'Parte de un sublote quedó fuera de los límites del lote.',
+      outside_area_ha: Number(summary.outside_area_ha || 0),
+      outside_distance_m: Number(summary.outside_distance_m || 0),
+      containment_tolerance_meters: CONTAINMENT_TOLERANCE_METERS,
+      outside_area_tolerance_ha: CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+    });
   }
 
   if (summary.all_same_scope !== true) {
-    issues.push({ code: 'scope_mismatch', message: 'Hay sublotes fuera del mismo lote/layout/empresa' });
+    issues.push({ code: 'scope_mismatch', message: 'Hay un sublote que no corresponde a este lote.' });
   }
 
   for (const row of overlapResult.rows) {
     issues.push({
       code: 'overlap',
-      message: 'Dos sublotes se superponen con area real mayor a la tolerancia',
+      message: 'Hay sublotes que se superponen.',
       sub_lot_a_id: row.sub_lot_a_id,
       sub_lot_b_id: row.sub_lot_b_id,
       sub_lot_a_code: row.sub_lot_a_code,
@@ -302,7 +471,7 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
   if (sumDeltaHa > toleranceHa) {
     issues.push({
       code: 'area_sum_mismatch',
-      message: 'La suma de superficies de sublotes no representa el 100% del lote padre dentro de la tolerancia',
+      message: 'La suma de superficies no coincide con la superficie total del lote.',
       delta_ha: sumDeltaHa,
     });
   }
@@ -311,7 +480,7 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
   if (coverageDeltaHa > toleranceHa) {
     issues.push({
       code: 'coverage_mismatch',
-      message: 'La union de sublotes no cubre el lote padre dentro de la tolerancia',
+      message: 'Todavía queda superficie del lote sin asignar.',
       delta_ha: coverageDeltaHa,
     });
   }
@@ -383,8 +552,8 @@ exports.createLayout = async (req, res, next) => {
 
     const lot = await getLot(client, lotId, company_id);
     if (!lot) throw httpError(404, 'Lote no encontrado', 'NotFound');
-    if (!lot.enabled) throw httpError(400, 'No se puede crear un layout para un lote deshabilitado');
-    if (!lot.geom) throw httpError(400, 'El lote no tiene geometria normalizada');
+    if (!lot.enabled) throw httpError(400, 'No se puede crear una división para un lote deshabilitado.');
+    if (!lot.geom) throw httpError(400, 'Este lote todavía no tiene un contorno listo para editar divisiones.');
 
     const { rows: versionRows } = await client.query(
       'SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM lot_layouts WHERE lot_id = $1 AND company_id = $2',
@@ -454,7 +623,7 @@ exports.getLayout = async (req, res, next) => {
     const { lotId, layoutId } = req.params;
     const layout = await getLayout(pool, lotId, layoutId, company_id);
 
-    if (!layout) return res.status(404).json({ error: 'NotFound', message: 'Layout no encontrado' });
+    if (!layout) return res.status(404).json({ error: 'NotFound', message: 'División no encontrada' });
     return res.json({ layout });
   } catch (err) {
     next(err);
@@ -468,14 +637,14 @@ exports.updateLayout = async (req, res, next) => {
     const { name, tolerance_ha, status } = req.body;
 
     const current = await getLayout(pool, lotId, layoutId, company_id);
-    if (!current) return res.status(404).json({ error: 'NotFound', message: 'Layout no encontrado' });
+    if (!current) return res.status(404).json({ error: 'NotFound', message: 'División no encontrada' });
 
     if (TERMINAL_STATUSES.has(current.status)) {
-      return res.status(409).json({ error: 'Conflict', message: `El layout en estado ${current.status} no puede modificarse` });
+      return res.status(409).json({ error: 'Conflict', message: `Esta división está ${layoutStatusLabel(current.status)}. Creá una nueva división para realizar cambios.` });
     }
 
     if (status && status === 'active') {
-      return res.status(400).json({ error: 'BadRequest', message: 'Usa el endpoint de activacion para activar layouts' });
+      return res.status(400).json({ error: 'BadRequest', message: 'Usá la acción de activar división.' });
     }
 
     if (current.status !== 'draft') {
@@ -485,7 +654,7 @@ exports.updateLayout = async (req, res, next) => {
         && ['locked', 'archived'].includes(status);
 
       if (!onlyStatusTransition) {
-        return res.status(409).json({ error: 'Conflict', message: `El layout en estado ${current.status} no puede modificarse` });
+        return res.status(409).json({ error: 'Conflict', message: `Esta división está ${layoutStatusLabel(current.status)}. Creá una nueva división para realizar cambios.` });
       }
     }
 
@@ -548,12 +717,12 @@ exports.createSubLot = async (req, res, next) => {
 
     await assertEditableLayout(pool, lotId, layoutId, company_id);
     const geoJsonText = toGeoJsonText(geom);
-    await assertSubLotGeometryCanBeSaved(pool, lotId, layoutId, company_id, geoJsonText);
+    const normalizedGeoJsonText = await normalizeSubLotGeometryForSave(pool, lotId, layoutId, company_id, geoJsonText);
 
     const { rows } = await pool.query(
       `
       INSERT INTO sub_lots (layout_id, lot_id, company_id, code, name, geom, sort_order, enabled)
-      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), $7, $8)
+      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON($6)), 4326), $7, $8)
       RETURNING
         id,
         layout_id,
@@ -568,7 +737,7 @@ exports.createSubLot = async (req, res, next) => {
         created_at,
         updated_at
       `,
-      [layoutId, lotId, company_id, code, name, geoJsonText, sort_order, enabled]
+      [layoutId, lotId, company_id, code, name, normalizedGeoJsonText, sort_order, enabled]
     );
 
     return res.status(201).json({ sub_lot: mapSubLot(rows[0]) });
@@ -598,9 +767,9 @@ exports.updateSubLot = async (req, res, next) => {
     if (enabled !== undefined) push('enabled', enabled);
     if (geom !== undefined) {
       const geoJsonText = toGeoJsonText(geom);
-      await assertSubLotGeometryCanBeSaved(pool, lotId, layoutId, company_id, geoJsonText, subLotId);
-      values.push(geoJsonText);
-      updates.push(`geom = ST_SetSRID(ST_GeomFromGeoJSON($${values.length}), 4326)`);
+      const normalizedGeoJsonText = await normalizeSubLotGeometryForSave(pool, lotId, layoutId, company_id, geoJsonText, subLotId);
+      values.push(normalizedGeoJsonText);
+      updates.push(`geom = ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON($${values.length})), 4326)`);
     }
 
     if (!updates.length) {
@@ -688,6 +857,202 @@ exports.deleteSubLot = async (req, res, next) => {
   }
 };
 
+exports.fillRemainingSubLot = async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const { company_id } = req.user;
+    const { lotId, layoutId } = req.params;
+
+    await client.query('BEGIN');
+
+    const { rows: scopeRows } = await client.query(
+      `
+      SELECT
+        ll.id,
+        ll.status,
+        ll.lot_id,
+        ll.company_id,
+        ll.parent_geom_snapshot,
+        l.name AS lot_name
+      FROM lot_layouts ll
+      JOIN lots l ON l.id = ll.lot_id
+      WHERE ll.id = $1
+        AND ll.lot_id = $2
+        AND ll.company_id = $3
+      FOR UPDATE OF ll
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const layout = scopeRows[0];
+    if (!layout) throw httpError(404, 'División no encontrada', 'NotFound');
+    if (!EDITABLE_STATUSES.has(layout.status)) {
+      throw httpError(409, `Esta división está ${layoutStatusLabel(layout.status)}. Creá una nueva división para realizar cambios.`, 'Conflict');
+    }
+
+    const { rows: subLotRows } = await client.query(
+      `
+      SELECT id, code, sort_order, enabled
+      FROM sub_lots
+      WHERE layout_id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      ORDER BY sort_order, code
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const enabledSubLotRows = subLotRows.filter((subLot) => subLot.enabled);
+    if (!enabledSubLotRows.length) {
+      throw httpError(400, 'Dibujá al menos un sublote antes de completar la superficie restante.');
+    }
+
+    const remainingResult = await client.query(
+      `
+      WITH existing_union AS (
+        SELECT ST_UnaryUnion(ST_Collect(geom)) AS geom
+        FROM sub_lots
+        WHERE layout_id = $1
+          AND lot_id = $2
+          AND company_id = $3
+          AND enabled = TRUE
+      ),
+      remaining_raw AS (
+        SELECT ST_Difference(
+          ll.parent_geom_snapshot,
+          COALESCE(existing_union.geom, ST_SetSRID('GEOMETRYCOLLECTION EMPTY'::geometry, 4326))
+        ) AS geom
+        FROM lot_layouts ll
+        CROSS JOIN existing_union
+        WHERE ll.id = $1
+          AND ll.lot_id = $2
+          AND ll.company_id = $3
+      ),
+      remaining_polygons AS (
+        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
+        FROM remaining_raw
+      ),
+      regions AS (
+        SELECT
+          (dumped).path[1] AS region_index,
+          (dumped).geom::geometry(Polygon, 4326) AS geom
+        FROM (
+          SELECT ST_Dump(geom) AS dumped
+          FROM remaining_polygons
+          WHERE NOT ST_IsEmpty(geom)
+        ) dump_source
+      )
+      SELECT
+        COUNT(*)::int AS regions_count,
+        COALESCE(SUM(ST_Area(geom::geography) / 10000), 0)::numeric AS remaining_area_ha,
+        COALESCE(json_agg(
+          json_build_object(
+            'index', region_index,
+            'area_ha', ROUND((ST_Area(geom::geography) / 10000)::numeric, 4),
+            'geom', ST_AsGeoJSON(geom)::json
+          )
+          ORDER BY region_index
+        ) FILTER (WHERE geom IS NOT NULL), '[]'::json) AS regions
+      FROM regions
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const remaining = remainingResult.rows[0];
+    const regionsCount = Number(remaining?.regions_count || 0);
+    const remainingAreaHa = Number(remaining?.remaining_area_ha || 0);
+    const regions = Array.isArray(remaining?.regions) ? remaining.regions : [];
+
+    if (regionsCount === 0 || remainingAreaHa <= 0) {
+      throw httpError(400, 'No queda superficie sin asignar para crear otro sublote.');
+    }
+
+    if (regionsCount > 1) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'MultipleRemainingRegions',
+        message: 'La superficie sin asignar está separada en varias zonas. Revisala antes de crear sublotes automáticamente.',
+        regions_count: regionsCount,
+        remaining_area_ha: remainingAreaHa,
+        regions,
+      });
+    }
+
+    const code = nextSubLotCode(subLotRows);
+    const sortOrder = subLotRows.reduce((max, subLot) => Math.max(max, Number(subLot.sort_order || 0)), -1) + 1;
+
+    const { rows } = await client.query(
+      `
+      WITH existing_union AS (
+        SELECT ST_UnaryUnion(ST_Collect(geom)) AS geom
+        FROM sub_lots
+        WHERE layout_id = $1
+          AND lot_id = $2
+          AND company_id = $3
+          AND enabled = TRUE
+      ),
+      remaining AS (
+        SELECT (ST_Dump(ST_CollectionExtract(ST_MakeValid(ST_Difference(
+          ll.parent_geom_snapshot,
+          COALESCE(existing_union.geom, ST_SetSRID('GEOMETRYCOLLECTION EMPTY'::geometry, 4326))
+        )), 3))).geom::geometry(Polygon, 4326) AS geom
+        FROM lot_layouts ll
+        CROSS JOIN existing_union
+        WHERE ll.id = $1
+          AND ll.lot_id = $2
+          AND ll.company_id = $3
+      )
+      INSERT INTO sub_lots (layout_id, lot_id, company_id, code, name, geom, sort_order, enabled)
+      SELECT
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        geom,
+        $6,
+        TRUE
+      FROM remaining
+      WHERE ST_IsValid(geom)
+        AND (ST_Area(geom::geography) / 10000) > 0
+      RETURNING
+        id,
+        layout_id,
+        lot_id,
+        company_id,
+        code,
+        name,
+        ST_AsGeoJSON(geom)::json AS geom,
+        area_ha,
+        sort_order,
+        enabled,
+        created_at,
+        updated_at
+      `,
+      [layoutId, lotId, company_id, code, `${layout.lot_name}-${code}`, sortOrder]
+    );
+
+    if (!rows.length) {
+      throw httpError(400, 'No se pudo crear un sublote con la superficie sin asignar.');
+    }
+
+    await client.query('COMMIT');
+    return res.status(201).json({
+      sub_lot: mapSubLot(rows[0]),
+      remaining: {
+        regions_count: regionsCount,
+        area_ha: remainingAreaHa,
+      },
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
 exports.validateLayout = async (req, res, next) => {
   try {
     const { company_id } = req.user;
@@ -722,9 +1087,9 @@ exports.activateLayout = async (req, res, next) => {
     );
 
     const layout = await getLayout(client, lotId, layoutId, company_id);
-    if (!layout) throw httpError(404, 'Layout no encontrado', 'NotFound');
+    if (!layout) throw httpError(404, 'División no encontrada', 'NotFound');
     if (layout.status !== 'draft') {
-      throw httpError(409, `Solo se pueden activar layouts en draft. Estado actual: ${layout.status}`, 'Conflict');
+      throw httpError(409, `Sólo se pueden usar divisiones que estén en edición. Esta división está ${layoutStatusLabel(layout.status)}.`, 'Conflict');
     }
 
     const validation = await validateLayoutById(client, lotId, layoutId, company_id);
@@ -732,7 +1097,7 @@ exports.activateLayout = async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'LayoutValidationError',
-        message: 'El layout no cumple las validaciones geograficas',
+        message: 'La división todavía necesita ajustes antes de usarse.',
         validation,
       });
     }
@@ -782,7 +1147,7 @@ exports.activateLayout = async (req, res, next) => {
     );
 
     if (!rows.length) {
-      throw httpError(409, 'No se pudo activar el layout porque ya no esta en draft', 'Conflict');
+      throw httpError(409, 'No se pudo activar la división porque ya no está en edición.', 'Conflict');
     }
 
     await client.query('COMMIT');

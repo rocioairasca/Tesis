@@ -93,6 +93,12 @@ router.delete('/:lotId/layouts/:layoutId/sub-lots/:subLotId',
   layouts.deleteSubLot
 );
 
+router.post('/:lotId/layouts/:layoutId/fill-remaining',
+  validate(schema.layoutParam),
+  checkRole(2),
+  layouts.fillRemainingSubLot
+);
+
 router.post('/:lotId/layouts/:layoutId/validate',
   validate(schema.layoutParam),
   checkRole(2),

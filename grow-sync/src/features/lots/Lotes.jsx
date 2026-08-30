@@ -61,7 +61,9 @@ const Lotes = () => {
   const fetchLots = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/lots");
+      const { data } = await api.get("/lots", {
+        params: { includeActiveLayout: true },
+      });
       const list = Array.isArray(data) ? data : data?.items || data?.data || [];
       setLots(list);
     } catch (error) {

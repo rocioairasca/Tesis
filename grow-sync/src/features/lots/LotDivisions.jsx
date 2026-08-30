@@ -42,10 +42,17 @@ const statusColor = {
 };
 
 const statusLabel = {
-  draft: 'Draft',
-  active: 'Active',
-  locked: 'Locked',
-  archived: 'Archived',
+  draft: 'En edición',
+  active: 'Activa',
+  locked: 'Histórica',
+  archived: 'Archivada',
+};
+
+const friendlyErrorMessage = (error, fallback = 'No pudimos guardar los cambios. Intentá nuevamente.') => {
+  const response = error?.response?.data;
+  if (response?.error === 'MultipleRemainingRegions') return 'Quedan varias superficies separadas. Revisá el dibujo antes de completar automáticamente.';
+  if (response?.error === 'LayoutValidationError') return 'La división todavía necesita ajustes antes de usarse.';
+  return response?.message || fallback;
 };
 
 const LotDivisions = () => {
@@ -146,8 +153,8 @@ const LotDivisions = () => {
   useEffect(() => {
     setValidation(null);
     fetchLayoutDetail(selectedLayoutId).catch((error) => {
-      console.error('Error al cargar layout:', error);
-      notification.error({ message: 'No se pudo cargar el layout seleccionado' });
+      console.error('Error al cargar división:', error);
+      notification.error({ message: 'No se pudo cargar la división seleccionada' });
     });
   }, [fetchLayoutDetail, selectedLayoutId]);
 
@@ -161,10 +168,10 @@ const LotDivisions = () => {
       notification.success({ message: 'Nueva división creada' });
       await refreshAll(layout.id);
     } catch (error) {
-      console.error('Error al crear layout:', error);
+      console.error('Error al crear división:', error);
       notification.error({
         message: 'No se pudo crear la división',
-        description: error?.response?.data?.message,
+        description: friendlyErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -183,7 +190,7 @@ const LotDivisions = () => {
       console.error('Error al guardar sublote:', error);
       notification.error({
         message: 'No se pudo guardar el sublote',
-        description: error?.response?.data?.message,
+        description: friendlyErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -202,7 +209,7 @@ const LotDivisions = () => {
       console.error('Error al actualizar sublote:', error);
       notification.error({
         message: 'No se pudo actualizar el sublote',
-        description: error?.response?.data?.message,
+        description: friendlyErrorMessage(error),
       });
       await refreshAll(selectedLayoutId);
     } finally {
@@ -215,7 +222,7 @@ const LotDivisions = () => {
 
     Modal.confirm({
       title: 'Eliminar sublote',
-      content: 'El sublote se quitará del layout draft.',
+      content: 'El sublote se quitará de esta división en edición.',
       okText: 'Eliminar',
       cancelText: 'Cancelar',
       okButtonProps: { danger: true },
@@ -230,13 +237,39 @@ const LotDivisions = () => {
           console.error('Error al eliminar sublote:', error);
           notification.error({
             message: 'No se pudo eliminar el sublote',
-            description: error?.response?.data?.message,
+            description: friendlyErrorMessage(error),
           });
         } finally {
           setSaving(false);
         }
       },
     });
+  };
+
+  const fillRemainingSubLot = async () => {
+    if (!selectedLayoutId) return;
+    setSaving(true);
+    try {
+      setValidation(null);
+      const { data } = await api.post(`/lots/${lotId}/layouts/${selectedLayoutId}/fill-remaining`);
+      const subLot = data?.sub_lot;
+      notification.success({
+        message: 'Sublote restante creado',
+        description: subLot ? `${subLot.name} - ${formatHa(subLot.area_ha)} ha` : undefined,
+      });
+      await refreshAll(selectedLayoutId);
+    } catch (error) {
+      console.error('Error al crear superficie restante:', error);
+      const response = error?.response?.data;
+      notification.error({
+        message: response?.error === 'MultipleRemainingRegions'
+          ? 'Quedan varias superficies separadas'
+          : 'No se pudo crear la superficie restante',
+        description: friendlyErrorMessage(error),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const validateLayout = async () => {
@@ -252,10 +285,10 @@ const LotDivisions = () => {
       }
       return data;
     } catch (error) {
-      console.error('Error al validar layout:', error);
+      console.error('Error al comprobar división:', error);
       notification.error({
-        message: 'No se pudo validar la división',
-        description: error?.response?.data?.message,
+        message: 'No se pudo comprobar la división',
+        description: friendlyErrorMessage(error),
       });
       return null;
     } finally {
@@ -282,7 +315,7 @@ const LotDivisions = () => {
           console.error('Error al activar layout:', error);
           notification.error({
             message: 'No se pudo activar la división',
-            description: error?.response?.data?.message,
+            description: friendlyErrorMessage(error),
           });
         } finally {
           setSaving(false);
@@ -318,17 +351,11 @@ const LotDivisions = () => {
           )}
           description={(
             <Space direction="vertical" size={4}>
-              <Text type="secondary">{layout.name || 'Sin nombre'}</Text>
               <Text>
                 {subLots.length ? `${subLots.length} sublotes` : 'Lote completo'}
-                {' - '}
+                {' · '}
                 {formatHa(layout.parent_area_ha_snapshot)} ha
               </Text>
-              {subLots.map((subLot) => (
-                <Text key={subLot.id} type="secondary">
-                  {subLot.name} - {formatHa(subLot.area_ha)} ha
-                </Text>
-              ))}
             </Space>
           )}
         />
@@ -379,14 +406,14 @@ const LotDivisions = () => {
           type="success"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`Layout activo actual: Versión ${activeLayout.version}`}
+          message="División actual del lote"
         />
       ) : (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Este lote todavía no tiene un layout activo."
+          message="Este lote todavía no tiene una división actual."
         />
       )}
 
@@ -396,7 +423,7 @@ const LotDivisions = () => {
             <List
               dataSource={layouts}
               loading={loading}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin layouts" /> }}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin divisiones" /> }}
               renderItem={renderLayoutCard}
             />
           </Card>
@@ -430,6 +457,7 @@ const LotDivisions = () => {
                 onCreateSubLot={createSubLot}
                 onUpdateSubLot={updateSubLot}
                 onDeleteSubLot={deleteSubLot}
+                onFillRemaining={fillRemainingSubLot}
                 onValidate={validateLayout}
                 onActivate={activateLayout}
               />

@@ -12,7 +12,7 @@
  *  - Desacoplamiento de la lógica de estado principal.
  */
 import React from 'react';
-import { Table, Button, Space, Tooltip, Popconfirm } from 'antd';
+import { Table, Button, Space, Tooltip, Popconfirm, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, FormOutlined } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -20,6 +20,16 @@ import { hasPermission } from "../../../utils/permissions";
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 const canEdit = hasPermission(currentUser, PERMISSIONS.LOTS_EDIT);
 const canDisable = hasPermission(currentUser, PERMISSIONS.LOTS_DISABLE);
+const { Text } = Typography;
+
+const formatHa = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+};
+
+const getActiveSubLots = (lot) => (
+    Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
+);
 
 const LotTable = ({
     lots,
@@ -35,21 +45,40 @@ const LotTable = ({
 
     const columns = [
         {
-            title: "#",
-            dataIndex: "index",
-            key: "index",
-            render: (_, __, index) => index + 1,
-            width: 64,
-        },
-        {
             title: "Nombre del Lote",
             dataIndex: "name",
             key: "name",
+            render: (_, record) => {
+                const subLots = getActiveSubLots(record);
+                return (
+                    <Space direction="vertical" size={4}>
+                        <Text strong>{record.name}</Text>
+                        {subLots.map((subLot) => (
+                            <Text key={subLot.id} type="secondary" style={{ paddingLeft: 18 }}>
+                                ↳ {subLot.name}
+                            </Text>
+                        ))}
+                    </Space>
+                );
+            },
         },
         {
             title: "Área Total (ha)",
             dataIndex: "area",
             key: "area",
+            render: (_, record) => {
+                const subLots = getActiveSubLots(record);
+                return (
+                    <Space direction="vertical" size={4}>
+                        <Text>{formatHa(record.area_ha || record.area)} ha</Text>
+                        {subLots.map((subLot) => (
+                            <Text key={subLot.id} type="secondary" style={{ paddingLeft: 18 }}>
+                                {formatHa(subLot.area_ha)} ha
+                            </Text>
+                        ))}
+                    </Space>
+                );
+            },
         },
         {
             title: "Ubicación",

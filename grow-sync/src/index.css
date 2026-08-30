@@ -13,3 +13,32 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.lot-map-label-icon {
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+.lot-map-label {
+  display: inline-block;
+  max-width: 130px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(67, 113, 24, 0.18);
+  box-shadow: 0 2px 8px rgba(20, 40, 20, 0.18);
+  color: #1f3b2d;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  transform: translate(-50%, -50%);
+}
+
+.leaflet-pm-tooltip,
+.leaflet-pm-touch-hint,
+.leaflet-pm-actions-container {
+  display: none !important;
+}
+

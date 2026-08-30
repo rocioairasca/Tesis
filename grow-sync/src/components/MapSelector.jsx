@@ -4,6 +4,7 @@ import {
   MapContainer,
   TileLayer,
   Polygon,
+  Marker,
   useMap,
   Tooltip,
   LayersControl,
@@ -15,6 +16,7 @@ import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
 
 const FALLBACK_POSITION = [-32.4082, -63.2402];
+const SUB_LOT_PATTERNS = ['sub-lot-hatch-a', 'sub-lot-hatch-b', 'sub-lot-hatch-c'];
 
 const parseLocation = (location) => {
   if (!location) return null;
@@ -31,6 +33,86 @@ const getLocationRing = (location) => {
   return Array.isArray(parsed) && Array.isArray(parsed[0]) && parsed[0].length
     ? parsed[0]
     : null;
+};
+
+const geoJsonToPositions = (geometry) => {
+  const rawGeometry = geometry?.type === 'Feature' ? geometry.geometry : geometry;
+  const ring = rawGeometry?.coordinates?.[0];
+  if (!Array.isArray(ring)) return [];
+  return ring.map(([lng, lat]) => [lat, lng]);
+};
+
+const hasActiveSubLots = (lot) => (
+  Array.isArray(lot?.active_layout?.sub_lots) && lot.active_layout.sub_lots.length > 0
+);
+
+const escapeHtml = (value) => String(value || '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
+const getLotLabelPosition = (lot) => {
+  const ring = getLocationRing(lot.location);
+  if (!ring?.length) return null;
+
+  try {
+    const polygon = turf.polygon([ring.map(({ lat, lng }) => [lng, lat])]);
+    const point = turf.pointOnFeature(polygon);
+    const [lng, lat] = point.geometry.coordinates;
+    return [lat, lng];
+  } catch {
+    const totals = ring.reduce((acc, coord) => ({
+      lat: acc.lat + Number(coord.lat || 0),
+      lng: acc.lng + Number(coord.lng || 0),
+    }), { lat: 0, lng: 0 });
+
+    return [totals.lat / ring.length, totals.lng / ring.length];
+  }
+};
+
+const createLotLabelIcon = (name) => L.divIcon({
+  className: 'lot-map-label-icon',
+  html: `<span class="lot-map-label">${escapeHtml(name)}</span>`,
+  iconSize: [0, 0],
+  iconAnchor: [0, 0],
+});
+
+const MapHatchPatterns = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    const ensurePatterns = () => {
+      const svg = map.getPanes()?.overlayPane?.querySelector('svg');
+      if (!svg || svg.querySelector('#sub-lot-hatch-a')) return;
+
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      defs.innerHTML = `
+        <pattern id="sub-lot-hatch-a" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="8" stroke="#2f5d3a" stroke-width="1.6" opacity="0.55" />
+        </pattern>
+        <pattern id="sub-lot-hatch-b" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(-45)">
+          <line x1="0" y1="0" x2="0" y2="9" stroke="#24517a" stroke-width="1.5" opacity="0.5" />
+        </pattern>
+        <pattern id="sub-lot-hatch-c" patternUnits="userSpaceOnUse" width="10" height="10">
+          <path d="M 0 5 L 10 5" stroke="#7a5a1f" stroke-width="1.4" opacity="0.45" />
+        </pattern>
+      `;
+      svg.insertBefore(defs, svg.firstChild);
+    };
+
+    ensurePatterns();
+    map.on('layeradd', ensurePatterns);
+    map.on('zoomend', ensurePatterns);
+
+    return () => {
+      map.off('layeradd', ensurePatterns);
+      map.off('zoomend', ensurePatterns);
+    };
+  }, [map]);
+
+  return null;
 };
 
 const MapSelector = ({
@@ -230,6 +312,8 @@ const MapSelector = ({
           </LayersControl.BaseLayer>
         </LayersControl>
 
+        <MapHatchPatterns />
+
         {activeLocation && (
           <Polygon
             positions={activeLocation}
@@ -259,17 +343,60 @@ const MapSelector = ({
             '#e74c3c',
           ];
           const color = colors[index % colors.length];
+          const divided = hasActiveSubLots(lot);
+          const labelPosition = getLotLabelPosition(lot);
 
           return (
-            <Polygon
-              key={lot.id}
-              positions={[ring]}
-              pathOptions={{ color, weight: 2, smoothFactor: 1 }}
-            >
-              <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
-                {lot.name}
-              </Tooltip>
-            </Polygon>
+            <React.Fragment key={lot.id}>
+              <Polygon
+                positions={[ring]}
+                pathOptions={{
+                  color,
+                  weight: divided ? 3 : 2,
+                  smoothFactor: 1,
+                  fillOpacity: divided ? 0.03 : 0.18,
+                  dashArray: divided ? '8 5' : undefined,
+                }}
+              >
+                <Tooltip direction="center" offset={[0, 0]} opacity={0.95}>
+                  {divided ? `${lot.name} - dividido` : lot.name}
+                </Tooltip>
+              </Polygon>
+
+              {labelPosition ? (
+                <Marker
+                  position={labelPosition}
+                  icon={createLotLabelIcon(lot.name)}
+                  interactive={false}
+                  keyboard={false}
+                />
+              ) : null}
+
+              {divided && lot.active_layout.sub_lots.map((subLot, subLotIndex) => {
+                const positions = geoJsonToPositions(subLot.geom);
+                if (!positions.length) return null;
+
+                const patternId = SUB_LOT_PATTERNS[subLotIndex % SUB_LOT_PATTERNS.length];
+                return (
+                  <Polygon
+                    key={subLot.id}
+                    positions={positions}
+                    pathOptions={{
+                      color,
+                      weight: 1.4,
+                      opacity: 0.95,
+                      fillColor: `url(#${patternId})`,
+                      fillOpacity: 1,
+                      smoothFactor: 1,
+                    }}
+                  >
+                    <Tooltip direction="center" offset={[0, 0]} opacity={0.95}>
+                      {subLot.name} - {Number(subLot.area_ha || 0).toFixed(2)} ha
+                    </Tooltip>
+                  </Polygon>
+                );
+              })}
+            </React.Fragment>
           );
         })}
       </MapContainer>
@@ -303,6 +430,7 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
 
     map.pm.setGlobalOptions({
       continueDrawing: false,
+      tooltips: false,
       pathOptions: {
         color: '#437118',
         weight: 2,
@@ -323,7 +451,7 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
 
       const latlngs = activeLocation[0].map(({ lat, lng }) => [lat, lng]);
       const polygon = L.polygon(latlngs, { color: '#437118', weight: 2 }).addTo(map);
-      polygon.pm.enable();
+      polygon.pm.enable({ tooltips: false });
 
       editableLayerRef.current = polygon;
     };
@@ -332,7 +460,7 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
       clearEditableLayer();
 
       editableLayerRef.current = e.layer;
-      editableLayerRef.current.pm.enable();
+      editableLayerRef.current.pm.enable({ tooltips: false });
 
       emitPolygonData(e.layer);
     };

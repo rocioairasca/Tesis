@@ -123,5 +123,6 @@ exports.listQuery = z.object({
     page: z.coerce.number().int().min(1).optional(),
     pageSize: z.coerce.number().int().min(1).max(1000).optional(),
     includeDisabled: z.coerce.boolean().optional(), 
+    includeActiveLayout: z.coerce.boolean().optional(),
   }),
 });

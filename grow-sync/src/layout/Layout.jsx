@@ -56,7 +56,7 @@ const AppLayout = ({ children }) => {
 
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Text type="secondary">
-            Copyright © 2024 - Grow Sync
+            Copyright © 2026 - Grow Sync
           </Text>
         </div>
       </Layout>

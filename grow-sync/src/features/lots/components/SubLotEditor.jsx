@@ -3,19 +3,34 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MapContainer,
   Polygon,
+  GeoJSON,
   TileLayer,
   Tooltip,
   useMap,
 } from 'react-leaflet';
 import { Alert, Button, Empty, List, Space, Statistic, Tag, Typography, notification } from 'antd';
+import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import 'leaflet/dist/leaflet.css';
 
-import { DeleteOutlined, Ruler, SaveOutlined } from '../../../components/AppIcons';
+import { DeleteOutlined, PlusOutlined, Ruler, SaveOutlined } from '../../../components/AppIcons';
 
 const { Text } = Typography;
 
 const SUB_LOT_COLORS = ['#2f80ed', '#27ae60', '#f2994a', '#9b51e0', '#eb5757', '#00a8a8'];
+const SNAP_DISTANCE_PX = 40;
+const SHARED_BORDER_TOLERANCE_METERS = 0.75;
+const SMALL_REMAINING_AREA_HA = 0.05;
+const SNAP_OPTIONS = {
+  snappable: true,
+  snapDistance: SNAP_DISTANCE_PX,
+  snapVertex: true,
+  snapMiddle: true,
+  snapSegment: true,
+  requireSnapToFinish: false,
+  allowSelfIntersection: false,
+  tooltips: false,
+};
 
 const toNumber = (value) => {
   const n = Number(value);
@@ -23,6 +38,21 @@ const toNumber = (value) => {
 };
 
 const formatHa = (value) => toNumber(value).toFixed(2);
+
+const statusEditMessage = {
+  active: 'Esta división ya está en uso. Para realizar cambios, creá una nueva división.',
+  locked: 'Esta división es histórica y no puede modificarse.',
+  archived: 'Esta división está archivada y no puede modificarse.',
+};
+
+const issueMessage = {
+  invalid_geometry: 'Hay un sublote con un contorno que necesita ajustes.',
+  not_contained: 'Parte de un sublote quedó fuera de los límites del lote.',
+  scope_mismatch: 'Hay un sublote que no corresponde a este lote.',
+  overlap: 'Hay sublotes que se superponen.',
+  area_sum_mismatch: 'La suma de superficies no coincide con la superficie total del lote.',
+  coverage_mismatch: 'Todavía queda superficie del lote sin asignar.',
+};
 
 const getParentFeature = (layout) => {
   const geometry = layout?.parent_geom_snapshot;
@@ -69,6 +99,160 @@ const layerToGeoJsonPolygon = (layer) => {
   };
 };
 
+const roundCoord = ([lng, lat]) => [
+  Number(lng.toFixed(7)),
+  Number(lat.toFixed(7)),
+];
+
+const sameCoord = (a, b) => (
+  a && b && a[0] === b[0] && a[1] === b[1]
+);
+
+const closeRing = (coordinates) => {
+  if (!coordinates.length) return coordinates;
+  const closed = [...coordinates];
+  const first = closed[0];
+  const last = closed[closed.length - 1];
+  if (!sameCoord(first, last)) closed.push([...first]);
+  return closed;
+};
+
+const getGeometryRing = (geometry) => {
+  const rawGeometry = geometry?.type === 'Feature' ? geometry.geometry : geometry;
+  const ring = rawGeometry?.coordinates?.[0];
+  return Array.isArray(ring) ? ring.map(roundCoord) : [];
+};
+
+const getReferenceRings = (layout, ignoreSubLotId = null) => {
+  const rings = [];
+  const parentRing = getGeometryRing(layout?.parent_geom_snapshot);
+  if (parentRing.length) rings.push(parentRing);
+
+  (layout?.sub_lots || []).forEach((subLot) => {
+    if (ignoreSubLotId && subLot.id === ignoreSubLotId) return;
+    const ring = getGeometryRing(subLot.geom);
+    if (ring.length) rings.push(ring);
+  });
+
+  return rings;
+};
+
+const coordDistanceMeters = (a, b) => {
+  if (!a || !b) return Infinity;
+  return turf.distance(turf.point(a), turf.point(b), { units: 'meters' });
+};
+
+const snapCoordToReferences = (coord, referenceRings) => {
+  let best = { coord, distance: Infinity };
+  let parentBest = { coord, distance: Infinity };
+
+  referenceRings.forEach((ring, ringIndex) => {
+    ring.forEach((referenceCoord) => {
+      const distance = coordDistanceMeters(coord, referenceCoord);
+      if (distance < best.distance) {
+        best = { coord: referenceCoord, distance };
+      }
+      if (ringIndex === 0 && distance < parentBest.distance) {
+        parentBest = { coord: referenceCoord, distance };
+      }
+    });
+
+    for (let index = 0; index < ring.length - 1; index += 1) {
+      const start = ring[index];
+      const end = ring[index + 1];
+      const line = turf.lineString([start, end]);
+      const snapped = turf.nearestPointOnLine(line, turf.point(coord), { units: 'meters' });
+      const distance = Number(snapped?.properties?.dist ?? Infinity);
+      if (distance < best.distance) {
+        best = { coord: roundCoord(snapped.geometry.coordinates), distance };
+      }
+      if (ringIndex === 0 && distance < parentBest.distance) {
+        parentBest = { coord: roundCoord(snapped.geometry.coordinates), distance };
+      }
+    }
+  });
+
+  if (parentBest.distance <= SHARED_BORDER_TOLERANCE_METERS) {
+    return roundCoord(parentBest.coord);
+  }
+
+  return best.distance <= SHARED_BORDER_TOLERANCE_METERS
+    ? roundCoord(best.coord)
+    : roundCoord(coord);
+};
+
+const locationOnEdge = (coord, edgeStart, edgeEnd) => {
+  const edge = turf.lineString([edgeStart, edgeEnd]);
+  const snapped = turf.nearestPointOnLine(edge, turf.point(coord), { units: 'meters' });
+  const distance = Number(snapped?.properties?.dist ?? Infinity);
+  if (distance > SHARED_BORDER_TOLERANCE_METERS) return null;
+
+  const total = turf.length(edge, { units: 'meters' });
+  const location = Number(snapped?.properties?.location ?? 0);
+  if (location < -0.01 || location > total + 0.01) return null;
+  return Math.max(0, Math.min(total, location));
+};
+
+const withSharedBorderVertices = (ring, referenceRings) => {
+  if (ring.length < 4) return ring;
+
+  const output = [];
+  const openRing = ring.slice(0, -1);
+
+  for (let index = 0; index < openRing.length; index += 1) {
+    const start = openRing[index];
+    const end = openRing[(index + 1) % openRing.length];
+    output.push(start);
+
+    const sharedVertices = [];
+    referenceRings.forEach((referenceRing) => {
+      referenceRing.slice(0, -1).forEach((referenceCoord) => {
+        if (sameCoord(referenceCoord, start) || sameCoord(referenceCoord, end)) return;
+        const location = locationOnEdge(referenceCoord, start, end);
+        if (location == null) return;
+        sharedVertices.push({ coord: referenceCoord, location });
+      });
+    });
+
+    sharedVertices
+      .sort((a, b) => a.location - b.location)
+      .forEach(({ coord }) => {
+        if (!sameCoord(output[output.length - 1], coord)) output.push(coord);
+      });
+  }
+
+  return closeRing(output);
+};
+
+const normalizePolygonToReferences = (geom, layout, ignoreSubLotId = null) => {
+  const ring = geom?.coordinates?.[0];
+  if (!Array.isArray(ring) || ring.length < 4) return geom;
+
+  const referenceRings = getReferenceRings(layout, ignoreSubLotId);
+  if (!referenceRings.length) return geom;
+
+  const openRing = ring.slice(0, -1).map((coord) => snapCoordToReferences(coord, referenceRings));
+  const withInsertedVertices = withSharedBorderVertices(closeRing(openRing), referenceRings);
+
+  return {
+    ...geom,
+    coordinates: [withInsertedVertices],
+  };
+};
+
+const getRemainingFeature = (parentFeature, subLots) => {
+  if (!parentFeature || !subLots.length) return null;
+  const assignedFeatures = subLots.map(getFeature).filter(Boolean);
+  if (!assignedFeatures.length) return null;
+
+  try {
+    return turf.difference(turf.featureCollection([parentFeature, ...assignedFeatures]));
+  } catch (error) {
+    console.warn('No se pudo calcular la superficie restante visualmente:', error);
+    return null;
+  }
+};
+
 const nextCode = (subLots = []) => {
   const used = new Set(subLots.map((subLot) => String(subLot.code || '').toUpperCase()));
   for (let index = 0; index < 26; index += 1) {
@@ -91,7 +275,41 @@ const FitBounds = ({ parentGeometry }) => {
   return null;
 };
 
-const DrawControls = ({ enabled, drawing, onDrawingChange, onCreate }) => {
+const SnapReferencePolygon = ({ geometry }) => {
+  const ref = useRef(null);
+  const positions = useMemo(() => geoJsonToPositions(geometry), [geometry]);
+
+  useEffect(() => {
+    const layer = ref.current;
+    if (!layer) return undefined;
+
+    layer.options.pmIgnore = false;
+    layer.pm?.disable();
+    L.PM?.reInitLayer?.(layer);
+
+    return () => {
+      layer.pm?.disable();
+    };
+  }, []);
+
+  if (!positions.length) return null;
+
+  return (
+    <Polygon
+      ref={ref}
+      positions={positions}
+      pathOptions={{
+        color: '#1f3b2d',
+        weight: 3,
+        fillOpacity: 0.06,
+        dashArray: '8 6',
+      }}
+      interactive={false}
+    />
+  );
+};
+
+const DrawControls = ({ enabled, drawing, onDrawingChange, onSnapChange, onCreate }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -115,6 +333,7 @@ const DrawControls = ({ enabled, drawing, onDrawingChange, onCreate }) => {
 
     map.pm.setGlobalOptions({
       continueDrawing: false,
+      ...SNAP_OPTIONS,
       pathOptions: {
         color: '#2f80ed',
         weight: 2,
@@ -132,18 +351,25 @@ const DrawControls = ({ enabled, drawing, onDrawingChange, onCreate }) => {
 
     const setDrawing = () => onDrawingChange(true);
     const clearDrawing = () => onDrawingChange(false);
+    const setSnap = () => onSnapChange(true);
+    const clearSnap = () => onSnapChange(false);
 
     map.on('pm:create', handleCreate);
     map.on('pm:drawstart', setDrawing);
     map.on('pm:drawend', clearDrawing);
+    map.on('pm:snap', setSnap);
+    map.on('pm:unsnap', clearSnap);
 
     return () => {
       map.off('pm:create', handleCreate);
       map.off('pm:drawstart', setDrawing);
       map.off('pm:drawend', clearDrawing);
+      map.off('pm:snap', setSnap);
+      map.off('pm:unsnap', clearSnap);
       map.pm.removeControls();
+      onSnapChange(false);
     };
-  }, [enabled, map, onCreate, onDrawingChange]);
+  }, [enabled, map, onCreate, onDrawingChange, onSnapChange]);
 
   useEffect(() => {
     if (!enabled || !map?.pm) return;
@@ -155,7 +381,7 @@ const DrawControls = ({ enabled, drawing, onDrawingChange, onCreate }) => {
   return null;
 };
 
-const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit }) => {
+const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit, onSnapChange }) => {
   const ref = useRef(null);
   const positions = useMemo(() => geoJsonToPositions(subLot.geom), [subLot.geom]);
   const color = SUB_LOT_COLORS[index % SUB_LOT_COLORS.length];
@@ -166,20 +392,27 @@ const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit }) => 
 
     if (editable) {
       layer.pm.enable({
-        allowSelfIntersection: false,
+        ...SNAP_OPTIONS,
       });
     } else {
       layer.pm.disable();
     }
 
     const handleEdit = () => onEdit(subLot, layer);
+    const setSnap = () => onSnapChange(true);
+    const clearSnap = () => onSnapChange(false);
     layer.on('pm:edit', handleEdit);
+    layer.on('pm:snap', setSnap);
+    layer.on('pm:unsnap', clearSnap);
 
     return () => {
       layer.off('pm:edit', handleEdit);
+      layer.off('pm:snap', setSnap);
+      layer.off('pm:unsnap', clearSnap);
       layer.pm?.disable();
+      onSnapChange(false);
     };
-  }, [editable, onEdit, subLot]);
+  }, [editable, onEdit, onSnapChange, subLot]);
 
   if (!positions.length) return null;
 
@@ -203,6 +436,35 @@ const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit }) => 
   );
 };
 
+const RemainingAreaLayer = ({ feature }) => {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const layer = ref.current;
+    if (!layer) return;
+    layer.options.pmIgnore = true;
+    L.PM?.reInitLayer?.(layer);
+  }, []);
+
+  if (!feature?.geometry || turf.area(feature) <= 0) return null;
+
+  return (
+    <GeoJSON
+      ref={ref}
+      key={JSON.stringify(feature.geometry.coordinates)}
+      data={feature}
+      interactive={false}
+      style={{
+        color: '#d46b08',
+        weight: 1,
+        dashArray: '4 5',
+        fillColor: '#faad14',
+        fillOpacity: 0.18,
+      }}
+    />
+  );
+};
+
 const SubLotEditor = ({
   lot,
   layout,
@@ -212,15 +474,18 @@ const SubLotEditor = ({
   onCreateSubLot,
   onUpdateSubLot,
   onDeleteSubLot,
+  onFillRemaining,
   onValidate,
   onActivate,
   isMobile = false,
 }) => {
   const [drawing, setDrawing] = useState(false);
+  const [snapActive, setSnapActive] = useState(false);
   const parentFeature = useMemo(() => getParentFeature(layout), [layout]);
   const parentGeometry = parentFeature?.geometry;
   const subLots = layout?.sub_lots || [];
   const parentArea = toNumber(layout?.parent_area_ha_snapshot || lot?.area_ha || lot?.area);
+  const remainingFeature = useMemo(() => getRemainingFeature(parentFeature, subLots), [parentFeature, subLots]);
 
   const assignedArea = useMemo(() => (
     subLots.reduce((acc, subLot) => acc + toNumber(subLot.area_ha), 0)
@@ -237,8 +502,12 @@ const SubLotEditor = ({
       parent: parentApprox,
       assigned: assignedApprox,
       remaining: Math.max(parentApprox - assignedApprox, 0),
+      coverage: parentApprox > 0 ? Math.min((assignedApprox / parentApprox) * 100, 100) : 0,
     };
   }, [parentArea, parentFeature, subLots]);
+
+  const hasSmallRemainingArea = visualAreas.remaining > 0.005
+    && visualAreas.remaining <= SMALL_REMAINING_AREA_HA;
 
   const handleCreate = useCallback(async (layer) => {
     const geom = layerToGeoJsonPolygon(layer);
@@ -247,14 +516,15 @@ const SubLotEditor = ({
       return;
     }
 
+    const normalizedGeom = normalizePolygonToReferences(geom, layout);
     const code = nextCode(subLots);
     await onCreateSubLot({
       code,
       name: `${lot.name}-${code}`,
-      geom,
+      geom: normalizedGeom,
       sort_order: subLots.length,
     });
-  }, [lot.name, onCreateSubLot, subLots]);
+  }, [layout, lot.name, onCreateSubLot, subLots]);
 
   const handleEdit = useCallback(async (subLot, layer) => {
     const geom = layerToGeoJsonPolygon(layer);
@@ -263,15 +533,16 @@ const SubLotEditor = ({
       return;
     }
 
-    await onUpdateSubLot(subLot.id, { geom });
-  }, [onUpdateSubLot]);
+    const normalizedGeom = normalizePolygonToReferences(geom, layout, subLot.id);
+    await onUpdateSubLot(subLot.id, { geom: normalizedGeom });
+  }, [layout, onUpdateSubLot]);
 
   if (!parentGeometry) {
     return (
       <Alert
         type="warning"
         showIcon
-        message="Este lote no tiene geometría normalizada para editar divisiones."
+        message="Este lote todavía no tiene un contorno listo para editar divisiones."
       />
     );
   }
@@ -301,15 +572,8 @@ const SubLotEditor = ({
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               opacity={0.45}
             />
-            <Polygon
-              positions={geoJsonToPositions(parentGeometry)}
-              pathOptions={{
-                color: '#1f3b2d',
-                weight: 3,
-                fillOpacity: 0.06,
-                dashArray: '8 6',
-              }}
-            />
+            <SnapReferencePolygon geometry={parentGeometry} />
+            <RemainingAreaLayer feature={remainingFeature} />
             {subLots.map((subLot, index) => (
               <EditableSubLotPolygon
                 key={subLot.id}
@@ -318,12 +582,14 @@ const SubLotEditor = ({
                 editable={editable}
                 drawing={drawing}
                 onEdit={handleEdit}
+                onSnapChange={setSnapActive}
               />
             ))}
             <DrawControls
               enabled={editable}
               drawing={drawing}
               onDrawingChange={setDrawing}
+              onSnapChange={setSnapActive}
               onCreate={handleCreate}
             />
             <FitBounds parentGeometry={parentGeometry} />
@@ -333,25 +599,42 @@ const SubLotEditor = ({
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Statistic title="Lote total" value={formatHa(visualAreas.parent)} suffix="ha" />
-          <Statistic title="Asignado" value={formatHa(assignedArea || visualAreas.assigned)} suffix="ha" />
-          <Statistic title="Restante" value={formatHa(visualAreas.remaining)} suffix="ha" />
-          <Statistic title="Sublotes" value={subLots.length} />
+          <Statistic title="Superficie total" value={formatHa(visualAreas.parent)} suffix="ha" />
+          <Statistic title="Asignada" value={formatHa(assignedArea || visualAreas.assigned)} suffix="ha" />
+          <Statistic title="Sin asignar" value={formatHa(visualAreas.remaining)} suffix="ha" />
+          <Statistic title="Cobertura" value={formatHa(visualAreas.coverage)} suffix="%" />
         </div>
+
+        {editable && snapActive ? (
+          <Alert
+            type="success"
+            showIcon
+            message="Punto alineado con un borde o vértice existente."
+          />
+        ) : null}
 
         {editable ? (
           <Alert
             type="info"
             showIcon
-            message="Dibujá cada sublote con la herramienta de polígono. Las áreas definitivas las calcula el backend."
+            message="Dibujá cada sublote con la herramienta de polígono. Las superficies se recalculan al guardar."
           />
         ) : (
           <Alert
             type="warning"
             showIcon
-            message={`Este layout está ${layout.status}; no permite edición geométrica.`}
+            message={statusEditMessage[layout.status] || 'Esta división no puede modificarse.'}
           />
         )}
+
+        {hasSmallRemainingArea ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="Queda una pequeña superficie sin asignar."
+            description={`Sin asignar: ${formatHa(visualAreas.remaining)} ha.`}
+          />
+        ) : null}
 
         <List
           size="small"
@@ -397,7 +680,7 @@ const SubLotEditor = ({
             description={(
               <ul style={{ paddingLeft: 18, marginBottom: 0 }}>
                 {validation.issues.map((issue, index) => (
-                  <li key={`${issue.code}-${index}`}>{issue.message}</li>
+                  <li key={`${issue.code}-${index}`}>{issueMessage[issue.code] || issue.message}</li>
                 ))}
               </ul>
             )}
@@ -411,8 +694,18 @@ const SubLotEditor = ({
         ) : null}
 
         <Space wrap>
+          {editable && subLots.length > 0 ? (
+            <Button
+              onClick={onFillRemaining}
+              loading={saving}
+              icon={<PlusOutlined />}
+              disabled={visualAreas.remaining <= 0.005}
+            >
+              Crear sublote con superficie restante
+            </Button>
+          ) : null}
           <Button onClick={onValidate} loading={saving} icon={<SaveOutlined />}>
-            Validar división
+            Comprobar división
           </Button>
           <Button
             type="primary"

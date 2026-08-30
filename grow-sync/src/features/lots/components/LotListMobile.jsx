@@ -20,6 +20,15 @@ const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 const canEdit = hasPermission(currentUser, PERMISSIONS.LOTS_EDIT);
 const canDisable = hasPermission(currentUser, PERMISSIONS.LOTS_DISABLE);
 
+const formatHa = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+};
+
+const getActiveSubLots = (lot) => (
+    Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
+);
+
 const LotListMobile = ({
     lots,
     onEdit,
@@ -32,7 +41,10 @@ const LotListMobile = ({
 }) => {
     return (
         <div className="inventory-cards-container">
-            {lots.map((lot) => (
+            {lots.map((lot) => {
+                const subLots = getActiveSubLots(lot);
+
+                return (
                 <div className="inventory-card" key={rowKey(lot)}>
                     <div className="card-header">
                         <h3>{lot.name}</h3>
@@ -76,8 +88,20 @@ const LotListMobile = ({
                     </div>
 
                     <p>
-                        <AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {lot.area} ha
+                        <AimOutlined style={{ marginRight: 8 }} /> <strong>Área:</strong> {formatHa(lot.area_ha || lot.area)} ha
                     </p>
+                    {subLots.length > 0 ? (
+                        <div style={{ margin: '8px 0 10px', paddingLeft: 4 }}>
+                            <strong>Sublotes</strong>
+                            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                                {subLots.map((subLot) => (
+                                    <li key={subLot.id}>
+                                        {subLot.name} — {formatHa(subLot.area_ha)} ha
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
                     <p>
                         <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
                         {safeParse(lot.location) ? (
@@ -94,7 +118,8 @@ const LotListMobile = ({
                         )}
                     </p>
                 </div>
-            ))}
+                );
+            })}
         </div>
     );
 };
