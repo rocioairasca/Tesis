@@ -3,6 +3,18 @@ const { pool } = require('../db/supabaseClient');
 const supabase = require('../db/supabaseClient');
 const { createNotification } = require('../controllers/notifications');
 
+const ACTIVITY_LABELS = {
+    siembra: 'siembra',
+    fumigacion: 'fumigación',
+    cosecha: 'cosecha',
+    fertilizacion: 'fertilización',
+    riego: 'riego',
+    mantenimiento: 'mantenimiento',
+    otro: 'actividad',
+};
+
+const activityLabel = (activityType) => ACTIVITY_LABELS[activityType] || 'actividad';
+
 /**
  * Inicializar Cron Jobs
  */
@@ -33,7 +45,7 @@ const initCronJobs = () => {
                         'planning_upcoming',
                         'medium',
                         'Planificación próxima',
-                        `La planificación "${p.title}" comienza pronto (el ${new Date(p.start_at).toLocaleDateString()}).`,
+                        `Tenés una planificación de ${activityLabel(p.activity_type)} para el ${new Date(p.start_at).toLocaleDateString('es-AR')}.`,
                         { planning_id: p.id, start_at: p.start_at }
                     );
                 }
@@ -72,8 +84,8 @@ const initCronJobs = () => {
                                 admin.id,
                                 'low_stock',
                                 'medium',
-                                'Alerta de Stock Bajo',
-                                `El producto "${prod.name}" tiene bajo stock (${prod.available_quantity} ${prod.unit}).`,
+                                'Stock bajo',
+                                `${prod.name} tiene bajo stock: ${prod.available_quantity} ${prod.unit}.`,
                                 { product_id: prod.id, available: prod.available_quantity }
                             );
                         }

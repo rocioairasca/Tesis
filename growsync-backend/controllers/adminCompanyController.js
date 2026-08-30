@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const supabase = require('../db/supabaseClient');
 const { pool } = require('../db/supabaseClient');
 const { sendCompanyInvitationEmail } = require('../services/emailService');
+const { seedDefaultCrops } = require('../services/defaultCrops');
 
 function normalizeFrontendUrl(req) {
     const origin = req.get('origin');
@@ -60,8 +61,7 @@ async function respondWithInvitationEmail(req, res, {
             inviteLink,
             email: {
                 sent: false,
-                provider: 'resend',
-                error: emailError.code || emailError.response?.data?.message || emailError.message,
+                message: 'No se pudo enviar el email de invitación.',
             },
         });
     }
@@ -187,6 +187,8 @@ const createCompanyInvitation = async (req, res) => {
                 );
                 company = companyResult.rows[0];
             }
+
+            await seedDefaultCrops(client, company.id);
 
             const invitationResult = await client.query(
                 `INSERT INTO invitations (email, token, company_id, role, expires_at, used)

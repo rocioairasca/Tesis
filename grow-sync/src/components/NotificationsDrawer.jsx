@@ -11,6 +11,7 @@ import {
 } from './AppIcons';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationsContext';
+import { sanitizeNotification } from '../utils/userFriendlyErrors';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es';
@@ -136,7 +137,9 @@ const NotificationsDrawer = ({ open, onClose }) => {
                 <List
                     dataSource={items}
                     split={false}
-                    renderItem={notification => (
+                    renderItem={rawNotification => {
+                        const notification = sanitizeNotification(rawNotification);
+                        return (
                         <List.Item
                             onClick={() => handleNotificationClick(notification)}
                             style={{
@@ -160,7 +163,7 @@ const NotificationsDrawer = ({ open, onClose }) => {
                                         icon={<CheckOutlined />}
                                         onClick={(e) => handleMarkAsRead(e, notification.id)}
                                     >
-                                        Marcar leida
+                                        Marcar leída
                                     </Button>
                                 ),
                             ] : undefined}
@@ -197,14 +200,15 @@ const NotificationsDrawer = ({ open, onClose }) => {
                                                 onClick={(e) => handleMarkAsRead(e, notification.id)}
                                                 style={{ paddingInline: 0, maxWidth: '100%' }}
                                             >
-                                                Marcar leida
+                                                Marcar leída
                                             </Button>
                                         )}
                                     </div>
                                 }
                             />
                         </List.Item>
-                    )}
+                    );
+                    }}
                 />
             </div>
         );
@@ -255,11 +259,11 @@ const NotificationsDrawer = ({ open, onClose }) => {
                     style={{ maxWidth: '100%' }}
                     options={[
                         { label: 'Todas', value: 'all' },
-                        { label: 'No leidas', value: 'unread' },
+                        { label: 'No leídas', value: 'unread' },
                     ]}
                 />
                 <Button size="small" onClick={handleMarkAllAsRead} type="primary" ghost block={isMobile}>
-                    Marcar todas leidas
+                    Marcar todas leídas
                 </Button>
             </div>
 
@@ -275,7 +279,7 @@ const NotificationsDrawer = ({ open, onClose }) => {
                     {renderNotificationGroup('Hoy', groupedNotifications.today)}
                     {renderNotificationGroup('Ayer', groupedNotifications.yesterday)}
                     {renderNotificationGroup('Esta semana', groupedNotifications.thisWeek)}
-                    {renderNotificationGroup('Mas antiguas', groupedNotifications.older)}
+                    {renderNotificationGroup('Más antiguas', groupedNotifications.older)}
                 </div>
             )}
         </Drawer>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Badge, Dropdown, Button, Empty } from 'antd';
 import { BellOutlined } from './AppIcons';
 import { useNotifications } from '../context/NotificationsContext';
+import { sanitizeNotification } from '../utils/userFriendlyErrors';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es';
@@ -56,7 +57,9 @@ const NotificationBell = ({ onOpenDrawer }) => {
 
     const dropdownMenu = {
         items: notifications.length > 0 ? [
-            ...notifications.slice(0, 5).map(notification => ({
+            ...notifications.slice(0, 5).map(rawNotification => {
+                const notification = sanitizeNotification(rawNotification);
+                return {
                 key: notification.id,
                 label: (
                     <div
@@ -81,7 +84,8 @@ const NotificationBell = ({ onOpenDrawer }) => {
                         </div>
                     </div>
                 ),
-            })),
+            };
+            }),
             {
                 key: 'view-all',
                 label: (

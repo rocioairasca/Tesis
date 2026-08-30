@@ -9,6 +9,7 @@ import {
   Alert,
 } from "antd";
 import { getMercadoPagoPaymentStatus } from "../../services/publicService";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
@@ -43,8 +44,7 @@ const PaymentSuccess = () => {
         console.error("Error al verificar el pago:", requestError);
 
         setError(
-          requestError.response?.data?.message ||
-            "No se pudo verificar el pago."
+          getUserFriendlyError(requestError, "No se pudo verificar el pago.")
         );
       } finally {
         setLoading(false);

@@ -6,10 +6,10 @@ import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { STATUS_COLORS, formatActivity, getPlanningDisplayName, statusLabel } from "./planningDisplay";
 
 const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.title ?? String(Math.random());
-const STATUS_COLORS = { cancelado: "volcano" };
 
 const DisabledPlanning = () => {
   const [list, setList] = useState([]);
@@ -17,7 +17,8 @@ const DisabledPlanning = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
-  const canEnable = hasPermission(currentUser, PERMISSIONS.PLANNING_ENABLE);
+  const canEnable = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT)
+    && hasPermission(currentUser, PERMISSIONS.PLANNING_ENABLE);
 
   const fetchDisabled = useCallback(async () => {
     setLoading(true);
@@ -47,10 +48,9 @@ const DisabledPlanning = () => {
   };
 
   const columns = [
-    { title: "#", dataIndex: "index", width: 56, render: (_, __, i) => i + 1 },
-    { title: "Título", dataIndex: "title" },
-    { title: "Actividad", dataIndex: "activity_type", render: (t) => <Tag color="blue">{t || "—"}</Tag> },
-    { title: "Estado", dataIndex: "status", render: (s) => <Tag color={STATUS_COLORS[s] || "default"}>{s}</Tag> },
+    { title: "Cultivo", dataIndex: "crop_name", render: (_, row) => getPlanningDisplayName(row) },
+    { title: "Actividad", dataIndex: "activity_type", render: (t) => <Tag color="default">{formatActivity(t)}</Tag> },
+    { title: "Estado", dataIndex: "status", render: (s) => <Tag color={STATUS_COLORS[s] || "default"}>{statusLabel(s)}</Tag> },
     canEnable && {
       title: "Acciones",
       key: "actions",

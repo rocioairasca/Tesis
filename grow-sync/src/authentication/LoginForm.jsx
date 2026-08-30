@@ -4,6 +4,7 @@ import { UserOutlined, LockOutlined } from "../components/AppIcons";
 import { loginUser, getUserDataByEmail } from "../services/authService"; // Asegúrate de que la ruta sea correcta
 import { useNavigate } from "react-router-dom"; // Importa useNavigate para redireccionar
 import { jwtDecode } from 'jwt-decode';
+import { getUserFriendlyError } from "../utils/userFriendlyErrors";
 
 const LoginForm = () => {
   const [loading, setLoading] = useState(false);
@@ -35,7 +36,7 @@ const LoginForm = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error('Error al iniciar sesión:', error);
-      message.error(error?.message || 'Error al iniciar sesión');
+      message.error(getUserFriendlyError(error, 'No se pudo iniciar sesión'));
     } finally {
       setLoading(false);
     }

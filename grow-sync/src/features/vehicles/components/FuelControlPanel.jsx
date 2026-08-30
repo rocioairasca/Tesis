@@ -17,6 +17,7 @@ import {
   notification,
 } from "antd";
 import api from "../../../services/apiClient";
+import { getUserFriendlyError } from "../../../utils/userFriendlyErrors";
 
 const { Text } = Typography;
 
@@ -45,11 +46,7 @@ const toLoadedAt = (value) => {
   return new Date(`${value}T12:00:00`).toISOString();
 };
 
-const getApiErrorMessage = (error) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  "Error inesperado";
+const getApiErrorMessage = (error, fallback) => getUserFriendlyError(error, fallback);
 
 const FuelControlPanel = ({ vehicles, numberFmt, isMobile, canManageFuel }) => {
   const [form] = Form.useForm();
@@ -104,8 +101,8 @@ const FuelControlPanel = ({ vehicles, numberFmt, isMobile, canManageFuel }) => {
     } catch (error) {
       console.error("fuel records error:", error);
       notification.error({
-        message: "Error al cargar combustible del vehiculo",
-        description: getApiErrorMessage(error),
+        message: "No se pudo cargar el combustible del vehículo",
+        description: getApiErrorMessage(error, "Intentá actualizar la pantalla."),
       });
       setRecords([]);
       setSummary({});
@@ -137,8 +134,8 @@ const FuelControlPanel = ({ vehicles, numberFmt, isMobile, canManageFuel }) => {
     } catch (error) {
       console.error("save fuel record error:", error);
       notification.error({
-        message: "Error al registrar combustible",
-        description: getApiErrorMessage(error),
+        message: "No se pudo registrar el combustible",
+        description: getApiErrorMessage(error, "Revisá los datos ingresados e intentá nuevamente."),
       });
     } finally {
       setSubmitting(false);
@@ -155,8 +152,8 @@ const FuelControlPanel = ({ vehicles, numberFmt, isMobile, canManageFuel }) => {
     } catch (error) {
       console.error("delete fuel record error:", error);
       notification.error({
-        message: "Error al eliminar la carga",
-        description: getApiErrorMessage(error),
+        message: "No se pudo eliminar la carga",
+        description: getApiErrorMessage(error, "Intentá nuevamente."),
       });
     }
   };

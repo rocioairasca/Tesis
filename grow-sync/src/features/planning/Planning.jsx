@@ -11,13 +11,13 @@
  *  - Se extrajo la lista mobile a `components/PlanningListMobile.jsx`.
  *  - Se mantiene la lógica de estado y handlers aquí.
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
+  Button, Card, Drawer, Form, Input, InputNumber, Select, DatePicker,
   Dropdown, Space, Row, Col, Tag, notification,
-  Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table
+  Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
-import { PlusOutlined, MoreOutlined, EyeOutlined } from '../../components/AppIcons';
+import { PlusOutlined, MoreOutlined, EyeOutlined, UserOutlined } from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { useNavigate } from "react-router-dom";
@@ -29,6 +29,18 @@ import PlanningListMobile from "./components/PlanningListMobile";
 import LotMapPreview from "./components/LotMapPreview";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import {
+  ACTIVITY_EVENT_STYLES,
+  STATUS_COLORS,
+  formatActivity,
+  getCropDisplayName,
+  getPlanningDisplayName,
+  getPlanningEventLabel,
+  getPlanningLotName,
+  summarizePlanningLotsShort,
+  statusLabel,
+} from "./planningDisplay";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 dayjs.extend(isBetween);
 
@@ -37,14 +49,52 @@ const { RangePicker } = DatePicker;
 // --- helpers ---
 const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.title ?? String(Math.random());
-
-const STATUS_COLORS = {
-  planificado: "blue",
-  en_progreso: "gold",
-  completado: "green",
-  cancelado: "volcano",
+const fullLotKey = (lotId) => `lot:${lotId}`;
+const subLotKey = (lotId, subLotId) => `sub:${lotId}:${subLotId}`;
+const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})} ha`;
+const getLotArea = (lot) => Number(lot?.area_ha ?? lot?.area ?? 0);
+const getActiveSubLots = (lot) => (
+  Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
+);
+const getPlanningLotArea = (lot) => Number(lot?.area_ha || 0);
+const getPlanningArea = (row) => {
+  const plannedArea = Number(row?.planned_area_ha || 0);
+  if (plannedArea > 0) return plannedArea;
+  return (row?.lots || []).reduce((sum, lot) => sum + getPlanningLotArea(lot), 0);
 };
-const statusTag = (s) => <Tag color={STATUS_COLORS[s] || "default"}>{s?.replaceAll("_", " ") || "—"}</Tag>;
+const planningLotToSelectionKey = (lot) => {
+  const lotId = lot?.lot_id || lot?.id || lot?._id;
+  if (!lotId) return null;
+  return lot?.sub_lot_id ? subLotKey(lotId, lot.sub_lot_id) : fullLotKey(lotId);
+};
+const parseSelectionKey = (key) => {
+  const [type, lotId, subLotId] = String(key || "").split(":");
+  if (type === "lot" && lotId) return { lot_id: lotId, sub_lot_id: null };
+  if (type === "sub" && lotId && subLotId) return { lot_id: lotId, sub_lot_id: subLotId };
+  return null;
+};
+const campaignContainsRange = (campaign, range) => {
+  const [start, end] = range || [];
+  if (!campaign || !start || !end) return true;
+
+  const campaignStart = dayjs(campaign.start_date).startOf("day");
+  const campaignEnd = dayjs(campaign.end_date).endOf("day");
+  return !start.isBefore(campaignStart) && !end.isAfter(campaignEnd);
+};
+const campaignContainsDate = (campaign, date) => {
+  if (!campaign || !date) return false;
+  return date.isBetween(
+    dayjs(campaign.start_date).startOf("day"),
+    dayjs(campaign.end_date).endOf("day"),
+    null,
+    "[]"
+  );
+};
+
+const statusTag = (s) => <Tag color={STATUS_COLORS[s] || "default"}>{statusLabel(s)}</Tag>;
 
 const ACTIVITY_OPTIONS = [
   { value: "siembra", label: "Siembra" },
@@ -55,107 +105,562 @@ const ACTIVITY_OPTIONS = [
   { value: "mantenimiento", label: "Mantenimiento" },
   { value: "otro", label: "Otro" },
 ];
+const ACTIVITIES_REQUIRING_CROP = new Set(["siembra", "fumigacion", "fertilizacion", "cosecha"]);
+const ADD_CROP_VALUE = "__add_crop__";
+const MAX_CALENDAR_LANES = 3;
+const MONTH_NAMES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+const getEventIdentityAlpha = (id) => {
+  const value = String(id || "");
+  const hash = value.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return (0.07 + (hash % 5) * 0.025).toFixed(3);
+};
+const formatPeriod = (row) => {
+  if (!row?.start_at || !row?.end_at) return "—";
+  const start = dayjs(row.start_at);
+  const end = dayjs(row.end_at);
+  return start.isSame(end, "day")
+    ? start.format("DD/MM/YYYY")
+    : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
+};
+const getCampaignDisplayStatus = (campaign) => {
+  if (!campaign) return "—";
+  if (campaign.status === "active") return "Activa";
+  if (campaign.start_date && dayjs(campaign.start_date).isAfter(dayjs(), "day")) return "Próxima";
+  return "Cerrada";
+};
+const getMonthTitle = (date) => {
+  if (!date) return "";
+  return `${MONTH_NAMES[date.month()]} ${date.year()}`;
+};
+const getMonthText = (date) => {
+  if (!date) return "";
+  return `${MONTH_NAMES[date.month()]} de ${date.year()}`;
+};
 
 const Planning = () => {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'calendar'
-  const [openDay, setOpenDay] = useState(null); // dayjs() o null
+  const [calendarSelection, setCalendarSelection] = useState(null); // { type: 'day' | 'month', date: dayjs() }
 
   // filtros
   const [filters, setFilters] = useState({
     status: null,
     responsible: null,
+    cropId: null,
+    type: null,
+    campaignId: null,
+    lotSelectionKey: null,
+    dateRange: null,
   });
 
   // catálogos para nombres legibles
   const [users, setUsers] = useState([]);
   const [lots, setLots] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [crops, setCrops] = useState([]);
   const [products, setProducts] = useState([]);
   const [vehicles, setVehicles] = useState([]);
 
   // índices id -> nombre
-  const userIx = Object.fromEntries(users.map(u => [u.id ?? u._id, u.full_name || u.nickname || u.username || u.email]));
-  const lotIx = Object.fromEntries(lots.map(l => [l.id ?? l._id, l.name]));
-  const prodIx = Object.fromEntries(products.map(p => [p.id ?? p._id, p.name]));
-  const vehIx = Object.fromEntries(vehicles.map(v => [v.id ?? v._id, v.name || v.model || v.plate]));
+  const userIx = useMemo(
+    () => Object.fromEntries(users.map(u => [u.id ?? u._id, u.full_name || u.nickname || u.username || u.email])),
+    [users]
+  );
+  const lotIx = useMemo(
+    () => Object.fromEntries(lots.map(l => [l.id ?? l._id, l.name])),
+    [lots]
+  );
+  const cropIx = useMemo(
+    () => Object.fromEntries(crops.map(c => [c.id ?? c._id, c.name])),
+    [crops]
+  );
+  const prodIx = useMemo(
+    () => Object.fromEntries(products.map(p => [p.id ?? p._id, p.name])),
+    [products]
+  );
+  const vehIx = useMemo(
+    () => Object.fromEntries(vehicles.map(v => [v.id ?? v._id, v.name || v.model || v.plate])),
+    [vehicles]
+  );
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null); // Estado para el detalle
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [form] = Form.useForm();
+  const [cropForm] = Form.useForm();
+  const [campaignForm] = Form.useForm();
+  const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
+  const selectedActivityType = Form.useWatch("activity_type", form);
+  const selectedDateRange = Form.useWatch("date_range", form);
+  const selectedCampaignId = Form.useWatch("campaign_id", form);
+  const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [savingCampaign, setSavingCampaign] = useState(false);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [savingCrop, setSavingCrop] = useState(false);
 
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
-  //helpers
+  const selectedPlanningArea = useMemo(() => {
+    return selectedLotKeys.reduce((sum, key) => {
+      const parsed = parseSelectionKey(key);
+      if (!parsed) return sum;
+
+      const lot = lots.find(item => (item.id ?? item._id) === parsed.lot_id);
+      if (!lot) return sum;
+
+      if (!parsed.sub_lot_id) return sum + getLotArea(lot);
+
+      const subLot = getActiveSubLots(lot).find(item => item.id === parsed.sub_lot_id);
+      return sum + Number(subLot?.area_ha || 0);
+    }, 0);
+  }, [lots, selectedLotKeys]);
+
+  const lotSelectionOptions = useMemo(() => {
+    const selectedByLot = selectedLotKeys.reduce((acc, key) => {
+      const parsed = parseSelectionKey(key);
+      if (!parsed) return acc;
+      const current = acc.get(parsed.lot_id) || { full: false, subLots: new Set() };
+      if (parsed.sub_lot_id) current.subLots.add(parsed.sub_lot_id);
+      else current.full = true;
+      acc.set(parsed.lot_id, current);
+      return acc;
+    }, new Map());
+
+    return lots.map((lot) => {
+      const lotId = lot.id ?? lot._id;
+      const subLots = getActiveSubLots(lot);
+      const selected = selectedByLot.get(lotId) || { full: false, subLots: new Set() };
+      if (!subLots.length) {
+        return {
+          value: fullLotKey(lotId),
+          label: `${lot.name} · ${formatHa(getLotArea(lot))}`,
+        };
+      }
+
+      const children = [
+        {
+          value: fullLotKey(lotId),
+          label: `Lote completo · ${formatHa(getLotArea(lot))}`,
+          disabled: selected.subLots.size > 0,
+        },
+        ...subLots.map(subLot => ({
+          value: subLotKey(lotId, subLot.id),
+          label: `${subLot.name || subLot.code} · ${formatHa(subLot.area_ha)}`,
+          disabled: selected.full,
+        })),
+      ];
+
+      return {
+        label: lot.name,
+        options: children,
+      };
+    });
+  }, [lots, selectedLotKeys]);
+
+  const lotFilterOptions = useMemo(() => (
+    lots.map((lot) => {
+      const lotId = lot.id ?? lot._id;
+      const subLots = getActiveSubLots(lot);
+      if (!subLots.length) {
+        return {
+          value: fullLotKey(lotId),
+          label: `${lot.name} · ${formatHa(getLotArea(lot))}`,
+        };
+      }
+
+      return {
+        label: lot.name,
+        options: [
+          {
+            value: fullLotKey(lotId),
+            label: `Lote completo · ${formatHa(getLotArea(lot))}`,
+          },
+          ...subLots.map(subLot => ({
+            value: subLotKey(lotId, subLot.id),
+            label: `${subLot.name || subLot.code} · ${formatHa(subLot.area_ha)}`,
+          })),
+        ],
+      };
+    })
+  ), [lots]);
+
+  const responsibleOptions = useMemo(() => {
+    const nameCounts = users.reduce((acc, user) => {
+      const name = user.full_name || user.nickname || user.username || user.email || "Sin nombre";
+      acc.set(name, (acc.get(name) || 0) + 1);
+      return acc;
+    }, new Map());
+
+    return users.map((user) => {
+      const id = user.id ?? user._id;
+      const name = user.full_name || user.nickname || user.username || user.email || "Sin nombre";
+      const showEmail = Boolean(user.email && nameCounts.get(name) > 1);
+
+      return {
+        value: id,
+        label: showEmail ? (
+          <div>
+            <div>{name}</div>
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>{user.email}</div>
+          </div>
+        ) : name,
+      };
+    });
+  }, [users]);
+
+  const cropOptions = useMemo(() => {
+    const currentCropId = editing?.crop_id;
+    const currentCropName = editing?.crop_name;
+    const hasCurrentCrop = currentCropId && crops.some((crop) => (crop.id ?? crop._id) === currentCropId);
+    const historicalCurrentCrop = currentCropId && currentCropName && !hasCurrentCrop
+      ? [{
+        value: currentCropId,
+        label: `${currentCropName} (histórico)`,
+      }]
+      : [];
+
+    return [
+      ...historicalCurrentCrop,
+      ...crops.map((crop) => ({
+        value: crop.id ?? crop._id,
+        label: crop.name,
+      })),
+      {
+        value: ADD_CROP_VALUE,
+        label: "+ Agregar cultivo",
+      },
+    ];
+  }, [crops, editing]);
+
+  const activeCampaign = useMemo(
+    () => campaigns.find((campaign) => campaign.status === "active") || null,
+    [campaigns]
+  );
+
+  const campaignOptions = useMemo(() => {
+    const currentCampaignId = editing?.campaign_id;
+    const currentCampaignName = editing?.campaign_name;
+    const hasCurrentCampaign = currentCampaignId
+      && campaigns.some((campaign) => (campaign.id ?? campaign._id) === currentCampaignId);
+    const historicalCurrentCampaign = currentCampaignId && currentCampaignName && !hasCurrentCampaign
+      ? [{
+        value: currentCampaignId,
+        label: `${currentCampaignName} (cerrada)`,
+      }]
+      : [];
+
+    return [
+      ...historicalCurrentCampaign,
+      ...campaigns.map((campaign) => ({
+        value: campaign.id ?? campaign._id,
+        label: `${campaign.name} - ${getCampaignDisplayStatus(campaign)}`,
+      })),
+    ];
+  }, [campaigns, editing]);
+
+  const selectedCampaign = useMemo(
+    () => campaigns.find((campaign) => (campaign.id ?? campaign._id) === selectedCampaignId) || null,
+    [campaigns, selectedCampaignId]
+  );
+  const suggestedCampaign = useMemo(() => {
+    const [start] = selectedDateRange || [];
+    if (!start) return null;
+    return campaigns.find((campaign) => campaignContainsDate(campaign, start)) || null;
+  }, [campaigns, selectedDateRange]);
+  const campaignDateMismatch = Boolean(
+    selectedCampaign
+    && selectedDateRange?.[0]
+    && selectedDateRange?.[1]
+    && !campaignContainsRange(selectedCampaign, selectedDateRange)
+  );
+
+  const syncCampaignForRange = useCallback((range) => {
+    const [start] = range || [];
+    if (!start) return;
+
+    const containingCampaign = campaigns.find((campaign) => campaignContainsDate(campaign, start));
+    if (containingCampaign) {
+      form.setFieldValue("campaign_id", containingCampaign.id ?? containingCampaign._id);
+    }
+  }, [campaigns, form]);
+
+  const activeExtraFilterCount = [
+    filters.campaignId,
+    filters.responsible,
+    filters.lotSelectionKey,
+    filters.dateRange?.[0] && filters.dateRange?.[1],
+  ].filter(Boolean).length;
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  const comparePlanningEvents = (a, b) => {
+    const startDiff = dayjs(a.start_at).valueOf() - dayjs(b.start_at).valueOf();
+    if (startDiff) return startDiff;
+
+    const activityDiff = String(a.activity_type || "").localeCompare(String(b.activity_type || ""), "es");
+    if (activityDiff) return activityDiff;
+
+    const cropDiff = getCropDisplayName(a, cropIx).localeCompare(getCropDisplayName(b, cropIx), "es");
+    if (cropDiff) return cropDiff;
+
+    return String(getId(a) || "").localeCompare(String(getId(b) || ""), "es");
+  };
+
+  const calendarEventLayout = useMemo(() => {
+    const byDate = new Map();
+    const byWeek = new Map();
+
+    const weekStart = (date) => date.startOf("day").subtract(date.day(), "day");
+    const clampLater = (a, b) => (a.isAfter(b, "day") ? a : b);
+    const clampEarlier = (a, b) => (a.isBefore(b, "day") ? a : b);
+
+    const events = [...list]
+      .filter((event) => event.start_at && event.end_at)
+      .sort(comparePlanningEvents);
+
+    events.forEach((event) => {
+      const eventStart = dayjs(event.start_at).startOf("day");
+      const eventEnd = dayjs(event.end_at).startOf("day");
+      if (!eventStart.isValid() || !eventEnd.isValid()) return;
+
+      let cursor = weekStart(eventStart);
+      const lastWeek = weekStart(eventEnd);
+
+      while (cursor.isBefore(lastWeek, "day") || cursor.isSame(lastWeek, "day")) {
+        const startOfWeek = cursor;
+        const endOfWeek = cursor.add(6, "day");
+        const segmentStart = clampLater(eventStart, startOfWeek);
+        const segmentEnd = clampEarlier(eventEnd, endOfWeek);
+
+        if (!segmentStart.isAfter(segmentEnd, "day")) {
+          const weekKey = startOfWeek.format("YYYY-MM-DD");
+          const segments = byWeek.get(weekKey) || [];
+          segments.push({ event, segmentStart, segmentEnd });
+          byWeek.set(weekKey, segments);
+        }
+
+        cursor = cursor.add(7, "day");
+      }
+    });
+
+    byWeek.forEach((segments) => {
+      const lanes = [];
+
+      segments
+        .sort((a, b) => comparePlanningEvents(a.event, b.event))
+        .forEach((segment) => {
+          let lane = lanes.findIndex((lastEnd) => lastEnd.isBefore(segment.segmentStart, "day"));
+          if (lane < 0) {
+            lane = lanes.length;
+          }
+          lanes[lane] = segment.segmentEnd;
+
+          let day = segment.segmentStart;
+          while (day.isBefore(segment.segmentEnd, "day") || day.isSame(segment.segmentEnd, "day")) {
+            const isSingleDay = segment.segmentStart.isSame(segment.segmentEnd, "day");
+            const isStart = day.isSame(segment.segmentStart, "day");
+            const isEnd = day.isSame(segment.segmentEnd, "day");
+            const dateKey = day.format("YYYY-MM-DD");
+            const dateSegments = byDate.get(dateKey) || [];
+
+            dateSegments.push({
+              event: segment.event,
+              lane,
+              part: isSingleDay ? "single" : (isStart ? "start" : (isEnd ? "end" : "middle")),
+              showLabel: isSingleDay || isStart,
+            });
+            byDate.set(dateKey, dateSegments);
+
+            day = day.add(1, "day");
+          }
+        });
+    });
+
+    byDate.forEach((segments, dateKey) => {
+      byDate.set(dateKey, segments.sort((a, b) => a.lane - b.lane || comparePlanningEvents(a.event, b.event)));
+    });
+
+    return byDate;
+  }, [list, cropIx]);
+
   // planificaciones que "tocan" un día (inicio/fin inclusivo)
   const eventsOn = (day) => {
     if (!day) return [];
-    return list.filter((r) => {
-      const start = r.start_at ? dayjs(r.start_at) : null;
-      const end = r.end_at ? dayjs(r.end_at) : null;
-      if (!start || !end) return false;
-      return day.isBetween(start.startOf("day"), end.endOf("day"), "day", "[]");
-    });
+    return (calendarEventLayout.get(day.format("YYYY-MM-DD")) || []).map((segment) => segment.event);
   };
 
-  // contenido de cada celda de fecha
-  // color por estado (podés cambiarlo por tipo de actividad si querés)
-  const statusColor = (s) => ({
-    planificado: "#1677ff",
-    en_progreso: "#faad14",
-    completado: "#52c41a",
-    cancelado: "#ff4d4f",
-  }[s] || "#8c8c8c");
+  const eventsInMonth = useCallback((month) => {
+    if (!month) return [];
+    const monthStart = month.startOf("month");
+    const monthEnd = month.endOf("month");
 
-  // parte del span para ese día
-  const eventPartForDay = (ev, day) => {
-    const s = ev.start_at ? dayjs(ev.start_at).startOf("day") : null;
-    const e = ev.end_at ? dayjs(ev.end_at).endOf("day") : null;
-    if (!s || !e) return "single";
-    if (s.isSame(e, "day")) return "single";
-    if (day.isSame(s, "day")) return "start";
-    if (day.isSame(e, "day")) return "end";
-    return "middle";
+    return [...list]
+      .filter((event) => {
+        if (!event.start_at || !event.end_at) return false;
+        const eventStart = dayjs(event.start_at).startOf("day");
+        const eventEnd = dayjs(event.end_at).endOf("day");
+        if (!eventStart.isValid() || !eventEnd.isValid()) return false;
+        return !eventStart.isAfter(monthEnd) && !eventEnd.isBefore(monthStart);
+      })
+      .sort(comparePlanningEvents);
+  }, [list, cropIx]);
+
+  const selectedCalendarEvents = useMemo(() => {
+    if (!calendarSelection?.date) return [];
+    return calendarSelection.type === "month"
+      ? eventsInMonth(calendarSelection.date)
+      : eventsOn(calendarSelection.date);
+  }, [calendarSelection, eventsInMonth, calendarEventLayout]);
+
+  const selectedCalendarGroups = useMemo(() => {
+    const groups = new Map();
+    selectedCalendarEvents.forEach((event) => {
+      const start = dayjs(event.start_at);
+      const key = start.isValid() ? start.format("YYYY-MM-DD") : "sin-fecha";
+      const items = groups.get(key) || [];
+      items.push(event);
+      groups.set(key, items);
+    });
+
+    return Array.from(groups.entries()).map(([key, items]) => ({
+      key,
+      title: key === "sin-fecha"
+        ? "Sin fecha"
+        : `${dayjs(key).format("D")} ${MONTH_NAMES[dayjs(key).month()].toUpperCase()}`,
+      items: items.sort(comparePlanningEvents),
+    }));
+  }, [selectedCalendarEvents, cropIx]);
+
+  const calendarDrawerTitle = useMemo(() => {
+    if (!calendarSelection?.date) return "";
+    if (calendarSelection.type === "month") {
+      return `Planificaciones de ${getMonthTitle(calendarSelection.date)}`;
+    }
+    return `Planificaciones del ${calendarSelection.date.format("DD/MM/YYYY")}`;
+  }, [calendarSelection]);
+
+  const calendarEmptyText = useMemo(() => {
+    if (!calendarSelection?.date) return "No hay planificaciones.";
+    if (calendarSelection.type === "month") {
+      return `No hay planificaciones para ${getMonthText(calendarSelection.date)}.`;
+    }
+    return "Sin planificaciones para este día";
+  }, [calendarSelection]);
+
+  const renderEventPopover = (ev) => {
+    const lots = (ev.lots || []).map(getPlanningLotName).filter(Boolean);
+    const status = ev.status_effective || ev.status;
+    return (
+      <div className="cal-event-popover">
+        <strong>{getCropDisplayName(ev, cropIx)} · {formatActivity(ev.activity_type)}</strong>
+        <div>{lots.join(", ") || "Sin lotes asignados"}</div>
+        <div>{formatHa(getPlanningArea(ev))}</div>
+        <div>{formatPeriod(ev)}</div>
+        <div>Estado: {statusLabel(status)}</div>
+        <div>Responsable: {userIx[ev.responsible_user] || "—"}</div>
+      </div>
+    );
   };
 
   const renderDateCell = (value) => {
-    const items = eventsOn(value);
-    if (!items.length) return null;
+    const segments = calendarEventLayout.get(value.format("YYYY-MM-DD")) || [];
+    if (!segments.length) return null;
 
-    // si hay muchos, mostramos 3 bandas y luego “+N más”
-    const visible = items.slice(0, 3);
+    const segmentByLane = new Map(segments.map((segment) => [segment.lane, segment]));
+    const visibleLaneCount = Math.min(
+      MAX_CALENDAR_LANES,
+      Math.max(...segments.map((segment) => segment.lane)) + 1
+    );
+    const hiddenCount = segments.filter((segment) => segment.lane >= MAX_CALENDAR_LANES).length;
 
     return (
       <div className="cal-bars">
-        {visible.map((ev) => {
-          const part = eventPartForDay(ev, value);
-          const bg = statusColor(ev.status);
+        {Array.from({ length: visibleLaneCount }).map((_, lane) => {
+          const segment = segmentByLane.get(lane);
+          if (!segment) {
+            return <div key={`spacer-${lane}`} className="cal-bar-spacer" aria-hidden="true" />;
+          }
+
+          const ev = segment.event;
+          const activityStyle = ACTIVITY_EVENT_STYLES[ev.activity_type] || ACTIVITY_EVENT_STYLES.otro;
+          const effectiveStatus = ev.status_effective || ev.status;
+          const eventLabel = getPlanningEventLabel(ev, cropIx);
           return (
-            <div
-              key={getId(ev)}
-              className={`cal-bar cal-bar--${part}`}
-              style={{ backgroundColor: bg }}
-              title={`${ev.title || "Sin título"} • ${dayjs(ev.start_at).format("DD/MM/YYYY")} → ${dayjs(ev.end_at).format("DD/MM/YYYY")}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                // abrimos el detalle (read-only)
-                openDetail(ev);
-              }}
+            <Popover
+              key={`${getId(ev)}-${lane}`}
+              content={renderEventPopover(ev)}
+              trigger={isMobile ? [] : ["hover"]}
+              mouseEnterDelay={0.25}
             >
-              <span className="cal-bar__text">{ev.title || "Sin título"}</span>
-            </div>
+              <div
+                className={`cal-bar cal-bar--${segment.part} cal-bar--${effectiveStatus}`}
+                style={{
+                  backgroundColor: activityStyle.background,
+                  borderColor: activityStyle.borderColor,
+                  color: activityStyle.color,
+                  "--cal-identity-alpha": getEventIdentityAlpha(getId(ev)),
+                }}
+                title={`${getPlanningDisplayName(ev, cropIx)} • ${formatPeriod(ev)}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDetail(ev);
+                }}
+              >
+                <span className="cal-bar__text">{segment.showLabel ? eventLabel : ""}</span>
+              </div>
+            </Popover>
           );
         })}
-        {items.length > 3 && (
-          <div className="cal-more">+{items.length - 3} más</div>
+        {hiddenCount > 0 && (
+          <Popover
+            content={(
+              <List
+                size="small"
+                className="cal-more-list"
+                dataSource={eventsOn(value)}
+                renderItem={(event) => (
+                  <List.Item onClick={(e) => e.stopPropagation()}>
+                    <Button type="link" size="small" onClick={() => openDetail(event)}>
+                      {getPlanningEventLabel(event, cropIx)}
+                    </Button>
+                  </List.Item>
+                )}
+              />
+            )}
+            trigger="click"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              className="cal-more"
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              +{hiddenCount} más
+            </button>
+          </Popover>
         )}
       </div>
     );
@@ -169,6 +674,18 @@ const Planning = () => {
       const params = {};
       if (filters.status) params.status = filters.status;
       if (filters.responsible) params.responsible = filters.responsible;
+      if (filters.cropId) params.cropId = filters.cropId;
+      if (filters.type) params.type = filters.type;
+      if (filters.campaignId) params.campaignId = filters.campaignId;
+      if (filters.lotSelectionKey) {
+        const parsed = parseSelectionKey(filters.lotSelectionKey);
+        if (parsed?.sub_lot_id) params.subLotId = parsed.sub_lot_id;
+        else if (parsed?.lot_id) params.lotId = parsed.lot_id;
+      }
+      if (filters.dateRange?.[0] && filters.dateRange?.[1]) {
+        params.from = filters.dateRange[0].format("YYYY-MM-DD[T]00:00:00.000[Z]");
+        params.to = filters.dateRange[1].format("YYYY-MM-DD[T]23:59:59.999[Z]");
+      }
 
       const { data } = await api.get("/planning", { params }); // ?includeDisabled=0&includeCanceled=0 por default
       const items = Array.isArray(data) ? data : data?.items || data?.data || [];
@@ -183,15 +700,36 @@ const Planning = () => {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const { data } = await api.get("/users");
+      const { data } = await api.get("/users/planning-responsibles");
       setUsers(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { }
+    } catch {
+      setUsers([]);
+      notification.error({ message: "No se pudieron cargar los responsables." });
+    }
   }, []);
   const fetchLots = useCallback(async () => {
     try {
-      const { data } = await api.get("/lots");
+      const { data } = await api.get("/lots", { params: { includeActiveLayout: true } });
       setLots(Array.isArray(data) ? data : data?.items || data?.data || []);
     } catch { }
+  }, []);
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const { data } = await api.get("/campaigns", { params: { includeClosed: true } });
+      setCampaigns(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch {
+      setCampaigns([]);
+      notification.error({ message: "No se pudieron cargar las campañas." });
+    }
+  }, []);
+  const fetchCrops = useCallback(async () => {
+    try {
+      const { data } = await api.get("/crops");
+      setCrops(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch {
+      setCrops([]);
+      notification.error({ message: "No se pudieron cargar los cultivos." });
+    }
   }, []);
   const fetchProducts = useCallback(async () => {
     try {
@@ -210,22 +748,27 @@ const Planning = () => {
     fetchPlanning();
     fetchUsers();
     fetchLots();
+    fetchCampaigns();
+    fetchCrops();
     fetchProducts();
     fetchVehicles();
-  }, [fetchPlanning, fetchUsers, fetchLots, fetchProducts, fetchVehicles]);
+  }, [fetchPlanning, fetchUsers, fetchLots, fetchCampaigns, fetchCrops, fetchProducts, fetchVehicles]);
 
   // ---------- drawer handlers ----------
   const openDrawer = (row = null) => {
     setEditing(row);
     if (row) {
       form.setFieldsValue({
-        title: row.title,
         description: row.description,
         activity_type: row.activity_type,
+        campaign_id: row.campaign_id,
+        crop_id: row.crop_id,
         date_range: [row.start_at ? dayjs(row.start_at) : null, row.end_at ? dayjs(row.end_at) : null],
         responsible_user: row.responsible_user,
         vehicle_id: row.vehicle_id,
-        lot_ids: row.lot_ids || (row.lots || []).map(l => l.id),
+        lot_selection_keys: (row.lots || [])
+          .map(planningLotToSelectionKey)
+          .filter(Boolean),
         products: Array.isArray(row.products) ? row.products.map(p => ({
           product_id: p.product_id,
           amount: p.amount,
@@ -235,7 +778,11 @@ const Planning = () => {
       });
     } else {
       form.resetFields();
-      form.setFieldsValue({ status: "planificado", products: [] });
+      form.setFieldsValue({
+        status: "planificado",
+        products: [],
+        campaign_id: activeCampaign?.id,
+      });
     }
     setIsDrawerOpen(true);
   };
@@ -261,14 +808,19 @@ const Planning = () => {
       const [start, end] = values.date_range || [];
 
       // Build payload conditionally to avoid sending empty strings
+      const lotSelections = (values.lot_selection_keys || [])
+        .map(parseSelectionKey)
+        .filter(Boolean);
+
       const payload = {
-        title: values.title?.trim() || "",
         activity_type: values.activity_type,
-        start_at: start?.toDate().toISOString(),
-        end_at: end?.toDate().toISOString(),
+        campaign_id: values.campaign_id,
+        crop_id: values.crop_id || null,
+        start_at: start?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
+        end_at: end?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
         responsible_user: values.responsible_user,
         status: values.status || "planificado",
-        lot_ids: values.lot_ids || [],
+        lot_selections: lotSelections,
       };
 
       // Only include optional fields if they have values
@@ -302,10 +854,64 @@ const Planning = () => {
       closeDrawer();
     } catch (e) {
       console.error("→ save planning error:", e);
-      const errorMsg = e.response?.data?.error === 'Conflicto de fechas en lotes'
-        ? "Conflicto de fechas: Los lotes seleccionados ya tienen una planificación en ese rango."
-        : (e.response?.data?.message || "Error al guardar planificación");
-      notification.error({ message: errorMsg });
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo guardar la planificación."),
+      });
+    }
+  };
+
+  const handleCreateCrop = async (values) => {
+    setSavingCrop(true);
+    try {
+      const { data } = await api.post("/crops", { name: values.name?.trim() });
+      await fetchCrops();
+      form.setFieldValue("crop_id", data?.id);
+      cropForm.resetFields();
+      setIsCropModalOpen(false);
+      notification.success({ message: "Cultivo creado" });
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo crear el cultivo."),
+      });
+    } finally {
+      setSavingCrop(false);
+    }
+  };
+
+  const handleCreateCampaign = async (values) => {
+    setSavingCampaign(true);
+    try {
+      const payload = {
+        name: values.name?.trim(),
+        start_date: values.date_range?.[0]?.format("YYYY-MM-DD"),
+        end_date: values.date_range?.[1]?.format("YYYY-MM-DD"),
+      };
+      const { data } = await api.post("/campaigns", payload);
+      await fetchCampaigns();
+      form.setFieldValue("campaign_id", data?.id);
+      campaignForm.resetFields();
+      setIsCampaignModalOpen(false);
+      notification.success({ message: "Campaña creada" });
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo crear la campaña."),
+      });
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  const handleCloseCampaign = async (campaign) => {
+    try {
+      await api.post(`/campaigns/${campaign.id ?? campaign._id}/close`);
+      await fetchCampaigns();
+      const currentCampaignId = form.getFieldValue("campaign_id");
+      if (currentCampaignId === (campaign.id ?? campaign._id)) {
+        form.setFieldValue("campaign_id", undefined);
+      }
+      notification.success({ message: "Campaña cerrada" });
+    } catch (e) {
+      notification.error({ message: getUserFriendlyError(e, "No se pudo cerrar la campaña.") });
     }
   };
 
@@ -316,7 +922,7 @@ const Planning = () => {
       fetchPlanning();
     } catch (e) {
       console.error("→ cancel planning error:", e);
-      notification.error({ message: "No se pudo cancelar la planificación" });
+      notification.error({ message: getUserFriendlyError(e, "No se pudo cancelar la planificación.") });
     }
   };
 
@@ -325,17 +931,211 @@ const Planning = () => {
       await api.patch(`/planning/${getId(row)}`, { status });
       fetchPlanning();
     } catch (e) {
-      notification.error({ message: "No se pudo actualizar el estado" });
+      notification.error({ message: getUserFriendlyError(e, "No se pudo actualizar el estado.") });
     }
+  };
+
+  const closeCalendarSelection = () => {
+    setCalendarSelection(null);
+  };
+
+  const getStatusTransitionActions = (item) => {
+    const status = item?.status;
+    if (!canEdit) return [];
+
+    if (status === "planificado" || status === "pendiente") {
+      return [
+        { key: "progress", label: "Marcar en progreso", status: "en_progreso" },
+        { key: "done", label: "Marcar completada", status: "completado" },
+      ];
+    }
+
+    if (status === "en_progreso") {
+      return [
+        { key: "done", label: "Marcar completada", status: "completado" },
+        { key: "pending", label: "Volver a pendiente", status: "pendiente" },
+      ];
+    }
+
+    if (status === "completado") {
+      return [
+        { key: "reopen", label: "Reabrir planificación", status: "pendiente" },
+      ];
+    }
+
+    return [];
+  };
+
+  const getMonthlyMenuItems = (item, secondaryActions) => [
+    ...secondaryActions.map((action) => ({
+      key: action.key,
+      label: action.label,
+      onClick: () => {
+        closeCalendarSelection();
+        updateStatus(item, action.status);
+      },
+    })),
+    canEdit && canDisable && item?.status !== "completado" && item?.status !== "cancelado"
+      ? {
+          key: "cancel",
+          danger: true,
+          label: "Cancelar",
+          onClick: () => {
+            Modal.confirm({
+              title: "¿Cancelar planificación?",
+              content: "Esta acción no elimina el registro, lo marca como cancelado.",
+              okText: "Sí",
+              cancelText: "No",
+              onOk: () => {
+                closeCalendarSelection();
+                return handleCancel(item);
+              },
+            });
+          },
+        }
+      : null,
+  ].filter(Boolean);
+
+  const renderCalendarSummaryCard = (item) => {
+    const effectiveStatus = item.status_effective || item.status;
+    const lotSummary = summarizePlanningLotsShort(item.lots || []);
+    const locationText = lotSummary.text !== "—"
+      ? `${lotSummary.text} · ${formatHa(getPlanningArea(item))}`
+      : null;
+    const transitionActions = getStatusTransitionActions(item);
+    const [primaryTransition, ...secondaryTransitions] = transitionActions;
+    const menuItems = getMonthlyMenuItems(item, secondaryTransitions);
+    const activityStyle = ACTIVITY_EVENT_STYLES[item.activity_type] || ACTIVITY_EVENT_STYLES.otro;
+
+    return (
+      <Card
+        key={getId(item)}
+        size="small"
+        className={`planning-month-card planning-month-card--${effectiveStatus}`}
+        styles={{ body: { padding: isMobile ? 12 : 14 } }}
+        style={{ borderLeftColor: activityStyle.borderColor }}
+      >
+        <div className="planning-month-card__header">
+          <div className="planning-month-card__title">
+            {getCropDisplayName(item, cropIx)} · {formatActivity(item.activity_type)}
+          </div>
+          <Tag color={STATUS_COLORS[effectiveStatus] || "default"} style={{ marginInlineEnd: 0 }}>
+            {statusLabel(effectiveStatus)}
+          </Tag>
+        </div>
+
+        <div className="planning-month-card__period">{formatPeriod(item)}</div>
+
+        <div className="planning-month-card__meta">
+          {locationText && (
+            <Tooltip title={lotSummary.tooltip || locationText} placement="topLeft">
+              <span className="planning-month-card__line">{locationText}</span>
+            </Tooltip>
+          )}
+          {item.campaign_name && (
+            <span className="planning-month-card__line">Campaña {item.campaign_name}</span>
+          )}
+          {userIx[item.responsible_user] && (
+            <span className="planning-month-card__line planning-month-card__responsible">
+              <UserOutlined /> {userIx[item.responsible_user]}
+            </span>
+          )}
+        </div>
+
+        <div className="planning-month-card__actions">
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => {
+              closeCalendarSelection();
+              openDetail(item);
+            }}
+          >
+            Ver
+          </Button>
+
+          {primaryTransition && !isMobile && (
+            <Button
+              size="small"
+              onClick={() => {
+                closeCalendarSelection();
+                updateStatus(item, primaryTransition.status);
+              }}
+            >
+              {primaryTransition.label}
+            </Button>
+          )}
+
+          {menuItems.length > 0 && (
+            <Dropdown menu={{ items: isMobile && primaryTransition
+              ? getMonthlyMenuItems(item, transitionActions)
+              : menuItems
+            }} trigger={["click"]} placement="bottomRight">
+              <Button size="small" icon={<MoreOutlined />} aria-label="Más acciones" />
+            </Dropdown>
+          )}
+        </div>
+      </Card>
+    );
   };
 
   const handleFilterChange = (key, val) => {
     setFilters(prev => ({ ...prev, [key]: val }));
   };
 
+  const clearFilters = () => {
+    setFilters({
+      status: null,
+      responsible: null,
+      cropId: null,
+      type: null,
+      campaignId: null,
+      lotSelectionKey: null,
+      dateRange: null,
+    });
+  };
+
   const disabledMenu = [
+    (canCreate || canEdit) && { key: "campaigns", label: <span onClick={() => setIsCampaignModalOpen(true)}>Campañas</span> },
     canViewDisabled && { key: "1", label: <span onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver canceladas</span> }
   ].filter(Boolean);
+
+  const moreFiltersContent = (
+    <Space direction="vertical" style={{ width: 280 }} size="middle">
+      <Select
+        style={{ width: "100%" }}
+        placeholder="Todas las campañas"
+        allowClear
+        value={filters.campaignId}
+        onChange={(v) => handleFilterChange("campaignId", v)}
+        options={campaignOptions.filter(option => option.value !== ADD_CROP_VALUE)}
+      />
+      <Select
+        style={{ width: "100%" }}
+        placeholder="Todos los responsables"
+        allowClear
+        value={filters.responsible}
+        onChange={(v) => handleFilterChange("responsible", v)}
+        options={responsibleOptions}
+        notFoundContent="No hay usuarios disponibles para asignar como responsables."
+      />
+      <Select
+        style={{ width: "100%" }}
+        placeholder="Todos los lotes y sublotes"
+        allowClear
+        value={filters.lotSelectionKey}
+        onChange={(v) => handleFilterChange("lotSelectionKey", v)}
+        options={lotFilterOptions}
+        optionFilterProp="label"
+      />
+      <RangePicker
+        format="DD/MM/YYYY"
+        style={{ width: "100%" }}
+        value={filters.dateRange}
+        onChange={(range) => handleFilterChange("dateRange", range)}
+      />
+    </Space>
+  );
 
   // ---------- UI ----------
   return (
@@ -362,6 +1162,7 @@ const Planning = () => {
             ) : (
               <Space>
                 {canViewDisabled && <Button onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver canceladas</Button>}
+                {(canCreate || canEdit) && <Button onClick={() => setIsCampaignModalOpen(true)}>Campañas</Button>}
                 {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
                   Nueva Planificación
                 </Button>}
@@ -372,30 +1173,58 @@ const Planning = () => {
       </Row>
 
       {/* Filtros (Desktop) */}
-      {!isMobile && viewMode === "table" && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={6}>
+      {viewMode === "table" && (
+        <Row gutter={[12, 12]} align="middle" style={{ marginBottom: 16 }}>
+          <Col flex="180px">
             <Select
               style={{ width: "100%" }}
-              placeholder="Filtrar por Estado"
+              placeholder="Todos los cultivos"
               allowClear
+              value={filters.cropId}
+              onChange={(v) => handleFilterChange("cropId", v)}
+              options={crops.map(crop => ({ value: crop.id ?? crop._id, label: crop.name }))}
+              notFoundContent="No hay cultivos disponibles."
+            />
+          </Col>
+          <Col flex="190px">
+            <Select
+              style={{ width: "100%" }}
+              placeholder="Todas las actividades"
+              allowClear
+              value={filters.type}
+              onChange={(v) => handleFilterChange("type", v)}
+              options={ACTIVITY_OPTIONS}
+            />
+          </Col>
+          <Col flex="170px">
+            <Select
+              style={{ width: "100%" }}
+              placeholder="Todos los estados"
+              allowClear
+              value={filters.status}
               onChange={(v) => handleFilterChange("status", v)}
               options={[
                 { value: "planificado", label: "Planificado" },
-                { value: "en_progreso", label: "En Progreso" },
+                { value: "pendiente", label: "Pendiente" },
+                { value: "en_progreso", label: "En progreso" },
                 { value: "completado", label: "Completado" },
+                { value: "cancelado", label: "Cancelado" },
+                { value: "en_demora", label: "En demora" },
               ]}
             />
           </Col>
-          <Col span={6}>
-            <Select
-              style={{ width: "100%" }}
-              placeholder="Filtrar por Responsable"
-              allowClear
-              onChange={(v) => handleFilterChange("responsible", v)}
-              options={users.map(u => ({ value: u.id ?? u._id, label: userIx[u.id ?? u._id] }))}
-            />
+          <Col flex="none">
+            <Popover content={moreFiltersContent} trigger="click" placement="bottomLeft">
+              <Button>
+                Más filtros{activeExtraFilterCount ? ` (${activeExtraFilterCount})` : ""}
+              </Button>
+            </Popover>
           </Col>
+          {hasActiveFilters && (
+            <Col flex="none">
+              <Button type="link" onClick={clearFilters}>Limpiar filtros</Button>
+            </Col>
+          )}
         </Row>
       )}
 
@@ -410,8 +1239,7 @@ const Planning = () => {
           onCancel={handleCancel}
           rowKey={rowKey}
           userIx={userIx}
-          lotIx={lotIx}
-          vehIx={vehIx}
+          cropIx={cropIx}
           statusTag={statusTag}
         />
       )}
@@ -424,7 +1252,13 @@ const Planning = () => {
             cellRender={(current, info) => (
               info.type === "date" ? renderDateCell(current) : info.originNode
             )}
-            onSelect={(d) => setOpenDay(d)} // click en día abre detalle
+            onSelect={(date, info) => {
+              const source = info?.source;
+              setCalendarSelection({
+                type: source === "month" ? "month" : "day",
+                date,
+              });
+            }}
           />
         </div>
       )}
@@ -435,11 +1269,11 @@ const Planning = () => {
           list={list}
           onEdit={openDrawer}
           onView={openDetail}
+          onUpdateStatus={updateStatus}
           onCancel={handleCancel}
           rowKey={rowKey}
           userIx={userIx}
-          lotIx={lotIx}
-          vehIx={vehIx}
+          cropIx={cropIx}
           statusTag={statusTag}
         />
       )}
@@ -456,27 +1290,137 @@ const Planning = () => {
         styles={{ body: { paddingBottom: 80 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          <Form.Item name="title" label="Título" rules={[{ required: true, message: "Ingresá un título" }]}>
-            <Input placeholder="Ej: Fumigación Lote Norte" />
-          </Form.Item>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", marginBottom: 12, textTransform: "uppercase" }}>
+            Planificación
+          </div>
 
-          <Form.Item name="description" label="Descripción">
-            <Input.TextArea placeholder="Detalle de la planificación" rows={3} />
+          <Form.Item
+            name="crop_id"
+            label="Cultivo"
+            required={ACTIVITIES_REQUIRING_CROP.has(selectedActivityType)}
+            rules={[
+              {
+                validator: (_, value) => {
+                  if (ACTIVITIES_REQUIRING_CROP.has(selectedActivityType) && !value) {
+                    return Promise.reject(new Error("Seleccioná un cultivo."));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Select
+              allowClear
+              placeholder="Seleccioná un cultivo"
+              options={cropOptions}
+              onChange={(value) => {
+                if (value === ADD_CROP_VALUE) {
+                  form.setFieldValue("crop_id", undefined);
+                  cropForm.resetFields();
+                  setIsCropModalOpen(true);
+                }
+              }}
+            />
           </Form.Item>
 
           <Form.Item name="activity_type" label="Actividad" rules={[{ required: true, message: "Seleccioná la actividad" }]}>
             <Select options={ACTIVITY_OPTIONS} placeholder="Seleccioná la actividad" />
           </Form.Item>
 
-          <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
-            <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+          <Form.Item
+            name="campaign_id"
+            label="Campaña"
+            rules={[
+              { required: true, message: "Seleccioná una campaña." },
+              {
+                validator: () => (
+                  campaignDateMismatch
+                    ? Promise.reject(new Error("La fecha seleccionada no corresponde a la campaña elegida."))
+                    : Promise.resolve()
+                ),
+              },
+            ]}
+            extra={(
+              <>
+                {selectedCampaign?.status === "closed" && (
+                  <div style={{ color: "#8c6d1f" }}>
+                    Esta campaña está cerrada. Estás cargando información histórica.
+                  </div>
+                )}
+                {campaignDateMismatch && (
+                  <div style={{ color: "#cf1322" }}>
+                    La fecha seleccionada no corresponde a la campaña elegida.
+                    {suggestedCampaign ? ` Campaña sugerida: ${suggestedCampaign.name}.` : ""}
+                  </div>
+                )}
+              </>
+            )}
+          >
+            <Select
+              placeholder="Seleccioná una campaña"
+              options={campaignOptions}
+              notFoundContent="No hay campañas disponibles."
+            />
           </Form.Item>
+
+          <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
+            <RangePicker
+              format="DD/MM/YYYY"
+              style={{ width: "100%" }}
+              onChange={syncCampaignForRange}
+            />
+          </Form.Item>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
+            Ubicación
+          </div>
+
+          <Form.Item
+            name="lot_selection_keys"
+            label="Lotes y sublotes"
+            rules={[
+              { required: true, message: "Seleccioná al menos un lote o sublote" },
+              {
+                validator: (_, value = []) => {
+                  const selectedByLot = value.reduce((acc, key) => {
+                    const parsed = parseSelectionKey(key);
+                    if (!parsed) return acc;
+                    const current = acc.get(parsed.lot_id) || { full: false, subLots: 0 };
+                    if (parsed.sub_lot_id) current.subLots += 1;
+                    else current.full = true;
+                    acc.set(parsed.lot_id, current);
+                    return acc;
+                  }, new Map());
+                  const hasInvalidMix = Array.from(selectedByLot.values()).some(item => item.full && item.subLots > 0);
+                  return hasInvalidMix
+                    ? Promise.reject(new Error("No combines un lote completo con sublotes del mismo lote"))
+                    : Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Select
+              mode="multiple"
+              placeholder="Seleccioná lotes completos o sublotes"
+              options={lotSelectionOptions}
+              optionFilterProp="label"
+            />
+          </Form.Item>
+
+          <div style={{ marginTop: -12, marginBottom: 16, color: "#595959", fontSize: 13 }}>
+            Superficie planificada: <strong>{formatHa(selectedPlanningArea)}</strong>
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
+            Recursos
+          </div>
 
           <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: "Seleccioná un responsable" }]}>
             <Select
               allowClear
               placeholder="Seleccioná un usuario"
-              options={users.map(u => ({ value: u.id ?? u._id, label: userIx[u.id ?? u._id] }))}
+              options={responsibleOptions}
+              notFoundContent="No hay usuarios disponibles para asignar como responsables."
             />
           </Form.Item>
 
@@ -490,15 +1434,6 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <Form.Item name="lot_ids" label="Lotes" rules={[{ required: true, message: "Seleccioná al menos un lote" }]}>
-            <Select
-              mode="multiple"
-              placeholder="Seleccioná lotes"
-              options={lots.map(l => ({ value: l.id ?? l._id, label: lotIx[l.id ?? l._id] }))}
-            />
-          </Form.Item>
-
-          {/* Productos a aplicar */}
           <Form.List name="products">
             {(fields, { add, remove }) => (
               <>
@@ -546,15 +1481,24 @@ const Planning = () => {
             )}
           </Form.List>
 
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
+            Información adicional
+          </div>
+
           <Form.Item name="status" label="Estado">
             <Select
               options={[
                 { value: "planificado", label: "Planificado" },
+                { value: "pendiente", label: "Pendiente" },
                 { value: "en_progreso", label: "En progreso" },
                 { value: "completado", label: "Completado" },
               ]}
               placeholder="Estado"
             />
+          </Form.Item>
+
+          <Form.Item name="description" label="Descripción">
+            <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
           </Form.Item>
 
           <Form.Item>
@@ -578,15 +1522,18 @@ const Planning = () => {
         {viewing && (
           <Space direction="vertical" style={{ width: "100%" }} size="large">
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Título">{viewing.title}</Descriptions.Item>
-              <Descriptions.Item label="Estado">{statusTag(viewing.status)}</Descriptions.Item>
-              <Descriptions.Item label="Actividad">
-                {viewing.activity_type ? viewing.activity_type.toUpperCase() : "—"}
+              <Descriptions.Item label="Planificación">
+                <strong>{getPlanningDisplayName(viewing, cropIx)}</strong>
               </Descriptions.Item>
+              <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
+              <Descriptions.Item label="Campaña">
+                {viewing.campaign_name || "—"}
+              </Descriptions.Item>
+              {viewing.title && !viewing.crop_id && !viewing.crop_name && (
+                <Descriptions.Item label="Título histórico">{viewing.title}</Descriptions.Item>
+              )}
               <Descriptions.Item label="Período">
-                {viewing.start_at ? dayjs(viewing.start_at).format("DD/MM/YYYY") : "—"}
-                {" → "}
-                {viewing.end_at ? dayjs(viewing.end_at).format("DD/MM/YYYY") : "—"}
+                {formatPeriod(viewing)}
               </Descriptions.Item>
               <Descriptions.Item label="Responsable">
                 {userIx[viewing.responsible_user] || "—"}
@@ -594,44 +1541,47 @@ const Planning = () => {
               <Descriptions.Item label="Vehículo">
                 {vehIx[viewing.vehicle_id] || "—"}
               </Descriptions.Item>
+              <Descriptions.Item label="Superficie planificada">
+                {formatHa(getPlanningArea(viewing))}
+              </Descriptions.Item>
               <Descriptions.Item label="Descripción">
                 {viewing.description || "—"}
               </Descriptions.Item>
             </Descriptions>
 
             <div>
-              <h4>Lotes</h4>
+              <h4>Ubicación</h4>
               <List
                 size="small"
                 bordered
                 dataSource={viewing.lots || []}
-                renderItem={item => {
-                  // Buscar el lote completo en el estado 'lots' para obtener la location
-                  const fullLot = lots.find(l => (l.id ?? l._id) === (item.id ?? item._id));
-                  return (
-                    <List.Item style={{ display: 'block' }}>
-                      <div style={{ marginBottom: 8 }}><strong>{item.name}</strong></div>
-                      {fullLot?.location && (
-                        <LotMapPreview location={fullLot.location} allLots={lots} />
-                      )}
-                    </List.Item>
-                  );
-                }}
+                renderItem={item => (
+                  <List.Item>
+                    <strong>{getPlanningLotName(item)}</strong>
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                  </List.Item>
+                )}
                 locale={{ emptyText: "Sin lotes asignados" }}
               />
+              <div style={{ marginTop: 12 }}>
+                <LotMapPreview selections={viewing.lots || []} allLots={lots} />
+              </div>
             </div>
             <div>
               <h4>Productos</h4>
-              <Table
+              <List
                 size="small"
-                pagination={false}
+                bordered
                 dataSource={viewing.products || []}
-                rowKey="product_id"
-                columns={[
-                  { title: "Producto", dataIndex: "name" },
-                  { title: "Cant.", dataIndex: "amount" },
-                  { title: "Unidad", dataIndex: "unit" },
-                ]}
+                renderItem={(product) => {
+                  const details = [product.amount, product.unit].filter(Boolean).join(" ");
+                  return (
+                    <List.Item>
+                      {product.name || prodIx[product.product_id] || "Producto"}
+                      {details ? ` — ${details}` : ""}
+                    </List.Item>
+                  );
+                }}
                 locale={{ emptyText: "Sin productos asignados" }}
               />
             </div>
@@ -640,47 +1590,134 @@ const Planning = () => {
       </Drawer>
 
       <Drawer
-        title={openDay ? `Planificaciones del ${openDay.format("DD/MM/YYYY")}` : ""}
-        open={!!openDay}
-        onClose={() => setOpenDay(null)}
+        className="planning-calendar-drawer"
+        title={calendarDrawerTitle}
+        open={!!calendarSelection}
+        onClose={closeCalendarSelection}
         width={isMobile ? "100%" : 520}
         placement={isMobile ? "bottom" : "right"}
         height={isMobile ? "80vh" : undefined}
         destroyOnClose
       >
-        <List
-          dataSource={eventsOn(openDay)}
-          locale={{ emptyText: "Sin planificaciones para este día" }}
-          renderItem={(item) => (
-            <List.Item
-              key={getId(item)}
-              actions={[
-                <Button type="link" icon={<EyeOutlined />} onClick={() => { setOpenDay(null); openDetail(item); }}>Ver</Button>,
-                canDisable && <Popconfirm
-                  title="¿Cancelar planificación?"
-                  description="Esta acción no se puede deshacer."
-                  onConfirm={() => { setOpenDay(null); handleCancel(item); }}
-                  okText="Sí"
-                  cancelText="No"
-                >
-                  <Button type="link" danger>Cancelar</Button>
-                </Popconfirm>,
-              ].filter(Boolean)}
-            >
-              <List.Item.Meta
-                title={<span>{statusTag(item.status)} <strong>{item.title || "Sin título"}</strong></span>}
-                description={
-                  <div style={{ fontSize: 12 }}>
-                    <div>Período: {item.start_at ? dayjs(item.start_at).format("DD/MM/YYYY") : "—"} → {item.end_at ? dayjs(item.end_at).format("DD/MM/YYYY") : "—"}</div>
-                    <div>Lotes: {(item.lot_ids || []).map(id => lotIx[id]).filter(Boolean).join(", ") || "—"}</div>
-                    <div>Resp.: {userIx[item.responsible_user] || "—"}</div>
-                  </div>
-                }
-              />
-            </List.Item>
-          )}
-        />
+        {selectedCalendarGroups.length ? (
+          <div className="planning-month-list">
+            {selectedCalendarGroups.map((group) => (
+              <section key={group.key} className="planning-month-group">
+                <div className="planning-month-group__title">{group.title}</div>
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  {group.items.map(renderCalendarSummaryCard)}
+                </Space>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="planning-month-empty">{calendarEmptyText}</div>
+        )}
       </Drawer>
+
+      <Modal
+        title="Campañas"
+        open={isCampaignModalOpen}
+        onCancel={() => setIsCampaignModalOpen(false)}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="large">
+          <Form form={campaignForm} layout="vertical" onFinish={handleCreateCampaign}>
+            <Row gutter={12}>
+              <Col xs={24} md={8}>
+                <Form.Item name="name" label="Campaña" rules={[{ required: true, message: "Ingresá el nombre de la campaña" }]}>
+                  <Input placeholder="Ej: 2026/27" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={10}>
+                <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
+                  <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={6}>
+                <Form.Item label=" ">
+                  <Button type="primary" htmlType="submit" loading={savingCampaign} block>
+                    Nueva campaña
+                  </Button>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+
+          <Table
+            size="small"
+            pagination={false}
+            dataSource={campaigns}
+            rowKey={(campaign) => campaign.id ?? campaign._id}
+            locale={{ emptyText: "No hay campañas cargadas" }}
+            columns={[
+              { title: "Campaña", dataIndex: "name" },
+              {
+                title: "Inicio",
+                dataIndex: "start_date",
+                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "—",
+              },
+              {
+                title: "Fin",
+                dataIndex: "end_date",
+                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "—",
+              },
+              {
+                title: "Estado",
+                dataIndex: "status",
+                render: (_, campaign) => {
+                  const displayStatus = getCampaignDisplayStatus(campaign);
+                  return (
+                    <Tag color={campaign.status === "active" ? "green" : (displayStatus === "Próxima" ? "blue" : "default")}>
+                      {displayStatus}
+                    </Tag>
+                  );
+                },
+              },
+              {
+                title: "Acciones",
+                key: "actions",
+                render: (_, campaign) => (
+                  campaign.status === "active" ? (
+                    <Popconfirm
+                      title="Cerrar campaña"
+                      description="Las planificaciones históricas seguirán conservando esta campaña."
+                      okText="Cerrar"
+                      cancelText="Cancelar"
+                      onConfirm={() => handleCloseCampaign(campaign)}
+                    >
+                      <Button type="link">Cerrar campaña</Button>
+                    </Popconfirm>
+                  ) : "—"
+                ),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="Nuevo cultivo"
+        open={isCropModalOpen}
+        onCancel={() => setIsCropModalOpen(false)}
+        onOk={() => cropForm.submit()}
+        confirmLoading={savingCrop}
+        okText="Guardar"
+        cancelText="Cancelar"
+        destroyOnClose
+      >
+        <Form form={cropForm} layout="vertical" onFinish={handleCreateCrop}>
+          <Form.Item
+            name="name"
+            label="Nombre"
+            rules={[{ required: true, message: "Ingresá el nombre del cultivo" }]}
+          >
+            <Input placeholder="Ej: Maní" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {
         isMobile && !isDrawerOpen && canCreate && (

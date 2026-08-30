@@ -5,6 +5,7 @@ import { Leaf } from "../../components/AppIcons";
 import { createMercadoPagoPreference, getMercadoPagoPaymentByReference } from "../../services/publicService";
 import { QRCodeSVG } from "qrcode.react";
 import jsPDF from 'jspdf';
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -92,7 +93,7 @@ const PaymentSimulation = () => {
 
       if (!result?.preference?.checkoutUrl) {
         throw new Error(
-          "El backend no devolvió una URL de pago válida"
+          "No se pudo preparar el pago. Intentá nuevamente en unos minutos."
         );
       }
 
@@ -120,10 +121,7 @@ const PaymentSimulation = () => {
       );
 
       notification.error({
-        message:
-          error?.response?.data?.message ||
-          error?.message ||
-          "No se pudo generar el código de pago.",
+        message: getUserFriendlyError(error, "No se pudo generar el código de pago."),
       });
     } finally {
       setLoading(false);

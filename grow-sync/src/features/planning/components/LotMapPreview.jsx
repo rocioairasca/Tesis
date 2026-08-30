@@ -1,35 +1,150 @@
 import React, { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
+const parseJsonValue = (value) => {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
+};
+
+const normalizeLegacyPositions = (value) => {
+    if (!Array.isArray(value)) return null;
+    if (!value.length) return null;
+
+    const normalizePoint = (point) => {
+        if (!point) return null;
+        if (point.lat !== undefined && point.lng !== undefined) {
+            const lat = Number(point.lat);
+            const lng = Number(point.lng);
+            return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+        }
+        if (Array.isArray(point) && point.length >= 2) {
+            const lat = Number(point[0]);
+            const lng = Number(point[1]);
+            return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+        }
+        return null;
+    };
+
+    if (value[0]?.lat !== undefined || (Array.isArray(value[0]) && typeof value[0][0] !== 'object')) {
+        const ring = value.map(normalizePoint).filter(Boolean);
+        return ring.length >= 3 ? ring : null;
+    }
+
+    const rings = value
+        .map((ring) => Array.isArray(ring) ? ring.map(normalizePoint).filter(Boolean) : [])
+        .filter((ring) => ring.length >= 3);
+
+    return rings.length ? rings : null;
+};
+
+const locationToPositions = (location) => {
+    const parsed = parseJsonValue(location);
+    return normalizeLegacyPositions(parsed);
+};
+
+const geoJsonToPositions = (geometry) => {
+    const parsed = parseJsonValue(geometry);
+    const rawGeometry = parsed?.type === 'Feature' ? parsed.geometry : parsed;
+
+    if (rawGeometry?.type === 'FeatureCollection') {
+        const polygons = (rawGeometry.features || [])
+            .map((feature) => geoJsonToPositions(feature))
+            .filter(Boolean);
+        return polygons.length ? polygons : null;
+    }
+
+    const convertRing = (ring) => (
+        Array.isArray(ring)
+            ? ring
+                .map(([lng, lat]) => {
+                    const parsedLat = Number(lat);
+                    const parsedLng = Number(lng);
+                    return Number.isFinite(parsedLat) && Number.isFinite(parsedLng)
+                        ? [parsedLat, parsedLng]
+                        : null;
+                })
+                .filter(Boolean)
+            : []
+    );
+
+    if (rawGeometry?.type === 'Polygon') {
+        const rings = rawGeometry.coordinates;
+        if (!Array.isArray(rings) || !Array.isArray(rings[0])) return null;
+        const positions = rings.map(convertRing).filter((ring) => ring.length >= 3);
+        return positions.length ? positions : null;
+    }
+
+    if (rawGeometry?.type === 'MultiPolygon') {
+        const polygons = rawGeometry.coordinates
+            .map((polygon) => polygon.map(convertRing).filter((ring) => ring.length >= 3))
+            .filter((polygon) => polygon.length);
+        return polygons.length ? polygons : null;
+    }
+
+    return null;
+};
+
+const getPositionsBounds = (positions = []) => {
+    const points = [];
+    const collect = (value) => {
+        if (!value) return;
+        if (value.lat !== undefined && value.lng !== undefined) {
+            points.push([Number(value.lat), Number(value.lng)]);
+            return;
+        }
+        if (!Array.isArray(value)) return;
+        if (value.length === 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+            points.push([Number(value[0]), Number(value[1])]);
+            return;
+        }
+        value.forEach(collect);
+    };
+
+    collect(positions);
+    return points;
+};
+
+const getSelectionGeometry = (selection) => {
+    if (selection?.sub_lot_id) {
+        const subLotPositions = geoJsonToPositions(selection.sub_lot_geom);
+        if (subLotPositions?.length) return subLotPositions;
+
+        if (import.meta.env.DEV) {
+            console.warn('La planificación referencia un sublote sin geometría renderizable.', {
+                hasSubLotId: Boolean(selection.sub_lot_id),
+                hasSubLotGeom: Boolean(selection.sub_lot_geom),
+            });
+        }
+    }
+
+    return geoJsonToPositions(selection?.lot_geom)
+        || locationToPositions(selection?.lot_location || selection?.location);
+};
+
+const getParentGeometry = (selection) => (
+    selection?.sub_lot_id
+        ? geoJsonToPositions(selection?.lot_geom)
+            || locationToPositions(selection?.lot_location || selection?.location)
+        : null
+);
+
 // Componente auxiliar para ajustar el zoom al polígono
-const FitBounds = ({ coords }) => {
+const FitBounds = ({ bounds }) => {
     const map = useMap();
 
     useEffect(() => {
-        if (coords && coords.length > 0) {
+        if (bounds && bounds.length > 0) {
             // Pequeño delay para asegurar que el mapa esté completamente renderizado
             const timer = setTimeout(() => {
                 try {
-                    // Extraer coordenadas en formato [lat, lng]
-                    let allCoordinates = [];
-
-                    // Si coords es un array de arrays (polígono con anillos)
-                    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
-                        // coords = [[[{lat, lng}, ...]], ...]
-                        allCoordinates = coords[0].map(point =>
-                            point.lat ? [point.lat, point.lng] : point
-                        );
-                    } else if (Array.isArray(coords[0]) && coords[0].lat) {
-                        // coords = [{lat, lng}, ...]
-                        allCoordinates = coords.map(point => [point.lat, point.lng]);
-                    } else {
-                        // coords ya está en formato [[lat, lng], ...]
-                        allCoordinates = coords;
-                    }
-
-                    if (allCoordinates.length > 0) {
-                        map.fitBounds(allCoordinates, {
+                    if (bounds.length > 0) {
+                        map.fitBounds(bounds, {
                             padding: [40, 40],
                             maxZoom: 18
                         });
@@ -41,7 +156,7 @@ const FitBounds = ({ coords }) => {
 
             return () => clearTimeout(timer);
         }
-    }, [coords, map]);
+    }, [bounds, map]);
 
     return null;
 };
@@ -58,29 +173,52 @@ const MapInvalidator = () => {
     return null;
 };
 
-const LotMapPreview = ({ location, allLots = [] }) => {
-    const coordinates = useMemo(() => {
-        if (!location) return null;
-        try {
-            const parsed = typeof location === 'string' ? JSON.parse(location) : location;
-            return parsed;
-        } catch (e) {
-            return null;
+const LotMapPreview = ({ location, allLots = [], selections = [] }) => {
+    const selectedGeometries = useMemo(() => {
+        if (Array.isArray(selections) && selections.length) {
+            return selections
+                .map((selection) => ({
+                    id: selection.sub_lot_id || selection.lot_id || selection.id,
+                    name: selection.sub_lot_name
+                        ? `${selection.lot_name || selection.name} / ${selection.sub_lot_name}`
+                        : (selection.lot_name || selection.name),
+                    positions: getSelectionGeometry(selection),
+                    parentPositions: getParentGeometry(selection),
+                }))
+                .filter((item) => item.positions?.length);
         }
-    }, [location]);
 
-    if (!coordinates || coordinates.length === 0) {
+        const positions = locationToPositions(location);
+        return positions?.length ? [{ id: 'selected', name: 'Lote seleccionado', positions }] : [];
+    }, [location, selections]);
+
+    const contextGeometries = useMemo(() => {
+        const parentContexts = selectedGeometries
+            .filter((item) => item.parentPositions?.length)
+            .map((item) => ({
+                id: `parent-${item.id}`,
+                positions: item.parentPositions,
+            }));
+
+        if (parentContexts.length) return parentContexts;
+
+        return allLots
+            .map((lot) => ({
+                id: lot.id || lot._id,
+                positions: locationToPositions(lot.location),
+            }))
+            .filter((item) => item.positions?.length);
+    }, [allLots, selectedGeometries]);
+
+    const bounds = useMemo(() => (
+        selectedGeometries.flatMap((item) => getPositionsBounds(item.positions))
+    ), [selectedGeometries]);
+
+    if (!selectedGeometries.length) {
         return <div style={{ background: '#f0f0f0', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sin ubicación</div>;
     }
 
-    // Calcular centro: manejar array de puntos o array de arrays de puntos
-    let firstPoint = coordinates[0];
-    if (Array.isArray(firstPoint) && !Number.isFinite(firstPoint)) {
-        // Es un array de arrays (ej: [[{lat, lng}, ...]])
-        firstPoint = firstPoint[0];
-    }
-
-    const center = firstPoint && firstPoint.lat ? [firstPoint.lat, firstPoint.lng] : firstPoint;
+    const center = bounds[0];
 
     if (!center || (Array.isArray(center) && center.length !== 2)) {
         return <div style={{ background: '#f0f0f0', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Ubicación inválida</div>;
@@ -102,25 +240,25 @@ const LotMapPreview = ({ location, allLots = [] }) => {
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                 />
 
-                {/* Renderizar otros lotes como contexto (bordes visibles) */}
-                {allLots.map((lot) => {
-                    if (!lot.location || lot.location === location) return null;
-                    try {
-                        const otherCoords = typeof lot.location === 'string' ? JSON.parse(lot.location) : lot.location;
-                        return (
-                            <Polygon
-                                key={lot.id || lot._id}
-                                positions={otherCoords}
-                                pathOptions={{ color: '#FFEB3B', weight: 2, fillOpacity: 0.15, dashArray: '5, 5' }}
-                            />
-                        );
-                    } catch { return null; }
-                })}
+                {contextGeometries.map((item) => (
+                    <Polygon
+                        key={item.id}
+                        positions={item.positions}
+                        pathOptions={{ color: '#ffd666', weight: 2, fillOpacity: 0.04, dashArray: '6, 6' }}
+                    />
+                ))}
 
-                {/* Lote principal resaltado (borde grueso, relleno visible) */}
-                <Polygon positions={coordinates} pathOptions={{ color: '#FF5733', weight: 4, fillOpacity: 0.4 }} />
+                {selectedGeometries.map((item) => (
+                    <Polygon
+                        key={item.id}
+                        positions={item.positions}
+                        pathOptions={{ color: '#FF5733', weight: 4, fillOpacity: 0.42 }}
+                    >
+                        <Tooltip>{item.name}</Tooltip>
+                    </Polygon>
+                ))}
 
-                <FitBounds coords={coordinates} />
+                <FitBounds bounds={bounds} />
                 <MapInvalidator />
             </MapContainer>
         </div>

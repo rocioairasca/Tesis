@@ -37,6 +37,7 @@ import {
 import { formatCropLabel, formatNumber } from "../../utils/harvestUtils";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const { Text } = Typography;
 
@@ -130,9 +131,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
     } catch (error) {
       console.error(error);
       notification.error({
-        message:
-          error?.response?.data?.message ||
-          "No se pudo deshabilitar el registro",
+        message: getUserFriendlyError(error, "No se pudo deshabilitar el registro."),
       });
     }
   }, [fetchRecords]);
@@ -147,9 +146,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
     } catch (error) {
       console.error(error);
       notification.error({
-        message:
-          error?.response?.data?.message ||
-          "No se pudo habilitar el registro",
+        message: getUserFriendlyError(error, "No se pudo habilitar el registro."),
       });
     }
   }, [fetchRecords]);

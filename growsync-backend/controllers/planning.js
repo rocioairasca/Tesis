@@ -1,6 +1,456 @@
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 const { createNotification } = require('./notifications');
+const { PERMISSIONS, getEffectivePermissions } = require('../constants/permissions');
+
+const lotSelectionJsonSql = `
+  SELECT json_agg(
+    json_build_object(
+      'id', l.id,
+      'name', CASE
+        WHEN sl.id IS NULL THEN l.name
+        ELSE l.name || ' / ' || sl.name
+      END,
+      'lot_id', l.id,
+      'lot_name', l.name,
+      'lot_geom', ST_AsGeoJSON(l.geom)::json,
+      'lot_location', l.location,
+      'sub_lot_id', sl.id,
+      'sub_lot_name', sl.name,
+      'sub_lot_geom', ST_AsGeoJSON(sl.geom)::json,
+      'area_ha', pl.area_ha
+    )
+    ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST
+  )
+  FROM planning_lots pl
+  JOIN lots l ON l.id = pl.lot_id
+  LEFT JOIN sub_lots sl ON sl.id = pl.sub_lot_id
+  WHERE pl.planning_id = b.id
+`;
+
+const plannedAreaSql = `
+  SELECT COALESCE(ROUND(SUM(pl.area_ha)::NUMERIC, 4), 0)
+  FROM planning_lots pl
+  WHERE pl.planning_id = b.id
+`;
+
+const ACTIVITIES_REQUIRING_CROP = new Set(['fumigacion', 'siembra', 'cosecha', 'fertilizacion']);
+
+const validateRequiredCrop = (activityType, cropId) => {
+  if (ACTIVITIES_REQUIRING_CROP.has(activityType) && !cropId) {
+    const err = new Error('Seleccioná un cultivo.');
+    err.status = 400;
+    throw err;
+  }
+};
+
+const resolveCrop = async (client, cropId, companyId, options = {}) => {
+  if (!cropId) return null;
+
+  const { allowDisabledCropId = null } = options;
+  const { rows } = await client.query(
+    `
+    SELECT id, name, enabled
+    FROM crops
+    WHERE id = $1
+      AND company_id = $2
+    LIMIT 1;
+    `,
+    [cropId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('El cultivo seleccionado no existe');
+    err.status = 400;
+    throw err;
+  }
+
+  const crop = rows[0];
+  if (!crop.enabled && crop.id !== allowDisabledCropId) {
+    const err = new Error('El cultivo seleccionado no está disponible');
+    err.status = 400;
+    throw err;
+  }
+
+  return crop;
+};
+
+const assertCropFilterBelongsToCompany = async (cropId, companyId) => {
+  if (!cropId) return;
+
+  const { rows } = await pool.query(
+    'SELECT 1 FROM crops WHERE id = $1 AND company_id = $2 LIMIT 1',
+    [cropId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('El cultivo seleccionado no existe');
+    err.status = 400;
+    throw err;
+  }
+};
+
+const assertCampaignFilterBelongsToCompany = async (campaignId, companyId) => {
+  if (!campaignId) return;
+
+  const { rows } = await pool.query(
+    'SELECT 1 FROM campaigns WHERE id = $1 AND company_id = $2 LIMIT 1',
+    [campaignId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('La campaña seleccionada no existe');
+    err.status = 400;
+    throw err;
+  }
+};
+
+const assertLotFilterBelongsToCompany = async (lotId, companyId) => {
+  if (!lotId) return;
+
+  const { rows } = await pool.query(
+    'SELECT 1 FROM lots WHERE id = $1 AND company_id = $2 LIMIT 1',
+    [lotId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('El lote seleccionado no existe');
+    err.status = 400;
+    throw err;
+  }
+};
+
+const assertSubLotFilterBelongsToCompany = async (subLotId, companyId) => {
+  if (!subLotId) return;
+
+  const { rows } = await pool.query(
+    'SELECT 1 FROM sub_lots WHERE id = $1 AND company_id = $2 LIMIT 1',
+    [subLotId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('El sublote seleccionado no existe');
+    err.status = 400;
+    throw err;
+  }
+};
+
+const hasEffectivePermission = (user, permission) => {
+  const permissions = getEffectivePermissions(user || {});
+  return permissions.includes('all') || permissions.includes(permission);
+};
+
+const PLANNING_STATUS_TRANSITIONS = {
+  planificado: new Set(['pendiente', 'en_progreso', 'completado']),
+  pendiente: new Set(['planificado', 'en_progreso', 'completado']),
+  en_progreso: new Set(['pendiente', 'completado']),
+  completado: new Set(['pendiente']),
+  cancelado: new Set([]),
+};
+
+const PLANNING_STATUS_LABELS = {
+  planificado: 'planificado',
+  pendiente: 'pendiente',
+  en_progreso: 'en progreso',
+  completado: 'completado',
+  cancelado: 'cancelado',
+};
+
+const planningStatusLabel = (status) => PLANNING_STATUS_LABELS[status] || 'otro estado';
+
+const ACTIVITY_LABELS = {
+  siembra: 'siembra',
+  fumigacion: 'fumigación',
+  cosecha: 'cosecha',
+  fertilizacion: 'fertilización',
+  riego: 'riego',
+  mantenimiento: 'mantenimiento',
+  otro: 'actividad',
+};
+
+const activityLabel = (activityType) => ACTIVITY_LABELS[activityType] || 'actividad';
+
+const assertPlanningStatusTransition = (currentStatus, nextStatus) => {
+  if (!nextStatus) return;
+
+  if (nextStatus === currentStatus) return;
+
+  const allowed = PLANNING_STATUS_TRANSITIONS[currentStatus];
+  if (!allowed || !allowed.has(nextStatus)) {
+    const err = new Error('Transición de estado no permitida para la planificación');
+    err.status = 400;
+    err.details = { current_status: currentStatus, next_status: nextStatus };
+    throw err;
+  }
+};
+
+const calendarDateSql = (param) => `left($${param}::text, 10)::date`;
+
+const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
+  if (!campaignId) {
+    const err = new Error('Seleccioná una campaña.');
+    err.status = 400;
+    throw err;
+  }
+
+  const {
+    allowClosedCampaignId = null,
+    allowClosedHistorical = false,
+    startAt = null,
+    endAt = null,
+  } = options;
+  const { rows } = await client.query(
+    `
+    SELECT id, name, status, start_date, end_date
+    FROM campaigns
+    WHERE id = $1
+      AND company_id = $2
+    LIMIT 1;
+    `,
+    [campaignId, companyId]
+  );
+
+  if (!rows.length) {
+    const err = new Error('La campaña seleccionada no existe');
+    err.status = 400;
+    throw err;
+  }
+
+  const campaign = rows[0];
+  if (startAt && endAt) {
+    const { rows: dateRows } = await client.query(
+      `
+      SELECT
+        (
+          ${calendarDateSql(1)} >= $3::date
+          AND ${calendarDateSql(2)} <= $4::date
+        ) AS matches_campaign,
+        (
+          SELECT json_build_object('id', id, 'name', name, 'status', status)
+          FROM campaigns
+          WHERE company_id = $5
+            AND ${calendarDateSql(1)} BETWEEN start_date AND end_date
+          ORDER BY status = 'active' DESC, start_date DESC
+          LIMIT 1
+        ) AS suggested_campaign;
+      `,
+      [startAt, endAt, campaign.start_date, campaign.end_date, companyId]
+    );
+
+    if (!dateRows[0]?.matches_campaign) {
+      const err = new Error('La fecha seleccionada no corresponde a la campaña elegida.');
+      err.status = 400;
+      err.details = { suggested_campaign: dateRows[0]?.suggested_campaign || null };
+      throw err;
+    }
+  }
+
+  if (
+    campaign.status !== 'active'
+    && campaign.id !== allowClosedCampaignId
+    && !allowClosedHistorical
+  ) {
+    const err = new Error('La campaña seleccionada está cerrada');
+    err.status = 400;
+    throw err;
+  }
+
+  return campaign;
+};
+
+const normalizeLotSelections = (lotIds = [], lotSelections = null) => {
+  if (Array.isArray(lotSelections) && (lotSelections.length > 0 || !Array.isArray(lotIds) || lotIds.length === 0)) {
+    return lotSelections.map(item => ({
+      lot_id: item.lot_id,
+      sub_lot_id: item.sub_lot_id || null,
+    }));
+  }
+
+  if (Array.isArray(lotIds)) {
+    return lotIds.map(lotId => ({
+      lot_id: lotId,
+      sub_lot_id: null,
+    }));
+  }
+
+  return [];
+};
+
+const validateSelectionMix = (selections) => {
+  const byLot = new Map();
+
+  for (const selection of selections) {
+    const current = byLot.get(selection.lot_id) || { full: false, subLots: new Set() };
+    if (selection.sub_lot_id) {
+      current.subLots.add(selection.sub_lot_id);
+    } else {
+      current.full = true;
+    }
+    byLot.set(selection.lot_id, current);
+  }
+
+  for (const [lotId, current] of byLot.entries()) {
+    if (current.full && current.subLots.size) {
+      const err = new Error('No se puede seleccionar un lote completo junto con sus sublotes');
+      err.status = 400;
+      err.details = { lot_id: lotId };
+      throw err;
+    }
+  }
+};
+
+const selectionKey = (selection) => `${selection.lot_id}:${selection.sub_lot_id || 'full'}`;
+
+const haveSameSelections = (a, b) => {
+  if (a.length !== b.length) return false;
+
+  const aKeys = new Set(a.map(selectionKey));
+  if (aKeys.size !== b.length) return false;
+
+  return b.every(selection => aKeys.has(selectionKey(selection)));
+};
+
+const resolveLotSelections = async (client, selections, companyId, options = {}) => {
+  const allowHistoricalSelectionKeys = options.allowHistoricalSelectionKeys || new Set();
+  validateSelectionMix(selections);
+
+  if (!selections.length) return [];
+
+  const lotIds = selections.map(item => item.lot_id);
+  const subLotIds = selections.map(item => item.sub_lot_id);
+
+  const { rows } = await client.query(`
+    WITH requested AS (
+      SELECT
+        lot_id,
+        sub_lot_id,
+        ord
+      FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS r(lot_id, sub_lot_id, ord)
+    )
+    SELECT
+      r.ord,
+      r.lot_id,
+      r.sub_lot_id,
+      l.name AS lot_name,
+      sl.name AS sub_lot_name,
+      CASE
+        WHEN r.sub_lot_id IS NULL THEN COALESCE(l.area_ha, NULLIF(l.area, 0)::NUMERIC)
+        ELSE sl.area_ha
+      END AS area_ha,
+      CASE WHEN l.id IS NULL THEN TRUE ELSE FALSE END AS missing_lot,
+      CASE
+        WHEN r.sub_lot_id IS NULL THEN FALSE
+        WHEN sl.id IS NULL THEN TRUE
+        ELSE FALSE
+      END AS missing_sub_lot,
+      ll.status AS layout_status
+    FROM requested r
+    LEFT JOIN lots l
+      ON l.id = r.lot_id
+     AND l.company_id = $3
+     AND COALESCE(l.enabled, TRUE) IS TRUE
+    LEFT JOIN sub_lots sl
+      ON sl.id = r.sub_lot_id
+     AND sl.lot_id = r.lot_id
+     AND sl.company_id = $3
+     AND COALESCE(sl.enabled, TRUE) IS TRUE
+    LEFT JOIN lot_layouts ll
+      ON ll.id = sl.layout_id
+     AND ll.lot_id = r.lot_id
+     AND ll.company_id = $3
+    ORDER BY r.ord;
+  `, [lotIds, subLotIds, companyId]);
+
+  const invalidLot = rows.find(row => row.missing_lot);
+  if (invalidLot) {
+    const err = new Error('El lote seleccionado no existe o no pertenece a la empresa');
+    err.status = 400;
+    err.details = { lot_id: invalidLot.lot_id };
+    throw err;
+  }
+
+  const invalidSubLot = rows.find(row => row.missing_sub_lot);
+  if (invalidSubLot) {
+    const err = new Error('El sublote seleccionado no existe o no pertenece al lote indicado');
+    err.status = 400;
+    err.details = { lot_id: invalidSubLot.lot_id, sub_lot_id: invalidSubLot.sub_lot_id };
+    throw err;
+  }
+
+  const inactiveSubLot = rows.find(row => (
+    row.sub_lot_id
+    && row.layout_status !== 'active'
+    && !allowHistoricalSelectionKeys.has(`${row.lot_id}:${row.sub_lot_id}`)
+  ));
+  if (inactiveSubLot) {
+    const err = new Error('El sublote seleccionado ya no corresponde a la división vigente del lote.');
+    err.status = 400;
+    err.details = { lot_id: inactiveSubLot.lot_id, sub_lot_id: inactiveSubLot.sub_lot_id };
+    throw err;
+  }
+
+  const missingArea = rows.find(row => row.area_ha === null || Number(row.area_ha) <= 0);
+  if (missingArea) {
+    const err = new Error('No se pudo determinar la superficie del lote o sublote seleccionado');
+    err.status = 400;
+    err.details = { lot_id: missingArea.lot_id, sub_lot_id: missingArea.sub_lot_id };
+    throw err;
+  }
+
+  return rows.map(row => ({
+    lot_id: row.lot_id,
+    sub_lot_id: row.sub_lot_id || null,
+    area_ha: row.area_ha,
+  }));
+};
+
+const checkLotScheduleConflicts = async (client, selections, startAt, endAt, companyId, excludePlanningId = null) => {
+  if (!selections.length || !startAt || !endAt) return [];
+
+  const lotIds = selections.map(item => item.lot_id);
+  const subLotIds = selections.map(item => item.sub_lot_id);
+  const params = [lotIds, subLotIds, startAt, endAt, companyId];
+  const excludeSql = excludePlanningId ? 'AND p.id <> $6' : '';
+  if (excludePlanningId) params.push(excludePlanningId);
+
+  const { rows } = await client.query(`
+    WITH requested AS (
+      SELECT lot_id, sub_lot_id
+      FROM unnest($1::uuid[], $2::uuid[]) AS r(lot_id, sub_lot_id)
+    )
+    SELECT DISTINCT pl.lot_id, pl.sub_lot_id
+    FROM planning p
+    JOIN planning_lots pl ON pl.planning_id = p.id
+    JOIN requested r ON r.lot_id = pl.lot_id
+    WHERE p.status <> 'cancelado'
+      AND p.date_range && tstzrange($3::timestamptz, $4::timestamptz, '[]')
+      AND p.company_id = $5
+      ${excludeSql}
+      AND (
+        r.sub_lot_id IS NULL
+        OR pl.sub_lot_id IS NULL
+        OR pl.sub_lot_id = r.sub_lot_id
+      );
+  `, params);
+
+  return rows;
+};
+
+const insertPlanningLots = async (client, planningId, selections) => {
+  if (!selections.length) return;
+
+  const params = [planningId];
+  const values = selections.map((selection, index) => {
+    const base = index * 3 + 2;
+    params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha);
+    return `($1, $${base}, $${base + 1}, $${base + 2})`;
+  });
+
+  await client.query(
+    `INSERT INTO planning_lots(planning_id, lot_id, sub_lot_id, area_ha) VALUES ${values.join(',')}`,
+    params
+  );
+};
 
 /**
  * Controlador: Planificación
@@ -17,14 +467,19 @@ exports.list = async (req, res, next) => {
   try {
     const {
       from, to, type, status, responsible, lotId, search,
+      cropId, campaignId, subLotId,
       includeDisabled = false, includeCanceled = false,
       page = 1, pageSize = 20
     } = req.query;
 
     const { company_id } = req.user;
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
+    await assertCropFilterBelongsToCompany(cropId, company_id);
+    await assertCampaignFilterBelongsToCompany(campaignId, company_id);
+    await assertLotFilterBelongsToCompany(lotId, company_id);
+    await assertSubLotFilterBelongsToCompany(subLotId, company_id);
 
     // Build WHERE dinámico
     let p = [company_id];
@@ -70,6 +525,25 @@ exports.list = async (req, res, next) => {
       )`);
     }
 
+    if (subLotId) {
+      p.push(subLotId);
+      w.push(`EXISTS (
+        SELECT 1
+        FROM planning_lots pl
+        WHERE pl.planning_id = p.id AND pl.sub_lot_id = $${p.length}
+      )`);
+    }
+
+    if (cropId) {
+      p.push(cropId);
+      w.push(`p.crop_id = $${p.length}`);
+    }
+
+    if (campaignId) {
+      p.push(campaignId);
+      w.push(`p.campaign_id = $${p.length}`);
+    }
+
     if (search) {
       p.push(`%${search}%`);
       w.push(`(p.title ILIKE $${p.length} OR p.description ILIKE $${p.length})`);
@@ -99,20 +573,22 @@ exports.list = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name
+               u.name AS responsible_name,
+               c.name AS crop_name,
+               cp.name AS campaign_name
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
+        LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
+        LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         ${whereSql}
         ORDER BY p.start_at DESC
         LIMIT $${p.length - 1} OFFSET $${p.length}
       )
       SELECT b.*,
              COALESCE((
-               SELECT json_agg(json_build_object('id', l.id, 'name', l.name))
-               FROM planning_lots pl
-               JOIN lots l ON l.id = pl.lot_id
-               WHERE pl.planning_id = b.id
+               ${lotSelectionJsonSql}
              ), '[]') AS lots,
+             (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
                SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
                FROM planning_products pp
@@ -143,7 +619,7 @@ exports.getOne = async (req, res, next) => {
     const { id } = req.params;
     const { company_id } = req.user;
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const sql = `
@@ -153,19 +629,21 @@ exports.getOne = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name
+               u.name AS responsible_name,
+               c.name AS crop_name,
+               cp.name AS campaign_name
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
+        LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
+        LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         WHERE p.id = $1 AND p.company_id = $2
         LIMIT 1
       )
       SELECT b.*,
              COALESCE((
-               SELECT json_agg(json_build_object('id', l.id, 'name', l.name))
-               FROM planning_lots pl
-               JOIN lots l ON l.id = pl.lot_id
-               WHERE pl.planning_id = b.id
+               ${lotSelectionJsonSql}
              ), '[]') AS lots,
+             (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
                SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
                FROM planning_products pp
@@ -178,7 +656,7 @@ exports.getOne = async (req, res, next) => {
     const { rows } = await pool.query(sql, [id, company_id]);
 
     if (!rows.length) {
-      return res.status(404).json({ error: 'Not found' });
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
     return res.json(rows[0]);
@@ -204,7 +682,10 @@ exports.create = async (req, res, next) => {
       responsible_user,
       status = 'pendiente',
       vehicle_id,
+      campaign_id,
+      crop_id,
       lot_ids = [],
+      lot_selections,
       products = [],
       created_by, // opcional, si no va el user de req
     } = req.body;
@@ -212,31 +693,32 @@ exports.create = async (req, res, next) => {
     const { company_id, id: userId } = req.user;
     if (!company_id) {
       client.release();
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const creator = created_by || userId || null;
 
     await client.query('BEGIN');
 
+    await resolveCampaign(client, campaign_id, company_id, {
+      startAt: start_at,
+      endAt: end_at,
+      allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
+    });
+    validateRequiredCrop(activity_type, crop_id);
+    const resolvedCrop = await resolveCrop(client, crop_id, company_id);
+
+    const requestedSelections = normalizeLotSelections(lot_ids, lot_selections);
+    const resolvedSelections = await resolveLotSelections(client, requestedSelections, company_id);
+
     // Revalidar conflictos de lotes
-    if (Array.isArray(lot_ids) && lot_ids.length && start_at && end_at) {
-      const q = `
-        SELECT DISTINCT pl.lot_id
-        FROM planning p
-        JOIN planning_lots pl ON pl.planning_id = p.id
-        WHERE pl.lot_id = ANY($1::uuid[])
-          AND p.status <> 'cancelado'
-          AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
-          AND p.company_id = $4;
-      `;
-      const { rows } = await client.query(q, [lot_ids, start_at, end_at, company_id]);
-      if (rows.length) {
+    if (resolvedSelections.length && start_at && end_at) {
+      const conflicts = await checkLotScheduleConflicts(client, resolvedSelections, start_at, end_at, company_id);
+      if (conflicts.length) {
         await client.query('ROLLBACK');
         client.release();
         return res.status(409).json({
-          error: 'Conflicto de fechas en lotes',
-          lot_ids_conflict: rows.map(r => r.lot_id),
+          message: 'Ya existe una planificación para ese lote o sublote en el mismo período.',
         });
       }
     }
@@ -256,24 +738,28 @@ exports.create = async (req, res, next) => {
       if (rows.length) {
         await client.query('ROLLBACK');
         client.release();
-        return res.status(409).json({ error: 'Vehículo ya asignado en ese rango' });
+        return res.status(409).json({
+          message: 'El vehículo ya está asignado en ese período.',
+        });
       }
     }
 
     // Insert planning
     const insertSql = `
       INSERT INTO planning(
-        title, description, activity_type, start_at, end_at,
+        title, description, activity_type, start_at, end_at, campaign_id, crop_id,
         responsible_user, status, vehicle_id, created_by, company_id
-      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id;
     `;
     const { rows: newPlan } = await client.query(insertSql, [
-      title,
+      title?.trim() || null,
       description ?? null,
       activity_type,
       start_at,
       end_at,
+      campaign_id,
+      crop_id ?? null,
       responsible_user,
       status,
       vehicle_id ?? null,
@@ -283,13 +769,7 @@ exports.create = async (req, res, next) => {
     const id = newPlan[0].id;
 
     // Insert lotes
-    if (Array.isArray(lot_ids) && lot_ids.length) {
-      const values = lot_ids.map((_, i) => `($1, $${i + 2})`).join(',');
-      await client.query(
-        `INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`,
-        [id, ...lot_ids]
-      );
-    }
+    await insertPlanningLots(client, id, resolvedSelections);
 
     // Insert productos
     if (Array.isArray(products) && products.length) {
@@ -315,7 +795,7 @@ exports.create = async (req, res, next) => {
         'planning_assigned',
         'low',
         'Nueva planificación asignada',
-        `Se te ha asignado la planificación: ${title}`,
+        `Se te asignó una planificación de ${activityLabel(activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
         { planning_id: id, activity_type },
         company_id
       ).catch(err => console.error('Error enviando notificación:', err));
@@ -343,45 +823,114 @@ exports.update = async (req, res, next) => {
     const { id } = req.params;
     const {
       title, description, activity_type, start_at, end_at,
-      responsible_user, status, vehicle_id, lot_ids, products
+      responsible_user, status, vehicle_id, campaign_id, crop_id, lot_ids, lot_selections, products
     } = req.body;
 
     const { company_id } = req.user;
     if (!company_id) {
       client.release();
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     await client.query('BEGIN');
 
     // Verificar que la planificación pertenezca a la compañía
-    const checkSql = 'SELECT id FROM planning WHERE id = $1 AND company_id = $2';
+    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, status, enabled FROM planning WHERE id = $1 AND company_id = $2';
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
       client.release();
-      return res.status(404).json({ error: 'Not found' });
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
+    if (status !== undefined) {
+      assertPlanningStatusTransition(checkRows[0].status, status);
+    }
+
+    if (campaign_id !== undefined) {
+      await resolveCampaign(client, campaign_id, company_id, {
+        allowClosedCampaignId: checkRows[0].campaign_id,
+        allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
+        startAt: start_at ?? checkRows[0].start_at,
+        endAt: end_at ?? checkRows[0].end_at,
+      });
+    } else if ((start_at !== undefined || end_at !== undefined) && checkRows[0].campaign_id) {
+      await resolveCampaign(client, checkRows[0].campaign_id, company_id, {
+        allowClosedCampaignId: checkRows[0].campaign_id,
+        allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
+        startAt: start_at ?? checkRows[0].start_at,
+        endAt: end_at ?? checkRows[0].end_at,
+      });
+    }
+
+    const effectiveActivityType = activity_type ?? checkRows[0].activity_type;
+    const effectiveCropId = crop_id !== undefined ? crop_id : checkRows[0].crop_id;
+    if (crop_id !== undefined || activity_type !== undefined) {
+      validateRequiredCrop(effectiveActivityType, effectiveCropId);
+    }
+    if (crop_id !== undefined) {
+      await resolveCrop(client, crop_id, company_id, {
+        allowDisabledCropId: checkRows[0].crop_id,
+      });
+    }
+
+    const hasLotSelectionsPayload = Array.isArray(lot_selections);
+    const hasLegacyLotIdsPayload = Array.isArray(lot_ids);
+    const shouldUpdateLots = hasLotSelectionsPayload || hasLegacyLotIdsPayload;
+    const shouldCheckLotConflicts = shouldUpdateLots || start_at !== undefined || end_at !== undefined;
+    const requestedSelections = shouldUpdateLots
+      ? normalizeLotSelections(lot_ids, lot_selections)
+      : [];
+    let existingSelections = [];
+
+    if (shouldCheckLotConflicts) {
+      const { rows } = await client.query(
+        'SELECT lot_id, sub_lot_id, area_ha FROM planning_lots WHERE planning_id = $1',
+        [id]
+      );
+      existingSelections = rows.map(row => ({
+        lot_id: row.lot_id,
+        sub_lot_id: row.sub_lot_id || null,
+        area_ha: row.area_ha,
+      }));
+    }
+
+    const relationChanged = shouldUpdateLots
+      ? !haveSameSelections(existingSelections, requestedSelections)
+      : false;
+    const existingHistoricalKeys = new Set(
+      existingSelections
+        .filter(row => row.sub_lot_id)
+        .map(selectionKey)
+    );
+    const resolvedSelections = shouldUpdateLots
+      ? (
+        relationChanged
+          ? await resolveLotSelections(client, requestedSelections, company_id, {
+            allowHistoricalSelectionKeys: existingHistoricalKeys,
+          })
+          : existingSelections
+      )
+      : [];
+
     // Revalidar conflictos si cambian fecha/lotes/vehículo
-    if (Array.isArray(lot_ids) && start_at && end_at) {
-      const q = `
-        SELECT DISTINCT pl.lot_id
-        FROM planning p
-        JOIN planning_lots pl ON pl.planning_id = p.id
-        WHERE pl.lot_id = ANY($1::uuid[])
-          AND p.status <> 'cancelado'
-          AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
-          AND p.id <> $4
-          AND p.company_id = $5;
-      `;
-      const { rows } = await client.query(q, [lot_ids, start_at, end_at, id, company_id]);
-      if (rows.length) {
+    if (shouldCheckLotConflicts) {
+      const effectiveStartAt = start_at ?? checkRows[0].start_at;
+      const effectiveEndAt = end_at ?? checkRows[0].end_at;
+      const selectionsForConflict = shouldUpdateLots ? resolvedSelections : existingSelections;
+      const conflicts = await checkLotScheduleConflicts(
+        client,
+        selectionsForConflict,
+        effectiveStartAt,
+        effectiveEndAt,
+        company_id,
+        id
+      );
+      if (conflicts.length) {
         await client.query('ROLLBACK');
         client.release();
         return res.status(409).json({
-          error: 'Conflicto de fechas en lotes',
-          lot_ids_conflict: rows.map(r => r.lot_id),
+          message: 'Ya existe una planificación para ese lote o sublote en el mismo período.',
         });
       }
     }
@@ -401,7 +950,9 @@ exports.update = async (req, res, next) => {
       if (rows.length) {
         await client.query('ROLLBACK');
         client.release();
-        return res.status(409).json({ error: 'Vehículo ya asignado en ese rango' });
+        return res.status(409).json({
+          message: 'El vehículo ya está asignado en ese período.',
+        });
       }
     }
 
@@ -413,7 +964,7 @@ exports.update = async (req, res, next) => {
       sets.push(`${k} = $${vals.length}`);
     };
 
-    if (title !== undefined) push(title, 'title');
+    if (title !== undefined) push(title?.trim() || null, 'title');
     if (description !== undefined) push(description, 'description');
     if (activity_type !== undefined) push(activity_type, 'activity_type');
     if (start_at !== undefined) push(start_at, 'start_at');
@@ -421,6 +972,8 @@ exports.update = async (req, res, next) => {
     if (responsible_user !== undefined) push(responsible_user, 'responsible_user');
     if (status !== undefined) push(status, 'status');
     if (vehicle_id !== undefined) push(vehicle_id, 'vehicle_id');
+    if (campaign_id !== undefined) push(campaign_id, 'campaign_id');
+    if (crop_id !== undefined) push(crop_id, 'crop_id');
 
     if (sets.length > 0) {
       vals.push(id, company_id);
@@ -433,15 +986,9 @@ exports.update = async (req, res, next) => {
     }
 
     // Lotes
-    if (Array.isArray(lot_ids)) {
+    if (shouldUpdateLots && relationChanged) {
       await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
-      if (lot_ids.length) {
-        const values = lot_ids.map((_, i) => `($1, $${i + 2})`).join(',');
-        await client.query(
-          `INSERT INTO planning_lots(planning_id, lot_id) VALUES ${values}`,
-          [id, ...lot_ids]
-        );
-      }
+      await insertPlanningLots(client, id, resolvedSelections);
     }
 
     // Productos
@@ -481,7 +1028,7 @@ exports.update = async (req, res, next) => {
           'state_change',
           'low',
           'Cambio de estado en planificación',
-          `La planificación ha cambiado a estado: ${status}`,
+          `La planificación cambió a ${planningStatusLabel(status)}.`,
           { planning_id: id, new_status: status },
           company_id
         ).catch(err => console.error('Error enviando notificación:', err));
@@ -501,7 +1048,7 @@ exports.update = async (req, res, next) => {
 
 /**
  * DESHABILITAR PLANIFICACIÓN (Soft Delete)
- * Oculta la planificación y (si no está completada) la marca como cancelada.
+ * Oculta la planificación y la marca como cancelada.
  */
 exports.remove = async (req, res, next) => {
   const client = await pool.connect();
@@ -510,34 +1057,44 @@ exports.remove = async (req, res, next) => {
     const { company_id } = req.user;
     if (!company_id) {
       client.release();
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     await client.query('BEGIN');
 
     // Verificar existencia y compañía
-    const checkSql = 'SELECT id, status FROM planning WHERE id = $1 AND company_id = $2';
+    const checkSql = 'SELECT id, status, enabled FROM planning WHERE id = $1 AND company_id = $2';
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
       client.release();
-      return res.status(404).json({ error: 'Not found' });
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
-    const currentStatus = checkRows[0].status;
-    let newStatus = currentStatus;
+    const current = checkRows[0];
+    if (current.status === 'completado') {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(409).json({
+        error: 'No se puede cancelar una planificación completada',
+        message: 'Reabrí la planificación antes de cancelarla.',
+      });
+    }
 
-    // Si no está completada, la marcamos como cancelada
-    if (currentStatus !== 'completado') {
-      newStatus = 'cancelado';
+    if (current.status === 'cancelado' || current.enabled === false) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(409).json({
+        error: 'La planificación ya está cancelada',
+      });
     }
 
     const updateSql = `
       UPDATE planning
-      SET enabled = false, status = $1
-      WHERE id = $2 AND company_id = $3;
+      SET enabled = false, status = 'cancelado'
+      WHERE id = $1 AND company_id = $2;
     `;
-    await client.query(updateSql, [newStatus, id, company_id]);
+    await client.query(updateSql, [id, company_id]);
 
     await client.query('COMMIT');
     client.release();
@@ -558,13 +1115,17 @@ exports.listDisabled = async (req, res, next) => {
   try {
     const {
       page = 1, pageSize = 20,
-      status, responsible, lotId, search
+      status, responsible, lotId, subLotId, cropId, campaignId, search
     } = req.query;
 
     const { company_id } = req.user;
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
+    await assertCropFilterBelongsToCompany(cropId, company_id);
+    await assertCampaignFilterBelongsToCompany(campaignId, company_id);
+    await assertLotFilterBelongsToCompany(lotId, company_id);
+    await assertSubLotFilterBelongsToCompany(subLotId, company_id);
 
     let p = [company_id];
     const w = [`p.enabled IS FALSE`, `p.company_id = $1`];
@@ -592,6 +1153,25 @@ exports.listDisabled = async (req, res, next) => {
         FROM planning_lots pl
         WHERE pl.planning_id = p.id AND pl.lot_id = $${p.length}
       )`);
+    }
+
+    if (subLotId) {
+      p.push(subLotId);
+      w.push(`EXISTS (
+        SELECT 1
+        FROM planning_lots pl
+        WHERE pl.planning_id = p.id AND pl.sub_lot_id = $${p.length}
+      )`);
+    }
+
+    if (cropId) {
+      p.push(cropId);
+      w.push(`p.crop_id = $${p.length}`);
+    }
+
+    if (campaignId) {
+      p.push(campaignId);
+      w.push(`p.campaign_id = $${p.length}`);
     }
 
     if (search) {
@@ -622,20 +1202,22 @@ exports.listDisabled = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado', 'cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name
+               u.name AS responsible_name,
+               c.name AS crop_name,
+               cp.name AS campaign_name
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
+        LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
+        LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         ${whereSql}
         ORDER BY p.start_at DESC
         LIMIT $${p.length - 1} OFFSET $${p.length}
       )
       SELECT b.*,
              COALESCE((
-               SELECT json_agg(json_build_object('id', l.id, 'name', l.name))
-               FROM planning_lots pl
-               JOIN lots l ON l.id = pl.lot_id
-               WHERE pl.planning_id = b.id
+               ${lotSelectionJsonSql}
              ), '[]') AS lots,
+             (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
                SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
                FROM planning_products pp
@@ -665,19 +1247,20 @@ exports.enable = async (req, res, next) => {
     const { id } = req.params;
     const { company_id } = req.user;
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const sql = `
       UPDATE planning
-      SET enabled = true
+      SET enabled = true,
+          status = CASE WHEN status = 'cancelado' THEN 'pendiente' ELSE status END
       WHERE id = $1 AND company_id = $2
       RETURNING id, status;
     `;
     const { rows } = await pool.query(sql, [id, company_id]);
 
     if (!rows.length) {
-      return res.status(404).json({ error: 'Not found' });
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
     return res.status(200).json({

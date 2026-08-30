@@ -15,7 +15,7 @@ module.exports = async function userData(req, res, next) {
       null;
 
     if (!sub) {
-      return res.status(401).json({ message: "Token invalido: no se encontro el sub" });
+      return res.status(401).json({ message: "Tu sesión venció. Iniciá sesión nuevamente." });
     }
 
     const selectCols = "id, email, role, enabled, company_id, auth0_id, auth0_sub, custom_permissions";
@@ -83,15 +83,15 @@ module.exports = async function userData(req, res, next) {
 
     // 5) No existe en la BD
     if (!userDb) {
-      return res.status(403).json({ message: "Usuario no registrado en BD" });
+      return res.status(403).json({ message: "No tenés permiso para ingresar a GrowSync." });
     }
 
     if (userDb.enabled === false) {
-      return res.status(403).json({ message: "Usuario deshabilitado" });
+      return res.status(403).json({ message: "Tu usuario está deshabilitado. Contactá a un administrador." });
     }
 
     if (!userDb.company_id) {
-      return res.status(400).json({ message: "Usuario sin empresa asignada" });
+      return res.status(403).json({ message: "Tu usuario no tiene una empresa asignada. Contactá a un administrador." });
     }
 
     req.user = {

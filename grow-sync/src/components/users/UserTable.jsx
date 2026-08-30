@@ -26,6 +26,7 @@ import {
 } from '../../services/authService';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '../../constants/permissions';
 import { hasPermission } from "../../utils/permissions";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const ROLE_OPTIONS = [
   { value: 0, label: "Empleado" },
@@ -170,7 +171,7 @@ const UserTable = () => {
       setUsers(list);
     } catch (err) {
       console.error("→ users list error:", err);
-      message.error(err?.response?.data?.message || "No se pudo cargar usuarios");
+      message.error(getUserFriendlyError(err, "No se pudieron cargar los usuarios."));
     } finally {
       setLoading(false);
     }
@@ -196,7 +197,7 @@ const UserTable = () => {
     } catch (err) {
       console.error("→ update role error:", err);
       setUsers(prev); // rollback
-      message.error(err?.response?.data?.message || "No se pudo actualizar el rol");
+      message.error(getUserFriendlyError(err, "No se pudo actualizar el rol."));
     } finally {
       setUpdatingId(null);
     }
@@ -238,7 +239,7 @@ const UserTable = () => {
     } catch (err) {
       console.error(err);
       message.error(
-        err?.message || "No se pudieron actualizar los permisos"
+        getUserFriendlyError(err, "No se pudieron actualizar los permisos.")
       );
     } finally {
       setSavingPermissions(false);

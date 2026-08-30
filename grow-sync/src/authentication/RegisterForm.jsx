@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Alert, Form, Input, Button, message, Typography } from "antd";
 import { UserOutlined, LockOutlined, MailOutlined } from '../components/AppIcons';
 import { registerUser, getInvitation } from "../services/authService";
+import { getUserFriendlyError } from "../utils/userFriendlyErrors";
 
 const { Text } = Typography;
 
@@ -26,8 +27,9 @@ const RegisterForm = ({ onSwitchToLogin, token }) => {
                 .catch(err => {
                     console.error("Error fetching invitation:", err);
                     setInvitation(null);
-                    setInvitationError(err?.message || "Invitación inválida o expirada");
-                    message.error(err?.message || "Invitación inválida o expirada");
+                    const friendlyMessage = getUserFriendlyError(err, "Invitación inválida o expirada");
+                    setInvitationError(friendlyMessage);
+                    message.error(friendlyMessage);
                 })
                 .finally(() => {
                     setInvitationLoading(false);
@@ -46,14 +48,14 @@ const RegisterForm = ({ onSwitchToLogin, token }) => {
 
             const response = await registerUser({ username, email, password, token });
 
-            message.success(response?.message || "Usuario registrado con éxito 🚀");
+            message.success(response?.message || "Usuario registrado correctamente");
 
             setTimeout(() => {
                 onSwitchToLogin?.();
             }, 800);
         } catch (error) {
             console.error("→ Error:", error);
-            message.error(error?.message || "Error al registrar usuario");
+            message.error(getUserFriendlyError(error, "No se pudo registrar el usuario"));
         } finally {
             setLoading(false);
         }

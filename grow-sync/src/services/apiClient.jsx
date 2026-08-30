@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getApiBaseUrl } from "./apiBase";
+import { enrichUserFriendlyError } from "../utils/userFriendlyErrors";
 
 const api = axios.create({
   baseURL: getApiBaseUrl(),
@@ -23,6 +24,11 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(enrichUserFriendlyError(error))
 );
 
 export default api;

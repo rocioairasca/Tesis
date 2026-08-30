@@ -91,8 +91,8 @@ async function adjustStock(productId, delta, companyId) {
             user.id,
             'low_stock',
             'high',
-            'Stock Bajo Alerta',
-            `El producto "${prod.name || 'Desconocido'}" tiene stock bajo (${next} ${prod.unit || 'unidades'}).`,
+            'Stock bajo',
+            `${prod.name || 'Producto'} quedó con bajo stock: ${next} ${prod.unit || 'unidades'}.`,
             { product_id: productId, current_stock: next },
             companyId
           ).catch(e => console.error('Error enviando notif low_stock:', e));
@@ -142,7 +142,7 @@ const listUsages = async (req, res) => {
     } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
@@ -216,7 +216,7 @@ const createUsage = async (req, res) => {
     } = req.body;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const qty = toNum(amount_used, NaN);
     if (!product_id || !Number.isFinite(qty) || qty <= 0) {
@@ -285,7 +285,7 @@ const editUsage = async (req, res) => {
     const { id } = req.params;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     // 0) Cargar registro actual
     const { data: current, error: curErr } = await supabase
@@ -367,7 +367,7 @@ const disableUsage = async (req, res) => {
     const { id } = req.params;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     // 1) Leer registro (solo si esta habilitado)
     const { data: usage, error: fErr } = await supabase
@@ -414,7 +414,7 @@ const listDisabledUsages = async (req, res) => {
     const { page = 1, pageSize = 50 } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
@@ -456,7 +456,7 @@ const enableUsage = async (req, res) => {
     const { id } = req.params;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     // 1) Leer registro (solo si esta deshabilitado)
     const { data: usage, error: fErr } = await supabase

@@ -9,6 +9,8 @@ const router = require('express').Router();
 const ctrl = require('../controllers/planning');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
+const requirePermission = require('../middleware/requirePermission');
+const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/planning.schema');
 
 /**
@@ -38,7 +40,8 @@ router.get('/disabled',
 // Restaurar (habilitar) una planificacion deshabilitada
 router.put('/enable/:id',
   validate(schema.idParam),
-  checkRole(2),   // Dueño+ 
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  requirePermission(PERMISSIONS.PLANNING_ENABLE),
   ctrl.enable
 );
 
@@ -63,14 +66,14 @@ router.get('/:id',
 // CREAR planificacion
 router.post('/',
   validate(schema.createSchema),
-  checkRole(1), // Supervisor+
+  requirePermission(PERMISSIONS.PLANNING_CREATE),
   ctrl.create
 );
 
 // EDITAR planificacion (parcial)
 router.patch('/:id',
   validate(schema.updateSchema),
-  checkRole(1), // Supervisor+
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
   ctrl.update
 );
 
@@ -78,7 +81,8 @@ router.patch('/:id',
 // En el controller: no se borra, se marca enabled=false y/o status='cancelado'
 router.delete('/:id',
   validate(schema.idParam),
-  checkRole(2), // Dueño+
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  requirePermission(PERMISSIONS.PLANNING_DISABLE),
   ctrl.remove
 );
 

@@ -16,7 +16,7 @@ module.exports = async function getAllUsers(req, res) {
     // Multi-tenancy: get company_id from authenticated user
     const { company_id } = req.user;
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     // Coerciones suaves (por si el validate no corrio)

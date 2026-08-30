@@ -47,7 +47,7 @@ exports.createHarvestRecord = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -192,7 +192,7 @@ exports.listHarvestRecords = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -309,7 +309,7 @@ exports.getHarvestRecordById = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -371,7 +371,7 @@ exports.updateHarvestRecord = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -535,7 +535,7 @@ exports.disableHarvestRecord = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -592,7 +592,7 @@ exports.enableHarvestRecord = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -652,7 +652,7 @@ exports.getHarvestSummary = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -699,7 +699,7 @@ exports.getHarvestStatsByCrop = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -745,7 +745,7 @@ exports.getHarvestStatsByCampaign = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 
@@ -789,7 +789,7 @@ exports.getHarvestStatsFilters = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'Falta company_id en el usuario autenticado'
+        message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.'
       });
     }
 

@@ -49,6 +49,7 @@ import {
   syncTodayRainRecord,
   updateRainRecord,
 } from "../../services/rainRecordsService";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const { Text } = Typography;
 
@@ -134,7 +135,7 @@ const RainRecords = () => {
     } catch (error) {
       console.error("Error al cargar registros de lluvia:", error);
       notification.error({
-        message: error?.response?.data?.message || "Error al cargar registros de lluvia",
+        message: getUserFriendlyError(error, "No se pudieron cargar los registros de lluvia."),
       });
     } finally {
       setLoading(false);
@@ -203,7 +204,7 @@ const RainRecords = () => {
     } catch (error) {
       console.error("Error al guardar registro de lluvia:", error);
       notification.error({
-        message: error?.response?.data?.message || "Error al guardar registro de lluvia",
+        message: getUserFriendlyError(error, "No se pudo guardar el registro de lluvia."),
       });
     }
   };
@@ -215,7 +216,7 @@ const RainRecords = () => {
       refreshAll();
     } catch (error) {
       notification.error({
-        message: error?.response?.data?.message || "No se pudo deshabilitar el registro",
+        message: getUserFriendlyError(error, "No se pudo deshabilitar el registro."),
       });
     }
   };
@@ -227,7 +228,7 @@ const RainRecords = () => {
       refreshAll();
     } catch (error) {
       notification.error({
-        message: error?.response?.data?.message || "No se pudo habilitar el registro",
+        message: getUserFriendlyError(error, "No se pudo habilitar el registro."),
       });
     }
   };
@@ -255,8 +256,8 @@ const RainRecords = () => {
       const permissionDenied = error?.code === 1;
       notification.error({
         message: permissionDenied
-          ? "Permiso de ubicacion denegado"
-          : error?.response?.data?.message || "No se pudo sincronizar la lluvia de hoy",
+          ? "Permiso de ubicación denegado"
+          : getUserFriendlyError(error, "No se pudo sincronizar la lluvia de hoy."),
       });
     } finally {
       setSyncing(false);

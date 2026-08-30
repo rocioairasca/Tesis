@@ -24,6 +24,7 @@ import ProductListMobile from "./components/ProductListMobile";
 
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const CATEGORY_OPTIONS = [
   { value: "semillas", label: "Semillas" },
@@ -139,7 +140,7 @@ const Inventory = () => {
       }
     } catch (error) {
       console.error("→ products list error:", error);
-      notification.error({ message: "Error al cargar productos" });
+      notification.error({ message: getUserFriendlyError(error, "No se pudieron cargar los productos.") });
     } finally {
       setLoading(false);
     }
@@ -213,7 +214,7 @@ const Inventory = () => {
     } catch (error) {
       console.error("→ save product error:", error);
       notification.error({
-        message: error?.response?.data?.message || "Error al guardar producto",
+        message: getUserFriendlyError(error, "No se pudo guardar el producto."),
       });
     }
   };
@@ -226,8 +227,7 @@ const Inventory = () => {
     } catch (error) {
       console.error("→ disable product error:", error);
       notification.error({
-        message:
-          error?.response?.data?.message || "Error al deshabilitar producto",
+        message: getUserFriendlyError(error, "No se pudo deshabilitar el producto."),
       });
     }
   };

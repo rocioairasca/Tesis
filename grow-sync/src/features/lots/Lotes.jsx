@@ -23,6 +23,7 @@ import LotListMobile from "./components/LotListMobile";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 import { useNavigate } from "react-router-dom";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 // -------- helpers --------
 const getId = (r) => r?.id ?? r?._id;
@@ -68,7 +69,7 @@ const Lotes = () => {
       setLots(list);
     } catch (error) {
       console.error("→ lots list error:", error);
-      notification.error({ message: "Error al cargar los lotes" });
+      notification.error({ message: getUserFriendlyError(error, "No se pudieron cargar los lotes.") });
     } finally {
       setLoading(false);
     }
@@ -144,7 +145,7 @@ const Lotes = () => {
       closeDrawer();
     } catch (error) {
       console.error("→ save lot error:", error);
-      notification.error({ message: "Error al guardar lote" });
+      notification.error({ message: getUserFriendlyError(error, "No se pudo guardar el lote.") });
     }
   };
 
@@ -156,7 +157,7 @@ const Lotes = () => {
       fetchLots();
     } catch (error) {
       console.error("→ disable lot error:", error);
-      notification.error({ message: "Error al deshabilitar lote" });
+      notification.error({ message: getUserFriendlyError(error, "No se pudo deshabilitar el lote.") });
     }
   };
 

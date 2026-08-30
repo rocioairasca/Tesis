@@ -1,7 +1,9 @@
 const supabase = require("../db/supabaseClient");
+const { pool } = require("../db/supabaseClient");
 const axios = require("axios");
 const { Payment } = require("mercadopago");
 const mercadoPagoClient = require("../src/config/mercadoPago");
+const { seedDefaultCrops } = require("../services/defaultCrops");
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_M2M_CLIENT_ID;
@@ -97,6 +99,15 @@ exports.registerCompany = async (req, res) => {
       .single();
 
     if (companyError) throw companyError;
+
+    if (pool) {
+      const client = await pool.connect();
+      try {
+        await seedDefaultCrops(client, company.id);
+      } finally {
+        client.release();
+      }
+    }
 
     const managementToken = await getAuth0ManagementToken();
 

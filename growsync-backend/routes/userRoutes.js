@@ -21,6 +21,7 @@ const supabase = require('../db/supabaseClient');
 const updateRole = require('../controllers/users/updateRole');
 
 const requirePermission = require('../middleware/requirePermission');
+const requireAnyPermission = require('../middleware/requireAnyPermission');
 const { PERMISSIONS } = require('../constants/permissions');
 const updatePermissions = require('../controllers/users/updatePermissions');
 
@@ -38,6 +39,37 @@ const updatePermissions = require('../controllers/users/updatePermissions');
  *    - Admin (3) puede ver cualquiera.
  *    - Usuarios con rol < 3 solo pueden ver SU PROPIO email.
  */
+
+// ----------------------------------------------------------------------------
+// RESPONSABLES para planificaciones — usuarios habilitados de la misma empresa
+// GET /api/users/planning-responsibles
+// ----------------------------------------------------------------------------
+router.get('/planning-responsibles',
+  checkJwt,
+  userData,
+  requireAnyPermission(PERMISSIONS.PLANNING_CREATE, PERMISSIONS.PLANNING_EDIT),
+  async (req, res, next) => {
+    try {
+      const { company_id } = req.user;
+      if (!company_id) {
+        return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('id,full_name,email,role')
+        .eq('company_id', company_id)
+        .eq('enabled', true)
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+
+      return res.json(data || []);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 // ----------------------------------------------------------------------------
 // LISTAR usuarios (paginado) — Admin

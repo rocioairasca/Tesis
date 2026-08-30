@@ -22,7 +22,7 @@ exports.listByVehicle = async (req, res, next) => {
     const { vehicleId } = req.params;
 
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const vehicle = await ensureVehicleBelongsToCompany(vehicleId, company_id);
@@ -94,7 +94,7 @@ exports.create = async (req, res, next) => {
     const { vehicleId } = req.params;
 
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const vehicle = await ensureVehicleBelongsToCompany(vehicleId, company_id);
@@ -152,7 +152,7 @@ exports.remove = async (req, res, next) => {
     const { vehicleId, recordId } = req.params;
 
     if (!company_id) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
     const { rows } = await pool.query(

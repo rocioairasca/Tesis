@@ -204,8 +204,8 @@ const editProduct = async (req, res, next) => {
                 user.id,
                 'low_stock',
                 'high',
-                'Stock Bajo (Edición Manual)',
-                `El producto "${data.name}" ha sido actualizado a stock bajo (${newQty} ${data.unit}).`,
+                'Stock bajo',
+                `${data.name} quedó con bajo stock: ${newQty} ${data.unit}.`,
                 { product_id: data.id, current_stock: newQty },
                 company_id // Pass company_id
               ).catch(e => console.error('Error enviando notif low_stock manual:', e));

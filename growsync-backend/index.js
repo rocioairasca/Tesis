@@ -81,6 +81,9 @@ const privateMiddlewares = [
 // ---------------------------------------------------
 const userRoutes = require('./routes/userRoutes');
 const lotRoutes = require('./routes/lot');
+const campaignRoutes = require('./routes/campaigns');
+const cropAssignmentRoutes = require('./routes/cropAssignments');
+const cropRoutes = require('./routes/crops');
 const productRoutes = require('./routes/products');
 const usageRoutes = require('./routes/usage');
 const statsRoutes = require('./routes/stats');
@@ -105,6 +108,9 @@ app.get(
 
 app.use('/api/users', ...privateMiddlewares, userRoutes);
 app.use('/api/lots', ...privateMiddlewares, lotRoutes);
+app.use('/api/campaigns', ...privateMiddlewares, campaignRoutes);
+app.use('/api/crop-assignments', ...privateMiddlewares, cropAssignmentRoutes);
+app.use('/api/crops', ...privateMiddlewares, cropRoutes);
 app.use('/api/products', ...privateMiddlewares, productRoutes);
 app.use('/api/usages', ...privateMiddlewares, usageRoutes);
 app.use('/api/stats', ...privateMiddlewares, statsRoutes);

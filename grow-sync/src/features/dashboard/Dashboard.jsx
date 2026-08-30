@@ -43,6 +43,7 @@ import {
 import api from "../../services/apiClient";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 import {
   getHarvestFilters,
@@ -488,7 +489,7 @@ const Dashboard = () => {
             );
             updateWeatherStatus({
               weather: "error",
-              weatherError: error?.response?.data?.message || "No se pudo obtener el clima actual desde Open-Meteo.",
+              weatherError: getUserFriendlyError(error, "No se pudo obtener el clima actual."),
             });
             fetchWeatherFallback();
           }

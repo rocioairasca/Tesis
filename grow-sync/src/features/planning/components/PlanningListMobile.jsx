@@ -1,43 +1,116 @@
 import React from 'react';
-import { Button, Popconfirm, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '../../../components/AppIcons';
-import { Calendar as CalIcon, User as UserIcon, MapPin, Package, Truck } from '../../../components/AppIcons';
+import { Button, Dropdown, Modal, Tooltip } from 'antd';
+import { EditOutlined, EyeOutlined, MoreOutlined } from '../../../components/AppIcons';
+import { Calendar as CalIcon, User as UserIcon, MapPin } from '../../../components/AppIcons';
 import dayjs from 'dayjs';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
+import {
+    formatActivity,
+    getPlanningDisplayName,
+    getPlanningLotName,
+} from "../planningDisplay";
 
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
 const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
+const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+})} ha`;
+const getPlanningArea = (row) => {
+    const plannedArea = Number(row?.planned_area_ha || 0);
+    if (plannedArea > 0) return plannedArea;
+    return (row?.lots || []).reduce((sum, lot) => sum + Number(lot?.area_ha || 0), 0);
+};
+const formatPeriod = (row) => {
+    if (!row?.start_at || !row?.end_at) return "-";
+    const start = dayjs(row.start_at);
+    const end = dayjs(row.end_at);
+    return start.isSame(end, "day")
+        ? start.format("DD/MM/YYYY")
+        : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
+};
+const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }) => {
+    const status = record?.status;
+    const items = [];
+
+    const addStatusAction = (key, label, nextStatus) => {
+        if (status !== nextStatus) {
+            items.push({ key, label, onClick: () => onUpdateStatus(record, nextStatus) });
+        }
+    };
+
+    if (canEdit) {
+        if (status === "planificado" || status === "pendiente") {
+            addStatusAction("progress", "Marcar en progreso", "en_progreso");
+            addStatusAction("done", "Marcar completada", "completado");
+        } else if (status === "en_progreso") {
+            addStatusAction("done", "Marcar completada", "completado");
+            addStatusAction("pending", "Volver a pendiente", "pendiente");
+        } else if (status === "completado") {
+            addStatusAction("reopen", "Reabrir planificación", "pendiente");
+        }
+    }
+
+    if (canEdit && canDisable && status !== "completado" && status !== "cancelado") {
+        if (items.length) items.push({ type: "divider" });
+        items.push({
+            key: "cancel",
+            danger: true,
+            label: "Cancelar",
+            onClick: () => Modal.confirm({
+                title: "¿Cancelar planificación?",
+                content: "Esta acción no elimina el registro, lo marca como cancelado.",
+                okText: "Cancelar planificación",
+                okButtonProps: { danger: true },
+                cancelText: "Volver",
+                onOk: () => onCancel(record),
+            }),
+        });
+    }
+
+    return items;
+};
 
 const PlanningListMobile = ({
     list,
     onEdit,
     onView,
+    onUpdateStatus,
     onCancel,
     rowKey,
     userIx,
-    vehIx,
+    cropIx,
     statusTag
 }) => {
     return (
         <div className="inventory-cards-container">
             {list.map((r) => {
-                const lotsText = (r.lots || []).map(lot => lot.name).filter(Boolean).join(", ") || "-";
-                const period = (r.start_at && r.end_at)
-                    ? `${dayjs(r.start_at).format("DD/MM/YYYY")} -> ${dayjs(r.end_at).format("DD/MM/YYYY")}`
-                    : "-";
+                const lotsText = (r.lots || []).map(getPlanningLotName).filter(Boolean).join(", ") || "-";
+                const period = formatPeriod(r);
+                const menuItems = buildStatusMenuItems(r, { onUpdateStatus, onCancel });
 
                 return (
-                    <div className="inventory-card" key={rowKey(r)}>
+                    <div
+                        className="inventory-card"
+                        key={rowKey(r)}
+                        onClick={() => onView(r)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") onView(r);
+                        }}
+                        role="button"
+                        tabIndex={0}
+                    >
                         <div className="card-header">
-                            <h3>{r.title}</h3>
-                            <div className="card-icons">
+                            <h3>{getPlanningDisplayName(r, cropIx)}</h3>
+                            <div className="card-icons" onClick={(event) => event.stopPropagation()}>
+                                {statusTag(r.status_effective || r.status)}
                                 <Tooltip title="Ver detalle">
                                     <Button
                                         type="text"
                                         shape="circle"
-                                        aria-label={`Ver detalle de ${r.title}`}
+                                        aria-label={`Ver detalle de ${getPlanningDisplayName(r, cropIx)}`}
                                         icon={<EyeOutlined />}
                                         onClick={() => onView(r)}
                                     />
@@ -46,36 +119,27 @@ const PlanningListMobile = ({
                                     <Button
                                         type="text"
                                         shape="circle"
-                                        aria-label={`Editar ${r.title}`}
+                                        aria-label={`Editar ${getPlanningDisplayName(r, cropIx)}`}
                                         icon={<EditOutlined />}
                                         onClick={() => onEdit(r)}
                                     />
                                 </Tooltip>}
-                                {canDisable && <Popconfirm
-                                    title="Cancelar planificacion"
-                                    description="Esta accion no elimina el registro, lo marca como cancelado."
-                                    onConfirm={() => onCancel(r)}
-                                    okText="Si"
-                                    cancelText="No"
-                                >
-                                    <Tooltip title="Cancelar">
+                                {menuItems.length > 0 && (
+                                    <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={["click"]}>
                                         <Button
                                             type="text"
-                                            danger
                                             shape="circle"
-                                            aria-label={`Cancelar ${r.title}`}
-                                            icon={<DeleteOutlined />}
+                                            aria-label={`Más acciones para ${getPlanningDisplayName(r, cropIx)}`}
+                                            icon={<MoreOutlined />}
                                         />
-                                    </Tooltip>
-                                </Popconfirm>}
+                                    </Dropdown>
+                                )}
                             </div>
                         </div>
-                        <p className="flex-row"><CalIcon size={18} /> <strong>Periodo:</strong> {period}</p>
                         <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotsText}</p>
+                        <p className="flex-row"><MapPin size={18} /> <strong>Superficie:</strong> {formatHa(getPlanningArea(r))}</p>
+                        <p className="flex-row"><CalIcon size={18} /> <strong>Período:</strong> {period}</p>
                         <p className="flex-row"><UserIcon size={18} /> <strong>Resp.:</strong> {userIx[r.responsible_user] || "-"}</p>
-                        <p className="flex-row"><Truck size={18} /> <strong>Vehiculo:</strong> {vehIx[r.vehicle_id] || "-"}</p>
-                        <p className="flex-row"><Package size={18} /> <strong>Productos:</strong> {(r.products?.length || 0)} item(s)</p>
-                        <p><strong>Estado:</strong> {statusTag(r.status)}</p>
                     </div>
                 );
             })}

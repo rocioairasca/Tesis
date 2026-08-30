@@ -10,6 +10,7 @@ import io from "socket.io-client";
 import api from "../services/apiClient";
 import { getUserDataByEmail } from "../services/authService";
 import { getApiOrigin } from "../services/apiBase";
+import { sanitizeNotification } from "../utils/userFriendlyErrors";
 
 const NotificationsContext = createContext();
 
@@ -63,9 +64,8 @@ export const NotificationsProvider = ({ children }) => {
         params,
       });
 
-      setNotifications(
-        Array.isArray(data) ? data : data?.data || []
-      );
+      const items = Array.isArray(data) ? data : data?.data || [];
+      setNotifications(items.map(sanitizeNotification));
     } catch (error) {
       if (error?.response?.status !== 401) {
         console.error(
@@ -196,18 +196,18 @@ export const NotificationsProvider = ({ children }) => {
         newSocket.on(
           "new_notification",
           (notification) => {
+            const safeNotification = sanitizeNotification(notification);
+
             setNotifications((prev) => [
-              notification,
+              safeNotification,
               ...prev,
             ]);
 
             setUnreadCount((prev) => prev + 1);
 
             antNotification.info({
-              message: notification.title,
-              description:
-                notification.message ||
-                notification.body,
+              message: safeNotification.title,
+              description: safeNotification.message,
               placement: "topRight",
               duration: 4,
             });

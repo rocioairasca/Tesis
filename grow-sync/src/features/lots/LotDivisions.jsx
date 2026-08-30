@@ -25,6 +25,7 @@ import {
   SyncOutlined,
 } from '../../components/AppIcons';
 import SubLotEditor from './components/SubLotEditor';
+import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
 const { Text, Title } = Typography;
 
@@ -48,12 +49,9 @@ const statusLabel = {
   archived: 'Archivada',
 };
 
-const friendlyErrorMessage = (error, fallback = 'No pudimos guardar los cambios. Intentá nuevamente.') => {
-  const response = error?.response?.data;
-  if (response?.error === 'MultipleRemainingRegions') return 'Quedan varias superficies separadas. Revisá el dibujo antes de completar automáticamente.';
-  if (response?.error === 'LayoutValidationError') return 'La división todavía necesita ajustes antes de usarse.';
-  return response?.message || fallback;
-};
+const friendlyErrorMessage = (error, fallback = 'No pudimos guardar los cambios. Intentá nuevamente.') => (
+  getUserFriendlyError(error, fallback)
+);
 
 const LotDivisions = () => {
   const { lotId } = useParams();
@@ -139,7 +137,7 @@ const LotDivisions = () => {
       console.error('Error al cargar divisiones:', error);
       notification.error({
         message: 'Error al cargar divisiones del lote',
-        description: error?.response?.data?.message || error.message,
+        description: friendlyErrorMessage(error, 'No se pudieron cargar las divisiones del lote.'),
       });
     } finally {
       setLoading(false);

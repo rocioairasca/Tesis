@@ -199,7 +199,7 @@ module.exports = async function registerUser(req, res) {
           'new_user',
           'medium',
           'Nuevo usuario registrado',
-          `Se ha registrado el usuario: ${email}`,
+          `Se registró un nuevo usuario: ${email}`,
           { user_id: data.id, email },
           invite.company_id // Pasar company_id a la notificacion
         ).catch(e => console.error('Error notificando admin:', e));

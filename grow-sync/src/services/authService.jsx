@@ -1,5 +1,6 @@
 // src/services/authService.jsx
 import { getApiBaseUrl } from "./apiBase";
+import { getUserFriendlyError } from "../utils/userFriendlyErrors";
 
 const API_BASE = getApiBaseUrl();
 
@@ -25,7 +26,7 @@ export async function loginUser({ email, password }) {
 
   if (!res.ok) {
     const err = await safeJson(res);
-    throw new Error(err?.message || "No se pudo iniciar sesión");
+    throw createFetchError(res, err, "No se pudo iniciar sesión");
   }
 
   const data = await res.json();
@@ -51,8 +52,7 @@ export async function registerUser({ username, email, password, token }) {
 
   const data = await safeJson(res);
   if (!res.ok) {
-    // Backend suele devolver mensaje
-    throw new Error(data?.message || "Error al registrar usuario");
+    throw createFetchError(res, data, "No se pudo registrar el usuario");
   }
   return data; // p.ej. { message: "Usuario creado correctamente" }
 }
@@ -71,7 +71,7 @@ export async function getUserDataByEmail(email) {
 
   if (!res.ok) {
     const err = await safeJson(res);
-    throw new Error(err?.message || "No se pudo obtener el usuario");
+    throw createFetchError(res, err, "No se pudo obtener el usuario");
   }
   return res.json(); // debería incluir { role, ... }
 }
@@ -90,7 +90,7 @@ export async function inviteUser({ email, role }) {
 
   const data = await safeJson(res);
   if (!res.ok) {
-    throw new Error(data?.message || "Error al crear la invitación");
+    throw createFetchError(res, data, "No se pudo crear la invitación");
   }
   return data; // { message, inviteLink, token, invitation }
 }
@@ -107,7 +107,7 @@ export async function getInvitation(token) {
 
   const data = await safeJson(res);
   if (!res.ok) {
-    throw new Error(data?.message || "Invitación no encontrada");
+    throw createFetchError(res, data, "Invitación inválida o expirada");
   }
   return data; // { email }
 }
@@ -129,7 +129,7 @@ export async function getCurrentUser() {
   const data = await safeJson(res);
 
   if (!res.ok) {
-    throw new Error(data?.message || "No se pudo obtener el usuario actual");
+    throw createFetchError(res, data, "No se pudo obtener el usuario actual");
   }
 
   return data.user;
@@ -145,8 +145,17 @@ export async function updateUserPermissions(userId, custom_permissions) {
   const data = await safeJson(res);
 
   if (!res.ok) {
-    throw new Error(data?.message || "Error al actualizar permisos");
+    throw createFetchError(res, data, "No se pudieron actualizar los permisos");
   }
 
   return data;
+}
+
+function createFetchError(res, data, fallback) {
+  const error = new Error(fallback);
+  error.status = res.status;
+  error.data = data;
+  error.userMessage = getUserFriendlyError(error, fallback);
+  error.message = error.userMessage;
+  return error;
 }

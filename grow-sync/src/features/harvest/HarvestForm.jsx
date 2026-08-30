@@ -22,6 +22,7 @@ import {
 
 import { createHarvestRecord, updateHarvestRecord } from '../../services/harvestService';
 import { calculateYieldKgHa, formatNumber } from '../../utils/harvestUtils';
+import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
 const { Option } = Select;
 const campaignRegex = /^\d{4}-\d{4}$/;
@@ -133,16 +134,11 @@ const HarvestForm = ({
       resetForm();
       onSuccess?.();
     } catch (error) {
-      console.error('Error completo:', error);
-      console.error('Response data:', error?.response?.data);
-      console.error('Response status:', error?.response?.status);
-
-      const backendMessage =
-        error?.response?.data?.message || 'Error al guardar la cosecha';
+      console.error('Error al guardar la cosecha:', error);
 
       notification.error({
         message: 'No se pudo guardar la cosecha',
-        description: backendMessage
+        description: getUserFriendlyError(error, 'Revisá los datos ingresados e intentá nuevamente.')
       });
     } finally {
       setSubmitting(false);

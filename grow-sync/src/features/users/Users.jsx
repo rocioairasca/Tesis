@@ -12,6 +12,7 @@ import UserTable from "../../components/users/UserTable";
 import { inviteUser } from "../../services/authService";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const ROLE_OPTIONS = [
   { value: 0, label: "Empleado" },
@@ -36,7 +37,7 @@ const Users = () => {
       form.resetFields();
     } catch (error) {
       console.error("Error creating invitation:", error);
-      message.error(error?.message || "Error al crear la invitación");
+      message.error(getUserFriendlyError(error, "No se pudo crear la invitación."));
     } finally {
       setLoading(false);
     }

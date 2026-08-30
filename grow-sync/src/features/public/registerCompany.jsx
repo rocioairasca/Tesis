@@ -26,6 +26,7 @@ import {
   getSimulatedPayment,
   registerCompany,
 } from "../../services/publicService";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -111,9 +112,7 @@ const RegisterCompany = () => {
 
       notification.error({
         message: "No se pudo crear la empresa",
-        description:
-          error?.response?.data?.message ||
-          "Ocurrio un error inesperado",
+        description: getUserFriendlyError(error, "Ocurrió un error inesperado."),
       });
     } finally {
       setLoading(false);

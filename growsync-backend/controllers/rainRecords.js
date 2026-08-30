@@ -7,7 +7,7 @@ function ensureTenant(req, res) {
   if (!company_id) {
     res.status(400).json({
       error: 'BadRequest',
-      message: 'Falta company_id en el usuario autenticado',
+      message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.',
     });
     return null;
   }

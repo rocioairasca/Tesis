@@ -110,8 +110,6 @@ const createPaymentPreference = async (req, res) => {
 
     return res.status(500).json({
       message: 'No se pudo iniciar el pago',
-      error: error.message,
-      status: error.status,
     });
   }
 };
@@ -151,8 +149,6 @@ const getPaymentStatus = async (req, res) => {
 
     return res.status(500).json({
       message: 'No se pudo consultar el pago',
-      error: error.message,
-      status: error.status,
     });
   }
 };
@@ -208,8 +204,6 @@ const getPaymentByReference = async (req, res) => {
 
     return res.status(500).json({
       message: 'No se pudo consultar el estado del pago',
-      error: error.message,
-      status: error.status,
     });
   }
 };

@@ -87,7 +87,7 @@ const getStats = async (req, res) => {
     } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { from: F, to: T } = computeRange({ from, to, range });
     const incDisabled = includeDisabled === '1' || String(includeDisabled).toLowerCase() === 'true';
@@ -180,7 +180,7 @@ const getStats = async (req, res) => {
 
   } catch (error) {
     console.error('Error inesperado al obtener estadísticas:', error);
-    return res.status(500).json({ message: 'Error al obtener estadísticas', error: error.message });
+    return res.status(500).json({ message: 'No se pudieron obtener las estadísticas.' });
   }
 };
 

@@ -258,18 +258,43 @@ html {
 .cal-bar {
   height: 18px;
   line-height: 18px;
-  color: #fff;
   font-size: 11px;
   padding: 0 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  opacity: .95;
+  opacity: .96;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .35),
+    inset 0 -3px 0 rgba(0, 0, 0, var(--cal-identity-alpha, .08));
+}
+
+.cal-bar-spacer {
+  height: 18px;
 }
 
 .cal-bar:hover {
   opacity: 1;
+}
+
+.cal-bar--en_demora {
+  border-right: 4px solid #ff4d4f !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 77, 79, .18),
+    inset 0 -3px 0 rgba(0, 0, 0, var(--cal-identity-alpha, .08));
+}
+
+.cal-bar--completado {
+  opacity: .62;
+  text-decoration: line-through;
+}
+
+.cal-bar--cancelado {
+  opacity: .45;
 }
 
 /* Esquinas según tramo */
@@ -278,18 +303,22 @@ html {
 }
 
 /* Estirá cada tramo hasta EL BORDE de la celda:
-   - start: corre a la izquierda (−padding)
-   - end:   corre a la derecha (−padding)
+   - start: corre a la derecha (−padding)
+   - end:   corre a la izquierda (−padding)
    - middle: corre a ambos lados
 */
 .cal-bar--start {
-  margin-left: calc(-1 * var(--cal-pad-x));
+  margin-right: calc(-1 * var(--cal-pad-x));
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .cal-bar--end {
-  margin-right: calc(-1 * var(--cal-pad-x));
+  margin-left: calc(-1 * var(--cal-pad-x));
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
 }
@@ -302,8 +331,140 @@ html {
 
 /* indicador "+N más" cuando hay muchos */
 .cal-more {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  padding: 0;
   font-size: 11px;
-  color: #999;
+  color: #5f6f52;
+  cursor: pointer;
+}
+
+.cal-more:hover {
+  color: #437118;
+  text-decoration: underline;
+}
+
+.cal-event-popover {
+  max-width: 260px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cal-event-popover > * + * {
+  margin-top: 4px;
+}
+
+.planning-calendar-drawer .ant-drawer-body {
+  overflow-x: hidden;
+}
+
+.planning-month-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 100%;
+}
+
+.planning-month-group {
+  min-width: 0;
+}
+
+.planning-month-group__title {
+  margin-bottom: 8px;
+  color: #6b7a59;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.planning-month-card {
+  width: 100%;
+  min-width: 0;
+  border-left-width: 4px;
+}
+
+.planning-month-card--en_demora {
+  border-color: #ffccc7;
+  border-left-color: #ff4d4f !important;
+  background: #fff7f6;
+}
+
+.planning-month-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.planning-month-card__title {
+  min-width: 0;
+  color: #1f1f1f;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.planning-month-card__period {
+  margin-top: 8px;
+  color: #262626;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.planning-month-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  min-width: 0;
+  color: #595959;
+  font-size: 13px;
+}
+
+.planning-month-card__line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-month-card__responsible {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planning-month-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.planning-month-empty {
+  padding: 32px 8px;
+  color: #8c8c8c;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .planning-month-card__header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .planning-month-card__period,
+  .planning-month-card__line {
+    white-space: normal;
+  }
 }
 
 /* (opcional) asegúrate de que la tabla no meta espacios raros */

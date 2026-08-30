@@ -2,10 +2,12 @@ const { z } = require('zod');
 
 // Enums
 const ActivityType = z.enum(['fumigacion','siembra','cosecha','fertilizacion','riego','mantenimiento','otro']);
-const Status = z.enum(['planificado','pendiente','en_progreso','completado','en_demora','cancelado']);
+const EditableStatus = z.enum(['planificado','pendiente','en_progreso','completado']);
+const StatusFilter = z.enum(['planificado','pendiente','en_progreso','completado','en_demora','cancelado']);
+const ACTIVITIES_REQUIRING_CROP = new Set(['fumigacion', 'siembra', 'cosecha', 'fertilizacion']);
 
 // Helpers
-const Title = z.string().trim().min(1, 'Título requerido');
+const Title = z.string().trim().min(1, 'Título requerido').optional().nullable();
 const Description = z.string().trim().optional().nullable();
 
 // Validador de array de UUIDs sin duplicados
@@ -14,6 +16,32 @@ const uuidArrayNoDup = (fieldLabel = 'IDs') =>
     (arr) => new Set(arr).size === arr.length,
     { message: `${fieldLabel} duplicados` }
   );
+
+const LotSelectionItem = z.object({
+  lot_id: z.string().uuid(),
+  sub_lot_id: z.string().uuid().optional().nullable(),
+});
+
+const lotSelectionArrayNoDup = z.array(LotSelectionItem).refine(
+  (arr) => {
+    const keys = arr.map(item => `${item.lot_id}:${item.sub_lot_id || 'full'}`);
+    return new Set(keys).size === keys.length;
+  },
+  { message: 'Lotes o sublotes duplicados' }
+);
+
+const requireLotSelection = (val, ctx) => {
+  const hasLegacyLots = Array.isArray(val.lot_ids) && val.lot_ids.length > 0;
+  const hasSelections = Array.isArray(val.lot_selections) && val.lot_selections.length > 0;
+
+  if (!hasLegacyLots && !hasSelections) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Debes seleccionar al menos un lote o sublote',
+      path: ['lot_selections'],
+    });
+  }
+};
 
 // Products item
 const ProductItem = z.object({
@@ -30,13 +58,26 @@ const baseBody = z.object({
   start_at: z.string().datetime({ message: 'start_at debe ser fecha/hora ISO' }),
   end_at: z.string().datetime({ message: 'end_at debe ser fecha/hora ISO' }),
   responsible_user: z.string().uuid(),
-  status: Status, // Nota: "en_demora" suele ser derivado, pero se acepta si se envia
+  status: EditableStatus,
   vehicle_id: z.string().uuid().optional().nullable(),
-  lot_ids: uuidArrayNoDup('Lotes').min(1, 'Debes seleccionar al menos un lote'),
+  campaign_id: z.string().uuid(),
+  crop_id: z.string().uuid().optional().nullable(),
+  lot_ids: uuidArrayNoDup('Lotes').optional(),
+  lot_selections: lotSelectionArrayNoDup.optional(),
   products: z.array(ProductItem).optional(),
   created_by: z.string().uuid().optional().nullable(),
 })
 .superRefine((val, ctx) => {
+  requireLotSelection(val, ctx);
+
+  if (ACTIVITIES_REQUIRING_CROP.has(val.activity_type) && !val.crop_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Seleccioná un cultivo.',
+      path: ['crop_id'],
+    });
+  }
+
   // start <= end
   const start = Date.parse(val.start_at);
   const end = Date.parse(val.end_at);
@@ -61,6 +102,9 @@ exports.updateSchema = z.object({
   body: baseBody.partial().extend({
     // En PATCH, lot_ids/products pueden venir omitidos o vacios; seguimos validando duplicados si vienen
     lot_ids: uuidArrayNoDup('Lotes').optional(),
+    lot_selections: lotSelectionArrayNoDup.optional(),
+    campaign_id: z.string().uuid().optional().nullable(),
+    crop_id: z.string().uuid().optional().nullable(),
     products: z.array(ProductItem).optional(),
     // Opcional: permitir togglear enabled desde PATCH para soft delete/restore
     enabled: z.coerce.boolean().optional(),
@@ -91,9 +135,12 @@ exports.listQuery = z.object({
     from: z.string().datetime().optional(),
     to: z.string().datetime().optional(),
     type: ActivityType.optional(),
-    status: Status.optional(),
+    status: StatusFilter.optional(),
     responsible: z.string().uuid().optional(),
     lotId: z.string().uuid().optional(),
+    subLotId: z.string().uuid().optional(),
+    cropId: z.string().uuid().optional(),
+    campaignId: z.string().uuid().optional(),
     search: z.string().optional(),
 
     // Paginado con coercion a numero

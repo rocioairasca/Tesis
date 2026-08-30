@@ -6,6 +6,20 @@
 
 const supabase = require('../db/supabaseClient');
 
+const TECHNICAL_PATTERNS = [
+    /\/api\//i,
+    /\b(endpoint|request|response|backend|frontend|controller|route|stack|trace)\b/i,
+    /\b(jwt|token|bearer|unauthorized|badrequest|internalservererror)\b/i,
+    /\b(status\s*)?(400|401|403|404|409|500|502)\b/i,
+    /\b(uuid|sql|postgres|postg|supabase|constraint|violates|duplicate key|null value|foreign key|not null)\b/i,
+    /\b(company_id|crop_id|lot_id|sub_lot_id|planning_id|layout_id|product_id|vehicle_id|user_id)\b/i,
+];
+
+const safeNotificationText = (value, fallback) => {
+    if (!value || typeof value !== 'string') return fallback;
+    return TECHNICAL_PATTERNS.some((pattern) => pattern.test(value)) ? fallback : value;
+};
+
 /**
  * LISTAR NOTIFICACIONES del usuario autenticado
  * Soporta: ?read=true/false&priority=low/medium/high&page=1&pageSize=20
@@ -132,6 +146,9 @@ const markAllAsRead = async (req, res, next) => {
  */
 const createNotification = async (userId, type, priority, title, message, data = {}, companyId = null) => {
     try {
+        const safeTitle = safeNotificationText(title, 'Notificación de GrowSync');
+        const safeMessage = safeNotificationText(message, 'Abrí GrowSync para revisar el detalle.');
+
         const { data: notification, error } = await supabase
             .from('notifications')
             .insert([{
@@ -139,8 +156,8 @@ const createNotification = async (userId, type, priority, title, message, data =
                 company_id: companyId, // Multi-tenancy
                 type,
                 priority,
-                title,
-                message,
+                title: safeTitle,
+                message: safeMessage,
                 data,
             }])
             .select()

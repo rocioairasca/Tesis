@@ -12,6 +12,14 @@ const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 const { createNotification } = require('./notifications');
 
+const VEHICLE_STATUS_LABELS = {
+  activo: 'activo',
+  mantenimiento: 'en mantenimiento',
+  inactivo: 'inactivo',
+};
+
+const vehicleStatusLabel = (status) => VEHICLE_STATUS_LABELS[status] || 'actualizado';
+
 const SELECT_COLUMNS = `
   id, name, type, brand, model, plate, capacity, notes, status,
   responsible_user, created_by, enabled, created_at, updated_at
@@ -30,7 +38,7 @@ exports.list = async (req, res, next) => {
     } = req.query;
 
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const p = [company_id];
     const w = [`company_id = $1`]; // $1 is always company_id
@@ -71,7 +79,7 @@ exports.list = async (req, res, next) => {
 exports.getOne = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { rows } = await pool.query(
       `SELECT ${SELECT_COLUMNS} FROM vehicles WHERE id = $1 AND company_id = $2`,
@@ -88,7 +96,7 @@ exports.getOne = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const {
       name, type = 'otro', brand, model, plate, capacity, notes,
@@ -114,7 +122,7 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { id } = req.params;
     const allowed = ['name', 'type', 'brand', 'model', 'plate', 'capacity', 'notes', 'status', 'responsible_user', 'enabled'];
@@ -148,8 +156,9 @@ exports.update = async (req, res, next) => {
         'vehicle_status',
         'medium',
         'Estado de vehículo actualizado',
-        `El vehículo ${rows[0].name} ahora está: ${rows[0].status}`,
-        { vehicle_id: rows[0].id, new_status: rows[0].status }
+        `El vehículo ${rows[0].name} ahora está ${vehicleStatusLabel(rows[0].status)}.`,
+        { vehicle_id: rows[0].id, new_status: rows[0].status },
+        company_id
       ).catch(err => console.error('Error enviando notificación vehículo:', err));
     }
 
@@ -163,7 +172,7 @@ exports.update = async (req, res, next) => {
 exports.remove = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { rows } = await pool.query(
       `UPDATE vehicles
@@ -183,7 +192,7 @@ exports.remove = async (req, res, next) => {
 exports.listDisabled = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { q, type, status, page = 1, pageSize = 50 } = req.query;
     const p = [company_id];
@@ -222,7 +231,7 @@ exports.listDisabled = async (req, res, next) => {
 exports.enable = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ error: 'BadRequest', message: 'Falta company_id' });
+    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
 
     const { rows } = await pool.query(
       `UPDATE vehicles
