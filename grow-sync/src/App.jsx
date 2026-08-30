@@ -38,6 +38,10 @@ const Lotes = lazy(() =>
   import("./features/lots/Lotes.jsx")
 );
 
+const LotDivisions = lazy(() =>
+  import("./features/lots/LotDivisions.jsx")
+);
+
 const DisabledLotes = lazy(() =>
   import("./features/lots/DisabledLotes.jsx")
 );
@@ -269,6 +273,19 @@ function App() {
                   }
                 >
                   <DisabledLotes />
+                </PrivatePage>
+              }
+            />
+
+            <Route
+              path="/lotes/:lotId/divisiones"
+              element={
+                <PrivatePage
+                  requiredPermission={
+                    PERMISSIONS.LOTS_VIEW
+                  }
+                >
+                  <LotDivisions />
                 </PrivatePage>
               }
             />

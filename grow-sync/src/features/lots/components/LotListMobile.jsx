@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import { Button, Popconfirm, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined } from '../../../components/AppIcons';
+import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined, FormOutlined } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
 
@@ -25,6 +25,7 @@ const LotListMobile = ({
     onEdit,
     onDelete,
     onViewLocation,
+    onManageDivisions,
     rowKey,
     getId,
     safeParse
@@ -43,6 +44,15 @@ const LotListMobile = ({
                                     aria-label={`Editar ${lot.name}`}
                                     icon={<EditOutlined />}
                                     onClick={() => onEdit(lot)}
+                                />
+                            </Tooltip>}
+                            {canEdit && <Tooltip title="Gestionar divisiones">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    aria-label={`Gestionar divisiones de ${lot.name}`}
+                                    icon={<FormOutlined />}
+                                    onClick={() => onManageDivisions(lot)}
                                 />
                             </Tooltip>}
                             {canDisable && <Popconfirm

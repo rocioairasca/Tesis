@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined } from '../../../components/AppIcons';
+import { EditOutlined, DeleteOutlined, FormOutlined } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
 
@@ -27,6 +27,7 @@ const LotTable = ({
     onEdit,
     onDelete,
     onViewLocation,
+    onManageDivisions,
     rowKey,
     getId,
     safeParse
@@ -77,6 +78,15 @@ const LotTable = ({
                             icon={<EditOutlined />}
                             onClick={() => onEdit(record)}
                             aria-label="Editar"
+                        />
+                    </Tooltip>}
+                    {canEdit && <Tooltip title="Gestionar divisiones">
+                        <Button
+                            type="text"
+                            shape="circle"
+                            icon={<FormOutlined />}
+                            onClick={() => onManageDivisions(record)}
+                            aria-label="Gestionar divisiones"
                         />
                     </Tooltip>}
                     {canDisable && <Popconfirm

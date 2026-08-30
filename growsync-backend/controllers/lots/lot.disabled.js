@@ -18,6 +18,11 @@ const supabase = require('../../db/supabaseClient');
  */
 const listDisabledLots = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const {
       q,
       page = 1,
@@ -33,6 +38,7 @@ const listDisabledLots = async (req, res, next) => {
     let query = supabase
       .from('lots')
       .select(columns, { count: 'exact' })
+      .eq('company_id', company_id)
       .eq('enabled', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -63,6 +69,11 @@ const listDisabledLots = async (req, res, next) => {
  */
 const enableLot = async (req, res, next) => {
   try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+
     const { id } = req.params;
 
     // Actualizamos solo si actualmente esta deshabilitado
@@ -70,6 +81,7 @@ const enableLot = async (req, res, next) => {
       .from('lots')
       .update({ enabled: true })
       .eq('id', id)
+      .eq('company_id', company_id)
       .eq('enabled', false)
       .select('id, name, enabled')
       .maybeSingle(); // no lanza error si no hay fila

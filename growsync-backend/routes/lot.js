@@ -12,6 +12,8 @@ const {
   enableLot,
 } = require('../controllers/lots/lot.disabled.js');
 
+const layouts = require('../controllers/lots/layouts.js');
+
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
 const schema = require('../validations/lots.schema'); 
@@ -36,6 +38,7 @@ router.get('/count/enabled',
 
 // Listado de deshabilitados (enabled=false)
 router.get('/disabled',
+  validate(schema.listQuery),
   checkRole(0),
   listDisabledLots
 );
@@ -45,6 +48,61 @@ router.put('/enable/:id',
   validate(schema.idParam),
   checkRole(2),
   enableLot
+);
+
+// Layouts versionados y sublotes
+router.get('/:lotId/layouts',
+  validate(schema.lotIdParam),
+  checkRole(0),
+  layouts.listLayouts
+);
+
+router.post('/:lotId/layouts',
+  validate(schema.createLayoutBody),
+  checkRole(2),
+  layouts.createLayout
+);
+
+router.get('/:lotId/layouts/:layoutId',
+  validate(schema.layoutParam),
+  checkRole(0),
+  layouts.getLayout
+);
+
+router.put('/:lotId/layouts/:layoutId',
+  validate(schema.updateLayoutBody),
+  checkRole(2),
+  layouts.updateLayout
+);
+
+router.post('/:lotId/layouts/:layoutId/sub-lots',
+  validate(schema.createSubLotBody),
+  checkRole(2),
+  layouts.createSubLot
+);
+
+router.put('/:lotId/layouts/:layoutId/sub-lots/:subLotId',
+  validate(schema.updateSubLotBody),
+  checkRole(2),
+  layouts.updateSubLot
+);
+
+router.delete('/:lotId/layouts/:layoutId/sub-lots/:subLotId',
+  validate(schema.subLotParam),
+  checkRole(2),
+  layouts.deleteSubLot
+);
+
+router.post('/:lotId/layouts/:layoutId/validate',
+  validate(schema.layoutParam),
+  checkRole(2),
+  layouts.validateLayout
+);
+
+router.post('/:lotId/layouts/:layoutId/activate',
+  validate(schema.layoutParam),
+  checkRole(2),
+  layouts.activateLayout
 );
 
 // ── CRUD PRINCIPAL ────────────────────────────────────────────────────────────

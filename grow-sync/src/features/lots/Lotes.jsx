@@ -22,6 +22,7 @@ import LotTable from "./components/LotTable";
 import LotListMobile from "./components/LotListMobile";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import { useNavigate } from "react-router-dom";
 
 // -------- helpers --------
 const getId = (r) => r?.id ?? r?._id;
@@ -51,6 +52,7 @@ const Lotes = () => {
   const mapRef = useRef();
 
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.LOTS_CREATE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.LOTS_VIEW_DISABLED);
@@ -210,6 +212,7 @@ const Lotes = () => {
               onEdit={openDrawer}
               onDelete={handleDelete}
               onViewLocation={setSelectedLocation}
+              onManageDivisions={(lot) => navigate(`/lotes/${getId(lot)}/divisiones`)}
               rowKey={rowKey}
               getId={getId}
               safeParse={safeParse}
@@ -226,6 +229,7 @@ const Lotes = () => {
             onEdit={openDrawer}
             onDelete={handleDelete}
             onViewLocation={setSelectedLocation}
+            onManageDivisions={(lot) => navigate(`/lotes/${getId(lot)}/divisiones`)}
             rowKey={rowKey}
             getId={getId}
             safeParse={safeParse}
