@@ -42,6 +42,8 @@ const ensureString = (value) => {
 
 const Lotes = () => {
   const [lots, setLots] = useState([]);
+  const [productiveStates, setProductiveStates] = useState({});
+  const [productiveStatesAvailable, setProductiveStatesAvailable] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -67,6 +69,17 @@ const Lotes = () => {
       });
       const list = Array.isArray(data) ? data : data?.items || data?.data || [];
       setLots(list);
+
+      try {
+        const statesResponse = await api.get("/lots/productive-states");
+        const states = Array.isArray(statesResponse.data?.data) ? statesResponse.data.data : [];
+        setProductiveStates(Object.fromEntries(states.map((state) => [state.lot_id, state])));
+        setProductiveStatesAvailable(true);
+      } catch (stateError) {
+        console.error("→ productive states list error:", stateError);
+        setProductiveStates({});
+        setProductiveStatesAvailable(false);
+      }
     } catch (error) {
       console.error("→ lots list error:", error);
       notification.error({ message: getUserFriendlyError(error, "No se pudieron cargar los lotes.") });
@@ -219,6 +232,8 @@ const Lotes = () => {
               rowKey={rowKey}
               getId={getId}
               safeParse={safeParse}
+              productiveStates={productiveStates}
+              productiveStatesAvailable={productiveStatesAvailable}
             />
           </Col>
         </Row>
@@ -236,6 +251,8 @@ const Lotes = () => {
             rowKey={rowKey}
             getId={getId}
             safeParse={safeParse}
+            productiveStates={productiveStates}
+            productiveStatesAvailable={productiveStatesAvailable}
           />
         </>
       )}

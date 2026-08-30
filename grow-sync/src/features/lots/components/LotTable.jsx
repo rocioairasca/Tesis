@@ -12,7 +12,7 @@
  *  - Desacoplamiento de la lógica de estado principal.
  */
 import React from 'react';
-import { Table, Button, Space, Tooltip, Popconfirm, Typography } from 'antd';
+import { Table, Button, Space, Tooltip, Popconfirm, Typography, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, FormOutlined } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -24,12 +24,15 @@ const { Text } = Typography;
 
 const formatHa = (value) => {
     const n = Number(value);
-    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+    return Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '0,00';
 };
 
 const getActiveSubLots = (lot) => (
     Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
+
+const getUnitCropName = (unit) => unit?.current_crop?.crop_name || null;
+const formatCropCount = (count) => `${count} ${count === 1 ? 'cultivo' : 'cultivos'}`;
 
 const LotTable = ({
     lots,
@@ -40,8 +43,69 @@ const LotTable = ({
     onManageDivisions,
     rowKey,
     getId,
-    safeParse
+    safeParse,
+    productiveStates = {},
+    productiveStatesAvailable = true
 }) => {
+    const renderProductiveState = (record) => {
+        if (!productiveStatesAvailable) {
+            return <Text type="secondary">No disponible</Text>;
+        }
+
+        const state = productiveStates[getId(record)];
+        const units = Array.isArray(state?.units) ? state.units : [];
+
+        if (!units.length) return <Text type="secondary">Sin cultivo</Text>;
+
+        const currentUnits = units.filter((unit) => unit.current_crop?.crop_name);
+        if (!currentUnits.length) return <Text type="secondary">Sin cultivo</Text>;
+
+        if (state.mode === 'sub_lots') {
+            const subLots = getActiveSubLots(record);
+            const unitBySubLotId = new Map(units.map((unit) => [unit.sub_lot_id, unit]));
+            const cropNames = currentUnits.map(getUnitCropName).filter(Boolean);
+            const uniqueCrops = Array.from(new Set(cropNames));
+            const allSubLotsHaveSameCrop = subLots.length > 0
+                && subLots.every((subLot) => getUnitCropName(unitBySubLotId.get(subLot.id)) === uniqueCrops[0])
+                && uniqueCrops.length === 1;
+
+            return (
+                <Space direction="vertical" size={4}>
+                    {allSubLotsHaveSameCrop ? (
+                        <Text>{uniqueCrops[0]}</Text>
+                    ) : (
+                        <Tag color="green">{formatCropCount(uniqueCrops.length || currentUnits.length)}</Tag>
+                    )}
+                    {subLots.map((subLot) => {
+                        const cropName = getUnitCropName(unitBySubLotId.get(subLot.id));
+                        return (
+                            <Text key={subLot.id} type="secondary" style={{ paddingLeft: 18 }}>
+                                {cropName || 'Sin cultivo'}
+                            </Text>
+                        );
+                    })}
+                    {subLots.length === 0 && currentUnits.slice(0, 2).map((unit) => (
+                        <Text key={unit.sub_lot_id || unit.name} type="secondary" style={{ paddingLeft: 18 }}>
+                            {unit.current_crop.crop_name}
+                        </Text>
+                    ))}
+                    {subLots.length === 0 && currentUnits.length > 2 && (
+                        <Text type="secondary">+ {currentUnits.length - 2} más</Text>
+                    )}
+                </Space>
+            );
+        }
+
+        const unit = currentUnits[0];
+        return (
+            <Space direction="vertical" size={4}>
+                <Text>{unit.current_crop.crop_name}</Text>
+                {unit.current_crop.campaign_name && (
+                    <Text type="secondary">{unit.current_crop.campaign_name}</Text>
+                )}
+            </Space>
+        );
+    };
 
     const columns = [
         {
@@ -61,6 +125,11 @@ const LotTable = ({
                     </Space>
                 );
             },
+        },
+        {
+            title: "Estado productivo",
+            key: "productive_state",
+            render: (_, record) => renderProductiveState(record),
         },
         {
             title: "Área Total (ha)",

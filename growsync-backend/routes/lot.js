@@ -13,9 +13,12 @@ const {
 } = require('../controllers/lots/lot.disabled.js');
 
 const layouts = require('../controllers/lots/layouts.js');
+const productiveState = require('../controllers/lots/productiveState.js');
 
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
+const requireAnyPermission = require('../middleware/requireAnyPermission');
+const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/lots.schema'); 
 
 /**
@@ -34,6 +37,18 @@ const schema = require('../validations/lots.schema');
 router.get('/count/enabled',
   checkRole(0),
   countEnabledLots
+);
+
+router.get('/productive-states',
+  validate(schema.productiveStateQuery),
+  requireAnyPermission(
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.PLANNING_VIEW,
+    PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_CREATE,
+    PERMISSIONS.HARVEST_EDIT
+  ),
+  productiveState.listLotProductiveStates
 );
 
 // Listado de deshabilitados (enabled=false)
@@ -55,6 +70,18 @@ router.get('/:lotId/layouts',
   validate(schema.lotIdParam),
   checkRole(0),
   layouts.listLayouts
+);
+
+router.get('/:lotId/productive-state',
+  validate(schema.productiveStateParam),
+  requireAnyPermission(
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.PLANNING_VIEW,
+    PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_CREATE,
+    PERMISSIONS.HARVEST_EDIT
+  ),
+  productiveState.getLotProductiveState
 );
 
 router.post('/:lotId/layouts',

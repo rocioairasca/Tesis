@@ -129,6 +129,12 @@ exports.updateSchema = z.object({
 });
 
 exports.idParam = z.object({ params: z.object({ id: z.string().uuid() }) });
+exports.completeSowingSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+  }),
+});
 
 exports.listQuery = z.object({
   query: z.object({

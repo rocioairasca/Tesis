@@ -9,9 +9,7 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Tooltip,
-  Typography,
   notification,
 } from "antd";
 import {
@@ -39,12 +37,16 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
-const { Text } = Typography;
-
 const formatDateDDMMYYYY = (date) => {
   if (!date) return "-";
   return dayjs(date).format("DD/MM/YYYY");
 };
+
+const getCropDisplay = (record) => record?.crop_name || record?.crop;
+const getCampaignDisplay = (record) => record?.campaign_name || record?.campaign;
+const getSurfaceDisplay = (record) => (
+  record?.sub_lot_name ? `${record.lot_name || "-"} / ${record.sub_lot_name}` : record?.lot_name || "-"
+);
 
 const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
   const [loading, setLoading] = useState(false);
@@ -214,21 +216,18 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
       },
       {
         title: "Lote",
-        dataIndex: "lot_name",
         key: "lot_name",
-        render: (value) => value || "-",
+        render: (_, record) => getSurfaceDisplay(record),
       },
       {
         title: "Cultivo",
-        dataIndex: "crop",
         key: "crop",
-        render: (value) => formatCropLabel(value),
+        render: (_, record) => formatCropLabel(getCropDisplay(record)),
       },
       {
         title: "Campaña",
-        dataIndex: "campaign",
         key: "campaign",
-        render: (value) => value || "-",
+        render: (_, record) => getCampaignDisplay(record) || "-",
       },
       {
         title: "Producción",
@@ -248,17 +247,6 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
         key: "yield_kg_ha",
         render: (value) => `${formatNumber(value)} kg/ha`,
       },
-      {
-        title: "Estado",
-        dataIndex: "enabled",
-        key: "enabled",
-        render: (value) =>
-          value ? (
-            <Tag color="success">Activo</Tag>
-          ) : (
-            <Tag color="default">Deshabilitado</Tag>
-          ),
-      },
       (canEdit || canDisable || canEnable) && {
         title: "Acciones",
         key: "actions",
@@ -272,7 +260,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
                   shape="circle"
                   icon={<EditOutlined />}
                   onClick={() => onEdit?.(record)}
-                  aria-label={`Editar cosecha ${record.crop || ""}`}
+                  aria-label={`Editar cosecha ${getCropDisplay(record) || ""}`}
                 />
               </Tooltip>
             )}
@@ -293,7 +281,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
         {records.map((record) => (
           <div className="inventory-card" key={record.id}>
             <div className="card-header">
-              <h3>{formatCropLabel(record.crop)} - {record.campaign || "-"}</h3>
+              <h3>{formatCropLabel(getCropDisplay(record))} - {getCampaignDisplay(record) || "-"}</h3>
               <div className="card-icons">
                 {record.enabled && canEdit && (
                   <Tooltip title="Editar">
@@ -302,7 +290,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
                       shape="circle"
                       icon={<EditOutlined />}
                       onClick={() => onEdit?.(record)}
-                      aria-label={`Editar cosecha ${record.crop || ""}`}
+                      aria-label={`Editar cosecha ${getCropDisplay(record) || ""}`}
                     />
                   </Tooltip>
                 )}
@@ -314,7 +302,7 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
               <CalendarOutlined size={18} /> <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
             </p>
             <p className="flex-row">
-              <MapPin size={18} /> <strong>Lote:</strong> {record.lot_name || "-"}
+              <MapPin size={18} /> <strong>Lote:</strong> {getSurfaceDisplay(record)}
             </p>
             <p className="flex-row">
               <Package size={18} /> <strong>Produccion:</strong> {formatNumber(record.production_kg, 0)} kg
@@ -324,14 +312,6 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
             </p>
             <p className="flex-row">
               <HarvestOutlined size={18} /> <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha
-            </p>
-            <p>
-              <strong>Estado:</strong>{" "}
-              {record.enabled ? (
-                <Tag color="success">Activo</Tag>
-              ) : (
-                <Tag color="default">Deshabilitado</Tag>
-              )}
             </p>
             {record.notes ? (
               <p>
@@ -344,63 +324,6 @@ const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
       </div>
     );
 
-    return (
-      <Row gutter={[16, 16]}>
-        {records.map((record) => (
-          <Col xs={24} key={record.id}>
-            <Card
-              size="small"
-              title={`${formatCropLabel(record.crop)} - ${record.campaign || "-"}`}
-              extra={
-                record.enabled ? (
-                  <Tag color="success">Activo</Tag>
-                ) : (
-                  <Tag color="default">Deshabilitado</Tag>
-                )
-              }
-            >
-              <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                <Text>
-                  <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
-                </Text>
-                <Text>
-                  <strong>Lote:</strong> {record.lot_name || "-"}
-                </Text>
-                <Text>
-                  <strong>Producción:</strong> {formatNumber(record.production_kg, 0)} kg
-                </Text>
-                <Text>
-                  <strong>Superficie:</strong> {formatNumber(record.harvested_area_ha)} ha
-                </Text>
-                <Text>
-                  <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha
-                </Text>
-                {record.notes ? (
-                  <Text>
-                    <strong>Notas:</strong> {record.notes}
-                  </Text>
-                ) : null}
-
-                <div style={{ marginTop: 8 }}>
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {record.enabled && canEdit && (
-                      <Button
-                        block
-                        icon={<EditOutlined />}
-                        onClick={() => onEdit?.(record)}
-                      >
-                        Editar
-                      </Button>
-                    )}
-                    {renderHarvestAction(record, true)}
-                  </Space>
-                </div>
-              </Space>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-    );
   };
 
   return (

@@ -5,6 +5,7 @@ const Name = z.string().trim().min(1, 'Nombre requerido');
 const Area = z.coerce.number().positive('Área debe ser > 0');
 const Location = z.any().optional().nullable(); 
 const LayoutStatus = z.enum(['draft', 'active', 'locked', 'archived']);
+const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD');
 
 const GeoJsonPolygon = z.object({
   type: z.literal('Polygon'),
@@ -45,6 +46,19 @@ exports.idParam = z.object({
 
 exports.lotIdParam = z.object({
   params: z.object({ lotId: z.string().uuid() }),
+});
+
+exports.productiveStateParam = z.object({
+  params: z.object({ lotId: z.string().uuid() }),
+  query: z.object({
+    date: YMD.optional(),
+  }),
+});
+
+exports.productiveStateQuery = z.object({
+  query: z.object({
+    date: YMD.optional(),
+  }),
 });
 
 exports.layoutParam = z.object({

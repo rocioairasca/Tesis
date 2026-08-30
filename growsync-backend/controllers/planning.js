@@ -184,6 +184,14 @@ const assertPlanningStatusTransition = (currentStatus, nextStatus) => {
   }
 };
 
+const assertSowingUsesCompletionEndpoint = (activityType, nextStatus) => {
+  if (activityType === 'siembra' && nextStatus === 'completado') {
+    const err = new Error('Para completar una siembra, confirmá la fecha efectiva de siembra.');
+    err.status = 400;
+    throw err;
+  }
+};
+
 const calendarDateSql = (param) => `left($${param}::text, 10)::date`;
 
 const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
@@ -452,6 +460,180 @@ const insertPlanningLots = async (client, planningId, selections) => {
   );
 };
 
+const getEffectiveSowingDate = (value) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const err = new Error('La fecha de siembra no es válida.');
+    err.status = 400;
+    throw err;
+  }
+  return String(value);
+};
+
+const assertSowingDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
+  const { rows } = await client.query(
+    `
+    SELECT id, name, status, start_date, end_date
+    FROM campaigns
+    WHERE id = $1
+      AND company_id = $2
+      AND $3::date BETWEEN start_date AND end_date
+    LIMIT 1;
+    `,
+    [campaignId, companyId, effectiveDate]
+  );
+
+  if (!rows.length) {
+    const err = new Error('La fecha de siembra no corresponde a la campaña seleccionada.');
+    err.status = 400;
+    throw err;
+  }
+
+  return rows[0];
+};
+
+const resolveOpenCropAssignmentsForSowing = async (client, selection, companyId, effectiveDate) => {
+  const { rows } = await client.query(
+    `
+    WITH selected_surface AS (
+      SELECT
+        pl.lot_id,
+        pl.sub_lot_id,
+        COALESCE(sl.geom, l.geom) AS geom
+      FROM planning_lots pl
+      JOIN lots l
+        ON l.id = pl.lot_id
+       AND l.company_id = $2
+      LEFT JOIN sub_lots sl
+        ON sl.id = pl.sub_lot_id
+       AND sl.company_id = $2
+      WHERE pl.planning_id = $1
+        AND pl.lot_id = $3
+        AND (
+          (pl.sub_lot_id IS NULL AND $4::uuid IS NULL)
+          OR pl.sub_lot_id = $4::uuid
+        )
+      LIMIT 1
+    ),
+    open_assignments AS (
+      SELECT
+        ca.id,
+        ca.lot_id,
+        ca.sub_lot_id,
+        COALESCE(ca_sl.geom, ca_lot.geom) AS geom
+      FROM crop_assignments ca
+      JOIN lots ca_lot
+        ON ca_lot.id = ca.lot_id
+       AND ca_lot.company_id = $2
+      LEFT JOIN sub_lots ca_sl
+        ON ca_sl.id = ca.sub_lot_id
+       AND ca_sl.company_id = $2
+      WHERE ca.company_id = $2
+        AND ca.lot_id = $3
+        AND ca.start_date < $5::date
+        AND (ca.end_date IS NULL OR ca.end_date >= $5::date)
+    ),
+    measured AS (
+      SELECT
+        oa.id,
+        oa.sub_lot_id,
+        ST_Area(ST_CollectionExtract(ST_MakeValid(oa.geom), 3)::geography) AS assignment_area_m2,
+        ST_Area(
+          ST_CollectionExtract(
+            ST_Intersection(
+              ST_CollectionExtract(ST_MakeValid(ss.geom), 3),
+              ST_CollectionExtract(ST_MakeValid(oa.geom), 3)
+            ),
+            3
+          )::geography
+        ) AS intersection_area_m2
+      FROM selected_surface ss
+      JOIN open_assignments oa ON ss.geom IS NOT NULL AND oa.geom IS NOT NULL
+    )
+    SELECT
+      id,
+      sub_lot_id,
+      assignment_area_m2,
+      intersection_area_m2,
+      (assignment_area_m2 - intersection_area_m2) AS outside_selected_m2
+    FROM measured
+    WHERE intersection_area_m2 > 1;
+    `,
+    [selection.planning_id, companyId, selection.lot_id, selection.sub_lot_id, effectiveDate]
+  );
+
+  const partial = rows.find(row => Number(row.outside_selected_m2 || 0) > 1);
+  if (partial) {
+    const err = new Error('El lote tiene un cultivo registrado sobre toda su superficie. Antes de completar esta siembra, actualizá el estado productivo para reflejar la nueva división.');
+    err.status = 409;
+    err.details = { open_assignment_id: partial.id };
+    throw err;
+  }
+
+  return rows.map(row => row.id);
+};
+
+const assertNoRemainingSowingConflicts = async (client, selections, companyId, effectiveDate) => {
+  const lotIds = selections.map(selection => selection.lot_id);
+  const subLotIds = selections.map(selection => selection.sub_lot_id);
+
+  const { rows } = await client.query(
+    `
+    WITH requested AS (
+      SELECT lot_id, sub_lot_id
+      FROM unnest($1::uuid[], $2::uuid[]) AS r(lot_id, sub_lot_id)
+    ),
+    requested_geom AS (
+      SELECT
+        r.lot_id,
+        r.sub_lot_id,
+        COALESCE(sl.geom, l.geom) AS geom
+      FROM requested r
+      JOIN lots l
+        ON l.id = r.lot_id
+       AND l.company_id = $3
+      LEFT JOIN sub_lots sl
+        ON sl.id = r.sub_lot_id
+       AND sl.company_id = $3
+    ),
+    conflicts AS (
+      SELECT ca.id
+      FROM requested_geom rg
+      JOIN crop_assignments ca
+        ON ca.company_id = $3
+       AND ca.lot_id = rg.lot_id
+       AND daterange(ca.start_date, COALESCE(ca.end_date, 'infinity'::date), '[]')
+         && daterange($4::date, 'infinity'::date, '[]')
+      JOIN lots ca_lot
+        ON ca_lot.id = ca.lot_id
+       AND ca_lot.company_id = $3
+      LEFT JOIN sub_lots ca_sl
+        ON ca_sl.id = ca.sub_lot_id
+       AND ca_sl.company_id = $3
+      WHERE rg.geom IS NOT NULL
+        AND COALESCE(ca_sl.geom, ca_lot.geom) IS NOT NULL
+        AND ST_Area(
+          ST_CollectionExtract(
+            ST_Intersection(
+              ST_CollectionExtract(ST_MakeValid(rg.geom), 3),
+              ST_CollectionExtract(ST_MakeValid(COALESCE(ca_sl.geom, ca_lot.geom)), 3)
+            ),
+            3
+          )::geography
+        ) > 1
+      LIMIT 1
+    )
+    SELECT id FROM conflicts;
+    `,
+    [lotIds, subLotIds, companyId, effectiveDate]
+  );
+
+  if (rows.length) {
+    const err = new Error('No se pudo registrar el cultivo porque existe un ciclo productivo superpuesto en esa superficie.');
+    err.status = 409;
+    throw err;
+  }
+};
+
 /**
  * Controlador: Planificación
  * Ubicación: controllers/planning.js
@@ -706,6 +888,7 @@ exports.create = async (req, res, next) => {
       allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
     });
     validateRequiredCrop(activity_type, crop_id);
+    assertSowingUsesCompletionEndpoint(activity_type, status);
     const resolvedCrop = await resolveCrop(client, crop_id, company_id);
 
     const requestedSelections = normalizeLotSelections(lot_ids, lot_selections);
@@ -812,6 +995,230 @@ exports.create = async (req, res, next) => {
   }
 };
 
+exports.completeSowing = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { company_id } = req.user;
+    const effectiveDate = getEffectiveSowingDate(req.body.effective_date);
+
+    if (!company_id) {
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: planningRows } = await client.query(
+      `
+      SELECT
+        p.id,
+        p.activity_type,
+        p.status,
+        p.enabled,
+        p.campaign_id,
+        p.crop_id,
+        p.responsible_user,
+        c.name AS crop_name,
+        cp.name AS campaign_name
+      FROM planning p
+      LEFT JOIN crops c
+        ON c.id = p.crop_id
+       AND c.company_id = p.company_id
+      LEFT JOIN campaigns cp
+        ON cp.id = p.campaign_id
+       AND cp.company_id = p.company_id
+      WHERE p.id = $1
+        AND p.company_id = $2
+      FOR UPDATE OF p
+      LIMIT 1;
+      `,
+      [id, company_id]
+    );
+
+    if (!planningRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
+    }
+
+    const planning = planningRows[0];
+
+    const { rows: existingSourceRows } = await client.query(
+      `
+      SELECT id
+      FROM crop_assignments
+      WHERE source_planning_id = $1
+        AND company_id = $2
+      LIMIT 1;
+      `,
+      [id, company_id]
+    );
+
+    if (existingSourceRows.length) {
+      await client.query('COMMIT');
+      return res.status(200).json({
+        ok: true,
+        already_applied: true,
+        message: 'Esta siembra ya fue registrada en el estado productivo.',
+      });
+    }
+
+    if (planning.activity_type !== 'siembra') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Esta acción sólo está disponible para planificaciones de siembra.' });
+    }
+
+    if (planning.status === 'cancelado' || planning.enabled === false) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede completar una planificación cancelada.' });
+    }
+
+    if (planning.status === 'completado') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'Esta siembra ya está completada. Registrá el cultivo manualmente si corresponde corregir el historial.',
+      });
+    }
+
+    if (!planning.crop_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La siembra debe tener un cultivo seleccionado.' });
+    }
+
+    if (!planning.campaign_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La siembra debe tener una campaña seleccionada.' });
+    }
+
+    await resolveCrop(client, planning.crop_id, company_id);
+    await assertSowingDateMatchesCampaign(client, planning.campaign_id, company_id, effectiveDate);
+
+    const { rows: selections } = await client.query(
+      `
+      SELECT
+        pl.planning_id,
+        pl.lot_id,
+        pl.sub_lot_id,
+        pl.area_ha,
+        l.name AS lot_name,
+        sl.name AS sub_lot_name
+      FROM planning_lots pl
+      JOIN lots l
+        ON l.id = pl.lot_id
+       AND l.company_id = $2
+      LEFT JOIN sub_lots sl
+        ON sl.id = pl.sub_lot_id
+       AND sl.company_id = $2
+      WHERE pl.planning_id = $1
+      ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST;
+      `,
+      [id, company_id]
+    );
+
+    if (!selections.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La siembra debe tener al menos un lote o sublote seleccionado.' });
+    }
+
+    const { rows: previousEndDateRows } = await client.query(
+      `SELECT ($1::date - INTERVAL '1 day')::date AS previous_end_date;`,
+      [effectiveDate]
+    );
+    const previousEndDate = previousEndDateRows[0].previous_end_date;
+    const closeIds = new Set();
+
+    for (const selection of selections) {
+      const idsToClose = await resolveOpenCropAssignmentsForSowing(
+        client,
+        selection,
+        company_id,
+        effectiveDate
+      );
+      idsToClose.forEach(closeId => closeIds.add(closeId));
+    }
+
+    if (closeIds.size) {
+      await client.query(
+        `
+        UPDATE crop_assignments
+        SET end_date = $1
+        WHERE company_id = $2
+          AND id = ANY($3::uuid[]);
+        `,
+        [previousEndDate, company_id, Array.from(closeIds)]
+      );
+    }
+
+    await assertNoRemainingSowingConflicts(client, selections, company_id, effectiveDate);
+
+    const params = [company_id, planning.campaign_id, planning.crop_id, effectiveDate, id];
+    const values = selections.map((selection, index) => {
+      const base = index * 3 + 6;
+      params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha);
+      return `($1, $2, $${base}, $${base + 1}, $3, $4, NULL, $${base + 2}, $5)`;
+    });
+
+    const { rows: assignmentRows } = await client.query(
+      `
+      INSERT INTO crop_assignments (
+        company_id, campaign_id, lot_id, sub_lot_id, crop_id, start_date, end_date, area_ha, source_planning_id
+      )
+      VALUES ${values.join(', ')}
+      RETURNING id, lot_id, sub_lot_id;
+      `,
+      params
+    );
+
+    if (assignmentRows.length !== selections.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Esta siembra ya fue registrada en el estado productivo.' });
+    }
+
+    await client.query(
+      `
+      UPDATE planning
+      SET status = 'completado'
+      WHERE id = $1
+        AND company_id = $2;
+      `,
+      [id, company_id]
+    );
+
+    await client.query('COMMIT');
+
+    if (planning.responsible_user) {
+      const locationText = selections
+        .map(selection => selection.sub_lot_name || selection.lot_name)
+        .join(', ');
+      createNotification(
+        planning.responsible_user,
+        'state_change',
+        'low',
+        'Siembra completada',
+        `Se completó la siembra de ${planning.crop_name || 'cultivo'} en ${locationText}.`,
+        { planning_id: id, new_status: 'completado' },
+        company_id
+      ).catch(err => console.error('Error enviando notificación:', err));
+    }
+
+    return res.json({
+      ok: true,
+      message: 'La siembra fue completada y el cultivo quedó registrado.',
+      assignments_created: assignmentRows.length,
+      closed_previous_cycles: closeIds.size,
+    });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    if (e.code === '23505') {
+      return res.status(409).json({ message: 'Esta siembra ya fue registrada en el estado productivo.' });
+    }
+    next(e);
+  } finally {
+    client.release();
+  }
+};
+
 /**
  * ACTUALIZAR PLANIFICACIÓN
  * Revalida conflictos si cambian fechas/lotes/vehículo.
@@ -845,6 +1252,28 @@ exports.update = async (req, res, next) => {
 
     if (status !== undefined) {
       assertPlanningStatusTransition(checkRows[0].status, status);
+      assertSowingUsesCompletionEndpoint(activity_type ?? checkRows[0].activity_type, status);
+
+      if (checkRows[0].status === 'completado' && status !== 'completado') {
+        const { rows: sourcedAssignments } = await client.query(
+          `
+          SELECT 1
+          FROM crop_assignments
+          WHERE source_planning_id = $1
+            AND company_id = $2
+          LIMIT 1;
+          `,
+          [id, company_id]
+        );
+
+        if (sourcedAssignments.length) {
+          await client.query('ROLLBACK');
+          client.release();
+          return res.status(409).json({
+            message: 'Esta siembra ya actualizó el estado productivo. Corregí el cultivo registrado antes de reabrirla.',
+          });
+        }
+      }
     }
 
     if (campaign_id !== undefined) {

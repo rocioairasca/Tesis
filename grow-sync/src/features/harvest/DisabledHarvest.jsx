@@ -30,6 +30,12 @@ const formatDateDDMMYYYY = (date) => {
   return dayjs(date).format("DD/MM/YYYY");
 };
 
+const getCropDisplay = (record) => record?.crop_name || record?.crop;
+const getCampaignDisplay = (record) => record?.campaign_name || record?.campaign;
+const getSurfaceDisplay = (record) => (
+  record?.sub_lot_name ? `${record.lot_name || "-"} / ${record.sub_lot_name}` : record?.lot_name || "-"
+);
+
 const DisabledHarvest = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -75,9 +81,9 @@ const DisabledHarvest = () => {
       dataIndex: "harvest_date",
       render: (value) => formatDateDDMMYYYY(value),
     },
-    { title: "Lote", dataIndex: "lot_name", render: (value) => value || "-" },
-    { title: "Cultivo", dataIndex: "crop", render: (value) => formatCropLabel(value) },
-    { title: "Campana", dataIndex: "campaign", render: (value) => value || "-" },
+    { title: "Lote", key: "lot_name", render: (_, record) => getSurfaceDisplay(record) },
+    { title: "Cultivo", key: "crop", render: (_, record) => formatCropLabel(getCropDisplay(record)) },
+    { title: "Campana", key: "campaign", render: (_, record) => getCampaignDisplay(record) || "-" },
     {
       title: "Produccion",
       dataIndex: "production_kg",
@@ -96,7 +102,7 @@ const DisabledHarvest = () => {
     {
       title: "Estado",
       dataIndex: "enabled",
-      render: () => <Tag color="default">Deshabilitado</Tag>,
+      render: () => <Tag color="default">Deshabilitada</Tag>,
     },
     canEnable && {
       title: "Acciones",
@@ -154,14 +160,14 @@ const DisabledHarvest = () => {
             {records.map((record) => (
               <div className="inventory-card" key={rowKey(record)}>
                 <div className="card-header">
-                  <h3>{formatCropLabel(record.crop)} - {record.campaign || "-"}</h3>
+                  <h3>{formatCropLabel(getCropDisplay(record))} - {getCampaignDisplay(record) || "-"}</h3>
                 </div>
 
                 <p className="flex-row">
                   <CalendarOutlined size={18} /> <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
                 </p>
                 <p className="flex-row">
-                  <MapPin size={18} /> <strong>Lote:</strong> {record.lot_name || "-"}
+                  <MapPin size={18} /> <strong>Lote:</strong> {getSurfaceDisplay(record)}
                 </p>
                 <p className="flex-row">
                   <Package size={18} /> <strong>Produccion:</strong> {formatNumber(record.production_kg, 0)} kg
@@ -173,7 +179,7 @@ const DisabledHarvest = () => {
                   <HarvestOutlined size={18} /> <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha
                 </p>
                 <p>
-                  <strong>Estado:</strong> <Tag color="default">Deshabilitado</Tag>
+                  <strong>Estado:</strong> <Tag color="default">Deshabilitada</Tag>
                 </p>
 
                 {canEnable && (

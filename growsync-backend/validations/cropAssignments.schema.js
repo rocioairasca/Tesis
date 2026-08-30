@@ -26,6 +26,9 @@ exports.createBody = z.object({
 exports.updateBody = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
+    campaign_id: z.string().uuid().optional(),
+    lot_id: z.string().uuid().optional(),
+    sub_lot_id: z.string().uuid().optional().nullable(),
     crop_id: z.string().uuid().optional(),
     start_date: YMD.optional(),
     end_date: YMD.optional().nullable(),
@@ -40,5 +43,6 @@ exports.listQuery = z.object({
   query: z.object({
     campaignId: z.string().uuid().optional(),
     lotId: z.string().uuid().optional(),
+    subLotId: z.string().uuid().optional(),
   }),
 });

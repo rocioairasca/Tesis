@@ -13,6 +13,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
+  Alert,
   Button, Card, Drawer, Form, Input, InputNumber, Select, DatePicker,
   Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
@@ -64,6 +65,14 @@ const getPlanningArea = (row) => {
   const plannedArea = Number(row?.planned_area_ha || 0);
   if (plannedArea > 0) return plannedArea;
   return (row?.lots || []).reduce((sum, lot) => sum + getPlanningLotArea(lot), 0);
+};
+const getEffectiveSowingDate = (row) => {
+  const source = row?.end_at || row?.start_at;
+  return source ? dayjs(source) : dayjs();
+};
+const formatDate = (value) => {
+  if (!value) return "—";
+  return dayjs(value).format("DD/MM/YYYY");
 };
 const planningLotToSelectionKey = (lot) => {
   const lotId = lot?.lot_id || lot?.id || lot?._id;
@@ -205,6 +214,7 @@ const Planning = () => {
   const [form] = Form.useForm();
   const [cropForm] = Form.useForm();
   const [campaignForm] = Form.useForm();
+  const [sowingForm] = Form.useForm();
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedDateRange = Form.useWatch("date_range", form);
@@ -213,6 +223,8 @@ const Planning = () => {
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
   const [savingCrop, setSavingCrop] = useState(false);
+  const [sowingCompletion, setSowingCompletion] = useState({ open: false, planning: null });
+  const [completingSowing, setCompletingSowing] = useState(false);
 
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -926,7 +938,50 @@ const Planning = () => {
     }
   };
 
+  const openCompleteSowingModal = (row) => {
+    setSowingCompletion({ open: true, planning: row });
+    sowingForm.setFieldsValue({
+      effective_date: getEffectiveSowingDate(row),
+    });
+  };
+
+  const closeCompleteSowingModal = () => {
+    setSowingCompletion({ open: false, planning: null });
+    sowingForm.resetFields();
+  };
+
+  const confirmCompleteSowing = async (values) => {
+    const planning = sowingCompletion.planning;
+    if (!planning) return;
+
+    setCompletingSowing(true);
+    try {
+      const { data } = await api.post(`/planning/${getId(planning)}/complete-sowing`, {
+        effective_date: values.effective_date.format("YYYY-MM-DD"),
+      });
+      notification.success({
+        message: data?.already_applied
+          ? "Esta siembra ya fue registrada en el estado productivo."
+          : "La siembra fue completada y el cultivo quedó registrado.",
+      });
+      closeCompleteSowingModal();
+      closeCalendarSelection();
+      fetchPlanning();
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo completar la siembra."),
+      });
+    } finally {
+      setCompletingSowing(false);
+    }
+  };
+
   const updateStatus = async (row, status) => {
+    if (status === "completado" && row?.activity_type === "siembra") {
+      openCompleteSowingModal(row);
+      return;
+    }
+
     try {
       await api.patch(`/planning/${getId(row)}`, { status });
       fetchPlanning();
@@ -1614,6 +1669,76 @@ const Planning = () => {
           <div className="planning-month-empty">{calendarEmptyText}</div>
         )}
       </Drawer>
+
+      <Modal
+        title="Completar siembra"
+        open={sowingCompletion.open}
+        onCancel={closeCompleteSowingModal}
+        onOk={() => sowingForm.submit()}
+        okText="Confirmar siembra"
+        cancelText="Cancelar"
+        confirmLoading={completingSowing}
+        destroyOnClose
+      >
+        {sowingCompletion.planning && (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Alert
+              type="info"
+              showIcon
+              message="Al confirmar, GrowSync registrará este cultivo como estado productivo de las superficies seleccionadas."
+            />
+
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="Cultivo">
+                {getCropDisplayName(sowingCompletion.planning, cropIx)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Campaña">
+                {sowingCompletion.planning.campaign_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Superficie total">
+                {formatHa(getPlanningArea(sowingCompletion.planning))}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <strong>Ubicación</strong>
+              <List
+                size="small"
+                dataSource={sowingCompletion.planning.lots || []}
+                renderItem={(item) => (
+                  <List.Item>
+                    {getPlanningLotName(item)}
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                  </List.Item>
+                )}
+                locale={{ emptyText: "Sin lotes asignados" }}
+              />
+            </div>
+
+            <Form form={sowingForm} layout="vertical" onFinish={confirmCompleteSowing}>
+              <Form.Item
+                name="effective_date"
+                label="Fecha efectiva de siembra"
+                rules={[
+                  { required: true, message: "Seleccioná la fecha efectiva de siembra." },
+                  {
+                    validator: (_, value) => {
+                      const campaign = campaigns.find((item) => (item.id ?? item._id) === sowingCompletion.planning?.campaign_id);
+                      const dateKey = value?.format("YYYY-MM-DD");
+                      if (!dateKey || !campaign) return Promise.resolve();
+                      return campaignContainsDate(campaign, dayjs(dateKey))
+                        ? Promise.resolve()
+                        : Promise.reject(new Error("La fecha de siembra no corresponde a la campaña seleccionada."));
+                    },
+                  },
+                ]}
+              >
+                <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              </Form.Item>
+            </Form>
+          </Space>
+        )}
+      </Modal>
 
       <Modal
         title="Campañas"

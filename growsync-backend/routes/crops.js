@@ -7,7 +7,14 @@ const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/crops.schema');
 
 router.get('/',
-  requireAnyPermission(PERMISSIONS.PLANNING_VIEW, PERMISSIONS.PLANNING_CREATE, PERMISSIONS.PLANNING_EDIT),
+  requireAnyPermission(
+    PERMISSIONS.PLANNING_VIEW,
+    PERMISSIONS.PLANNING_CREATE,
+    PERMISSIONS.PLANNING_EDIT,
+    PERMISSIONS.HARVEST_VIEW,
+    PERMISSIONS.HARVEST_CREATE,
+    PERMISSIONS.HARVEST_EDIT
+  ),
   ctrl.list
 );
 

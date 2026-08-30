@@ -56,6 +56,13 @@ router.get('/',
   ctrl.list
 );
 
+// Completar siembra y registrar estado productivo
+router.post('/:id/complete-sowing',
+  validate(schema.completeSowingSchema),
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  ctrl.completeSowing
+);
+
 // OBTENER una planificacion por ID
 router.get('/:id',
   validate(schema.idParam),

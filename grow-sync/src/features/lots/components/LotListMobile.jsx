@@ -11,7 +11,7 @@
  *  - Organización del código para separar responsabilidades de UI.
  */
 import React from 'react';
-import { Button, Popconfirm, Tooltip } from 'antd';
+import { Button, Popconfirm, Tag, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, AimOutlined, EnvironmentOutlined, FormOutlined } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -22,12 +22,15 @@ const canDisable = hasPermission(currentUser, PERMISSIONS.LOTS_DISABLE);
 
 const formatHa = (value) => {
     const n = Number(value);
-    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+    return Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '0,00';
 };
 
 const getActiveSubLots = (lot) => (
     Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
+
+const getUnitCropName = (unit) => unit?.current_crop?.crop_name || null;
+const formatCropCount = (count) => `${count} ${count === 1 ? 'cultivo' : 'cultivos'}`;
 
 const LotListMobile = ({
     lots,
@@ -37,12 +40,23 @@ const LotListMobile = ({
     onManageDivisions,
     rowKey,
     getId,
-    safeParse
+    safeParse,
+    productiveStates = {},
+    productiveStatesAvailable = true
 }) => {
     return (
         <div className="inventory-cards-container">
             {lots.map((lot) => {
                 const subLots = getActiveSubLots(lot);
+                const productiveState = productiveStates[getId(lot)];
+                const productiveUnits = Array.isArray(productiveState?.units) ? productiveState.units : [];
+                const currentUnits = productiveUnits.filter((unit) => unit.current_crop?.crop_name);
+                const unitBySubLotId = new Map(productiveUnits.map((unit) => [unit.sub_lot_id, unit]));
+                const cropNames = currentUnits.map(getUnitCropName).filter(Boolean);
+                const uniqueCrops = Array.from(new Set(cropNames));
+                const allSubLotsHaveSameCrop = subLots.length > 0
+                    && subLots.every((subLot) => getUnitCropName(unitBySubLotId.get(subLot.id)) === uniqueCrops[0])
+                    && uniqueCrops.length === 1;
 
                 return (
                 <div className="inventory-card" key={rowKey(lot)}>
@@ -102,6 +116,41 @@ const LotListMobile = ({
                             </ul>
                         </div>
                     ) : null}
+                    <div style={{ margin: '8px 0 10px', paddingLeft: 4 }}>
+                        <strong>Estado productivo</strong>
+                        {!productiveStatesAvailable ? (
+                            <div style={{ marginTop: 6, color: '#8c8c8c' }}>
+                                No disponible
+                            </div>
+                        ) : currentUnits.length ? (
+                            <div style={{ marginTop: 6 }}>
+                                {productiveState?.mode === 'sub_lots' ? (
+                                    <>
+                                        {allSubLotsHaveSameCrop ? (
+                                            <span>{uniqueCrops[0]}</span>
+                                        ) : (
+                                            <Tag color="green">{formatCropCount(uniqueCrops.length || currentUnits.length)}</Tag>
+                                        )}
+                                        {!allSubLotsHaveSameCrop && (
+                                            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                                                {subLots.map((subLot) => (
+                                                    <li key={subLot.id}>
+                                                        {getUnitCropName(unitBySubLotId.get(subLot.id)) || 'Sin cultivo'}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </>
+                                ) : (
+                                    <span>{currentUnits[0].current_crop.crop_name}</span>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ marginTop: 6, color: '#8c8c8c' }}>
+                                Sin cultivo
+                            </div>
+                        )}
+                    </div>
                     <p>
                         <EnvironmentOutlined style={{ marginRight: 8 }} /> <strong>Ubicación:</strong>{" "}
                         {safeParse(lot.location) ? (

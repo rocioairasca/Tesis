@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -10,6 +11,7 @@ import {
   Row,
   Select,
   Space,
+  Typography,
   notification
 } from 'antd';
 import dayjs from 'dayjs';
@@ -24,36 +26,120 @@ import { createHarvestRecord, updateHarvestRecord } from '../../services/harvest
 import { calculateYieldKgHa, formatNumber } from '../../utils/harvestUtils';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
-const { Option } = Select;
-const campaignRegex = /^\d{4}-\d{4}$/;
+const { Text } = Typography;
+
+const fullLotKey = (lotId) => `lot:${lotId}`;
+const subLotKey = (lotId, subLotId) => `sub:${lotId}:${subLotId}`;
 
 const initialItem = {
-  lot_id: undefined,
-  crop: '',
+  surface_key: undefined,
+  crop_id: undefined,
   harvested_area_ha: null,
   production_kg: null,
   notes: ''
 };
 
+const parseSurfaceKey = (key) => {
+  const [type, lotId, subLotId] = String(key || '').split(':');
+  if (type === 'lot' && lotId) return { lot_id: lotId, sub_lot_id: null };
+  if (type === 'sub' && lotId && subLotId) return { lot_id: lotId, sub_lot_id: subLotId };
+  return { lot_id: null, sub_lot_id: null };
+};
+
+const getActiveSubLots = (lot) => (
+  Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
+);
+
+const formatHa = (value) => `${Number(value || 0).toLocaleString('es-AR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})} ha`;
+
+const getCropName = (crop) => crop?.name || crop?.crop_name || crop?.crop || '';
+
 const HarvestForm = ({
   lots = [],
   loadingLots = false,
+  crops = [],
+  productiveStates = [],
+  loadingProductiveStates = false,
   initialRecord = null,
   onSuccess,
   onCancel
 }) => {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const isAppliedRecord = !!initialRecord?.closes_productive_cycle;
+
+  const productiveStateBySurface = useMemo(() => {
+    const map = new Map();
+    productiveStates.forEach((lotState) => {
+      (lotState.units || []).forEach((unit) => {
+        const key = unit.sub_lot_id
+          ? subLotKey(unit.lot_id, unit.sub_lot_id)
+          : fullLotKey(unit.lot_id);
+        map.set(key, unit);
+      });
+    });
+    return map;
+  }, [productiveStates]);
+
+  const surfaceOptions = useMemo(() => (
+    lots.map((lot) => {
+      const subLots = getActiveSubLots(lot);
+      const lotArea = lot.area_ha ?? lot.area;
+
+      if (!subLots.length) {
+        return {
+          value: fullLotKey(lot.id),
+          label: `${lot.name} · ${formatHa(lotArea)}`,
+          area_ha: lotArea,
+        };
+      }
+
+      return {
+        label: lot.name,
+        options: [
+          {
+            value: fullLotKey(lot.id),
+            label: `Lote completo · ${formatHa(lotArea)}`,
+            area_ha: lotArea,
+          },
+          ...subLots.map((subLot) => ({
+            value: subLotKey(lot.id, subLot.id),
+            label: `${subLot.name || subLot.code} · ${formatHa(subLot.area_ha)}`,
+            area_ha: subLot.area_ha,
+          })),
+        ],
+      };
+    })
+  ), [lots]);
+
+  const getSurfaceState = (surfaceKey) => productiveStateBySurface.get(surfaceKey) || null;
+
+  const syncCurrentCropForItem = (fieldName, surfaceKey) => {
+    const unit = getSurfaceState(surfaceKey);
+    const cropId = unit?.current_crop?.crop_id;
+    if (cropId) {
+      form.setFieldValue(['items', fieldName, 'crop_id'], cropId);
+    }
+  };
 
   useEffect(() => {
     if (initialRecord) {
+      const surfaceKey = initialRecord.sub_lot_id
+        ? subLotKey(initialRecord.lot_id, initialRecord.sub_lot_id)
+        : fullLotKey(initialRecord.lot_id);
+      const legacyCrop = crops.find((crop) => (
+        String(crop.name || '').trim().toLowerCase() === String(initialRecord.crop || '').trim().toLowerCase()
+      ));
+
       form.setFieldsValue({
         harvest_date: initialRecord.harvest_date ? dayjs(initialRecord.harvest_date) : dayjs(),
-        campaign: initialRecord.campaign || '',
         notes: initialRecord.notes || '',
         items: [{
-          lot_id: initialRecord.lot_id,
-          crop: initialRecord.crop || '',
+          surface_key: surfaceKey,
+          crop_id: initialRecord.crop_id || legacyCrop?.id,
           harvested_area_ha: initialRecord.harvested_area_ha,
           production_kg: initialRecord.production_kg,
           notes: initialRecord.notes || ''
@@ -64,17 +150,15 @@ const HarvestForm = ({
 
     form.setFieldsValue({
       harvest_date: dayjs(),
-      campaign: '',
       notes: '',
       items: [initialItem]
     });
-  }, [form, initialRecord]);
+  }, [crops, form, initialRecord]);
 
   const resetForm = () => {
     form.resetFields();
     form.setFieldsValue({
       harvest_date: dayjs(),
-      campaign: '',
       notes: '',
       items: [initialItem]
     });
@@ -84,15 +168,7 @@ const HarvestForm = ({
     try {
       setSubmitting(true);
 
-      const { harvest_date, campaign, notes, items } = values;
-
-      if (!campaignRegex.test(campaign)) {
-        notification.error({
-          message: 'Campaña inválida',
-          description: 'La campaña debe tener formato YYYY-YYYY'
-        });
-        return;
-      }
+      const { harvest_date, notes, items } = values;
 
       if (!items || items.length === 0) {
         notification.error({
@@ -104,10 +180,10 @@ const HarvestForm = ({
 
       if (initialRecord) {
         const item = items[0];
+        const surface = parseSurfaceKey(item.surface_key);
         await updateHarvestRecord(initialRecord.id, {
-          lot_id: item.lot_id,
-          crop: item.crop,
-          campaign,
+          ...surface,
+          crop_id: item.crop_id,
           harvest_date: dayjs(harvest_date).format('YYYY-MM-DD'),
           production_kg: item.production_kg,
           harvested_area_ha: item.harvested_area_ha,
@@ -115,10 +191,10 @@ const HarvestForm = ({
         });
       } else {
         for (const item of items) {
+          const surface = parseSurfaceKey(item.surface_key);
           await createHarvestRecord({
-            lot_id: item.lot_id,
-            crop: item.crop,
-            campaign,
+            ...surface,
+            crop_id: item.crop_id,
             harvest_date: dayjs(harvest_date).format('YYYY-MM-DD'),
             production_kg: item.production_kg,
             harvested_area_ha: item.harvested_area_ha,
@@ -151,34 +227,31 @@ const HarvestForm = ({
       layout="vertical"
       onFinish={handleSubmit}
     >
+      {isAppliedRecord ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Esta cosecha ya cerró un ciclo productivo. Podés corregir producción, superficie u observaciones; para cambiar lote, cultivo o fecha corregí primero el estado productivo."
+        />
+      ) : null}
+
       <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
+        <Col xs={24} md={12}>
           <Form.Item
             label="Fecha de cosecha"
             name="harvest_date"
             rules={[{ required: true, message: 'Seleccioná la fecha' }]}
           >
-            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            <DatePicker
+              style={{ width: '100%' }}
+              format="DD/MM/YYYY"
+              disabled={isAppliedRecord}
+            />
           </Form.Item>
         </Col>
 
-        <Col xs={24} md={8}>
-          <Form.Item
-            label="Campaña"
-            name="campaign"
-            rules={[
-              { required: true, message: 'Ingresá la campaña' },
-              {
-                pattern: campaignRegex,
-                message: 'Usá formato YYYY-YYYY, por ejemplo 2024-2025'
-              }
-            ]}
-          >
-            <Input placeholder="Ej: 2024-2025" />
-          </Form.Item>
-        </Col>
-
-        <Col xs={24} md={8}>
+        <Col xs={24} md={12}>
           <Form.Item label="Observaciones generales" name="notes">
             <Input placeholder="Opcional" />
           </Form.Item>
@@ -209,44 +282,87 @@ const HarvestForm = ({
                   }
                 >
                   <Row gutter={[16, 16]}>
-                    <Col xs={24} md={6}>
+                    <Col xs={24} md={8}>
                       <Form.Item
                         {...fieldProps}
-                        label="Lote"
-                        name={[field.name, 'lot_id']}
-                        rules={[{ required: true, message: 'Seleccioná un lote' }]}
+                        label="Lote o sublote"
+                        name={[field.name, 'surface_key']}
+                        rules={[{ required: true, message: 'Seleccioná una superficie' }]}
                       >
                         <Select
-                          placeholder="Seleccionar lote"
+                          placeholder="Seleccionar superficie"
                           loading={loadingLots}
                           showSearch
                           optionFilterProp="label"
-                        >
-                          {lots.map((lot) => (
-                            <Option
-                              key={lot.id}
-                              value={lot.id}
-                              label={lot.name}
-                            >
-                              {lot.name} ({lot.area} ha)
-                            </Option>
-                          ))}
-                        </Select>
+                          options={surfaceOptions}
+                          disabled={isAppliedRecord}
+                          onChange={(value) => syncCurrentCropForItem(field.name, value)}
+                        />
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={6}>
+                    <Col xs={24} md={8}>
                       <Form.Item
                         {...fieldProps}
                         label="Cultivo"
-                        name={[field.name, 'crop']}
-                        rules={[{ required: true, message: 'Ingresá el cultivo' }]}
+                        name={[field.name, 'crop_id']}
+                        rules={[{ required: true, message: 'Seleccioná el cultivo' }]}
                       >
-                        <Input placeholder="Ej: soja" />
+                        <Select
+                          placeholder="Seleccionar cultivo"
+                          showSearch
+                          optionFilterProp="label"
+                          disabled={isAppliedRecord}
+                          options={crops.map((crop) => ({
+                            value: crop.id,
+                            label: crop.name,
+                          }))}
+                        />
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={4}>
+                    <Col xs={24} md={8}>
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prev, current) => (
+                          prev?.items?.[field.name]?.surface_key !== current?.items?.[field.name]?.surface_key
+                          || prev?.items?.[field.name]?.crop_id !== current?.items?.[field.name]?.crop_id
+                        )}
+                      >
+                        {({ getFieldValue }) => {
+                          const item = getFieldValue(['items', field.name]) || {};
+                          const unit = getSurfaceState(item.surface_key);
+                          const currentCrop = unit?.current_crop;
+                          const selectedCrop = crops.find((crop) => crop.id === item.crop_id);
+                          const mismatch = currentCrop?.crop_id && item.crop_id && currentCrop.crop_id !== item.crop_id;
+
+                          if (!item.surface_key) {
+                            return <Text type="secondary">Seleccioná una superficie para ver su cultivo vigente.</Text>;
+                          }
+
+                          if (loadingProductiveStates) {
+                            return <Text type="secondary">Cargando estado productivo...</Text>;
+                          }
+
+                          if (!currentCrop) {
+                            return <Alert type="warning" showIcon message="No hay cultivo vigente en esta superficie." />;
+                          }
+
+                          return (
+                            <Alert
+                              type={mismatch ? 'warning' : 'success'}
+                              showIcon
+                              message={mismatch
+                                ? `Cultivo vigente: ${currentCrop.crop_name}. Seleccionaste ${getCropName(selectedCrop)}.`
+                                : `Cultivo vigente: ${currentCrop.crop_name}`}
+                              description={currentCrop.campaign_name ? `Campaña: ${currentCrop.campaign_name}` : null}
+                            />
+                          );
+                        }}
+                      </Form.Item>
+                    </Col>
+
+                    <Col xs={24} md={8}>
                       <Form.Item
                         {...fieldProps}
                         label="Superficie cosechada (ha)"
@@ -262,7 +378,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={4}>
+                    <Col xs={24} md={8}>
                       <Form.Item
                         {...fieldProps}
                         label="Producción (kg)"
@@ -278,7 +394,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={4}>
+                    <Col xs={24} md={8}>
                       <Form.Item label="Rendimiento">
                         <Form.Item
                           noStyle

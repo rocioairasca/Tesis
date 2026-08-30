@@ -24,6 +24,9 @@ const Harvest = () => {
 
   const [lots, setLots] = useState([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [crops, setCrops] = useState([]);
+  const [productiveStates, setProductiveStates] = useState([]);
+  const [loadingProductiveStates, setLoadingProductiveStates] = useState(false);
 
   const openDrawer = (record = null) => {
     setEditingRecord(record);
@@ -37,6 +40,7 @@ const Harvest = () => {
 
   const handleSuccess = () => {
     setRefreshKey((prev) => prev + 1);
+    fetchProductiveStates();
     closeDrawer();
   };
 
@@ -48,6 +52,7 @@ const Harvest = () => {
         params: {
           enabled: true,
           pageSize: 1000,
+          includeActiveLayout: true,
         },
       });
 
@@ -67,9 +72,40 @@ const Harvest = () => {
     }
   }, []);
 
+  const fetchCrops = useCallback(async () => {
+    try {
+      const { data } = await api.get("/crops");
+      setCrops(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch (error) {
+      console.error("→ crops list error:", error);
+      notification.error({
+        message: "No se pudieron cargar los cultivos",
+      });
+    }
+  }, []);
+
+  const fetchProductiveStates = useCallback(async () => {
+    setLoadingProductiveStates(true);
+
+    try {
+      const { data } = await api.get("/lots/productive-states");
+      setProductiveStates(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("→ productive states error:", error);
+      setProductiveStates([]);
+      notification.error({
+        message: "No se pudo cargar el estado productivo",
+      });
+    } finally {
+      setLoadingProductiveStates(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchLots();
-  }, [fetchLots]);
+    fetchCrops();
+    fetchProductiveStates();
+  }, [fetchLots, fetchCrops, fetchProductiveStates]);
 
   const disabledMenu = [
     canViewDisabled && {
@@ -135,6 +171,9 @@ const Harvest = () => {
         <HarvestForm
           lots={lots}
           loadingLots={loadingLots}
+          crops={crops}
+          productiveStates={productiveStates}
+          loadingProductiveStates={loadingProductiveStates}
           initialRecord={editingRecord}
           onSuccess={handleSuccess}
           onCancel={closeDrawer}

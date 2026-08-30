@@ -10,6 +10,7 @@ const assignmentSelect = `
   ca.start_date,
   ca.end_date,
   ca.area_ha,
+  ca.source_planning_id,
   ca.created_at,
   ca.updated_at,
   c.name AS campaign_name,
@@ -90,7 +91,7 @@ const resolveAssignmentTarget = async (
   );
 
   const row = rows[0];
-  const { allowClosedHistorical = false } = options;
+  const { allowClosedHistorical = false, allowHistoricalSubLot = false } = options;
   if (!row?.campaign_id) {
     const err = new Error('Campaña no encontrada');
     err.status = 400;
@@ -111,7 +112,7 @@ const resolveAssignmentTarget = async (
     err.status = 400;
     throw err;
   }
-  if (sub_lot_id && row.layout_status !== 'active') {
+  if (sub_lot_id && row.layout_status !== 'active' && !allowHistoricalSubLot) {
     const err = new Error('El sublote seleccionado ya no corresponde a la división vigente del lote.');
     err.status = 400;
     throw err;
@@ -264,7 +265,7 @@ const assertCropAvailable = async (client, cropId, companyId) => {
 exports.list = async (req, res, next) => {
   try {
     const { company_id } = req.user;
-    const { campaignId, lotId } = req.query;
+    const { campaignId, lotId, subLotId } = req.query;
     const params = [company_id];
     const where = ['ca.company_id = $1'];
 
@@ -275,6 +276,10 @@ exports.list = async (req, res, next) => {
     if (lotId) {
       params.push(lotId);
       where.push(`ca.lot_id = $${params.length}`);
+    }
+    if (subLotId) {
+      params.push(subLotId);
+      where.push(`ca.sub_lot_id = $${params.length}`);
     }
 
     const { rows } = await pool.query(
@@ -371,27 +376,23 @@ exports.update = async (req, res, next) => {
     }
 
     const current = currentRows[0];
-    const nextAssignment = {
-      campaign_id: current.campaign_id,
-      lot_id: current.lot_id,
-      sub_lot_id: current.sub_lot_id || null,
+    const requested = {
+      campaign_id: req.body.campaign_id ?? current.campaign_id,
+      lot_id: req.body.lot_id ?? current.lot_id,
+      sub_lot_id: req.body.sub_lot_id !== undefined ? req.body.sub_lot_id : current.sub_lot_id,
       crop_id: req.body.crop_id ?? current.crop_id,
-      start_date: req.body.start_date ?? current.start_date,
-      end_date: req.body.end_date !== undefined ? req.body.end_date : current.end_date,
-      area_ha: current.area_ha,
+      start_date: req.body.start_date ?? toDateKey(current.start_date),
+      end_date: req.body.end_date !== undefined ? req.body.end_date : toDateKey(current.end_date),
     };
 
-    if (req.body.crop_id !== undefined) {
-      await assertCropAvailable(client, req.body.crop_id, company_id);
-    }
-    await assertCampaignAllowsDates(
-      client,
-      nextAssignment.campaign_id,
-      company_id,
-      nextAssignment.start_date,
-      nextAssignment.end_date,
-      allowClosedHistorical
-    );
+    const changedSurface =
+      requested.lot_id !== current.lot_id
+      || (requested.sub_lot_id || null) !== (current.sub_lot_id || null);
+
+    const nextAssignment = await resolveAssignmentTarget(client, requested, company_id, {
+      allowClosedHistorical,
+      allowHistoricalSubLot: !changedSurface,
+    });
     await validateTemporalSurfaceConflict(client, nextAssignment, company_id, id);
 
     const sets = [];
@@ -401,9 +402,13 @@ exports.update = async (req, res, next) => {
       sets.push(`${column} = $${params.length}`);
     };
 
-    if (req.body.crop_id !== undefined) push(req.body.crop_id, 'crop_id');
-    if (req.body.start_date !== undefined) push(req.body.start_date, 'start_date');
-    if (req.body.end_date !== undefined) push(req.body.end_date, 'end_date');
+    if (req.body.campaign_id !== undefined) push(nextAssignment.campaign_id, 'campaign_id');
+    if (req.body.lot_id !== undefined) push(nextAssignment.lot_id, 'lot_id');
+    if (req.body.sub_lot_id !== undefined) push(nextAssignment.sub_lot_id, 'sub_lot_id');
+    if (req.body.crop_id !== undefined) push(nextAssignment.crop_id, 'crop_id');
+    if (req.body.start_date !== undefined) push(nextAssignment.start_date, 'start_date');
+    if (req.body.end_date !== undefined) push(nextAssignment.end_date, 'end_date');
+    if (changedSurface) push(nextAssignment.area_ha, 'area_ha');
 
     if (!sets.length) {
       await client.query('ROLLBACK');
