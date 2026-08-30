@@ -38,7 +38,8 @@ const formatPeriod = (row) => {
         ? start.format("DD/MM/YYYY")
         : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
 };
-const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }) => {
+const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
+    const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
     const status = record?.status;
     const items = [];
 
@@ -48,19 +49,21 @@ const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }) => {
         }
     };
 
-    if (canEdit) {
+    if (canEdit && includeTransitions) {
         if (status === "planificado" || status === "pendiente") {
-            addStatusAction("progress", "Marcar en progreso", "en_progreso");
-            addStatusAction("done", "Marcar completada", "completado");
+            addStatusAction("progress", "Iniciar trabajo", "en_progreso");
+            addStatusAction("done", "Completar trabajo", "completado");
         } else if (status === "en_progreso") {
-            addStatusAction("done", "Marcar completada", "completado");
+            addStatusAction("done", "Completar trabajo", "completado");
             addStatusAction("pending", "Volver a pendiente", "pendiente");
-        } else if (status === "completado") {
-            addStatusAction("reopen", "Reabrir planificación", "pendiente");
         }
     }
 
-    if (canEdit && canDisable && status !== "completado" && status !== "cancelado") {
+    if (canEdit && includeReopen && status === "completado") {
+        addStatusAction("reopen", "Reabrir planificación", "pendiente");
+    }
+
+    if (includeCancel && canEdit && canDisable && status !== "completado" && status !== "cancelado") {
         if (items.length) items.push({ type: "divider" });
         items.push({
             key: "cancel",
@@ -90,22 +93,67 @@ const PlanningTable = ({
     rowKey,
     userIx,
     cropIx,
-    statusTag
+    statusTag,
+    statusActionLoading,
+    getPrimaryStatusAction,
 }) => {
+    const renderStatusControl = (record) => {
+        const effectiveStatus = record.status_effective || record.status;
+        const dropdownItems = buildStatusMenuItems(
+            record,
+            { onUpdateStatus, onCancel },
+            { includeReopen: false, includeCancel: false }
+        ).filter(item => item.type === "divider" || item.key !== getPrimaryStatusAction?.(record)?.key);
+        const primaryAction = getPrimaryStatusAction?.(record);
+        const loading = primaryAction && statusActionLoading === `${record.id || record._id}:${primaryAction.status}`;
+        const disabled = Boolean(statusActionLoading);
+        const tag = statusTag(effectiveStatus);
+
+        return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                {dropdownItems.length ? (
+                    <Dropdown menu={{ items: dropdownItems }} trigger={["click"]} placement="bottomLeft">
+                        <button
+                            type="button"
+                            aria-label={`Cambiar estado ${effectiveStatus}`}
+                            style={{ border: 0, background: "transparent", padding: 0, cursor: "pointer", whiteSpace: "nowrap" }}
+                        >
+                            {tag} <span style={{ color: "#6b7280" }}>▾</span>
+                        </button>
+                    </Dropdown>
+                ) : tag}
+                {primaryAction && (
+                    <Button
+                        size="small"
+                        type="default"
+                        onClick={() => onUpdateStatus(record, primaryAction.status)}
+                        loading={loading}
+                        disabled={disabled}
+                    >
+                        {primaryAction.ctaLabel || primaryAction.label}
+                    </Button>
+                )}
+            </div>
+        );
+    };
 
     const columns = [
         {
             title: "Cultivo",
             dataIndex: "crop_name",
-            render: (_, row) => <strong>{getCropDisplayName(row, cropIx)}</strong>,
+            render: (_, row) => (
+                <Tooltip title={getCropDisplayName(row, cropIx)}>
+                    <strong>{getCropDisplayName(row, cropIx)}</strong>
+                </Tooltip>
+            ),
             ellipsis: true,
-            width: 170,
+            width: 115,
         },
         {
             title: "Actividad",
             dataIndex: "activity_type",
             render: (t) => <Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>,
-            width: 130,
+            width: 125,
         },
         {
             title: "Lote/Sublote",
@@ -117,24 +165,25 @@ const PlanningTable = ({
                     : summary.text;
             },
             ellipsis: true,
+            width: 155,
         },
         {
             title: "Período",
             key: "period",
             render: (_, r) => formatPeriod(r),
-            width: 150,
+            width: 145,
         },
         {
             title: "Estado",
             dataIndex: "status",
-            render: (_, row) => statusTag(row.status_effective || row.status),
-            width: 120,
+            render: (_, row) => renderStatusControl(row),
+            width: 210,
         },
         {
             title: "Superficie",
             key: "planned_area_ha",
             render: (_, r) => formatHa(getPlanningArea(r)),
-            width: 110,
+            width: 105,
         },
         {
             title: "Responsable",
@@ -148,17 +197,21 @@ const PlanningTable = ({
             dataIndex: "campaign_name",
             render: (value) => value || "—",
             responsive: ["lg"],
-            width: 110,
+            width: 95,
         },
         {
             title: "Acciones",
             key: "actions",
-            width: 118,
-            align: "right",
+            width: 110,
+            align: "center",
             render: (_, record) => {
-                const menuItems = buildStatusMenuItems(record, { onUpdateStatus, onCancel });
+                const menuItems = buildStatusMenuItems(
+                    record,
+                    { onUpdateStatus, onCancel },
+                    { includeTransitions: false, includeReopen: true, includeCancel: true }
+                );
                 return (
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 2, minWidth: 104, whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, minWidth: 96, whiteSpace: "nowrap" }}>
                         <Tooltip title="Ver detalle">
                             <Button size="small" type="text" shape="circle" icon={<EyeOutlined />} onClick={() => onView(record)} />
                         </Tooltip>

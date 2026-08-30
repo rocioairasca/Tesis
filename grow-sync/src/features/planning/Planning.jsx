@@ -70,6 +70,11 @@ const getEffectiveSowingDate = (row) => {
   const source = row?.end_at || row?.start_at;
   return source ? dayjs(source) : dayjs();
 };
+const getEffectiveWorkDate = getEffectiveSowingDate;
+const parseDecimalInput = (value) => {
+  if (typeof value === "string") return Number(value.replace(",", "."));
+  return Number(value);
+};
 const formatDate = (value) => {
   if (!value) return "—";
   return dayjs(value).format("DD/MM/YYYY");
@@ -115,6 +120,7 @@ const ACTIVITY_OPTIONS = [
   { value: "otro", label: "Otro" },
 ];
 const ACTIVITIES_REQUIRING_CROP = new Set(["siembra", "fumigacion", "fertilizacion", "cosecha"]);
+const PRODUCT_CONSUMING_ACTIVITIES = new Set(["siembra", "fumigacion", "fertilizacion"]);
 const ADD_CROP_VALUE = "__add_crop__";
 const MAX_CALENDAR_LANES = 3;
 const MONTH_NAMES = [
@@ -215,6 +221,7 @@ const Planning = () => {
   const [cropForm] = Form.useForm();
   const [campaignForm] = Form.useForm();
   const [sowingForm] = Form.useForm();
+  const [completionForm] = Form.useForm();
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedDateRange = Form.useWatch("date_range", form);
@@ -225,6 +232,9 @@ const Planning = () => {
   const [savingCrop, setSavingCrop] = useState(false);
   const [sowingCompletion, setSowingCompletion] = useState({ open: false, planning: null });
   const [completingSowing, setCompletingSowing] = useState(false);
+  const [workCompletion, setWorkCompletion] = useState({ open: false, planning: null });
+  const [completingWork, setCompletingWork] = useState(false);
+  const [statusActionLoading, setStatusActionLoading] = useState(null);
 
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -248,6 +258,119 @@ const Planning = () => {
       return sum + Number(subLot?.area_ha || 0);
     }, 0);
   }, [lots, selectedLotKeys]);
+
+  const getCatalogProduct = useCallback((planningProduct) => (
+    products.find(product => (product.id ?? product._id) === planningProduct?.product_id)
+  ), [products]);
+
+  const getPlanningProductUnit = useCallback((planningProduct) => (
+    planningProduct?.unit || getCatalogProduct(planningProduct)?.unit || ""
+  ), [getCatalogProduct]);
+
+  const getPlanningProductAvailable = useCallback((planningProduct) => {
+    const directValue = planningProduct?.available_quantity;
+    if (directValue !== undefined && directValue !== null) return Number(directValue || 0);
+    return Number(getCatalogProduct(planningProduct)?.available_quantity || 0);
+  }, [getCatalogProduct]);
+
+  const buildActualProductFields = useCallback((planning) => {
+    const values = {};
+    (planning?.products || []).forEach((product) => {
+      if (!product.id) return;
+      values[product.id] = { actual_amount: Number(product.amount || 0) };
+    });
+    return values;
+  }, []);
+
+  const buildActualProductsPayload = useCallback((planning, values) => (
+    (planning?.products || [])
+      .filter(product => product.id)
+      .map(product => ({
+        planning_product_id: product.id,
+        actual_amount: parseDecimalInput(
+          values?.actual_products?.[product.id]?.actual_amount ?? product.amount ?? 0
+        ),
+      }))
+  ), []);
+
+  const renderActualProductsForm = useCallback((planning) => {
+    const plannedProducts = (planning?.products || []).filter(product => product.id);
+    if (!plannedProducts.length) {
+      return (
+        <Alert
+          type="info"
+          showIcon
+          message="Esta planificación no tiene productos asociados."
+        />
+      );
+    }
+
+    return (
+      <Space direction="vertical" size={10} style={{ width: "100%" }}>
+        {plannedProducts.map((product) => {
+          const productId = product.id;
+          const plannedAmount = Number(product.amount || 0);
+          const unit = getPlanningProductUnit(product);
+          const available = getPlanningProductAvailable(product);
+          const title = product.name || prodIx[product.product_id] || "Producto";
+
+          return (
+            <div
+              key={productId || product.product_id}
+              style={{
+                border: "1px solid #edf1e8",
+                borderRadius: 8,
+                padding: 12,
+                background: "#fbfcf8",
+              }}
+            >
+              <Row gutter={[12, 8]} align="middle">
+                <Col xs={24} md={10}>
+                  <strong>{title}</strong>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>
+                    Planificado: {plannedAmount.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {unit || ""}
+                  </div>
+                </Col>
+                <Col xs={24} md={7}>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>Stock disponible</div>
+                  <strong>{available.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {unit || ""}</strong>
+                </Col>
+                <Col xs={24} md={7}>
+                  <Form.Item
+                    name={["actual_products", productId, "actual_amount"]}
+                    label="Cantidad real"
+                    style={{ marginBottom: 0 }}
+                    rules={[
+                      { required: true, message: "Ingresá la cantidad real." },
+                      {
+                        validator: (_, value) => {
+                          const amount = parseDecimalInput(value);
+                          if (!Number.isFinite(amount) || amount < 0) {
+                            return Promise.reject(new Error("Ingresá una cantidad válida."));
+                          }
+                          if (amount > available) {
+                            return Promise.reject(new Error("No hay stock suficiente."));
+                          }
+                          return Promise.resolve();
+                        },
+                      },
+                    ]}
+                  >
+                    <InputNumber
+                      min={0}
+                      decimalSeparator=","
+                      style={{ width: "100%" }}
+                      addonAfter={unit || undefined}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </div>
+          );
+        })}
+      </Space>
+    );
+  }, [getPlanningProductAvailable, getPlanningProductUnit, prodIx]);
 
   const lotSelectionOptions = useMemo(() => {
     const selectedByLot = selectedLotKeys.reduce((acc, key) => {
@@ -928,13 +1051,19 @@ const Planning = () => {
   };
 
   const handleCancel = async (row) => {
+    if (statusActionLoading) return;
+
+    const actionKey = `${getId(row)}:cancel`;
     try {
+      setStatusActionLoading(actionKey);
       await api.delete(`/planning/${getId(row)}`); // soft delete -> status cancelado
       notification.success({ message: "Planificación cancelada" });
       fetchPlanning();
     } catch (e) {
       console.error("→ cancel planning error:", e);
       notification.error({ message: getUserFriendlyError(e, "No se pudo cancelar la planificación.") });
+    } finally {
+      setStatusActionLoading(null);
     }
   };
 
@@ -942,6 +1071,7 @@ const Planning = () => {
     setSowingCompletion({ open: true, planning: row });
     sowingForm.setFieldsValue({
       effective_date: getEffectiveSowingDate(row),
+      actual_products: buildActualProductFields(row),
     });
   };
 
@@ -958,11 +1088,14 @@ const Planning = () => {
     try {
       const { data } = await api.post(`/planning/${getId(planning)}/complete-sowing`, {
         effective_date: values.effective_date.format("YYYY-MM-DD"),
+        actual_products: buildActualProductsPayload(planning, values),
       });
       notification.success({
-        message: data?.already_applied
-          ? "Esta siembra ya fue registrada en el estado productivo."
-          : "La siembra fue completada y el cultivo quedó registrado.",
+        message: data?.message || (
+          data?.already_applied
+            ? "Esta siembra ya fue registrada en el estado productivo."
+            : "La siembra fue completada y el cultivo quedó registrado."
+        ),
       });
       closeCompleteSowingModal();
       closeCalendarSelection();
@@ -976,17 +1109,65 @@ const Planning = () => {
     }
   };
 
+  const openCompleteWorkModal = (row) => {
+    setWorkCompletion({ open: true, planning: row });
+    completionForm.setFieldsValue({
+      effective_date: getEffectiveWorkDate(row),
+      actual_products: buildActualProductFields(row),
+    });
+  };
+
+  const closeCompleteWorkModal = () => {
+    setWorkCompletion({ open: false, planning: null });
+    completionForm.resetFields();
+  };
+
+  const confirmCompleteWork = async (values) => {
+    const planning = workCompletion.planning;
+    if (!planning) return;
+
+    setCompletingWork(true);
+    try {
+      const { data } = await api.post(`/planning/${getId(planning)}/complete-work`, {
+        effective_date: values.effective_date.format("YYYY-MM-DD"),
+        actual_products: buildActualProductsPayload(planning, values),
+      });
+      notification.success({
+        message: data?.message || "El trabajo fue completado y los productos utilizados quedaron registrados.",
+      });
+      closeCompleteWorkModal();
+      closeCalendarSelection();
+      fetchPlanning();
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo completar la planificación."),
+      });
+    } finally {
+      setCompletingWork(false);
+    }
+  };
+
   const updateStatus = async (row, status) => {
-    if (status === "completado" && row?.activity_type === "siembra") {
-      openCompleteSowingModal(row);
+    if (statusActionLoading) return;
+
+    if (status === "completado" && PRODUCT_CONSUMING_ACTIVITIES.has(row?.activity_type)) {
+      if (row?.activity_type === "siembra") {
+        openCompleteSowingModal(row);
+        return;
+      }
+      openCompleteWorkModal(row);
       return;
     }
 
+    const actionKey = `${getId(row)}:${status}`;
     try {
+      setStatusActionLoading(actionKey);
       await api.patch(`/planning/${getId(row)}`, { status });
       fetchPlanning();
     } catch (e) {
       notification.error({ message: getUserFriendlyError(e, "No se pudo actualizar el estado.") });
+    } finally {
+      setStatusActionLoading(null);
     }
   };
 
@@ -1000,14 +1181,14 @@ const Planning = () => {
 
     if (status === "planificado" || status === "pendiente") {
       return [
-        { key: "progress", label: "Marcar en progreso", status: "en_progreso" },
-        { key: "done", label: "Marcar completada", status: "completado" },
+        { key: "progress", label: "Iniciar trabajo", ctaLabel: "Iniciar", status: "en_progreso" },
+        { key: "done", label: "Completar trabajo", ctaLabel: "Completar", status: "completado" },
       ];
     }
 
     if (status === "en_progreso") {
       return [
-        { key: "done", label: "Marcar completada", status: "completado" },
+        { key: "done", label: "Completar trabajo", ctaLabel: "Completar", status: "completado" },
         { key: "pending", label: "Volver a pendiente", status: "pendiente" },
       ];
     }
@@ -1019,6 +1200,18 @@ const Planning = () => {
     }
 
     return [];
+  };
+
+  const getPrimaryStatusAction = (item) => {
+    const status = item?.status;
+    if (!canEdit) return null;
+    if (status === "planificado" || status === "pendiente") {
+      return { key: "progress", label: "Iniciar trabajo", ctaLabel: "Iniciar", status: "en_progreso" };
+    }
+    if (status === "en_progreso") {
+      return { key: "done", label: "Completar trabajo", ctaLabel: "Completar", status: "completado" };
+    }
+    return null;
   };
 
   const getMonthlyMenuItems = (item, secondaryActions) => [
@@ -1058,7 +1251,8 @@ const Planning = () => {
       ? `${lotSummary.text} · ${formatHa(getPlanningArea(item))}`
       : null;
     const transitionActions = getStatusTransitionActions(item);
-    const [primaryTransition, ...secondaryTransitions] = transitionActions;
+    const primaryTransition = getPrimaryStatusAction(item);
+    const secondaryTransitions = transitionActions.filter(action => action.key !== primaryTransition?.key);
     const menuItems = getMonthlyMenuItems(item, secondaryTransitions);
     const activityStyle = ACTIVITY_EVENT_STYLES[item.activity_type] || ACTIVITY_EVENT_STYLES.otro;
 
@@ -1116,8 +1310,10 @@ const Planning = () => {
                 closeCalendarSelection();
                 updateStatus(item, primaryTransition.status);
               }}
+              loading={statusActionLoading === `${getId(item)}:${primaryTransition.status}`}
+              disabled={Boolean(statusActionLoading)}
             >
-              {primaryTransition.label}
+              {primaryTransition.ctaLabel || primaryTransition.label}
             </Button>
           )}
 
@@ -1296,6 +1492,8 @@ const Planning = () => {
           userIx={userIx}
           cropIx={cropIx}
           statusTag={statusTag}
+          statusActionLoading={statusActionLoading}
+          getPrimaryStatusAction={getPrimaryStatusAction}
         />
       )}
 
@@ -1330,6 +1528,8 @@ const Planning = () => {
           userIx={userIx}
           cropIx={cropIx}
           statusTag={statusTag}
+          statusActionLoading={statusActionLoading}
+          getPrimaryStatusAction={getPrimaryStatusAction}
         />
       )}
 
@@ -1604,6 +1804,17 @@ const Planning = () => {
               </Descriptions.Item>
             </Descriptions>
 
+            {getPrimaryStatusAction(viewing) && (
+              <Button
+                type="primary"
+                loading={statusActionLoading === `${getId(viewing)}:${getPrimaryStatusAction(viewing).status}`}
+                disabled={Boolean(statusActionLoading)}
+                onClick={() => updateStatus(viewing, getPrimaryStatusAction(viewing).status)}
+              >
+                {getPrimaryStatusAction(viewing).label}
+              </Button>
+            )}
+
             <div>
               <h4>Ubicación</h4>
               <List
@@ -1734,6 +1945,84 @@ const Planning = () => {
                 ]}
               >
                 <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              </Form.Item>
+
+              <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
+                {renderActualProductsForm(sowingCompletion.planning)}
+              </Form.Item>
+            </Form>
+          </Space>
+        )}
+      </Modal>
+
+      <Modal
+        title={`Completar ${formatActivity(workCompletion.planning?.activity_type || "")}`}
+        open={workCompletion.open}
+        onCancel={closeCompleteWorkModal}
+        onOk={() => completionForm.submit()}
+        okText="Confirmar trabajo"
+        cancelText="Cancelar"
+        confirmLoading={completingWork}
+        destroyOnClose
+      >
+        {workCompletion.planning && (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Alert
+              type="info"
+              showIcon
+              message="Confirmá la fecha real del trabajo y las cantidades efectivamente utilizadas."
+            />
+
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="Planificación">
+                {getPlanningDisplayName(workCompletion.planning, cropIx)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Campaña">
+                {workCompletion.planning.campaign_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Superficie total">
+                {formatHa(getPlanningArea(workCompletion.planning))}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <strong>Ubicación</strong>
+              <List
+                size="small"
+                dataSource={workCompletion.planning.lots || []}
+                renderItem={(item) => (
+                  <List.Item>
+                    {getPlanningLotName(item)}
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                  </List.Item>
+                )}
+                locale={{ emptyText: "Sin lotes asignados" }}
+              />
+            </div>
+
+            <Form form={completionForm} layout="vertical" onFinish={confirmCompleteWork}>
+              <Form.Item
+                name="effective_date"
+                label="Fecha efectiva del trabajo"
+                rules={[
+                  { required: true, message: "Seleccioná la fecha efectiva del trabajo." },
+                  {
+                    validator: (_, value) => {
+                      const campaign = campaigns.find((item) => (item.id ?? item._id) === workCompletion.planning?.campaign_id);
+                      const dateKey = value?.format("YYYY-MM-DD");
+                      if (!dateKey || !campaign) return Promise.resolve();
+                      return campaignContainsDate(campaign, dayjs(dateKey))
+                        ? Promise.resolve()
+                        : Promise.reject(new Error("La fecha del trabajo no corresponde a la campaña seleccionada."));
+                    },
+                  },
+                ]}
+              >
+                <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              </Form.Item>
+
+              <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
+                {renderActualProductsForm(workCompletion.planning)}
               </Form.Item>
             </Form>
           </Space>

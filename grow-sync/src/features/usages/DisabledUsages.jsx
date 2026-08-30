@@ -17,6 +17,10 @@ const parseLotIds = (lot_ids) => {
   if (Array.isArray(lot_ids)) return lot_ids;
   try { return JSON.parse(lot_ids); } catch { return []; }
 };
+const formatArea = (value) => value == null
+  ? "-"
+  : `${Number(value || 0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ha`;
+const formatQuantity = (value, unit) => `${Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })} ${unit || ""}`.trim();
 
 const DisabledUsages = () => {
   const [usages, setUsages] = useState([]);
@@ -84,24 +88,26 @@ const DisabledUsages = () => {
   // helpers UI
   const productName = (id) => products.find((p) => p.id === id)?.name || "-";
   const lotNames = (usage) => {
+    if (Array.isArray(usage?.lot_names) && usage.lot_names.length) return usage.lot_names.join(", ");
     // preferimos usage_lots -> lot_id -> nombre; si no, parseamos lot_ids
     if (Array.isArray(usage?.usage_lots) && usage.usage_lots.length) {
       return usage.usage_lots
-        .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
+        .map((usageLot) => (
+          usageLot?.sub_lot?.name
+          || usageLot?.sub_lot_name
+          || usageLot?.lot?.name
+          || lots.find((x) => x.id === usageLot.lot_id)?.name
+          || usageLot.lot_id
+        ))
+        .filter(Boolean)
         .join(", ");
     }
     const ids = parseLotIds(usage?.lot_ids);
     return ids.map((id) => lots.find((x) => x.id === id)?.name || id).join(", ");
   };
+  const isPlanningUsage = (usage) => Boolean(usage?.source_planning_id);
 
   const columns = [
-    {
-      title: "#",
-      dataIndex: "index",
-      key: "index",
-      width: 64,
-      render: (_, __, index) => index + 1,
-    },
     {
       title: "Producto",
       dataIndex: "product_id",
@@ -112,10 +118,10 @@ const DisabledUsages = () => {
       title: "Cantidad",
       dataIndex: "amount_used",
       key: "amount_used",
-      render: (v, record) => `${v} ${record.unit}`,
+      render: (v, record) => formatQuantity(v, record.unit),
     },
     {
-      title: "Lotes",
+      title: "Lotes / Sublotes",
       key: "lot_ids",
       render: (_, record) => lotNames(record) || "-",
     },
@@ -123,7 +129,7 @@ const DisabledUsages = () => {
       title: "Área Total (ha)",
       dataIndex: "total_area",
       key: "total_area",
-      render: (v) => (v != null ? `${v} ha` : "-"),
+      render: (v) => formatArea(v),
     },
     {
       title: "Fecha",
@@ -135,7 +141,7 @@ const DisabledUsages = () => {
       title: "Acciones",
       key: "actions",
       width: 72,
-      render: (_, record) => (
+      render: (_, record) => isPlanningUsage(record) ? "-" : (
         <Tooltip title="Habilitar">
           <Button
             type="text"
@@ -195,21 +201,21 @@ const DisabledUsages = () => {
 
                 <p className="flex-row">
                   <Package size={18} style={{ marginRight: 8 }} /> <strong>Cantidad:</strong>{" "}
-                  {usage.amount_used} {usage.unit}
+                  {formatQuantity(usage.amount_used, usage.unit)}
                 </p>
                 <p className="flex-row">
-                  <MapPin size={18} style={{ marginRight: 8 }} /> <strong>Lotes:</strong>{" "}
+                  <MapPin size={18} style={{ marginRight: 8 }} /> <strong>Lotes / Sublotes:</strong>{" "}
                   {lotNames(usage) || "-"}
                 </p>
                 <p className="flex-row">
                   <Ruler size={18} style={{ marginRight: 8 }} /> <strong>Área Total:</strong>{" "}
-                  {usage.total_area} ha
+                  {formatArea(usage.total_area)}
                 </p>
                 <p>
                   <CalendarOutlined style={{ marginRight: 8 }} /> <strong>Fecha:</strong> {date}
                 </p>
 
-                {canEnable && <div style={{ marginTop: 12 }}>
+                {canEnable && !isPlanningUsage(usage) && <div style={{ marginTop: 12 }}>
                   <Button type="primary" block onClick={() => handleEnable(getId(usage))}>
                     Habilitar Registro
                   </Button>

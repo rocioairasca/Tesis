@@ -63,6 +63,13 @@ router.post('/:id/complete-sowing',
   ctrl.completeSowing
 );
 
+// Completar trabajo con consumos reales de productos
+router.post('/:id/complete-work',
+  validate(schema.completeWorkSchema),
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  ctrl.completeWork
+);
+
 // OBTENER una planificacion por ID
 router.get('/:id',
   validate(schema.idParam),

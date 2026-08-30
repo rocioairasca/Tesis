@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
-  Dropdown, Space, Popconfirm, Row, Col, notification, Tooltip
+  Dropdown, Space, Popconfirm, Row, Col, notification, Tooltip, Descriptions, List, Tag
 } from "antd";
 import {
-  PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined,
+  PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, EyeOutlined,
 } from '../../components/AppIcons';
 import {
-  Package, MapPin, Ruler, Leaf, User as UserIcon, Calendar as CalendarIcon,
+  Package, MapPin, Ruler, Leaf, Calendar as CalendarIcon,
 } from '../../components/AppIcons';
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -15,16 +15,19 @@ import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
+import LotMapPreview from "../planning/components/LotMapPreview";
+import { formatActivity } from "../planning/planningDisplay";
 
 const Usage = () => {
   const [usages, setUsages] = useState([]);
-  const [userIndex, setUserIndex] = useState({});
   const [products, setProducts] = useState([]);
   const [lots, setLots] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingUsage, setEditingUsage] = useState(null);
+  const [viewingUsage, setViewingUsage] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
   const [form] = Form.useForm();
@@ -38,6 +41,70 @@ const Usage = () => {
 
   const getId = (r) => r?.id ?? r?._id;
   const rowKey = (r) => getId(r) ?? `${r?.product_id}-${r?.date}`;
+  const formatArea = (value) => value == null
+    ? "-"
+    : `${Number(value || 0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ha`;
+  const formatQuantity = (value, unit) => `${Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })} ${unit || ""}`.trim();
+  const productName = (usage) => usage?.products?.name || products.find((p) => p.id === usage?.product_id)?.name || "Producto";
+  const lotNames = (usage) => {
+    if (Array.isArray(usage?.lot_names) && usage.lot_names.length) return usage.lot_names.join(", ");
+    if (Array.isArray(usage?.usage_lots) && usage.usage_lots.length) {
+      return usage.usage_lots
+        .map((usageLot) => (
+          usageLot?.sub_lot?.name
+          || usageLot?.sub_lot_name
+          || usageLot?.lot?.name
+          || lots.find((x) => x.id === usageLot.lot_id)?.name
+          || usageLot.lot_id
+        ))
+        .filter(Boolean)
+        .join(", ");
+    }
+    return "-";
+  };
+  const registeredBy = (usage) => (
+    usage?.user?.full_name
+    || usage?.user?.email
+    || "-"
+  );
+  const usageOrigin = (usage) => usage?.origin || (usage?.source_planning_id ? "Planificación" : "Registro manual");
+  const isPlanningUsage = (usage) => Boolean(usage?.source_planning_id);
+  const hasDetailValue = (value) => value !== undefined && value !== null && value !== "" && value !== "—" && value !== "-";
+  const normalizeGeometry = (value) => {
+    if (!value) return null;
+    let parsed = value;
+    if (typeof value === "string") {
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+    const geometry = parsed?.type === "Feature" ? parsed.geometry : parsed;
+    return ["Polygon", "MultiPolygon"].includes(geometry?.type) ? geometry : null;
+  };
+  const getUsageMapSelections = (usage) => (
+    Array.isArray(usage?.usage_surfaces) && usage.usage_surfaces.length
+      ? usage.usage_surfaces.map((surface) => ({
+          lot_id: surface.lot_id,
+          sub_lot_id: surface.sub_lot_id || null,
+          lot_name: surface.lot_name,
+          sub_lot_name: surface.sub_lot_name,
+          lot_geom: surface.sub_lot_id
+            ? normalizeGeometry(surface.parent_geometry)
+            : normalizeGeometry(surface.geometry),
+          sub_lot_geom: surface.sub_lot_id ? normalizeGeometry(surface.geometry) : null,
+        }))
+      : (usage?.usage_lots || []).map((usageLot) => ({
+          lot_id: usageLot.lot_id,
+          sub_lot_id: usageLot.sub_lot_id || null,
+          lot_name: usageLot?.lot?.name,
+          sub_lot_name: usageLot?.sub_lot?.name,
+          lot_geom: normalizeGeometry(usageLot?.lot?.geom),
+          lot_location: usageLot?.lot?.location,
+          sub_lot_geom: normalizeGeometry(usageLot?.sub_lot?.geom),
+        }))
+  );
 
   // ---------- fetchers ----------
   const fetchUsages = useCallback(async () => {
@@ -51,22 +118,6 @@ const Usage = () => {
       notification.error({ message: "Error al cargar registros de uso" });
     } finally {
       setLoading(false);
-    }
-  }, []);
-
-  const fetchUsersIndex = useCallback(async () => {
-    try {
-      const { data } = await api.get("/users");
-      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
-      const idx = {};
-      list.forEach((u) => {
-        const id = u.id ?? u._id;
-        idx[id] = u.full_name || u.nickname || u.username || u.email || String(id);
-      });
-      setUserIndex(idx);
-    } catch (error) {
-      console.error("→ users index error:", error);
-      // opcional: notification.warning({ message: "No se pudo cargar el índice de usuarios" });
     }
   }, []);
 
@@ -94,8 +145,7 @@ const Usage = () => {
     fetchUsages();
     fetchProducts();
     fetchLots();
-    fetchUsersIndex();
-  }, [fetchUsages, fetchProducts, fetchLots, fetchUsersIndex]);
+  }, [fetchUsages, fetchProducts, fetchLots]);
 
   // Si estamos editando y los productos se cargaron después, sincroniza selectedProduct
   useEffect(() => {
@@ -134,6 +184,16 @@ const Usage = () => {
     setIsDrawerOpen(false);
     setEditingUsage(null);
     form.resetFields();
+  };
+
+  const openDetail = (usage) => {
+    setViewingUsage(usage);
+    setIsDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setViewingUsage(null);
   };
 
   const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -201,53 +261,34 @@ const Usage = () => {
   // ---------- table ----------
   const columns = [
     {
-      title: "#",
-      dataIndex: "index",
-      key: "index",
-      width: 64,
-      render: (_, __, index) => index + 1,
-    },
-    {
       title: "Producto",
       dataIndex: "product_id",
       key: "product_id",
-      render: (id) => products.find((p) => p.id === id)?.name || "-",
+      render: (_, record) => productName(record),
     },
     {
       title: "Cantidad",
       dataIndex: "amount_used",
       key: "amount_used",
-      render: (value, record) => `${value} ${record.unit}`,
+      render: (value, record) => formatQuantity(value, record.unit),
     },
     {
-      title: "Lotes",
+      title: "Lotes / Sublotes",
       dataIndex: "lot_ids",
       key: "lot_ids",
-      render: (_, record) => {
-        if (!record.usage_lots) return "-";
-        const lotNames = record.usage_lots
-          .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
-          .join(", ");
-        return lotNames || "-";
-      },
+      render: (_, record) => lotNames(record),
     },
     {
       title: "Área Total",
       dataIndex: "total_area",
       key: "total_area",
-      render: (v) => `${v} ha`,
+      render: (v) => formatArea(v),
     },
-    { title: "Cultivo Previo", dataIndex: "previous_crop", key: "previous_crop" },
-    { title: "Cultivo Actual", dataIndex: "current_crop", key: "current_crop" },
     {
-      title: "Usuario",
-      key: "user",
-      render: (_, record) =>
-        userIndex[record.user_id]
-          || record.users?.full_name
-          || record.users?.nickname
-          || record.users?.email
-          || "-",
+      title: "Cultivo",
+      dataIndex: "current_crop_resolved",
+      key: "current_crop_resolved",
+      render: (value) => value || "Sin cultivo",
     },
     {
       title: "Fecha",
@@ -255,13 +296,22 @@ const Usage = () => {
       key: "date",
       render: (text) => (text ? dayjs(text).format("DD/MM/YYYY") : "-"),
     },
-    (canEdit || canDisable) && {
+    {
       title: "Acciones",
       key: "actions",
-      width: 96,
+      width: 132,
       render: (_, record) => (
         <Space size="small">
-          {canEdit && <Tooltip title="Editar">
+          <Tooltip title="Ver">
+            <Button
+              type="text"
+              shape="circle"
+              aria-label="Ver"
+              icon={<EyeOutlined />}
+              onClick={() => openDetail(record)}
+            />
+          </Tooltip>
+          {canEdit && !isPlanningUsage(record) && <Tooltip title="Editar">
             <Button
               type="text"
               shape="circle"
@@ -270,7 +320,7 @@ const Usage = () => {
               onClick={() => openDrawer(record)}
             />
           </Tooltip>}
-          {canDisable && <Popconfirm
+          {canDisable && !isPlanningUsage(record) && <Popconfirm
             title="¿Deshabilitar este registro?"
             okText="Sí"
             cancelText="No"
@@ -343,11 +393,7 @@ const Usage = () => {
         <div className="inventory-cards-container">
           {usages.map((usage) => {
             const product = products.find((p) => p.id === usage.product_id);
-            const lotList = usage.usage_lots
-              ? usage.usage_lots
-                  .map((l) => lots.find((x) => x.id === l.lot_id)?.name || l.lot_id)
-                  .join(", ")
-              : "-";
+            const lotList = lotNames(usage);
             const date = usage.date ? dayjs(usage.date).format("DD/MM/YYYY") : "-";
 
             return (
@@ -355,7 +401,16 @@ const Usage = () => {
                 <div className="card-header">
                   <h3>{product?.name || "Producto"}</h3>
                   <div className="card-icons">
-                    {canEdit && <Tooltip title="Editar">
+                    <Tooltip title="Ver">
+                      <Button
+                        type="text"
+                        shape="circle"
+                        aria-label={`Ver ${product?.name || "registro de uso"}`}
+                        icon={<EyeOutlined />}
+                        onClick={() => openDetail(usage)}
+                      />
+                    </Tooltip>
+                    {canEdit && !isPlanningUsage(usage) && <Tooltip title="Editar">
                       <Button
                         type="text"
                         shape="circle"
@@ -364,7 +419,7 @@ const Usage = () => {
                         onClick={() => openDrawer(usage)}
                       />
                     </Tooltip>}
-                    {canDisable && <Popconfirm
+                    {canDisable && !isPlanningUsage(usage) && <Popconfirm
                       title="Deshabilitar registro"
                       description="Esta accion se puede revertir desde registros deshabilitados."
                       okText="Si"
@@ -384,19 +439,10 @@ const Usage = () => {
                   </div>
                 </div>
 
-                <p className="flex-row"><Package size={18} /> <strong>Cantidad:</strong> {usage.amount_used} {usage.unit}</p>
-                <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotList}</p>
-                <p className="flex-row"><Ruler size={18} /> <strong>Área Total:</strong> {usage.total_area} ha</p>
-                <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Previo:</strong> {usage.previous_crop || "-"}</p>
-                <p className="flex-row"><Leaf size={18} /> <strong>Cultivo Actual:</strong> {usage.current_crop || "-"}</p>
-                <p className="flex-row">
-                  <UserIcon size={18} /> <strong>Usuario:</strong> {" "}
-                  {userIndex[usage.user_id]
-                    || usage.users?.full_name
-                    || usage.users?.nickname
-                    || usage.users?.email
-                    || "-"}
-                </p>
+                <p className="flex-row"><Package size={18} /> <strong>Cantidad:</strong> {formatQuantity(usage.amount_used, usage.unit)}</p>
+                <p className="flex-row"><MapPin size={18} /> <strong>Lotes / Sublotes:</strong> {lotList}</p>
+                <p className="flex-row"><Leaf size={18} /> <strong>Cultivo:</strong> {usage.current_crop_resolved || "Sin cultivo"}</p>
+                <p className="flex-row"><Ruler size={18} /> <strong>Área:</strong> {formatArea(usage.total_area)}</p>
                 <p className="flex-row"><CalendarIcon size={18} /> <strong>Fecha:</strong> {date}</p>
               </div>
             );
@@ -505,6 +551,80 @@ const Usage = () => {
             </Button>
           </Form.Item>
         </Form>
+      </Drawer>
+
+      <Drawer
+        title="Detalle de Registro de Uso"
+        placement={isMobile ? "bottom" : "right"}
+        onClose={closeDetail}
+        open={isDetailOpen}
+        height={isMobile ? "85vh" : undefined}
+        width={isMobile ? "100%" : 480}
+        destroyOnClose
+      >
+        {viewingUsage && (
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="Producto">{productName(viewingUsage)}</Descriptions.Item>
+              <Descriptions.Item label="Cantidad utilizada">
+                {formatQuantity(viewingUsage.amount_used, viewingUsage.unit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Fecha efectiva">
+                {viewingUsage.date ? dayjs(viewingUsage.date).format("DD/MM/YYYY") : null}
+              </Descriptions.Item>
+              {hasDetailValue(viewingUsage.total_area) && (
+                <Descriptions.Item label="Área total">{formatArea(viewingUsage.total_area)}</Descriptions.Item>
+              )}
+              <Descriptions.Item label="Cultivo">
+                {viewingUsage.current_crop_resolved || "Sin cultivo"}
+              </Descriptions.Item>
+              {hasDetailValue(usageOrigin(viewingUsage)) && (
+                <Descriptions.Item label="Origen">
+                  <Space direction="vertical" size={2}>
+                    <Tag color={isPlanningUsage(viewingUsage) ? "blue" : "default"}>
+                      {usageOrigin(viewingUsage)}
+                    </Tag>
+                    {hasDetailValue(viewingUsage.source_activity_type) && (
+                      <span>{formatActivity(viewingUsage.source_activity_type)}</span>
+                    )}
+                  </Space>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            <div>
+              <h4>Ubicación del uso</h4>
+              <LotMapPreview selections={getUsageMapSelections(viewingUsage)} />
+            </div>
+
+            <div>
+              <h4>Lotes / Sublotes</h4>
+              <List
+                size="small"
+                bordered
+                dataSource={Array.isArray(viewingUsage.lot_names) && viewingUsage.lot_names.length
+                  ? viewingUsage.lot_names
+                  : lotNames(viewingUsage).split(", ").filter(Boolean)}
+                renderItem={(item) => <List.Item>{item}</List.Item>}
+                locale={{ emptyText: "Sin lotes asignados" }}
+              />
+            </div>
+
+            {(hasDetailValue(registeredBy(viewingUsage)) || hasDetailValue(viewingUsage.previous_crop_resolved)) && (
+              <div>
+                <h4>Información adicional</h4>
+                <Descriptions column={1} bordered size="small">
+                  {hasDetailValue(registeredBy(viewingUsage)) && (
+                    <Descriptions.Item label="Registrado por">{registeredBy(viewingUsage)}</Descriptions.Item>
+                  )}
+                  {hasDetailValue(viewingUsage.previous_crop_resolved) && (
+                    <Descriptions.Item label="Cultivo previo">{viewingUsage.previous_crop_resolved}</Descriptions.Item>
+                  )}
+                </Descriptions>
+              </div>
+            )}
+          </Space>
+        )}
       </Drawer>
 
       {isMobile && !isDrawerOpen && canCreate && (

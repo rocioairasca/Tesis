@@ -1,5 +1,6 @@
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require("../../db/supabaseClient");
+const { pool } = require("../../db/supabaseClient");
 const { createNotification } = require('../notifications');
 
 // ───────────────────────────────────────────────────────────────────────────────
@@ -119,6 +120,114 @@ async function upsertUsageLots(usageId, lotIds) {
   if (insErr) throw insErr;
 }
 
+const resolveUsageLotName = (usageLot) => (
+  usageLot?.sub_lot?.name
+  || usageLot?.sub_lot_name
+  || usageLot?.lot?.name
+  || usageLot?.lot_name
+  || usageLot?.lot_id
+);
+
+const summarizeCropNames = (names, emptyValue) => {
+  const clean = [...new Set((names || []).filter(Boolean))];
+  if (!clean.length) return emptyValue;
+  if (clean.length === 1) return clean[0];
+  return 'Varios';
+};
+
+const resolveUsageCropIdSnapshot = async ({ companyId, date, lotIds = [] }) => {
+  if (!pool || !date || !lotIds.length) return null;
+  const cleanLotIds = [...new Set(asIdArray(lotIds))];
+  if (!cleanLotIds.length) return null;
+
+  const { rows } = await pool.query(
+    `
+    SELECT DISTINCT ca.crop_id
+    FROM crop_assignments ca
+    WHERE ca.company_id = $1
+      AND ca.lot_id = ANY($2::uuid[])
+      AND ca.sub_lot_id IS NULL
+      AND ca.start_date <= $3::date
+      AND (ca.end_date IS NULL OR ca.end_date >= $3::date);
+    `,
+    [companyId, cleanLotIds, date]
+  );
+
+  return rows.length === 1 ? rows[0].crop_id : null;
+};
+
+const fetchUsageSurfaces = async (usageIds, companyId) => {
+  if (!pool || !usageIds.length) return new Map();
+
+  const { rows } = await pool.query(
+    `
+    SELECT
+      ul.usage_id,
+      ul.lot_id,
+      l.name AS lot_name,
+      ul.sub_lot_id,
+      sl.name AS sub_lot_name,
+      CASE
+        WHEN ul.sub_lot_id IS NULL THEN ST_AsGeoJSON(l.geom)::json
+        ELSE ST_AsGeoJSON(sl.geom)::json
+      END AS geometry,
+      CASE
+        WHEN ul.sub_lot_id IS NOT NULL THEN ST_AsGeoJSON(l.geom)::json
+        ELSE NULL
+      END AS parent_geometry
+    FROM usage_lots ul
+    JOIN usage_records ur
+      ON ur.id = ul.usage_id
+     AND ur.company_id = $1
+    JOIN lots l
+      ON l.id = ul.lot_id
+     AND l.company_id = $1
+    LEFT JOIN sub_lots sl
+      ON sl.id = ul.sub_lot_id
+     AND sl.company_id = $1
+    WHERE ul.usage_id = ANY($2::uuid[])
+    ORDER BY l.name ASC, sl.sort_order NULLS FIRST, sl.code NULLS FIRST, sl.name ASC;
+    `,
+    [companyId, usageIds]
+  );
+
+  return rows.reduce((acc, row) => {
+    const current = acc.get(row.usage_id) || [];
+    current.push({
+      lot_id: row.lot_id,
+      lot_name: row.lot_name,
+      sub_lot_id: row.sub_lot_id || null,
+      sub_lot_name: row.sub_lot_name || null,
+      geometry: row.geometry || null,
+      parent_geometry: row.parent_geometry || null,
+    });
+    acc.set(row.usage_id, current);
+    return acc;
+  }, new Map());
+};
+
+const enrichUsagesWithProductiveContext = async (usages, companyId) => {
+  const usageIds = (usages || []).map(usage => usage.id).filter(Boolean);
+  const surfacesByUsage = await fetchUsageSurfaces(usageIds, companyId);
+
+  return usages.map((usage) => {
+    const usageSurfaces = surfacesByUsage.get(usage.id) || [];
+    const lotNames = usageSurfaces.length
+      ? usageSurfaces.map(surface => surface.sub_lot_name || surface.lot_name).filter(Boolean)
+      : (usage.usage_lots || []).map(resolveUsageLotName).filter(Boolean);
+
+    return {
+      ...usage,
+      usage_surfaces: usageSurfaces,
+      lot_names: lotNames,
+      current_crop_resolved: usage.crop?.name || usage.current_crop || 'Sin cultivo',
+      previous_crop_resolved: summarizeCropNames([usage.previous_crop], '—'),
+      origin: usage.source_planning_id ? 'Planificación' : 'Registro manual',
+      source_activity_type: usage.planning?.activity_type || null,
+    };
+  });
+};
+
 // ───────────────────────────────────────────────────────────────────────────────
 // LISTAR RDUs HABILITADOS (con filtros/paginado y joins basicos)
 // GET /api/usages?from=&to=&product_id=&lotId=&user_id=&q=&page=&pageSize=&includeDisabled=0/1
@@ -149,12 +258,16 @@ const listUsages = async (req, res) => {
 
     const selectCols = `
       id, date, product_id, amount_used, unit, total_area,
-      previous_crop, current_crop, user_id, enabled, created_at,
+      previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
       products:product_id ( id, name, unit ),
+      crop:crops!usage_records_crop_id_fkey ( id, name ),
+      planning:source_planning_id ( id, activity_type ),
       user:users!usage_records_user_id_fkey ( id, full_name, email ),
       usage_lots (
         lot_id,
-        lot:lots ( id, name )
+        sub_lot_id,
+        lot:lots ( id, name, location, geom ),
+        sub_lot:sub_lots ( id, name, geom )
       )
     `;
 
@@ -162,7 +275,9 @@ const listUsages = async (req, res) => {
       .from('usage_records')
       .select(selectCols, { count: 'exact' })
       .eq('company_id', company_id)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (!includeDisabled) query = query.eq('enabled', true);
     if (from && to) query = query.gte('date', from).lte('date', to);
@@ -186,8 +301,10 @@ const listUsages = async (req, res) => {
       return res.status(500).json({ error: 'DbError', message: 'Error al listar registros de uso' });
     }
 
+    const enrichedData = await enrichUsagesWithProductiveContext(data || [], company_id);
+
     return res.json({
-      data: data || [],
+      data: enrichedData,
       page: Number(page),
       pageSize: limit,
       total: count ?? (data?.length || 0),
@@ -223,6 +340,8 @@ const createUsage = async (req, res) => {
       return res.status(400).json({ error: 'ValidationError', message: 'product_id y amount_used (>0) son requeridos' });
     }
 
+    const cropId = await resolveUsageCropIdSnapshot({ companyId: company_id, date, lotIds: lot_ids });
+
     // 1) Crear registro
     const { data: usage, error: insertError } = await supabase
       .from('usage_records')
@@ -233,6 +352,7 @@ const createUsage = async (req, res) => {
         total_area,
         previous_crop,
         current_crop,
+        crop_id: cropId,
         user_id,
         date,
         company_id
@@ -290,13 +410,19 @@ const editUsage = async (req, res) => {
     // 0) Cargar registro actual
     const { data: current, error: curErr } = await supabase
       .from('usage_records')
-      .select('id, product_id, amount_used')
+      .select('id, product_id, amount_used, date, source_planning_id')
       .eq('id', id)
       .eq('company_id', company_id)
       .maybeSingle();
 
     if (curErr) throw curErr;
     if (!current) return res.status(404).json({ error: 'NotFound', message: 'Registro de uso no encontrado' });
+    if (current.source_planning_id) {
+      return res.status(409).json({
+        error: 'AutomaticUsage',
+        message: 'Este uso fue generado al completar una planificación y no puede modificarse de forma independiente.',
+      });
+    }
 
     const {
       product_id,
@@ -323,6 +449,22 @@ const editUsage = async (req, res) => {
     const updateData = {};
     for (const [k, v] of Object.entries({ product_id, amount_used, unit, total_area, previous_crop, current_crop, user_id, date })) {
       if (v !== undefined) updateData[k] = v;
+    }
+    if (date !== undefined || lot_ids !== undefined) {
+      let effectiveLotIds = lot_ids;
+      if (effectiveLotIds === undefined) {
+        const { data: currentLots, error: currentLotsErr } = await supabase
+          .from('usage_lots')
+          .select('lot_id')
+          .eq('usage_id', id);
+        if (currentLotsErr) throw currentLotsErr;
+        effectiveLotIds = (currentLots || []).map(item => item.lot_id);
+      }
+      updateData.crop_id = await resolveUsageCropIdSnapshot({
+        companyId: company_id,
+        date: date || current.date,
+        lotIds: effectiveLotIds,
+      });
     }
     const { error: upErr } = await supabase.from('usage_records').update(updateData).eq('id', id).eq('company_id', company_id);
     if (upErr) throw upErr;
@@ -372,7 +514,7 @@ const disableUsage = async (req, res) => {
     // 1) Leer registro (solo si esta habilitado)
     const { data: usage, error: fErr } = await supabase
       .from('usage_records')
-      .select('id, product_id, amount_used, enabled')
+      .select('id, product_id, amount_used, enabled, source_planning_id')
       .eq('id', id)
       .eq('company_id', company_id)
       .eq('enabled', true)
@@ -380,6 +522,12 @@ const disableUsage = async (req, res) => {
 
     if (fErr) throw fErr;
     if (!usage) return res.status(404).json({ error: 'NotFound', message: 'Registro no encontrado o ya deshabilitado' });
+    if (usage.source_planning_id) {
+      return res.status(409).json({
+        error: 'AutomaticUsage',
+        message: 'Este uso fue generado al completar una planificación y no puede deshabilitarse de forma independiente.',
+      });
+    }
 
     const qty = toNum(usage.amount_used, 0);
 
@@ -419,12 +567,29 @@ const listDisabledUsages = async (req, res) => {
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
+    const selectCols = `
+      id, date, product_id, amount_used, unit, total_area,
+      previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
+      products:product_id ( id, name, unit ),
+      crop:crops!usage_records_crop_id_fkey ( id, name ),
+      planning:source_planning_id ( id, activity_type ),
+      user:users!usage_records_user_id_fkey ( id, full_name, email ),
+      usage_lots (
+        lot_id,
+        sub_lot_id,
+        lot:lots ( id, name, location, geom ),
+        sub_lot:sub_lots ( id, name, geom )
+      )
+    `;
+
     const { data, error, count } = await supabase
       .from('usage_records')
-      .select('id, date, product_id, amount_used, unit, total_area, previous_crop, current_crop, user_id, enabled, created_at', { count: 'exact' })
+      .select(selectCols, { count: 'exact' })
       .eq('company_id', company_id)
       .eq('enabled', false)
       .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
@@ -432,8 +597,10 @@ const listDisabledUsages = async (req, res) => {
       return res.status(500).json({ error: 'DbError', message: 'Error al listar registros de uso deshabilitados' });
     }
 
+    const enrichedData = await enrichUsagesWithProductiveContext(data || [], company_id);
+
     return res.json({
-      data: data || [],
+      data: enrichedData,
       page: Number(page),
       pageSize: limit,
       total: count ?? (data?.length || 0),
@@ -461,7 +628,7 @@ const enableUsage = async (req, res) => {
     // 1) Leer registro (solo si esta deshabilitado)
     const { data: usage, error: fErr } = await supabase
       .from('usage_records')
-      .select('id, product_id, amount_used, enabled')
+      .select('id, product_id, amount_used, enabled, source_planning_id')
       .eq('id', id)
       .eq('company_id', company_id)
       .eq('enabled', false)
@@ -469,6 +636,12 @@ const enableUsage = async (req, res) => {
 
     if (fErr) throw fErr;
     if (!usage) return res.status(404).json({ error: 'NotFound', message: 'Registro no encontrado o ya habilitado' });
+    if (usage.source_planning_id) {
+      return res.status(409).json({
+        error: 'AutomaticUsage',
+        message: 'Este uso fue generado al completar una planificación y no puede habilitarse de forma independiente.',
+      });
+    }
 
     const qty = toNum(usage.amount_used, 0);
 

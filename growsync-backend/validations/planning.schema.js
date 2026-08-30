@@ -50,6 +50,11 @@ const ProductItem = z.object({
   unit: z.string().trim().optional().nullable(),
 });
 
+const ActualProductItem = z.object({
+  planning_product_id: z.string().uuid(),
+  actual_amount: z.union([z.number(), z.string()]),
+});
+
 // Body base (CREATE)
 const baseBody = z.object({
   title: Title,
@@ -133,6 +138,15 @@ exports.completeSowingSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+    actual_products: z.array(ActualProductItem).optional(),
+  }),
+});
+
+exports.completeWorkSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+    actual_products: z.array(ActualProductItem).optional(),
   }),
 });
 

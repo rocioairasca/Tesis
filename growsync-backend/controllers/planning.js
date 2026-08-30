@@ -169,6 +169,24 @@ const ACTIVITY_LABELS = {
 };
 
 const activityLabel = (activityType) => ACTIVITY_LABELS[activityType] || 'actividad';
+const PRODUCT_CONSUMING_ACTIVITIES = new Set(['fumigacion', 'fertilizacion', 'siembra']);
+
+const toNum = (value, fallback = 0) => {
+  const normalized = typeof value === 'string' ? value.replace(',', '.') : value;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const assertEffectiveWorkDate = (value, label = 'La fecha efectiva no es válida.') => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const err = new Error(label);
+    err.status = 400;
+    throw err;
+  }
+  return String(value);
+};
+
+const getEffectiveWorkDate = (value) => assertEffectiveWorkDate(value, 'La fecha efectiva del trabajo no es válida.');
 
 const assertPlanningStatusTransition = (currentStatus, nextStatus) => {
   if (!nextStatus) return;
@@ -458,6 +476,268 @@ const insertPlanningLots = async (client, planningId, selections) => {
     `INSERT INTO planning_lots(planning_id, lot_id, sub_lot_id, area_ha) VALUES ${values.join(',')}`,
     params
   );
+};
+
+const getPlanningSelectionsForUsage = async (client, planningId, companyId) => {
+  const { rows } = await client.query(
+    `
+    SELECT
+      pl.lot_id,
+      pl.sub_lot_id,
+      pl.area_ha,
+      l.name AS lot_name,
+      sl.name AS sub_lot_name
+    FROM planning_lots pl
+    JOIN lots l
+      ON l.id = pl.lot_id
+     AND l.company_id = $2
+    LEFT JOIN sub_lots sl
+      ON sl.id = pl.sub_lot_id
+     AND sl.company_id = $2
+    WHERE pl.planning_id = $1
+    ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST;
+    `,
+    [planningId, companyId]
+  );
+
+  return rows;
+};
+
+const getPlanningProductsForUsage = async (client, planningId, companyId) => {
+  const { rows } = await client.query(
+    `
+    SELECT
+      pp.id,
+      pp.planning_id,
+      pp.product_id,
+      pp.amount,
+      pp.unit,
+      pr.name AS product_name,
+      pr.unit AS product_unit,
+      pr.available_quantity,
+      pr.enabled
+    FROM planning_products pp
+    JOIN products pr
+      ON pr.id = pp.product_id
+     AND pr.company_id = $2
+    WHERE pp.planning_id = $1
+    ORDER BY pr.name ASC, pp.id ASC
+    FOR UPDATE OF pp;
+    `,
+    [planningId, companyId]
+  );
+
+  return rows;
+};
+
+const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
+  const plannedIds = new Set(plannedProducts.map(planned => String(planned.id)));
+  const byId = new Map();
+  for (const item of actualProducts || []) {
+    const key = String(item.planning_product_id);
+    if (!plannedIds.has(key)) {
+      const err = new Error('Uno de los productos informados no pertenece a esta planificación.');
+      err.status = 400;
+      throw err;
+    }
+    if (byId.has(key)) {
+      const err = new Error('Hay productos repetidos en la confirmación.');
+      err.status = 400;
+      throw err;
+    }
+    byId.set(key, item);
+  }
+
+  return plannedProducts.map((planned) => {
+    const provided = byId.get(String(planned.id));
+    const actualAmount = provided
+      ? toNum(provided.actual_amount, NaN)
+      : toNum(planned.amount, 0);
+
+    if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+      const err = new Error(`La cantidad utilizada de ${planned.product_name || 'producto'} no es válida.`);
+      err.status = 400;
+      throw err;
+    }
+
+    return {
+      ...planned,
+      actual_amount: actualAmount,
+    };
+  });
+};
+
+const getCurrentCropLabelForUsage = (planning) => (
+  planning.crop_name || null
+);
+
+const assertNoPlanningProductCompletions = async (client, planningId, companyId) => {
+  const { rows } = await client.query(
+    `
+    SELECT 1
+    FROM planning_product_completions ppc
+    JOIN planning p
+      ON p.id = ppc.planning_id
+     AND p.company_id = $2
+    WHERE ppc.planning_id = $1
+    LIMIT 1;
+    `,
+    [planningId, companyId]
+  );
+
+  return rows.length === 0;
+};
+
+const applyPlanningProductUsage = async (
+  client,
+  {
+    planning,
+    selections,
+    plannedProducts,
+    actualProducts,
+    effectiveDate,
+    companyId,
+  }
+) => {
+  if (!plannedProducts.length) {
+    return { usage_count: 0, consumed_products: 0 };
+  }
+
+  const normalizedProducts = normalizeActualProducts(plannedProducts, actualProducts);
+  const productIds = [...new Set(normalizedProducts.map((item) => item.product_id))];
+
+  const { rows: lockedProducts } = await client.query(
+    `
+    SELECT id, name, unit, available_quantity, enabled
+    FROM products
+    WHERE company_id = $1
+      AND id = ANY($2::uuid[])
+    FOR UPDATE;
+    `,
+    [companyId, productIds]
+  );
+  const productsById = new Map(lockedProducts.map((product) => [String(product.id), product]));
+  const requestedByProduct = new Map();
+
+  for (const planned of normalizedProducts) {
+    const product = productsById.get(String(planned.product_id));
+    if (!product || product.enabled === false) {
+      const err = new Error(`${planned.product_name || 'Producto'} no está disponible.`);
+      err.status = 409;
+      throw err;
+    }
+    if ((planned.unit || product.unit) !== product.unit) {
+      const err = new Error(`La unidad de ${product.name} no coincide con su stock.`);
+      err.status = 400;
+      throw err;
+    }
+    requestedByProduct.set(
+      String(planned.product_id),
+      (requestedByProduct.get(String(planned.product_id)) || 0) + planned.actual_amount
+    );
+  }
+
+  for (const [productId, requestedAmount] of requestedByProduct.entries()) {
+    const product = productsById.get(productId);
+    if (requestedAmount > Number(product.available_quantity || 0)) {
+      const err = new Error(`No hay stock suficiente de ${product.name}. Disponible: ${product.available_quantity} ${product.unit}.`);
+      err.status = 409;
+      throw err;
+    }
+  }
+
+  const totalArea = selections.reduce((sum, selection) => sum + Number(selection.area_ha || 0), 0);
+  const currentCrop = getCurrentCropLabelForUsage(planning);
+  let usageCount = 0;
+  let consumedProducts = 0;
+
+  for (const planned of normalizedProducts) {
+    let usageId = null;
+
+    if (planned.actual_amount > 0) {
+      const { rows: usageRows } = await client.query(
+        `
+        INSERT INTO usage_records (
+          date,
+          product_id,
+          amount_used,
+          unit,
+          total_area,
+          previous_crop,
+          current_crop,
+          crop_id,
+          user_id,
+          company_id,
+          source_planning_id,
+          source_planning_product_id
+        )
+        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11)
+        RETURNING id;
+        `,
+        [
+          effectiveDate,
+          planned.product_id,
+          planned.actual_amount,
+          planned.unit || planned.product_unit,
+          totalArea,
+          currentCrop,
+          planning.crop_id || null,
+          planning.responsible_user,
+          companyId,
+          planning.id,
+          planned.id,
+        ]
+      );
+
+      usageId = usageRows[0].id;
+      usageCount += 1;
+      consumedProducts += 1;
+
+      const usageLotValues = selections.map((_, index) => {
+        const base = index * 2 + 2;
+        return `($1, $${base}, $${base + 1})`;
+      });
+      const usageLotParams = [usageId];
+      selections.forEach((selection) => {
+        usageLotParams.push(selection.lot_id, selection.sub_lot_id || null);
+      });
+
+      if (usageLotValues.length) {
+        await client.query(
+          `
+          INSERT INTO usage_lots (usage_id, lot_id, sub_lot_id)
+          VALUES ${usageLotValues.join(', ')}
+          `,
+          usageLotParams
+        );
+      }
+
+      await client.query(
+        `
+        UPDATE products
+        SET available_quantity = COALESCE(available_quantity, 0) - $1
+        WHERE id = $2
+          AND company_id = $3;
+        `,
+        [planned.actual_amount, planned.product_id, companyId]
+      );
+    }
+
+    await client.query(
+      `
+      INSERT INTO planning_product_completions (
+        planning_product_id,
+        planning_id,
+        usage_id,
+        actual_amount
+      )
+      VALUES ($1, $2, $3, $4);
+      `,
+      [planned.id, planning.id, usageId, planned.actual_amount]
+    );
+  }
+
+  return { usage_count: usageCount, consumed_products: consumedProducts };
 };
 
 const getEffectiveSowingDate = (value) => {
@@ -772,7 +1052,7 @@ exports.list = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
+               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id
                WHERE pp.planning_id = b.id
@@ -827,7 +1107,7 @@ exports.getOne = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
+               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id
                WHERE pp.planning_id = b.id
@@ -999,6 +1279,7 @@ exports.completeSowing = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
+    const { actual_products = [] } = req.body;
     const { company_id } = req.user;
     const effectiveDate = getEffectiveSowingDate(req.body.effective_date);
 
@@ -1173,6 +1454,16 @@ exports.completeSowing = async (req, res, next) => {
       return res.status(409).json({ message: 'Esta siembra ya fue registrada en el estado productivo.' });
     }
 
+    const plannedProducts = await getPlanningProductsForUsage(client, id, company_id);
+    const productUsage = await applyPlanningProductUsage(client, {
+      planning,
+      selections,
+      plannedProducts,
+      actualProducts: actual_products,
+      effectiveDate,
+      companyId: company_id,
+    });
+
     await client.query(
       `
       UPDATE planning
@@ -1202,9 +1493,12 @@ exports.completeSowing = async (req, res, next) => {
 
     return res.json({
       ok: true,
-      message: 'La siembra fue completada y el cultivo quedó registrado.',
+      message: plannedProducts.length
+        ? 'La siembra fue completada, el cultivo quedó registrado y se actualizaron los productos utilizados.'
+        : 'La siembra fue completada y el cultivo quedó registrado.',
       assignments_created: assignmentRows.length,
       closed_previous_cycles: closeIds.size,
+      usage_records_created: productUsage.usage_count,
     });
   } catch (e) {
     try {
@@ -1212,6 +1506,142 @@ exports.completeSowing = async (req, res, next) => {
     } catch (_) {}
     if (e.code === '23505') {
       return res.status(409).json({ message: 'Esta siembra ya fue registrada en el estado productivo.' });
+    }
+    next(e);
+  } finally {
+    client.release();
+  }
+};
+
+exports.completeWork = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { actual_products = [] } = req.body;
+    const effectiveDate = getEffectiveWorkDate(req.body.effective_date);
+    const { company_id } = req.user;
+
+    if (!company_id) {
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: planningRows } = await client.query(
+      `
+      SELECT
+        p.id,
+        p.activity_type,
+        p.status,
+        p.enabled,
+        p.campaign_id,
+        p.crop_id,
+        p.responsible_user,
+        c.name AS crop_name,
+        cp.name AS campaign_name
+      FROM planning p
+      LEFT JOIN crops c
+        ON c.id = p.crop_id
+       AND c.company_id = p.company_id
+      LEFT JOIN campaigns cp
+        ON cp.id = p.campaign_id
+       AND cp.company_id = p.company_id
+      WHERE p.id = $1
+        AND p.company_id = $2
+      FOR UPDATE OF p
+      LIMIT 1;
+      `,
+      [id, company_id]
+    );
+
+    if (!planningRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
+    }
+
+    const planning = planningRows[0];
+
+    if (!PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type) || planning.activity_type === 'siembra') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Esta acción no corresponde a la actividad seleccionada.' });
+    }
+
+    if (planning.status === 'cancelado' || planning.enabled === false) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede completar una planificación cancelada.' });
+    }
+
+    const hasNoCompletions = await assertNoPlanningProductCompletions(client, id, company_id);
+    if (!hasNoCompletions) {
+      await client.query('COMMIT');
+      return res.status(200).json({
+        ok: true,
+        already_applied: true,
+        message: 'Esta planificación ya registró sus consumos.',
+      });
+    }
+
+    if (planning.status === 'completado') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Esta planificación ya está completada.' });
+    }
+
+    const selections = await getPlanningSelectionsForUsage(client, id, company_id);
+    if (!selections.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La planificación debe tener al menos un lote o sublote seleccionado.' });
+    }
+
+    const plannedProducts = await getPlanningProductsForUsage(client, id, company_id);
+    const productUsage = await applyPlanningProductUsage(client, {
+      planning,
+      selections,
+      plannedProducts,
+      actualProducts: actual_products,
+      effectiveDate,
+      companyId: company_id,
+    });
+
+    await client.query(
+      `
+      UPDATE planning
+      SET status = 'completado'
+      WHERE id = $1
+        AND company_id = $2;
+      `,
+      [id, company_id]
+    );
+
+    await client.query('COMMIT');
+
+    if (planning.responsible_user) {
+      const locationText = selections
+        .map(selection => selection.sub_lot_name || selection.lot_name)
+        .join(', ');
+      createNotification(
+        planning.responsible_user,
+        'state_change',
+        'low',
+        'Trabajo completado',
+        `Se completó la ${activityLabel(planning.activity_type)}${planning.crop_name ? ` de ${planning.crop_name}` : ''} en ${locationText}.`,
+        { planning_id: id, new_status: 'completado' },
+        company_id
+      ).catch(err => console.error('Error enviando notificación:', err));
+    }
+
+    return res.json({
+      ok: true,
+      message: plannedProducts.length
+        ? 'El trabajo fue completado y los productos utilizados quedaron registrados.'
+        : 'El trabajo fue completado.',
+      usage_records_created: productUsage.usage_count,
+    });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    if (e.code === '23505') {
+      return res.status(409).json({ message: 'Esta planificación ya registró sus consumos.' });
     }
     next(e);
   } finally {
@@ -1250,9 +1680,46 @@ exports.update = async (req, res, next) => {
       return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
+    const { rows: productCompletionRows } = await client.query(
+      `
+      SELECT 1
+      FROM planning_product_completions ppc
+      WHERE ppc.planning_id = $1
+      LIMIT 1;
+      `,
+      [id]
+    );
+    const hasProductCompletions = productCompletionRows.length > 0;
+    const updatesProductImpactStructure = (
+      products !== undefined
+      || lot_ids !== undefined
+      || lot_selections !== undefined
+      || start_at !== undefined
+      || end_at !== undefined
+      || crop_id !== undefined
+      || campaign_id !== undefined
+      || activity_type !== undefined
+    );
+
+    if (hasProductCompletions && updatesProductImpactStructure) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(409).json({
+        message: 'Esta planificación ya registró consumos de productos. Corregí los usos asociados antes de modificarla.',
+      });
+    }
+
     if (status !== undefined) {
       assertPlanningStatusTransition(checkRows[0].status, status);
       assertSowingUsesCompletionEndpoint(activity_type ?? checkRows[0].activity_type, status);
+
+      if (hasProductCompletions && checkRows[0].status === 'completado' && status !== 'completado') {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(409).json({
+          message: 'Esta planificación ya registró consumos de productos. Corregí los usos asociados antes de reabrirla.',
+        });
+      }
 
       if (checkRows[0].status === 'completado' && status !== 'completado') {
         const { rows: sourcedAssignments } = await client.query(
@@ -1502,11 +1969,23 @@ exports.remove = async (req, res, next) => {
 
     const current = checkRows[0];
     if (current.status === 'completado') {
+      const { rows: productCompletionRows } = await client.query(
+        `
+        SELECT 1
+        FROM planning_product_completions ppc
+        WHERE ppc.planning_id = $1
+        LIMIT 1;
+        `,
+        [id]
+      );
+
       await client.query('ROLLBACK');
       client.release();
       return res.status(409).json({
         error: 'No se puede cancelar una planificación completada',
-        message: 'Reabrí la planificación antes de cancelarla.',
+        message: productCompletionRows.length
+          ? 'Esta planificación ya registró consumos de productos. Corregí los usos asociados antes de cancelarla.'
+          : 'Reabrí la planificación antes de cancelarla.',
       });
     }
 
@@ -1648,7 +2127,7 @@ exports.listDisabled = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit))
+               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id
                WHERE pp.planning_id = b.id

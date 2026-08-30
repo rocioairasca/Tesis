@@ -31,7 +31,8 @@ const formatPeriod = (row) => {
         ? start.format("DD/MM/YYYY")
         : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
 };
-const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }) => {
+const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
+    const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
     const status = record?.status;
     const items = [];
 
@@ -41,19 +42,21 @@ const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }) => {
         }
     };
 
-    if (canEdit) {
+    if (canEdit && includeTransitions) {
         if (status === "planificado" || status === "pendiente") {
-            addStatusAction("progress", "Marcar en progreso", "en_progreso");
-            addStatusAction("done", "Marcar completada", "completado");
+            addStatusAction("progress", "Iniciar trabajo", "en_progreso");
+            addStatusAction("done", "Completar trabajo", "completado");
         } else if (status === "en_progreso") {
-            addStatusAction("done", "Marcar completada", "completado");
+            addStatusAction("done", "Completar trabajo", "completado");
             addStatusAction("pending", "Volver a pendiente", "pendiente");
-        } else if (status === "completado") {
-            addStatusAction("reopen", "Reabrir planificación", "pendiente");
         }
     }
 
-    if (canEdit && canDisable && status !== "completado" && status !== "cancelado") {
+    if (canEdit && includeReopen && status === "completado") {
+        addStatusAction("reopen", "Reabrir planificación", "pendiente");
+    }
+
+    if (includeCancel && canEdit && canDisable && status !== "completado" && status !== "cancelado") {
         if (items.length) items.push({ type: "divider" });
         items.push({
             key: "cancel",
@@ -82,14 +85,28 @@ const PlanningListMobile = ({
     rowKey,
     userIx,
     cropIx,
-    statusTag
+    statusTag,
+    statusActionLoading,
+    getPrimaryStatusAction,
 }) => {
     return (
         <div className="inventory-cards-container">
             {list.map((r) => {
                 const lotsText = (r.lots || []).map(getPlanningLotName).filter(Boolean).join(", ") || "-";
                 const period = formatPeriod(r);
-                const menuItems = buildStatusMenuItems(r, { onUpdateStatus, onCancel });
+                const primaryAction = getPrimaryStatusAction?.(r);
+                const menuItems = buildStatusMenuItems(
+                    r,
+                    { onUpdateStatus, onCancel },
+                    { includeTransitions: false, includeReopen: true, includeCancel: true }
+                );
+                const statusDropdownItems = buildStatusMenuItems(
+                    r,
+                    { onUpdateStatus, onCancel },
+                    { includeReopen: false, includeCancel: false }
+                ).filter(item => item.type === "divider" || item.key !== primaryAction?.key);
+                const actionLoading = primaryAction && statusActionLoading === `${r.id || r._id}:${primaryAction.status}`;
+                const actionsDisabled = Boolean(statusActionLoading);
 
                 return (
                     <div
@@ -105,7 +122,6 @@ const PlanningListMobile = ({
                         <div className="card-header">
                             <h3>{getPlanningDisplayName(r, cropIx)}</h3>
                             <div className="card-icons" onClick={(event) => event.stopPropagation()}>
-                                {statusTag(r.status_effective || r.status)}
                                 <Tooltip title="Ver detalle">
                                     <Button
                                         type="text"
@@ -136,10 +152,40 @@ const PlanningListMobile = ({
                                 )}
                             </div>
                         </div>
+                        <div
+                            style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 12px" }}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <strong>Estado:</strong>
+                            {statusDropdownItems.length ? (
+                                <Dropdown menu={{ items: statusDropdownItems }} placement="bottomLeft" trigger={["click"]}>
+                                    <button
+                                        type="button"
+                                        aria-label={`Cambiar estado ${r.status_effective || r.status}`}
+                                        style={{ border: 0, background: "transparent", padding: 0, cursor: "pointer" }}
+                                    >
+                                        {statusTag(r.status_effective || r.status)} <span style={{ color: "#6b7280" }}>▾</span>
+                                    </button>
+                                </Dropdown>
+                            ) : statusTag(r.status_effective || r.status)}
+                        </div>
                         <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotsText}</p>
                         <p className="flex-row"><MapPin size={18} /> <strong>Superficie:</strong> {formatHa(getPlanningArea(r))}</p>
                         <p className="flex-row"><CalIcon size={18} /> <strong>Período:</strong> {period}</p>
                         <p className="flex-row"><UserIcon size={18} /> <strong>Resp.:</strong> {userIx[r.responsible_user] || "-"}</p>
+                        {primaryAction && (
+                            <div style={{ marginTop: 12 }} onClick={(event) => event.stopPropagation()}>
+                                <Button
+                                    type="primary"
+                                    block
+                                    loading={actionLoading}
+                                    disabled={actionsDisabled}
+                                    onClick={() => onUpdateStatus(r, primaryAction.status)}
+                                >
+                                    {primaryAction.label}
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 );
             })}
