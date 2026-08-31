@@ -11,9 +11,9 @@ import {
 } from 'react-leaflet';
 import { Button } from 'antd';
 import { AimOutlined } from './AppIcons';
-import L from 'leaflet';
+import L from '../utils/leafletGeoman';
+import { useLeafletGeoman } from '../hooks/useLeafletGeoman';
 import 'leaflet/dist/leaflet.css';
-import '@geoman-io/leaflet-geoman-free';
 
 const FALLBACK_POSITION = [-32.4082, -63.2402];
 const SUB_LOT_PATTERNS = ['sub-lot-hatch-a', 'sub-lot-hatch-b', 'sub-lot-hatch-c'];
@@ -128,6 +128,7 @@ const MapSelector = ({
   const internalMapRef = useRef(null);
   const mapRef = externalMapRef || internalMapRef;
   const activeLocation = selectedLocation || initialLocation;
+  const geomanReady = useLeafletGeoman(Boolean(onSelect));
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -284,7 +285,7 @@ const MapSelector = ({
         }}
       >
         <GeomanControls
-          enabled={!!onSelect}
+          enabled={Boolean(onSelect) && geomanReady}
           selectedLocation={selectedLocation}
           initialLocation={initialLocation}
           emitPolygonData={emitPolygonData}

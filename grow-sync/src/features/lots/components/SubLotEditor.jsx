@@ -9,8 +9,8 @@ import {
   useMap,
 } from 'react-leaflet';
 import { Alert, Button, Empty, List, Space, Statistic, Tag, Typography, notification } from 'antd';
-import L from 'leaflet';
-import '@geoman-io/leaflet-geoman-free';
+import L from '../../../utils/leafletGeoman';
+import { useLeafletGeoman } from '../../../hooks/useLeafletGeoman';
 import 'leaflet/dist/leaflet.css';
 
 import { DeleteOutlined, PlusOutlined, Ruler, SaveOutlined } from '../../../components/AppIcons';
@@ -499,6 +499,7 @@ const SubLotEditor = ({
 }) => {
   const [drawing, setDrawing] = useState(false);
   const [snapActive, setSnapActive] = useState(false);
+  const geomanReady = useLeafletGeoman(editable);
   const parentFeature = useMemo(() => getParentFeature(layout), [layout]);
   const parentGeometry = parentFeature?.geometry;
   const subLots = layout?.sub_lots || [];
@@ -594,26 +595,34 @@ const SubLotEditor = ({
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               opacity={0.45}
             />
-            <SnapReferencePolygon geometry={parentGeometry} />
-            <RemainingAreaLayer feature={remainingFeature} />
+            <SnapReferencePolygon
+              key={`parent-${geomanReady ? 'geoman' : 'plain'}`}
+              geometry={parentGeometry}
+            />
+            <RemainingAreaLayer
+              key={`remaining-${geomanReady ? 'geoman' : 'plain'}`}
+              feature={remainingFeature}
+            />
             {subLots.map((subLot, index) => (
               <EditableSubLotPolygon
-                key={subLot.id}
+                key={`${subLot.id}-${geomanReady ? 'geoman' : 'plain'}`}
                 subLot={subLot}
                 index={index}
-                editable={editable}
+                editable={editable && geomanReady}
                 drawing={drawing}
                 onEdit={handleEdit}
                 onSnapChange={setSnapActive}
               />
             ))}
-            <DrawControls
-              enabled={editable}
-              drawing={drawing}
-              onDrawingChange={setDrawing}
-              onSnapChange={setSnapActive}
-              onCreate={handleCreate}
-            />
+            {geomanReady ? (
+              <DrawControls
+                enabled={editable}
+                drawing={drawing}
+                onDrawingChange={setDrawing}
+                onSnapChange={setSnapActive}
+                onCreate={handleCreate}
+              />
+            ) : null}
             <FitBounds parentGeometry={parentGeometry} />
           </MapContainer>
         </div>
