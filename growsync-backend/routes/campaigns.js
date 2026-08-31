@@ -24,6 +24,12 @@ router.put('/:id',
   ctrl.update
 );
 
+router.delete('/:id',
+  requireAnyPermission(PERMISSIONS.PLANNING_CREATE, PERMISSIONS.PLANNING_EDIT),
+  validate(schema.idParam),
+  ctrl.remove
+);
+
 router.post('/:id/close',
   requireAnyPermission(PERMISSIONS.PLANNING_CREATE, PERMISSIONS.PLANNING_EDIT),
   validate(schema.idParam),

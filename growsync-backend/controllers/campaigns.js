@@ -1,6 +1,8 @@
 const { pool } = require('../db/supabaseClient');
 
 const fields = 'id, name, start_date, end_date, status, created_at, updated_at';
+const CAMPAIGN_IN_USE_MESSAGE = 'Esta campaña tiene información asociada y no puede eliminarse.';
+const CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE = 'No se pueden guardar estas fechas porque existen registros asociados fuera del período seleccionado.';
 
 const assertNoCampaignDateOverlap = async (client, companyId, startDate, endDate, excludeId = null) => {
   const { rows } = await client.query(
@@ -36,26 +38,131 @@ const resolveCampaignStatusForDates = async (client, startDate, endDate) => {
   return rows[0]?.status || 'closed';
 };
 
+const getCampaignReferenceCounts = async (client, companyId, campaignId) => {
+  const { rows } = await client.query(
+    `
+    WITH refs AS (
+      SELECT 'planning' AS table_name, COUNT(*)::int AS count
+      FROM planning
+      WHERE company_id = $1
+        AND campaign_id = $2
+      UNION ALL
+      SELECT 'crop_assignments' AS table_name, COUNT(*)::int AS count
+      FROM crop_assignments
+      WHERE company_id = $1
+        AND campaign_id = $2
+      UNION ALL
+      SELECT 'harvest_records' AS table_name, COUNT(*)::int AS count
+      FROM harvest_records
+      WHERE company_id = $1
+        AND campaign_id = $2
+    )
+    SELECT table_name, count
+    FROM refs
+    WHERE count > 0
+    ORDER BY table_name;
+    `,
+    [companyId, campaignId]
+  );
+
+  return rows;
+};
+
+const assertCampaignDatesContainReferences = async (client, companyId, campaignId, startDate, endDate) => {
+  const { rows } = await client.query(
+    `
+    WITH referenced_dates AS (
+      SELECT start_at::date AS date_value
+      FROM planning
+      WHERE company_id = $1
+        AND campaign_id = $2
+        AND start_at IS NOT NULL
+      UNION ALL
+      SELECT end_at::date AS date_value
+      FROM planning
+      WHERE company_id = $1
+        AND campaign_id = $2
+        AND end_at IS NOT NULL
+      UNION ALL
+      SELECT start_date AS date_value
+      FROM crop_assignments
+      WHERE company_id = $1
+        AND campaign_id = $2
+      UNION ALL
+      SELECT end_date AS date_value
+      FROM crop_assignments
+      WHERE company_id = $1
+        AND campaign_id = $2
+        AND end_date IS NOT NULL
+      UNION ALL
+      SELECT harvest_date AS date_value
+      FROM harvest_records
+      WHERE company_id = $1
+        AND campaign_id = $2
+        AND harvest_date IS NOT NULL
+    )
+    SELECT
+      MIN(date_value) AS min_date,
+      MAX(date_value) AS max_date,
+      COUNT(*)::int AS out_of_range_count
+    FROM referenced_dates
+    WHERE date_value < $3::date
+       OR date_value > $4::date;
+    `,
+    [companyId, campaignId, startDate, endDate]
+  );
+
+  const outOfRangeCount = Number(rows[0]?.out_of_range_count || 0);
+  if (outOfRangeCount > 0) {
+    const err = new Error(CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE);
+    err.status = 409;
+    err.details = {
+      min_date: rows[0]?.min_date,
+      max_date: rows[0]?.max_date,
+      out_of_range_count: outOfRangeCount,
+    };
+    throw err;
+  }
+};
+
 exports.list = async (req, res, next) => {
   try {
     const { company_id } = req.user;
     const { includeClosed = false, status } = req.query;
     const params = [company_id];
-    const where = ['company_id = $1'];
+    const where = ['c.company_id = $1'];
 
     if (status) {
       params.push(status);
-      where.push(`status = $${params.length}`);
+      where.push(`c.status = $${params.length}`);
     } else if (!includeClosed) {
-      where.push(`status = 'active'`);
+      where.push(`c.status = 'active'`);
     }
 
     const { rows } = await pool.query(
       `
-      SELECT ${fields}
-      FROM campaigns
+      SELECT
+        c.${fields.replaceAll(', ', ', c.')},
+        COALESCE(refs.references_count, 0)::int AS references_count,
+        COALESCE(refs.references_count, 0)::int = 0 AS can_delete
+      FROM campaigns c
+      LEFT JOIN LATERAL (
+        SELECT
+          (
+            SELECT COUNT(*) FROM planning p
+            WHERE p.company_id = c.company_id AND p.campaign_id = c.id
+          )
+          + (
+            SELECT COUNT(*) FROM crop_assignments ca
+            WHERE ca.company_id = c.company_id AND ca.campaign_id = c.id
+          )
+          + (
+            SELECT COUNT(*) FROM harvest_records hr
+            WHERE hr.company_id = c.company_id AND hr.campaign_id = c.id
+          ) AS references_count
+      ) refs ON TRUE
       WHERE ${where.join(' AND ')}
-      ORDER BY status ASC, start_date DESC, name ASC;
+      ORDER BY c.status ASC, c.start_date DESC, c.name ASC;
       `,
       params
     );
@@ -107,6 +214,12 @@ exports.create = async (req, res, next) => {
         message: 'Ya existe una campaña con ese nombre.',
       });
     }
+    if (err.code === '23P01') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'El período se superpone con otra campaña existente.',
+      });
+    }
     next(err);
   } finally {
     client.release();
@@ -122,7 +235,7 @@ exports.update = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: currentRows } = await client.query(
-      'SELECT id, start_date, end_date FROM campaigns WHERE id = $1 AND company_id = $2',
+      'SELECT id, start_date, end_date, status FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, company_id]
     );
 
@@ -146,11 +259,9 @@ exports.update = async (req, res, next) => {
     }
 
     await assertNoCampaignDateOverlap(client, company_id, nextStart, nextEnd, id);
+    await assertCampaignDatesContainReferences(client, company_id, id, nextStart, nextEnd);
 
-    let nextStatus = req.body.status;
-    if (req.body.status === 'active' || req.body.start_date !== undefined || req.body.end_date !== undefined) {
-      nextStatus = await resolveCampaignStatusForDates(client, nextStart, nextEnd);
-    }
+    const nextStatus = req.body.status;
 
     if (nextStatus === 'active') {
       await client.query(
@@ -202,6 +313,66 @@ exports.update = async (req, res, next) => {
       return res.status(409).json({
         error: 'Conflict',
         message: 'Ya existe una campaña con ese nombre.',
+      });
+    }
+    if (err.code === '23P01') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'El período se superpone con otra campaña existente.',
+      });
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+exports.remove = async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const { company_id } = req.user;
+
+    await client.query('BEGIN');
+
+    const { rows: currentRows } = await client.query(
+      'SELECT id FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      [id, company_id]
+    );
+
+    if (!currentRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'NotFound', message: 'Campaña no encontrada' });
+    }
+
+    const references = await getCampaignReferenceCounts(client, company_id, id);
+    if (references.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Conflict',
+        message: CAMPAIGN_IN_USE_MESSAGE,
+      });
+    }
+
+    const { rows } = await client.query(
+      `
+      DELETE FROM campaigns
+      WHERE id = $1
+        AND company_id = $2
+      RETURNING id;
+      `,
+      [id, company_id]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.code === '23503') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: CAMPAIGN_IN_USE_MESSAGE,
       });
     }
     next(err);

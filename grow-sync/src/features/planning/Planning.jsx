@@ -18,7 +18,14 @@ import {
   Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
-import { PlusOutlined, MoreOutlined, EyeOutlined, UserOutlined } from '../../components/AppIcons';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  MoreOutlined,
+  EyeOutlined,
+  UserOutlined,
+} from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
 import { useNavigate } from "react-router-dom";
@@ -46,6 +53,7 @@ import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 dayjs.extend(isBetween);
 
 const { RangePicker } = DatePicker;
+const CAMPAIGN_HELP_TEXT = "La campaña representa el ciclo productivo completo, desde la siembra hasta la cosecha. Ejemplo: 2025/26.";
 
 // --- helpers ---
 const getId = (r) => r?.id ?? r?._id;
@@ -220,6 +228,7 @@ const Planning = () => {
   const [form] = Form.useForm();
   const [cropForm] = Form.useForm();
   const [campaignForm] = Form.useForm();
+  const [editCampaignForm] = Form.useForm();
   const [sowingForm] = Form.useForm();
   const [completionForm] = Form.useForm();
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
@@ -228,6 +237,8 @@ const Planning = () => {
   const selectedCampaignId = Form.useWatch("campaign_id", form);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [savingCampaign, setSavingCampaign] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
+  const [isEditCampaignModalOpen, setIsEditCampaignModalOpen] = useState(false);
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
   const [savingCrop, setSavingCrop] = useState(false);
   const [sowingCompletion, setSowingCompletion] = useState({ open: false, planning: null });
@@ -1030,6 +1041,74 @@ const Planning = () => {
     } catch (e) {
       notification.error({
         message: getUserFriendlyError(e, "No se pudo crear la campaña."),
+      });
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  const openEditCampaignModal = (campaign) => {
+    setEditingCampaign(campaign);
+    editCampaignForm.setFieldsValue({
+      name: campaign.name,
+      date_range: [
+        campaign.start_date ? dayjs(campaign.start_date) : null,
+        campaign.end_date ? dayjs(campaign.end_date) : null,
+      ],
+    });
+    setIsEditCampaignModalOpen(true);
+  };
+
+  const closeEditCampaignModal = () => {
+    setIsEditCampaignModalOpen(false);
+    setEditingCampaign(null);
+    editCampaignForm.resetFields();
+  };
+
+  const handleUpdateCampaign = async (values) => {
+    if (!editingCampaign) return;
+
+    setSavingCampaign(true);
+    try {
+      const payload = {
+        name: values.name?.trim(),
+        start_date: values.date_range?.[0]?.format("YYYY-MM-DD"),
+        end_date: values.date_range?.[1]?.format("YYYY-MM-DD"),
+      };
+
+      const campaignId = editingCampaign.id ?? editingCampaign._id;
+      await api.put(`/campaigns/${campaignId}`, payload);
+      await fetchCampaigns();
+      closeEditCampaignModal();
+      notification.success({ message: "Campaña actualizada" });
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(e, "No se pudo actualizar la campaña."),
+      });
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaign) => {
+    setSavingCampaign(true);
+    try {
+      const campaignId = campaign.id ?? campaign._id;
+      await api.delete(`/campaigns/${campaignId}`);
+      await fetchCampaigns();
+
+      const currentCampaignId = form.getFieldValue("campaign_id");
+      if (currentCampaignId === campaignId) {
+        form.setFieldValue("campaign_id", undefined);
+      }
+
+      notification.success({ message: "Campaña eliminada" });
+    } catch (e) {
+      notification.error({
+        message: getUserFriendlyError(
+          e,
+          "Esta campaña tiene información asociada y no puede eliminarse."
+        ),
       });
     } finally {
       setSavingCampaign(false);
@@ -2038,6 +2117,8 @@ const Planning = () => {
         destroyOnClose
       >
         <Space direction="vertical" style={{ width: "100%" }} size="large">
+          <Alert type="info" showIcon message={CAMPAIGN_HELP_TEXT} />
+
           <Form form={campaignForm} layout="vertical" onFinish={handleCreateCampaign}>
             <Row gutter={12}>
               <Col xs={24} md={8}>
@@ -2093,22 +2174,96 @@ const Planning = () => {
               {
                 title: "Acciones",
                 key: "actions",
-                render: (_, campaign) => (
-                  campaign.status === "active" ? (
-                    <Popconfirm
-                      title="Cerrar campaña"
-                      description="Las planificaciones históricas seguirán conservando esta campaña."
-                      okText="Cerrar"
-                      cancelText="Cancelar"
-                      onConfirm={() => handleCloseCampaign(campaign)}
-                    >
-                      <Button type="link">Cerrar campaña</Button>
-                    </Popconfirm>
-                  ) : "—"
-                ),
+                align: "center",
+                width: 150,
+                render: (_, campaign) => {
+                  const campaignInUse = campaign.can_delete === false || Number(campaign.references_count || 0) > 0;
+
+                  return (
+                    <Space size="small" style={{ justifyContent: "center", width: "100%" }}>
+                      <Tooltip title="Editar campaña">
+                        <Button
+                          type="text"
+                          shape="circle"
+                          icon={<EditOutlined />}
+                          aria-label="Editar campaña"
+                          onClick={() => openEditCampaignModal(campaign)}
+                        />
+                      </Tooltip>
+
+                      <Tooltip title={campaignInUse ? "Esta campaña tiene información asociada y no puede eliminarse." : "Eliminar campaña"}>
+                        <span>
+                          <Popconfirm
+                            title="¿Eliminar campaña?"
+                            description="Esta campaña no tiene información asociada. Esta acción no se puede deshacer."
+                            okText="Eliminar"
+                            cancelText="Cancelar"
+                            okButtonProps={{ danger: true }}
+                            disabled={campaignInUse}
+                            onConfirm={() => handleDeleteCampaign(campaign)}
+                          >
+                            <Button
+                              type="text"
+                              danger
+                              shape="circle"
+                              icon={<DeleteOutlined />}
+                              aria-label="Eliminar campaña"
+                              disabled={campaignInUse}
+                            />
+                          </Popconfirm>
+                        </span>
+                      </Tooltip>
+
+                      {campaign.status === "active" ? (
+                        <Popconfirm
+                          title="Cerrar campaña"
+                          description="Las planificaciones históricas seguirán conservando esta campaña."
+                          okText="Cerrar"
+                          cancelText="Cancelar"
+                          onConfirm={() => handleCloseCampaign(campaign)}
+                        >
+                          <Button type="link" size="small">Cerrar</Button>
+                        </Popconfirm>
+                      ) : null}
+                    </Space>
+                  );
+                },
               },
             ]}
           />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="Editar campaña"
+        open={isEditCampaignModalOpen}
+        onCancel={closeEditCampaignModal}
+        onOk={() => editCampaignForm.submit()}
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={savingCampaign}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Alert type="info" showIcon message={CAMPAIGN_HELP_TEXT} />
+
+          <Form form={editCampaignForm} layout="vertical" onFinish={handleUpdateCampaign}>
+            <Form.Item
+              name="name"
+              label="Nombre"
+              rules={[{ required: true, message: "Ingresá el nombre de la campaña" }]}
+            >
+              <Input placeholder="Ej: 2025/26" />
+            </Form.Item>
+
+            <Form.Item
+              name="date_range"
+              label="Período"
+              rules={[{ required: true, message: "Seleccioná el período" }]}
+            >
+              <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+            </Form.Item>
+          </Form>
         </Space>
       </Modal>
 
