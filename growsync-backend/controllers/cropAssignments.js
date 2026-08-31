@@ -126,7 +126,7 @@ const resolveAssignmentTarget = async (
     `
     SELECT (
       $1::date >= $3::date
-      AND ($2::date IS NULL OR $2::date <= $4::date)
+      AND ($4::date IS NULL OR $2::date IS NULL OR $2::date <= $4::date)
     ) AS matches_campaign;
     `,
     [start_date, end_date, row.campaign_start_date, row.campaign_end_date]
@@ -236,7 +236,7 @@ const assertCampaignAllowsDates = async (
     `
     SELECT (
       $1::date >= $3::date
-      AND ($2::date IS NULL OR $2::date <= $4::date)
+      AND ($4::date IS NULL OR $2::date IS NULL OR $2::date <= $4::date)
     ) AS matches_campaign;
     `,
     [startDate, endDate, campaign.start_date, campaign.end_date]

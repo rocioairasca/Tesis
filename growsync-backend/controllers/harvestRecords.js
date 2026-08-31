@@ -23,7 +23,8 @@ function toDateKey(value) {
 function legacyCampaignFromDates(startDate, endDate) {
   const startYear = toDateKey(startDate)?.slice(0, 4);
   const endYear = toDateKey(endDate)?.slice(0, 4);
-  return `${startYear}-${endYear}`;
+  if (!startYear) return null;
+  return endYear ? `${startYear}-${endYear}` : `${startYear}-en curso`;
 }
 
 function toNumber(value, label, { min = 0, inclusive = true } = {}) {
@@ -479,7 +480,7 @@ exports.createHarvestRecord = async (req, res, next) => {
         crop.id,
         normalizeCrop(crop.name),
         assignments[0].campaign_id,
-        legacyCampaignFromDates(assignments[0].campaign_start_date, assignments[0].campaign_end_date),
+        assignments[0].campaign_name || legacyCampaignFromDates(assignments[0].campaign_start_date, assignments[0].campaign_end_date),
         harvest_date,
         productionKg,
         harvestedAreaHa,
@@ -753,7 +754,7 @@ exports.updateHarvestRecord = async (req, res, next) => {
       const resolvedCrop = await resolveCrop(client, company_id, requestedCropId);
       cropText = normalizeCrop(resolvedCrop.name);
     }
-    const campaignText = current.campaign_id && current.campaign_start_date && current.campaign_end_date
+    const campaignText = current.campaign_id && current.campaign_start_date
       ? legacyCampaignFromDates(current.campaign_start_date, current.campaign_end_date)
       : campaign || current.campaign || null;
 

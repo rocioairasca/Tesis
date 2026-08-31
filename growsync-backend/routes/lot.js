@@ -114,6 +114,12 @@ router.post('/:lotId/layouts/:layoutId/sub-lots',
   layouts.createSubLot
 );
 
+router.put('/:lotId/layouts/:layoutId/sub-lots',
+  validate(schema.replaceSubLotsBody),
+  checkRole(2),
+  layouts.replaceSubLots
+);
+
 router.put('/:lotId/layouts/:layoutId/sub-lots/:subLotId',
   validate(schema.updateSubLotBody),
   checkRole(2),

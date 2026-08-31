@@ -166,7 +166,7 @@ const Harvest = () => {
           header: { borderBottom: "1px solid #f0f0f0" },
           body: { paddingBottom: 80, background: "#fafafa" },
         }}
-        destroyOnClose
+        destroyOnHidden
       >
         <HarvestForm
           lots={lots}

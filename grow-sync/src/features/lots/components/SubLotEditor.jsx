@@ -5,15 +5,34 @@ import {
   Polygon,
   GeoJSON,
   TileLayer,
-  Tooltip,
+  Tooltip as LeafletTooltip,
   useMap,
 } from 'react-leaflet';
-import { Alert, Button, Empty, List, Space, Statistic, Tag, Typography, notification } from 'antd';
+import {
+  Alert,
+  Button,
+  Empty,
+  Form,
+  Input,
+  List,
+  Modal,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+  notification,
+} from 'antd';
 import L from '../../../utils/leafletGeoman';
+import { ensureLeafletGeoman } from '../../../utils/leafletGeoman';
 import { useLeafletGeoman } from '../../../hooks/useLeafletGeoman';
 import 'leaflet/dist/leaflet.css';
 
-import { DeleteOutlined, PlusOutlined, Ruler, SaveOutlined } from '../../../components/AppIcons';
+import {
+  AimOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '../../../components/AppIcons';
 
 const { Text } = Typography;
 
@@ -23,6 +42,7 @@ const SHARED_BORDER_TOLERANCE_METERS = 0.75;
 const SMALL_REMAINING_AREA_HA = 0.05;
 const COVERAGE_TOLERANCE_HA = 0.10;
 const COVERAGE_TOLERANCE_PERCENT = 0.5;
+const AREA_TOLERANCE_HA = 0.03;
 const SNAP_OPTIONS = {
   snappable: true,
   snapDistance: SNAP_DISTANCE_PX,
@@ -48,6 +68,18 @@ const formatPercent = (value) => toNumber(value).toLocaleString('es-AR', {
   maximumFractionDigits: 2,
 });
 
+const getDraftId = (subLot) => subLot?.client_id || subLot?.id;
+
+const getGeometryAreaHa = (geom) => {
+  if (!geom) return 0;
+  const feature = geom.type === 'Feature' ? geom : { type: 'Feature', properties: {}, geometry: geom };
+  try {
+    return turf.area(feature) / 10000;
+  } catch {
+    return 0;
+  }
+};
+
 const isCoverageWithinTolerance = (remainingHa, parentAreaHa) => {
   const missingHa = Math.max(toNumber(remainingHa), 0);
   const parentHa = toNumber(parentAreaHa);
@@ -70,6 +102,7 @@ const issueMessage = {
   overlap: 'Hay sublotes que se superponen.',
   area_sum_mismatch: 'La suma de superficies no coincide con la superficie total del lote.',
   coverage_mismatch: 'Todavía queda superficie del lote sin asignar.',
+  coverage_excess: 'La superficie asignada excede la superficie total del lote.',
 };
 
 const getParentFeature = (layout) => {
@@ -147,7 +180,7 @@ const getReferenceRings = (layout, ignoreSubLotId = null) => {
   if (parentRing.length) rings.push(parentRing);
 
   (layout?.sub_lots || []).forEach((subLot) => {
-    if (ignoreSubLotId && subLot.id === ignoreSubLotId) return;
+    if (ignoreSubLotId && getDraftId(subLot) === ignoreSubLotId) return;
     const ring = getGeometryRing(subLot.geom);
     if (ring.length) rings.push(ring);
   });
@@ -280,15 +313,278 @@ const nextCode = (subLots = []) => {
   return String(subLots.length + 1);
 };
 
-const FitBounds = ({ parentGeometry }) => {
+const createTempId = () => `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const ensureMapGeomanReady = async (map) => {
+  if (!map) return false;
+  await ensureLeafletGeoman();
+  L.PM?.reInitLayer?.(map);
+
+  if (!map.pm || typeof map.pm.setGlobalOptions !== 'function') {
+    return false;
+  }
+
+  const currentOptions = typeof map.pm.getGlobalOptions === 'function'
+    ? map.pm.getGlobalOptions()
+    : {};
+  map.pm.setGlobalOptions(currentOptions || {});
+  return true;
+};
+
+const ensureLayerGeomanReady = (layer, map) => {
+  if (!layer || !map?.pm || !L.PM) return false;
+  layer.options.pmIgnore = false;
+  L.PM.reInitLayer?.(layer);
+  return Boolean(layer.pm && typeof layer.pm.enable === 'function' && typeof layer.pm.disable === 'function');
+};
+
+const withDraftFields = (subLot) => ({
+  ...subLot,
+  client_id: subLot.client_id || subLot.id || createTempId(),
+  area_ha: getGeometryAreaHa(subLot.geom) || toNumber(subLot.area_ha),
+  target_area_ha: subLot.target_area_ha ?? null,
+  isNew: Boolean(subLot.isNew),
+  isDirty: Boolean(subLot.isDirty),
+});
+
+const mapDraftSubLotToApiDto = (subLot, index) => {
+  const geom = subLot.geom?.type === 'Feature' ? subLot.geom.geometry : subLot.geom;
+  if (!geom?.type || !Array.isArray(geom?.coordinates)) {
+    throw new Error(`El contorno de ${subLot.name || subLot.code || 'un sublote'} no es válido.`);
+  }
+
+  return {
+    id: subLot.id || null,
+    clientId: subLot.id ? undefined : getDraftId(subLot),
+    code: subLot.code,
+    name: subLot.name,
+    geom,
+    sort_order: Number.isInteger(Number(subLot.sort_order)) ? Number(subLot.sort_order) : index,
+    enabled: subLot.enabled !== undefined ? subLot.enabled : true,
+  };
+};
+
+const getSinglePolygonGeometry = (feature) => {
+  const geometry = feature?.geometry || feature;
+  if (geometry?.type === 'Polygon') return geometry;
+  if (geometry?.type !== 'MultiPolygon' || !Array.isArray(geometry.coordinates)) return null;
+
+  const largest = geometry.coordinates
+    .map((coordinates) => ({
+      coordinates,
+      area: getGeometryAreaHa({ type: 'Polygon', coordinates }),
+    }))
+    .sort((a, b) => b.area - a.area)[0];
+
+  return largest?.coordinates ? { type: 'Polygon', coordinates: largest.coordinates } : null;
+};
+
+const getPolygonGeometriesFromFeature = (feature) => {
+  const geometry = feature?.geometry || feature;
+  if (geometry?.type === 'Polygon') return [geometry];
+  if (geometry?.type !== 'MultiPolygon' || !Array.isArray(geometry.coordinates)) return [];
+
+  return geometry.coordinates
+    .map((coordinates) => ({ type: 'Polygon', coordinates }))
+    .filter((geom) => getGeometryAreaHa(geom) > 0.0001)
+    .sort((a, b) => getGeometryAreaHa(b) - getGeometryAreaHa(a));
+};
+
+const intersectFeatures = (featureA, featureB) => {
+  try {
+    return turf.intersect(turf.featureCollection([featureA, featureB]));
+  } catch (error) {
+    try {
+      return turf.intersect(featureA, featureB);
+    } catch {
+      console.warn('No se pudo calcular la intersección local:', error);
+      return null;
+    }
+  }
+};
+
+const generateSurfaceGeometry = ({ parentFeature, availableFeature, centerLngLat, targetAreaHa }) => {
+  const targetSquareMeters = toNumber(targetAreaHa) * 10000;
+  if (!parentFeature || targetSquareMeters <= 0) return null;
+
+  const center = turf.point(centerLngLat);
+  const usableFeature = availableFeature || parentFeature;
+  const targetRadiusKm = Math.sqrt(targetSquareMeters / Math.PI) / 1000;
+
+  const makeCandidate = (scale) => {
+    const circle = turf.circle(center, Math.max(targetRadiusKm * scale, 0.001), {
+      steps: 24,
+      units: 'kilometers',
+    });
+    const clipped = intersectFeatures(circle, usableFeature);
+    const geom = getSinglePolygonGeometry(clipped);
+    return geom ? {
+      geom,
+      areaHa: getGeometryAreaHa(geom),
+    } : null;
+  };
+
+  let high = 1;
+  let best = makeCandidate(high);
+  for (let index = 0; index < 8 && (!best || best.areaHa < targetAreaHa * 0.98); index += 1) {
+    high *= 1.7;
+    const candidate = makeCandidate(high);
+    if (!candidate) continue;
+    best = !best || Math.abs(candidate.areaHa - targetAreaHa) < Math.abs(best.areaHa - targetAreaHa)
+      ? candidate
+      : best;
+  }
+
+  let low = 0.05;
+  for (let index = 0; index < 18; index += 1) {
+    const mid = (low + high) / 2;
+    const candidate = makeCandidate(mid);
+    if (!candidate) {
+      low = mid;
+      continue;
+    }
+
+    if (!best || Math.abs(candidate.areaHa - targetAreaHa) < Math.abs(best.areaHa - targetAreaHa)) {
+      best = candidate;
+    }
+
+    if (candidate.areaHa < targetAreaHa) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return best?.geom || null;
+};
+
+const computeLocalIssues = (parentFeature, subLots, parentAreaHa) => {
+  const issues = [];
+  const features = subLots.map((subLot) => ({ subLot, feature: getFeature(subLot) })).filter((item) => item.feature);
+
+  features.forEach(({ subLot, feature }) => {
+    if (getGeometryAreaHa(feature) <= 0.0001) {
+      issues.push({ code: 'invalid_geometry', message: `${subLot.name}: superficie inválida.` });
+      return;
+    }
+
+    try {
+      const outside = turf.difference(turf.featureCollection([feature, parentFeature]));
+      if (outside && getGeometryAreaHa(outside) > AREA_TOLERANCE_HA) {
+        issues.push({ code: 'not_contained', message: `${subLot.name}: parte del sublote queda fuera del lote.` });
+      }
+    } catch {
+      issues.push({ code: 'invalid_geometry', message: `${subLot.name}: no se pudo validar el contorno localmente.` });
+    }
+  });
+
+  for (let a = 0; a < features.length; a += 1) {
+    for (let b = a + 1; b < features.length; b += 1) {
+      const overlap = intersectFeatures(features[a].feature, features[b].feature);
+      if (overlap && getGeometryAreaHa(overlap) > AREA_TOLERANCE_HA) {
+        issues.push({
+          code: 'overlap',
+          message: `${features[a].subLot.name} se superpone con ${features[b].subLot.name}.`,
+        });
+      }
+    }
+  }
+
+  const assignedHa = subLots.reduce((acc, subLot) => acc + toNumber(subLot.area_ha), 0);
+  const remainingHa = Math.max(toNumber(parentAreaHa) - assignedHa, 0);
+  if (remainingHa > COVERAGE_TOLERANCE_HA && !isCoverageWithinTolerance(remainingHa, parentAreaHa)) {
+    issues.push({ code: 'coverage_mismatch', message: `Quedan ${formatHa(remainingHa)} ha sin asignar.` });
+  }
+
+  return issues;
+};
+
+const getCompactIssueMessages = (issues) => (
+  issues
+    .filter((issue) => issue.code !== 'coverage_mismatch')
+    .slice(0, 3)
+    .map((issue) => issue.message)
+);
+
+const FitBounds = ({ parentGeometry, fitKey }) => {
   const map = useMap();
+  const lastFitKeyRef = useRef(null);
 
   useEffect(() => {
+    if (lastFitKeyRef.current === fitKey) return;
     const positions = geoJsonToPositions(parentGeometry);
     if (positions.length) {
       map.fitBounds(positions, { padding: [36, 36] });
+      lastFitKeyRef.current = fitKey;
     }
-  }, [map, parentGeometry]);
+  }, [fitKey, map, parentGeometry]);
+
+  return null;
+};
+
+const MapRefBinder = ({ mapRef }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    mapRef.current = map;
+    return () => {
+      if (mapRef.current === map) {
+        mapRef.current = null;
+      }
+    };
+  }, [map, mapRef]);
+
+  return null;
+};
+
+const MapGeomanInitializer = ({ enabled, onReadyChange, onError }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!enabled) {
+      onReadyChange(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    onReadyChange(false);
+    ensureMapGeomanReady(map)
+      .then((ready) => {
+        if (cancelled) return;
+        onReadyChange(ready);
+        if (!ready) {
+          onError?.(new Error('Leaflet Geoman no dejó disponible map.pm.'));
+        }
+      })
+      .catch((error) => {
+        console.error('No se pudo iniciar Leaflet Geoman en el mapa:', error);
+        if (!cancelled) {
+          onReadyChange(false);
+          onError?.(error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      map.pm?.disableDraw?.();
+    };
+  }, [enabled, map, onError, onReadyChange]);
+
+  return null;
+};
+
+const SurfacePlacementHandler = ({ enabled, onPick }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const handleClick = (event) => onPick([event.latlng.lng, event.latlng.lat]);
+    map.on('click', handleClick);
+    return () => map.off('click', handleClick);
+  }, [enabled, map, onPick]);
 
   return null;
 };
@@ -301,12 +597,16 @@ const SnapReferencePolygon = ({ geometry }) => {
     const layer = ref.current;
     if (!layer) return undefined;
 
-    layer.options.pmIgnore = false;
-    layer.pm?.disable();
-    L.PM?.reInitLayer?.(layer);
+    try {
+      layer.options.pmIgnore = false;
+      layer.pm?.disable?.();
+      L.PM?.reInitLayer?.(layer);
+    } catch (error) {
+      console.warn('No se pudo preparar la referencia de snapping:', error);
+    }
 
     return () => {
-      layer.pm?.disable();
+      layer.pm?.disable?.();
     };
   }, []);
 
@@ -327,37 +627,27 @@ const SnapReferencePolygon = ({ geometry }) => {
   );
 };
 
-const DrawControls = ({ enabled, drawing, onDrawingChange, onSnapChange, onCreate }) => {
+const DrawControls = ({ enabled, drawing, onDrawingChange, onSnapChange, onCreate, onError }) => {
   const map = useMap();
 
   useEffect(() => {
     if (!enabled || !map?.pm) return undefined;
 
-    map.pm.addControls({
-      position: 'topright',
-      drawMarker: false,
-      drawCircleMarker: false,
-      drawPolyline: false,
-      drawRectangle: false,
-      drawCircle: false,
-      drawText: false,
-      dragMode: false,
-      cutPolygon: false,
-      rotateMode: false,
-      removalMode: false,
-      editMode: false,
-      drawPolygon: true,
-    });
-
-    map.pm.setGlobalOptions({
-      continueDrawing: false,
-      ...SNAP_OPTIONS,
-      pathOptions: {
-        color: '#2f80ed',
-        weight: 2,
-        fillOpacity: 0.2,
-      },
-    });
+    try {
+      map.pm.setGlobalOptions({
+        continueDrawing: false,
+        ...SNAP_OPTIONS,
+        pathOptions: {
+          color: '#2f80ed',
+          weight: 2,
+          fillOpacity: 0.2,
+        },
+      });
+    } catch (error) {
+      console.error('No se pudo configurar Leaflet Geoman:', error);
+      onError?.(error);
+      return undefined;
+    }
 
     const handleCreate = (event) => {
       onDrawingChange(false);
@@ -367,70 +657,106 @@ const DrawControls = ({ enabled, drawing, onDrawingChange, onSnapChange, onCreat
       }
     };
 
-    const setDrawing = () => onDrawingChange(true);
-    const clearDrawing = () => onDrawingChange(false);
     const setSnap = () => onSnapChange(true);
     const clearSnap = () => onSnapChange(false);
 
     map.on('pm:create', handleCreate);
-    map.on('pm:drawstart', setDrawing);
-    map.on('pm:drawend', clearDrawing);
     map.on('pm:snap', setSnap);
     map.on('pm:unsnap', clearSnap);
 
     return () => {
       map.off('pm:create', handleCreate);
-      map.off('pm:drawstart', setDrawing);
-      map.off('pm:drawend', clearDrawing);
       map.off('pm:snap', setSnap);
       map.off('pm:unsnap', clearSnap);
-      map.pm.removeControls();
+      map.pm.disableDraw?.();
       onSnapChange(false);
     };
-  }, [enabled, map, onCreate, onDrawingChange, onSnapChange]);
+  }, [enabled, map, onCreate, onDrawingChange, onError, onSnapChange]);
 
   useEffect(() => {
     if (!enabled || !map?.pm) return;
-    if (!drawing && typeof map.pm.globalDrawModeEnabled === 'function' && map.pm.globalDrawModeEnabled()) {
-      map.pm.disableDraw();
+    try {
+      if (drawing) {
+        map.pm.enableDraw('Polygon', {
+          ...SNAP_OPTIONS,
+          pathOptions: {
+            color: '#2f80ed',
+            weight: 2,
+            fillOpacity: 0.2,
+          },
+        });
+      } else if (typeof map.pm.globalDrawModeEnabled !== 'function' || map.pm.globalDrawModeEnabled()) {
+        map.pm.disableDraw();
+      }
+    } catch (error) {
+      console.error('No se pudo activar el dibujo del sublote:', error);
+      onDrawingChange(false);
+      onError?.(error);
     }
-  }, [drawing, enabled, map]);
+  }, [drawing, enabled, map, onDrawingChange, onError]);
 
   return null;
 };
 
-const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit, onSnapChange }) => {
+const EditableSubLotPolygon = ({ subLot, index, editable, geomanReady, drawing, onEdit, onSnapChange, onError }) => {
+  const map = useMap();
   const ref = useRef(null);
+  const frameRef = useRef(null);
   const positions = useMemo(() => geoJsonToPositions(subLot.geom), [subLot.geom]);
   const color = SUB_LOT_COLORS[index % SUB_LOT_COLORS.length];
+  const draftId = getDraftId(subLot);
 
   useEffect(() => {
     const layer = ref.current;
-    if (!layer?.pm) return undefined;
+    if (!geomanReady || !ensureLayerGeomanReady(layer, map)) return undefined;
 
-    if (editable) {
-      layer.pm.enable({
-        ...SNAP_OPTIONS,
-      });
-    } else {
-      layer.pm.disable();
+    try {
+      if (editable) {
+        layer.pm.enable({
+          ...SNAP_OPTIONS,
+        });
+      } else {
+        layer.pm.disable();
+      }
+    } catch (error) {
+      console.error('No se pudo habilitar edición del sublote:', error);
+      onError?.(error);
+      return undefined;
     }
 
-    const handleEdit = () => onEdit(subLot, layer);
+    const emitEdit = () => {
+      if (frameRef.current) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        onEdit(subLot, layer);
+      });
+    };
     const setSnap = () => onSnapChange(true);
     const clearSnap = () => onSnapChange(false);
-    layer.on('pm:edit', handleEdit);
+
+    layer.on('pm:edit', emitEdit);
+    layer.on('pm:update', emitEdit);
+    layer.on('pm:markerdrag', emitEdit);
+    layer.on('pm:markerdragend', emitEdit);
     layer.on('pm:snap', setSnap);
     layer.on('pm:unsnap', clearSnap);
 
     return () => {
-      layer.off('pm:edit', handleEdit);
+      layer.off('pm:edit', emitEdit);
+      layer.off('pm:update', emitEdit);
+      layer.off('pm:markerdrag', emitEdit);
+      layer.off('pm:markerdragend', emitEdit);
       layer.off('pm:snap', setSnap);
       layer.off('pm:unsnap', clearSnap);
-      layer.pm?.disable();
+      if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+      try {
+        layer.pm?.disable?.();
+      } catch (error) {
+        console.warn('No se pudo limpiar edición Geoman del sublote:', error);
+      }
       onSnapChange(false);
     };
-  }, [editable, onEdit, onSnapChange, subLot]);
+  }, [draftId, editable, geomanReady, map, onEdit, onError, onSnapChange, subLot]);
 
   if (!positions.length) return null;
 
@@ -446,9 +772,9 @@ const EditableSubLotPolygon = ({ subLot, index, editable, drawing, onEdit, onSna
       }}
     >
       {!drawing && (
-        <Tooltip direction="center" opacity={0.95}>
+        <LeafletTooltip direction="center" opacity={0.95}>
           {subLot.name} - {formatHa(subLot.area_ha)} ha
-        </Tooltip>
+        </LeafletTooltip>
       )}
     </Polygon>
   );
@@ -460,8 +786,12 @@ const RemainingAreaLayer = ({ feature }) => {
   useEffect(() => {
     const layer = ref.current;
     if (!layer) return;
-    layer.options.pmIgnore = true;
-    L.PM?.reInitLayer?.(layer);
+    try {
+      layer.options.pmIgnore = true;
+      L.PM?.reInitLayer?.(layer);
+    } catch (error) {
+      console.warn('No se pudo preparar la capa de superficie restante:', error);
+    }
   }, []);
 
   if (!feature?.geometry || turf.area(feature) <= 0) return null;
@@ -489,26 +819,68 @@ const SubLotEditor = ({
   editable,
   validation,
   saving,
-  onCreateSubLot,
-  onUpdateSubLot,
-  onDeleteSubLot,
-  onFillRemaining,
   onValidate,
   onActivate,
+  onSaveChanges,
+  onDirtyChange,
   isMobile = false,
 }) => {
   const [drawing, setDrawing] = useState(false);
   const [snapActive, setSnapActive] = useState(false);
-  const geomanReady = useLeafletGeoman(editable);
+  const [draftSubLots, setDraftSubLots] = useState([]);
+  const [deletedSubLotIds, setDeletedSubLotIds] = useState([]);
+  const [dirty, setDirty] = useState(false);
+  const [surfaceModalOpen, setSurfaceModalOpen] = useState(false);
+  const [surfacePlacement, setSurfacePlacement] = useState(null);
+  const [mapGeomanReady, setMapGeomanReady] = useState(false);
+  const [geomanError, setGeomanError] = useState(null);
+  const [surfaceForm] = Form.useForm();
+  const mapRef = useRef(null);
+  const lastLayoutIdRef = useRef(null);
+  const packageGeomanReady = useLeafletGeoman(editable);
+  const geomanReady = editable && packageGeomanReady && mapGeomanReady && !geomanError;
   const parentFeature = useMemo(() => getParentFeature(layout), [layout]);
   const parentGeometry = parentFeature?.geometry;
-  const subLots = layout?.sub_lots || [];
   const parentArea = toNumber(layout?.parent_area_ha_snapshot || lot?.area_ha || lot?.area);
-  const remainingFeature = useMemo(() => getRemainingFeature(parentFeature, subLots), [parentFeature, subLots]);
+  const draftLayout = useMemo(() => ({
+    ...layout,
+    sub_lots: draftSubLots,
+  }), [draftSubLots, layout]);
+  const remainingFeature = useMemo(() => getRemainingFeature(parentFeature, draftSubLots), [draftSubLots, parentFeature]);
+  const layoutSubLots = layout?.sub_lots;
+
+  useEffect(() => {
+    const layoutChanged = lastLayoutIdRef.current !== layout?.id;
+    if (!layoutChanged && dirty) return;
+    lastLayoutIdRef.current = layout?.id;
+    setDraftSubLots((layoutSubLots || []).map(withDraftFields));
+    setDeletedSubLotIds([]);
+    setDrawing(false);
+    setSurfacePlacement(null);
+  }, [dirty, layout?.id, layoutSubLots]);
+
+  useEffect(() => {
+    setGeomanError(null);
+  }, [layout?.id]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = 'Tenés cambios sin guardar. ¿Querés descartarlos?';
+      return event.returnValue;
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
 
   const assignedArea = useMemo(() => (
-    subLots.reduce((acc, subLot) => acc + toNumber(subLot.area_ha), 0)
-  ), [subLots]);
+    draftSubLots.reduce((acc, subLot) => acc + toNumber(subLot.area_ha), 0)
+  ), [draftSubLots]);
 
   const visualAreas = useMemo(() => {
     const parentApprox = parentArea || (parentFeature ? turf.area(parentFeature) / 10000 : 0);
@@ -521,6 +893,12 @@ const SubLotEditor = ({
       coverage: parentApprox > 0 ? (assignedApprox / parentApprox) * 100 : 0,
     };
   }, [assignedArea, parentArea, parentFeature]);
+  const remainingAreaHa = useMemo(() => getGeometryAreaHa(remainingFeature), [remainingFeature]);
+  const canFillRemaining = editable && remainingAreaHa > AREA_TOLERANCE_HA;
+
+  const localIssues = useMemo(() => (
+    parentFeature ? computeLocalIssues(parentFeature, draftSubLots, visualAreas.parent) : []
+  ), [draftSubLots, parentFeature, visualAreas.parent]);
 
   const hasSmallRemainingArea = visualAreas.remaining > 0.005
     && visualAreas.remaining <= SMALL_REMAINING_AREA_HA;
@@ -531,34 +909,268 @@ const SubLotEditor = ({
   const coverageWithinTolerance = validationSummary.coverage_within_tolerance === true
     || isCoverageWithinTolerance(coverageMissingHa, visualAreas.parent);
   const showCoverageTolerance = visualAreas.remaining > 0.005 && coverageWithinTolerance;
+  const compactIssueMessages = useMemo(() => getCompactIssueMessages(localIssues), [localIssues]);
+  const actionStateLabel = dirty
+    ? 'Cambios sin guardar'
+    : validation?.valid
+      ? 'División válida'
+      : 'Guardado';
 
-  const handleCreate = useCallback(async (layer) => {
+  const setDirtyDraftSubLots = useCallback((updater) => {
+    setDraftSubLots(updater);
+    setDirty(true);
+  }, []);
+
+  const handleGeomanError = useCallback((error) => {
+    console.error('Error en Leaflet Geoman:', error);
+    setGeomanError(error);
+    notification.error({
+      message: 'No se pudo iniciar la edición del mapa. Intentá volver a abrir el editor.',
+    });
+  }, []);
+
+  const handleCenterMap = useCallback(() => {
+    const positions = geoJsonToPositions(parentGeometry);
+    if (positions.length) {
+      mapRef.current?.fitBounds(positions, { padding: [36, 36] });
+    }
+  }, [parentGeometry]);
+
+  const startDrawing = useCallback(() => {
+    if (!geomanReady) {
+      notification.info({ message: 'El editor del mapa todavía se está preparando.' });
+      return;
+    }
+    setSurfacePlacement(null);
+    setDrawing(true);
+  }, [geomanReady]);
+
+  const handleCreate = useCallback((layer) => {
     const geom = layerToGeoJsonPolygon(layer);
     if (!geom) {
       notification.error({ message: 'No se pudo leer el polígono dibujado' });
       return;
     }
 
-    const normalizedGeom = normalizePolygonToReferences(geom, layout);
-    const code = nextCode(subLots);
-    await onCreateSubLot({
-      code,
-      name: `${lot.name}-${code}`,
-      geom: normalizedGeom,
-      sort_order: subLots.length,
-    });
-  }, [layout, lot.name, onCreateSubLot, subLots]);
+    const code = nextCode(draftSubLots);
+    const normalizedGeom = normalizePolygonToReferences(geom, draftLayout);
+    const areaHa = getGeometryAreaHa(normalizedGeom);
+    setDirtyDraftSubLots((current) => [
+      ...current,
+      withDraftFields({
+        id: null,
+        client_id: createTempId(),
+        code,
+        name: `${lot.name}-${code}`,
+        geom: normalizedGeom,
+        area_ha: areaHa,
+        sort_order: current.length,
+        isNew: true,
+        isDirty: true,
+      }),
+    ]);
+  }, [draftLayout, draftSubLots, lot.name, setDirtyDraftSubLots]);
 
-  const handleEdit = useCallback(async (subLot, layer) => {
+  const handleEdit = useCallback((subLot, layer) => {
     const geom = layerToGeoJsonPolygon(layer);
     if (!geom) {
       notification.error({ message: 'No se pudo leer el polígono editado' });
       return;
     }
 
-    const normalizedGeom = normalizePolygonToReferences(geom, layout, subLot.id);
-    await onUpdateSubLot(subLot.id, { geom: normalizedGeom });
-  }, [layout, onUpdateSubLot]);
+    const draftId = getDraftId(subLot);
+    const normalizedGeom = normalizePolygonToReferences(geom, draftLayout, draftId);
+    const areaHa = getGeometryAreaHa(normalizedGeom);
+    setDirtyDraftSubLots((current) => current.map((item) => (
+      getDraftId(item) === draftId
+        ? {
+          ...item,
+          geom: normalizedGeom,
+          area_ha: areaHa,
+          isDirty: true,
+        }
+        : item
+    )));
+  }, [draftLayout, setDirtyDraftSubLots]);
+
+  const handleNameChange = useCallback((draftId, value) => {
+    setDirtyDraftSubLots((current) => current.map((item) => (
+      getDraftId(item) === draftId
+        ? { ...item, name: value, isDirty: true }
+        : item
+    )));
+  }, [setDirtyDraftSubLots]);
+
+  const handleDeleteDraft = useCallback((subLot) => {
+    Modal.confirm({
+      title: 'Eliminar sublote',
+      content: subLot.id
+        ? 'El sublote se quitará de esta división cuando guardes los cambios.'
+        : 'El sublote se quitará del borrador.',
+      okText: 'Eliminar',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        if (subLot.id) {
+          setDeletedSubLotIds((current) => current.includes(subLot.id) ? current : [...current, subLot.id]);
+        }
+        setDraftSubLots((current) => current.filter((item) => getDraftId(item) !== getDraftId(subLot)));
+        setDirty(true);
+      },
+    });
+  }, []);
+
+  const resetDraft = useCallback(() => {
+    setDraftSubLots((layoutSubLots || []).map(withDraftFields));
+    setDeletedSubLotIds([]);
+    setDirty(false);
+    setDrawing(false);
+    setSurfacePlacement(null);
+  }, [layoutSubLots]);
+
+  const confirmDiscard = useCallback(() => {
+    Modal.confirm({
+      title: 'Tenés cambios sin guardar. ¿Querés descartarlos?',
+      okText: 'Descartar cambios',
+      cancelText: 'Seguir editando',
+      okButtonProps: { danger: true },
+      onOk: resetDraft,
+    });
+  }, [resetDraft]);
+
+  const openSurfaceModal = useCallback(() => {
+    surfaceForm.setFieldsValue({
+      name: `${lot.name}-${nextCode(draftSubLots)}`,
+      target_area_ha: Math.max(Math.min(visualAreas.remaining || visualAreas.parent, visualAreas.parent), 0.01),
+    });
+    setSurfaceModalOpen(true);
+  }, [draftSubLots, lot.name, surfaceForm, visualAreas.parent, visualAreas.remaining]);
+
+  const handleSurfaceSubmit = useCallback(async () => {
+    const values = await surfaceForm.validateFields();
+    setSurfacePlacement(values);
+    setSurfaceModalOpen(false);
+    setDrawing(false);
+    notification.info({ message: 'Hacé clic dentro del lote para ubicar el sublote.' });
+  }, [surfaceForm]);
+
+  const handleSurfacePick = useCallback((lngLat) => {
+    if (!surfacePlacement || !parentFeature) return;
+    const point = turf.point(lngLat);
+    if (!turf.booleanPointInPolygon(point, parentFeature)) {
+      notification.warning({ message: 'Elegí un punto dentro del lote.' });
+      return;
+    }
+
+    const availableFeature = remainingFeature || parentFeature;
+    if (remainingFeature && !turf.booleanPointInPolygon(point, remainingFeature)) {
+      notification.warning({ message: 'Elegí un punto sobre superficie sin asignar.' });
+      return;
+    }
+
+    const rawGeom = generateSurfaceGeometry({
+      parentFeature,
+      availableFeature,
+      centerLngLat: lngLat,
+      targetAreaHa: surfacePlacement.target_area_ha,
+    });
+
+    if (!rawGeom) {
+      notification.error({ message: 'No se pudo generar una forma inicial para esa ubicación.' });
+      return;
+    }
+
+    const code = nextCode(draftSubLots);
+    const normalizedGeom = normalizePolygonToReferences(rawGeom, draftLayout);
+    const areaHa = getGeometryAreaHa(normalizedGeom);
+    const diffHa = Math.abs(areaHa - toNumber(surfacePlacement.target_area_ha));
+
+    setDirtyDraftSubLots((current) => [
+      ...current,
+      withDraftFields({
+        id: null,
+        client_id: createTempId(),
+        code,
+        name: surfacePlacement.name || `${lot.name}-${code}`,
+        geom: normalizedGeom,
+        area_ha: areaHa,
+        target_area_ha: toNumber(surfacePlacement.target_area_ha),
+        sort_order: current.length,
+        isNew: true,
+        isDirty: true,
+      }),
+    ]);
+    setSurfacePlacement(null);
+    notification.success({
+      message: 'Sublote generado',
+      description: diffHa > AREA_TOLERANCE_HA
+        ? `Quedó en ${formatHa(areaHa)} ha. Ajustá los vértices para acercarlo a ${formatHa(surfacePlacement.target_area_ha)} ha.`
+        : undefined,
+    });
+  }, [draftLayout, draftSubLots, lot.name, parentFeature, remainingFeature, setDirtyDraftSubLots, surfacePlacement]);
+
+  const handleFillRemainingLocal = useCallback(() => {
+    const remainingGeometries = getPolygonGeometriesFromFeature(remainingFeature);
+    if (!remainingGeometries.length) {
+      notification.info({ message: 'No queda superficie sin asignar para completar.' });
+      return;
+    }
+
+    setDirtyDraftSubLots((current) => {
+      const nextSubLots = [...current];
+      remainingGeometries.forEach((rawGeom) => {
+        const code = nextCode(nextSubLots);
+        const normalizedGeom = normalizePolygonToReferences(rawGeom, {
+          ...draftLayout,
+          sub_lots: nextSubLots,
+        });
+        nextSubLots.push(withDraftFields({
+          id: null,
+          client_id: createTempId(),
+          code,
+          name: `${lot.name}-${code}`,
+          geom: normalizedGeom,
+          area_ha: getGeometryAreaHa(normalizedGeom),
+          sort_order: nextSubLots.length,
+          isNew: true,
+          isDirty: true,
+        }));
+      });
+      return nextSubLots;
+    });
+
+    if (remainingGeometries.length > 1) {
+      notification.warning({
+        message: `Quedan ${remainingGeometries.length} sectores sin asignar.`,
+        description: 'Se agregaron como sublotes separados para evitar una geometría inválida.',
+      });
+    }
+  }, [draftLayout, lot.name, remainingFeature, setDirtyDraftSubLots]);
+
+  const handleSaveChanges = useCallback(async () => {
+    if (!dirty || !editable) return;
+    let subLots;
+
+    try {
+      subLots = draftSubLots.map(mapDraftSubLotToApiDto);
+    } catch (error) {
+      notification.error({
+        message: 'No pudimos guardar la división.',
+        description: error.message,
+      });
+      return;
+    }
+
+    try {
+      await onSaveChanges?.({
+        subLots,
+      });
+      setDirty(false);
+      setDeletedSubLotIds([]);
+    } catch {
+      // El contenedor muestra el error amigable y conserva el borrador local.
+    }
+  }, [dirty, draftSubLots, editable, onSaveChanges]);
 
   if (!parentGeometry) {
     return (
@@ -574,7 +1186,7 @@ const SubLotEditor = ({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(280px, 340px)',
+        gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(300px, 370px)',
         gap: 16,
       }}
       className="sub-lot-editor"
@@ -586,6 +1198,12 @@ const SubLotEditor = ({
             zoom={14}
             style={{ height: '100%', width: '100%' }}
           >
+            <MapRefBinder mapRef={mapRef} />
+            <MapGeomanInitializer
+              enabled={editable && packageGeomanReady}
+              onReadyChange={setMapGeomanReady}
+              onError={handleGeomanError}
+            />
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -596,89 +1214,117 @@ const SubLotEditor = ({
               opacity={0.45}
             />
             <SnapReferencePolygon
-              key={`parent-${geomanReady ? 'geoman' : 'plain'}`}
+              key={`parent-${layout?.id || lot?.id}`}
               geometry={parentGeometry}
             />
-            <RemainingAreaLayer
-              key={`remaining-${geomanReady ? 'geoman' : 'plain'}`}
-              feature={remainingFeature}
-            />
-            {subLots.map((subLot, index) => (
+            {draftSubLots.map((subLot, index) => (
               <EditableSubLotPolygon
-                key={`${subLot.id}-${geomanReady ? 'geoman' : 'plain'}`}
+                key={getDraftId(subLot)}
                 subLot={subLot}
                 index={index}
                 editable={editable && geomanReady}
+                geomanReady={geomanReady}
                 drawing={drawing}
                 onEdit={handleEdit}
                 onSnapChange={setSnapActive}
+                onError={handleGeomanError}
               />
             ))}
             {geomanReady ? (
               <DrawControls
-                enabled={editable}
+                enabled={editable && geomanReady}
                 drawing={drawing}
                 onDrawingChange={setDrawing}
                 onSnapChange={setSnapActive}
                 onCreate={handleCreate}
+                onError={handleGeomanError}
               />
             ) : null}
-            <FitBounds parentGeometry={parentGeometry} />
+            <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />
           </MapContainer>
         </div>
       </div>
 
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Statistic title="Superficie total" value={formatHa(visualAreas.parent)} suffix="ha" />
-          <Statistic title="Asignada" value={formatHa(assignedArea || visualAreas.assigned)} suffix="ha" />
-          <Statistic title="Sin asignar" value={formatHa(visualAreas.remaining)} suffix="ha" />
-          <Statistic title="Cobertura" value={formatPercent(visualAreas.coverage)} suffix="%" />
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space wrap>
+          <Tooltip title="Centrar mapa en el lote">
+            <Button icon={<AimOutlined />} onClick={handleCenterMap}>
+              Centrar mapa
+            </Button>
+          </Tooltip>
+          {editable ? (
+            <Button
+              icon={<PlusOutlined />}
+              onClick={startDrawing}
+              disabled={!geomanReady}
+            >
+              Dibujar sublote
+            </Button>
+          ) : null}
+          {canFillRemaining ? (
+            <Button
+              icon={<PlusOutlined />}
+              onClick={handleFillRemainingLocal}
+            >
+              Completar superficie restante ({formatHa(remainingAreaHa)} ha)
+            </Button>
+          ) : null}
+        </Space>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 8,
+            padding: '8px 0',
+            borderTop: '1px solid #f0f0f0',
+            borderBottom: '1px solid #f0f0f0',
+          }}
+        >
+          <div>
+            <Text type="secondary">Asignada</Text>
+            <div><Text strong>{formatHa(assignedArea || visualAreas.assigned)} ha</Text></div>
+          </div>
+          <div>
+            <Text type="secondary">Sin asignar</Text>
+            <div><Text strong>{formatHa(visualAreas.remaining)} ha</Text></div>
+          </div>
+          <div>
+            <Text type="secondary">Cobertura</Text>
+            <div><Text strong>{formatPercent(visualAreas.coverage)} %</Text></div>
+          </div>
         </div>
 
-        {showCoverageTolerance ? (
-          <Tag color="green" style={{ alignSelf: 'flex-start' }}>
-            Dentro de tolerancia
-          </Tag>
+        {editable && !geomanReady && !geomanError ? (
+          <Text type="secondary">El editor del mapa todavía se está preparando.</Text>
         ) : null}
 
-        {editable && snapActive ? (
+        {geomanError ? (
           <Alert
-            type="success"
+            type="error"
             showIcon
-            message="Punto alineado con un borde o vértice existente."
+            message="No se pudo iniciar la edición del mapa. Intentá volver a abrir el editor."
           />
         ) : null}
 
-        {editable ? (
-          <Alert
-            type="info"
-            showIcon
-            message="Dibujá cada sublote con la herramienta de polígono. Las superficies se recalculan al guardar."
-          />
-        ) : (
+        {!editable ? (
           <Alert
             type="warning"
             showIcon
             message={statusEditMessage[layout.status] || 'Esta división no puede modificarse.'}
           />
-        )}
-
-        {hasSmallRemainingArea && !coverageWithinTolerance ? (
-          <Alert
-            type="warning"
-            showIcon
-            message="Queda una pequeña superficie sin asignar."
-            description={`Sin asignar: ${formatHa(visualAreas.remaining)} ha.`}
-          />
         ) : null}
+
+        {compactIssueMessages.map((message, index) => (
+          <Text key={`${message}-${index}`} type="warning">{message}</Text>
+        ))}
 
         <List
           size="small"
           bordered
-          dataSource={subLots}
+          dataSource={draftSubLots}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin sublotes" /> }}
-          renderItem={(subLot, index) => (
+          renderItem={(subLot) => (
             <List.Item
               actions={editable ? [
                 <Button
@@ -686,74 +1332,86 @@ const SubLotEditor = ({
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
-                  onClick={() => onDeleteSubLot(subLot.id)}
+                  aria-label="Eliminar sublote"
+                  onClick={() => handleDeleteDraft(subLot)}
                 />,
               ] : []}
             >
               <List.Item.Meta
                 title={(
-                  <Space size={8} wrap>
+                  <Space size={8} wrap style={{ width: '100%' }}>
                     <Tag color="blue">{subLot.code}</Tag>
-                    <Text strong>{subLot.name}</Text>
+                    {editable ? (
+                      <Input
+                        size="small"
+                        value={subLot.name}
+                        onChange={(event) => handleNameChange(getDraftId(subLot), event.target.value)}
+                        style={{ maxWidth: 220 }}
+                      />
+                    ) : (
+                      <Text strong>{subLot.name}</Text>
+                    )}
                   </Space>
                 )}
-                description={(
-                  <Space size={6}>
-                    <Ruler size={15} />
-                    <span>{formatHa(subLot.area_ha)} ha</span>
-                    <span style={{ color: SUB_LOT_COLORS[index % SUB_LOT_COLORS.length] }}>●</span>
-                  </Space>
-                )}
+                description={<Text type="secondary">{formatHa(subLot.area_ha)} ha</Text>}
               />
             </List.Item>
           )}
         />
 
         {validation?.issues?.length ? (
-          <Alert
-            type="error"
-            showIcon
-            message="La división todavía no es válida"
-            description={(
-              <ul style={{ paddingLeft: 18, marginBottom: 0 }}>
-                {validation.issues.map((issue, index) => (
-                  <li key={`${issue.code}-${index}`}>{issueMessage[issue.code] || issue.message}</li>
-                ))}
-              </ul>
-            )}
-          />
+          <Space direction="vertical" size={2}>
+            {validation.issues.slice(0, 3).map((issue, index) => (
+              <Text key={`${issue.code}-${index}`} type="danger">
+                {issueMessage[issue.code] || issue.message}
+              </Text>
+            ))}
+          </Space>
         ) : validation?.valid ? (
-          <Alert
-            type="success"
-            showIcon
-            message={showCoverageTolerance
-              ? 'La división está dentro de la tolerancia de cobertura.'
-              : 'La división cubre correctamente el lote.'}
-          />
+          <Space direction="vertical" size={2}>
+            <Text type="success" strong>✓ División válida</Text>
+            <Text type="secondary">
+              {formatPercent(validationSummary.coverage_percent ?? visualAreas.coverage)} % de cobertura
+            </Text>
+            {showCoverageTolerance ? (
+              <Text type="secondary">Diferencia dentro de la tolerancia permitida.</Text>
+            ) : null}
+          </Space>
         ) : null}
 
         <Space wrap>
-          {editable && subLots.length > 0 ? (
-            <Button
-              onClick={onFillRemaining}
-              loading={saving}
-              icon={<PlusOutlined />}
-              disabled={visualAreas.remaining <= 0.005}
-            >
-              Crear sublote con superficie restante
+          {editable && dirty ? (
+            <>
+              <Text type="warning">● Cambios sin guardar</Text>
+              <Text type="secondary">Guardá los cambios antes de comprobar la división.</Text>
+              <Button onClick={confirmDiscard} disabled={!dirty || saving}>
+                Descartar cambios
+              </Button>
+              <Button
+                type="primary"
+                onClick={handleSaveChanges}
+                loading={saving}
+                disabled={!dirty || localIssues.some((issue) => issue.code === 'invalid_geometry')}
+                icon={<SaveOutlined />}
+              >
+                Guardar cambios
+              </Button>
+            </>
+          ) : null}
+          {editable && !dirty && !validation?.valid ? (
+            <Button onClick={onValidate} loading={saving} icon={<SaveOutlined />}>
+              Comprobar división
             </Button>
           ) : null}
-          <Button onClick={onValidate} loading={saving} icon={<SaveOutlined />}>
-            Comprobar división
-          </Button>
-          <Button
-            type="primary"
-            disabled={!validation?.valid || !editable}
-            loading={saving}
-            onClick={onActivate}
-          >
-            Activar división
-          </Button>
+          {editable && !dirty && validation?.valid ? (
+            <Button
+              type="primary"
+              loading={saving}
+              onClick={onActivate}
+            >
+              Activar división
+            </Button>
+          ) : null}
         </Space>
       </Space>
     </div>

@@ -249,13 +249,14 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
       SELECT
         (
           ${calendarDateSql(1)} >= $3::date
-          AND ${calendarDateSql(2)} <= $4::date
+          AND ($4::date IS NULL OR ${calendarDateSql(2)} <= $4::date)
         ) AS matches_campaign,
         (
           SELECT json_build_object('id', id, 'name', name, 'status', status)
           FROM campaigns
           WHERE company_id = $5
-            AND ${calendarDateSql(1)} BETWEEN start_date AND end_date
+            AND ${calendarDateSql(1)} >= start_date
+            AND (end_date IS NULL OR ${calendarDateSql(1)} <= end_date)
           ORDER BY status = 'active' DESC, start_date DESC
           LIMIT 1
         ) AS suggested_campaign;
@@ -756,7 +757,8 @@ const assertSowingDateMatchesCampaign = async (client, campaignId, companyId, ef
     FROM campaigns
     WHERE id = $1
       AND company_id = $2
-      AND $3::date BETWEEN start_date AND end_date
+      AND $3::date >= start_date
+      AND (end_date IS NULL OR $3::date <= end_date)
     LIMIT 1;
     `,
     [campaignId, companyId, effectiveDate]

@@ -3,40 +3,35 @@ const { pool } = require('../db/supabaseClient');
 const fields = 'id, name, start_date, end_date, status, created_at, updated_at';
 const CAMPAIGN_IN_USE_MESSAGE = 'Esta campaña tiene información asociada y no puede eliminarse.';
 const CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE = 'No se pueden guardar estas fechas porque existen registros asociados fuera del período seleccionado.';
+const CAMPAIGN_NAME_UNIQUE_INDEX = 'campaigns_company_name_ci_unique';
+const LEGACY_ONE_ACTIVE_INDEX = 'campaigns_one_active_per_company';
 
-const assertNoCampaignDateOverlap = async (client, companyId, startDate, endDate, excludeId = null) => {
-  const { rows } = await client.query(
-    `
-    SELECT id, name
-    FROM campaigns
-    WHERE company_id = $1
-      AND daterange(start_date, end_date, '[]') && daterange($2::date, $3::date, '[]')
-      AND ($4::uuid IS NULL OR id <> $4)
-    LIMIT 1;
-    `,
-    [companyId, startDate, endDate, excludeId]
-  );
+const isDevelopment = () => process.env.NODE_ENV !== 'production';
 
-  if (rows.length) {
-    const err = new Error('El período se superpone con otra campaña existente.');
-    err.status = 409;
-    throw err;
+function logCampaignCreate(stage, payload) {
+  if (isDevelopment()) {
+    console.log(`[CAMPAIGN CREATE ${stage}]`, payload);
   }
-};
+}
 
-const resolveCampaignStatusForDates = async (client, startDate, endDate) => {
-  const { rows } = await client.query(
-    `
-    SELECT CASE
-      WHEN $1::date <= CURRENT_DATE AND $2::date >= CURRENT_DATE THEN 'active'
-      ELSE 'closed'
-    END AS status;
-    `,
-    [startDate, endDate]
-  );
+function logCampaignDbError(stage, err) {
+  if (isDevelopment()) {
+    console.error(`[CAMPAIGN ${stage} ERROR]`, {
+      code: err.code,
+      constraint: err.constraint,
+      detail: err.detail,
+    });
+  }
+}
 
-  return rows[0]?.status || 'closed';
-};
+function isUniqueViolation(err, constraintName) {
+  return err.code === '23505'
+    && (
+      err.constraint === constraintName
+      || String(err.detail || '').includes(constraintName)
+      || String(err.message || '').includes(constraintName)
+    );
+}
 
 const getCampaignReferenceCounts = async (client, companyId, campaignId) => {
   const { rows } = await client.query(
@@ -107,7 +102,7 @@ const assertCampaignDatesContainReferences = async (client, companyId, campaignI
       COUNT(*)::int AS out_of_range_count
     FROM referenced_dates
     WHERE date_value < $3::date
-       OR date_value > $4::date;
+       OR ($4::date IS NOT NULL AND date_value > $4::date);
     `,
     [companyId, campaignId, startDate, endDate]
   );
@@ -179,21 +174,24 @@ exports.create = async (req, res, next) => {
     const { company_id } = req.user;
     const { name, start_date, end_date } = req.body;
 
-    await client.query('BEGIN');
-    await assertNoCampaignDateOverlap(client, company_id, start_date, end_date);
-    const status = await resolveCampaignStatusForDates(client, start_date, end_date);
+    logCampaignCreate('REQUEST', {
+      name,
+      company_id,
+      start_date,
+      end_date: end_date || null,
+    });
 
-    if (status === 'active') {
-      await client.query(
-        `
-        UPDATE campaigns
-        SET status = 'closed'
-        WHERE company_id = $1
-          AND status = 'active';
-        `,
-        [company_id]
-      );
-    }
+    await client.query('BEGIN');
+    const status = req.body.status || 'active';
+    const insertName = name.trim();
+
+    logCampaignCreate('INSERT', {
+      name: insertName,
+      company_id,
+      start_date,
+      end_date: end_date || null,
+      status,
+    });
 
     const { rows } = await client.query(
       `
@@ -201,23 +199,24 @@ exports.create = async (req, res, next) => {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING ${fields};
       `,
-      [company_id, name.trim(), start_date, end_date, status]
+      [company_id, insertName, start_date, end_date || null, status]
     );
 
     await client.query('COMMIT');
     return res.status(201).json(rows[0]);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    if (err.code === '23505') {
+    logCampaignDbError('CREATE', err);
+    if (isUniqueViolation(err, CAMPAIGN_NAME_UNIQUE_INDEX)) {
       return res.status(409).json({
         error: 'Conflict',
         message: 'Ya existe una campaña con ese nombre.',
       });
     }
-    if (err.code === '23P01') {
+    if (isUniqueViolation(err, LEGACY_ONE_ACTIVE_INDEX)) {
       return res.status(409).json({
         error: 'Conflict',
-        message: 'El período se superpone con otra campaña existente.',
+        message: 'La base de datos todavía no permite varias campañas activas. Aplicá las migraciones pendientes e intentá nuevamente.',
       });
     }
     next(err);
@@ -245,36 +244,22 @@ exports.update = async (req, res, next) => {
     }
 
     const nextStart = req.body.start_date ?? currentRows[0].start_date;
-    const nextEnd = req.body.end_date ?? currentRows[0].end_date;
+    const nextEnd = req.body.end_date !== undefined ? req.body.end_date : currentRows[0].end_date;
     const { rows: dateOrderRows } = await client.query(
-      'SELECT $1::date <= $2::date AS valid_date_order',
+      'SELECT ($2::date IS NULL OR $1::date <= $2::date) AS valid_date_order',
       [nextStart, nextEnd]
     );
     if (!dateOrderRows[0]?.valid_date_order) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'BadRequest',
-        message: 'La fecha de inicio no puede ser posterior a la fecha de finalización',
+        message: 'La fecha de finalización no puede ser anterior a la fecha de inicio.',
       });
     }
 
-    await assertNoCampaignDateOverlap(client, company_id, nextStart, nextEnd, id);
     await assertCampaignDatesContainReferences(client, company_id, id, nextStart, nextEnd);
 
     const nextStatus = req.body.status;
-
-    if (nextStatus === 'active') {
-      await client.query(
-        `
-        UPDATE campaigns
-        SET status = 'closed'
-        WHERE company_id = $1
-          AND status = 'active'
-          AND id <> $2;
-        `,
-        [company_id, id]
-      );
-    }
 
     const sets = [];
     const params = [];
@@ -309,16 +294,17 @@ exports.update = async (req, res, next) => {
     return res.json(rows[0]);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    if (err.code === '23505') {
+    logCampaignDbError('UPDATE', err);
+    if (isUniqueViolation(err, CAMPAIGN_NAME_UNIQUE_INDEX)) {
       return res.status(409).json({
         error: 'Conflict',
         message: 'Ya existe una campaña con ese nombre.',
       });
     }
-    if (err.code === '23P01') {
+    if (isUniqueViolation(err, LEGACY_ONE_ACTIVE_INDEX)) {
       return res.status(409).json({
         error: 'Conflict',
-        message: 'El período se superpone con otra campaña existente.',
+        message: 'La base de datos todavía no permite varias campañas activas. Aplicá las migraciones pendientes e intentá nuevamente.',
       });
     }
     next(err);

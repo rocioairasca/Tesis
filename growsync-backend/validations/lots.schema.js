@@ -131,6 +131,27 @@ exports.updateSubLotBody = z.object({
   ),
 });
 
+const SubLotSnapshotItem = z.object({
+  id: z.string().uuid().nullable().optional(),
+  clientId: z.string().trim().min(1).max(120).nullable().optional(),
+  client_id: z.string().trim().min(1).max(120).nullable().optional(),
+  code: z.string().trim().min(1).max(50),
+  name: z.string().trim().min(1).max(255),
+  geom: GeoJsonPolygon,
+  sort_order: z.coerce.number().int().min(0).optional(),
+  enabled: z.coerce.boolean().optional(),
+});
+
+exports.replaceSubLotsBody = z.object({
+  params: z.object({
+    lotId: z.string().uuid(),
+    layoutId: z.string().uuid(),
+  }),
+  body: z.object({
+    subLots: z.array(SubLotSnapshotItem).max(1000),
+  }),
+});
+
 exports.listQuery = z.object({
   query: z.object({
     q: z.string().optional(),                 // busqueda por nombre

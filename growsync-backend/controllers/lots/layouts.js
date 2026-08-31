@@ -7,6 +7,8 @@ const CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA = 0.0025; // 25 m2.
 const COVERAGE_TOLERANCE_HA = 0.10;
 const COVERAGE_TOLERANCE_PERCENT = 0.5;
 const LAYOUT_IN_USE_MESSAGE = 'Esta división ya tiene información asociada y no puede eliminarse.';
+const SUB_LOT_IN_USE_MESSAGE = 'Este sublote ya tiene información asociada y no puede eliminarse.';
+const isDevelopment = () => process.env.NODE_ENV !== 'production';
 
 function httpError(status, message, error = 'BadRequest', details = null) {
   const err = new Error(message);
@@ -33,6 +35,26 @@ function parseJsonValue(value) {
   if (!value) return null;
   if (typeof value === 'string') return JSON.parse(value);
   return value;
+}
+
+function isGeometrySqlError(err) {
+  return Boolean(
+    err?.code
+    && ['XX000', '22023', '22000'].includes(err.code)
+    && /geojson|geometry|parse|polygon|linear ring/i.test(err.message || '')
+  );
+}
+
+function logSubLotBatchError(err) {
+  if (!isDevelopment()) return;
+  console.error('[SUBLOT BATCH SAVE BACKEND ERROR]', {
+    code: err.code,
+    constraint: err.constraint,
+    message: err.message,
+    detail: err.detail,
+    where: err.where,
+    stack: err.stack,
+  });
 }
 
 function layoutStatusLabel(status) {
@@ -198,6 +220,45 @@ async function getLayoutReferenceCounts(client, layoutId, companyId) {
     ORDER BY table_name
     `,
     [layoutId, companyId]
+  );
+
+  return rows;
+}
+
+async function getSubLotReferenceCounts(client, subLotIds = [], companyId) {
+  if (!subLotIds.length) return [];
+
+  const { rows } = await client.query(
+    `
+    WITH target_sub_lots AS (
+      SELECT id
+      FROM sub_lots
+      WHERE id = ANY($1::uuid[])
+        AND company_id = $2
+    ),
+    refs AS (
+      SELECT 'planning_lots' AS table_name, COUNT(*)::int AS count
+      FROM planning_lots pl
+      JOIN target_sub_lots sl ON sl.id = pl.sub_lot_id
+      UNION ALL
+      SELECT 'usage_lots' AS table_name, COUNT(*)::int AS count
+      FROM usage_lots ul
+      JOIN target_sub_lots sl ON sl.id = ul.sub_lot_id
+      UNION ALL
+      SELECT 'harvest_records' AS table_name, COUNT(*)::int AS count
+      FROM harvest_records hr
+      JOIN target_sub_lots sl ON sl.id = hr.sub_lot_id
+      UNION ALL
+      SELECT 'crop_assignments' AS table_name, COUNT(*)::int AS count
+      FROM crop_assignments ca
+      JOIN target_sub_lots sl ON sl.id = ca.sub_lot_id
+    )
+    SELECT table_name, count
+    FROM refs
+    WHERE count > 0
+    ORDER BY table_name
+    `,
+    [subLotIds, companyId]
   );
 
   return rows;
@@ -401,6 +462,366 @@ async function normalizeSubLotGeometryForSave(client, lotId, layoutId, companyId
   return normalizedGeoJsonText;
 }
 
+function normalizeSubLotSnapshotInput(subLots = []) {
+  const usedIds = new Set();
+  const usedCodes = new Map();
+
+  return subLots.map((subLot, index) => {
+    const id = subLot.id || null;
+    const code = String(subLot.code || '').trim();
+    const name = String(subLot.name || '').trim();
+    const clientId = subLot.clientId || subLot.client_id || null;
+    const geom = subLot.geom;
+
+    if (id) {
+      if (usedIds.has(id)) {
+        throw httpError(400, 'Hay sublotes repetidos en el borrador.', 'BadRequest', { id });
+      }
+      usedIds.add(id);
+    }
+
+    if (!code) {
+      throw httpError(400, 'Todos los sublotes necesitan código.', 'BadRequest', { row_index: index, client_id: clientId });
+    }
+
+    if (!name) {
+      throw httpError(400, `El sublote ${code} necesita nombre.`, 'BadRequest', { row_index: index, client_id: clientId });
+    }
+
+    if (!geom || geom.type !== 'Polygon' || !Array.isArray(geom.coordinates)) {
+      throw httpError(
+        400,
+        'La geometría de uno de los sublotes no es válida.',
+        'BadRequest',
+        {
+          row_index: index,
+          id,
+          client_id: clientId,
+          geom_type: geom?.type || null,
+        }
+      );
+    }
+
+    const normalizedCode = code.toUpperCase();
+    if (usedCodes.has(normalizedCode)) {
+      throw httpError(400, `El código ${code} está repetido en el borrador.`);
+    }
+    usedCodes.set(normalizedCode, index);
+
+    return {
+      row_index: index,
+      id,
+      client_id: clientId,
+      code,
+      name,
+      geom: JSON.parse(toGeoJsonText(geom)),
+      sort_order: Number.isInteger(Number(subLot.sort_order)) ? Number(subLot.sort_order) : index,
+      enabled: subLot.enabled !== undefined ? Boolean(subLot.enabled) : true,
+    };
+  });
+}
+
+async function createNormalizedSubLotSnapshotTable(client, lotId, layoutId, companyId, subLots) {
+  if (!Array.isArray(subLots)) {
+    throw httpError(400, 'El formato de los sublotes no es válido.');
+  }
+
+  if (isDevelopment()) {
+    console.log('[SUBLOT JSONB RECORDSET INPUT]', {
+      isArray: Array.isArray(subLots),
+      count: subLots.length,
+      jsonType: typeof subLots,
+    });
+  }
+
+  await client.query('DROP TABLE IF EXISTS pg_temp.tmp_sub_lot_snapshot');
+  await client.query(`
+    CREATE TEMP TABLE tmp_sub_lot_snapshot (
+      row_index integer PRIMARY KEY,
+      id uuid,
+      client_id text,
+      code text NOT NULL,
+      name text NOT NULL,
+      sort_order integer NOT NULL,
+      enabled boolean NOT NULL,
+      geom geometry(Polygon, 4326),
+      area_ha numeric NOT NULL,
+      outside_area_ha numeric NOT NULL,
+      outside_distance_m numeric NOT NULL,
+      normalized_parts_count integer NOT NULL
+    ) ON COMMIT DROP
+  `);
+
+  if (!subLots.length) return [];
+
+  const recordsetInput = subLots;
+  const recordsetValues = [
+    layoutId,
+    lotId,
+    companyId,
+    recordsetInput,
+    CONTAINMENT_TOLERANCE_METERS,
+    CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+  ];
+
+  await client.query(
+    `
+    INSERT INTO tmp_sub_lot_snapshot (
+      row_index,
+      id,
+      client_id,
+      code,
+      name,
+      sort_order,
+      enabled,
+      geom,
+      area_ha,
+      outside_area_ha,
+      outside_distance_m,
+      normalized_parts_count
+    )
+    WITH input_rows AS (
+      SELECT *
+      FROM jsonb_to_recordset($4::jsonb) AS x(
+        row_index integer,
+        id uuid,
+        client_id text,
+        code text,
+        name text,
+        geom jsonb,
+        sort_order integer,
+        enabled boolean
+      )
+    ),
+    layout_scope AS (
+      SELECT parent_geom_snapshot, tolerance_ha
+      FROM lot_layouts
+      WHERE id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      LIMIT 1
+    ),
+    candidate AS (
+      SELECT
+        input_rows.*,
+        ST_CollectionExtract(
+          ST_MakeValid(ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(input_rows.geom::text)), 4326)),
+          3
+        ) AS candidate_geom
+      FROM input_rows
+    ),
+    candidate_parts AS (
+      SELECT
+        candidate.*,
+        COUNT((dumped).geom)::int AS candidate_parts_count,
+        COALESCE(ST_UnaryUnion(ST_Collect((dumped).geom)), candidate.candidate_geom) AS candidate_polygon_geom
+      FROM candidate
+      LEFT JOIN LATERAL ST_Dump(candidate.candidate_geom) AS dumped ON TRUE
+      GROUP BY
+        candidate.row_index,
+        candidate.id,
+        candidate.client_id,
+        candidate.code,
+        candidate.name,
+        candidate.geom,
+        candidate.sort_order,
+        candidate.enabled,
+        candidate.candidate_geom
+    ),
+    outside AS (
+      SELECT
+        candidate_parts.*,
+        layout_scope.parent_geom_snapshot,
+        layout_scope.tolerance_ha,
+        ST_Difference(candidate_parts.candidate_polygon_geom, layout_scope.parent_geom_snapshot) AS outside_geom
+      FROM candidate_parts
+      CROSS JOIN layout_scope
+    ),
+    normalized_source AS (
+      SELECT
+        *,
+        CASE
+          WHEN ST_Covers(parent_geom_snapshot, candidate_polygon_geom) THEN candidate_polygon_geom
+          WHEN ST_Covers(
+            ST_Buffer(parent_geom_snapshot::geography, $5::numeric)::geometry,
+            candidate_polygon_geom
+          )
+          AND COALESCE((ST_Area(outside_geom::geography) / 10000), 0) <= $6::numeric
+            THEN ST_Intersection(candidate_polygon_geom, parent_geom_snapshot)
+          ELSE candidate_polygon_geom
+        END AS normalized_source_geom
+      FROM outside
+    ),
+    normalized_polygons AS (
+      SELECT
+        *,
+        ST_CollectionExtract(ST_MakeValid(normalized_source_geom), 3) AS normalized_polygon_geom,
+        COALESCE((ST_Area(outside_geom::geography) / 10000), 0)::numeric AS outside_area_ha,
+        CASE
+          WHEN ST_IsEmpty(outside_geom) THEN 0
+          ELSE ST_Distance(ST_PointOnSurface(outside_geom)::geography, parent_geom_snapshot::geography)
+        END::numeric AS outside_distance_m
+      FROM normalized_source
+    ),
+    normalized_parts AS (
+      SELECT
+        normalized_polygons.row_index,
+        (dumped).path[1] AS part_index,
+        (dumped).geom::geometry(Polygon, 4326) AS geom
+      FROM normalized_polygons
+      CROSS JOIN LATERAL ST_Dump(normalized_polygons.normalized_polygon_geom) AS dumped
+      WHERE NOT ST_IsEmpty(normalized_polygons.normalized_polygon_geom)
+    ),
+    normalized AS (
+      SELECT
+        normalized_polygons.row_index,
+        normalized_polygons.id,
+        normalized_polygons.client_id,
+        normalized_polygons.code,
+        normalized_polygons.name,
+        normalized_polygons.sort_order,
+        normalized_polygons.enabled,
+        normalized_polygons.outside_area_ha,
+        normalized_polygons.outside_distance_m,
+        COUNT(normalized_parts.geom)::int AS normalized_parts_count,
+        COALESCE((SUM(ST_Area(normalized_parts.geom::geography)) / 10000), 0)::numeric AS area_ha,
+        (
+          SELECT np.geom
+          FROM normalized_parts np
+          WHERE np.row_index = normalized_polygons.row_index
+          ORDER BY np.part_index
+          LIMIT 1
+        ) AS geom
+      FROM normalized_polygons
+      LEFT JOIN normalized_parts
+        ON normalized_parts.row_index = normalized_polygons.row_index
+      GROUP BY
+        normalized_polygons.row_index,
+        normalized_polygons.id,
+        normalized_polygons.client_id,
+        normalized_polygons.code,
+        normalized_polygons.name,
+        normalized_polygons.sort_order,
+        normalized_polygons.enabled,
+        normalized_polygons.outside_area_ha,
+        normalized_polygons.outside_distance_m
+    )
+    SELECT
+      row_index,
+      id,
+      client_id,
+      code,
+      name,
+      sort_order,
+      enabled,
+      geom,
+      area_ha,
+      outside_area_ha,
+      outside_distance_m,
+      normalized_parts_count
+    FROM normalized
+    `,
+    recordsetValues
+  );
+
+  const { rows } = await client.query(`
+    SELECT
+      row_index,
+      id,
+      client_id,
+      code,
+      name,
+      sort_order,
+      enabled,
+      area_ha,
+      outside_area_ha,
+      outside_distance_m,
+      normalized_parts_count,
+      ST_AsGeoJSON(geom)::json AS geom
+    FROM tmp_sub_lot_snapshot
+    ORDER BY row_index
+  `);
+
+  rows.forEach((row) => {
+    if (Number(row.area_ha || 0) <= 0) {
+      throw httpError(400, `La superficie de ${row.name || row.code} debe ser mayor a 0.`);
+    }
+
+    if (Number(row.outside_area_ha || 0) > CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA) {
+      throw httpError(
+        400,
+        `Parte de ${row.name || row.code} quedó fuera de los límites del lote. Ajustá el contorno e intentá nuevamente.`,
+        'BadRequest',
+        {
+          row_index: row.row_index,
+          id: row.id,
+          client_id: row.client_id,
+          outside_area_ha: Number(row.outside_area_ha || 0),
+          outside_distance_m: Number(row.outside_distance_m || 0),
+          containment_tolerance_meters: CONTAINMENT_TOLERANCE_METERS,
+          outside_area_tolerance_ha: CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA,
+        }
+      );
+    }
+
+    if (Number(row.normalized_parts_count || 0) !== 1 || !row.geom) {
+      throw httpError(
+        400,
+        `El contorno de ${row.name || row.code} necesita ajustes antes de guardarse.`,
+        'BadRequest',
+        {
+          row_index: row.row_index,
+          id: row.id,
+          client_id: row.client_id,
+          normalized_parts_count: Number(row.normalized_parts_count || 0),
+        }
+      );
+    }
+  });
+
+  const overlapResult = await client.query(`
+    SELECT
+      a.id AS sub_lot_a_id,
+      b.id AS sub_lot_b_id,
+      a.client_id AS sub_lot_a_client_id,
+      b.client_id AS sub_lot_b_client_id,
+      a.code AS sub_lot_a_code,
+      b.code AS sub_lot_b_code,
+      (ST_Area(ST_Intersection(a.geom, b.geom)::geography) / 10000)::numeric AS intersection_area_ha
+    FROM tmp_sub_lot_snapshot a
+    JOIN tmp_sub_lot_snapshot b
+      ON b.row_index > a.row_index
+    JOIN lot_layouts ll
+      ON ll.id = $1
+     AND ll.lot_id = $2
+     AND ll.company_id = $3
+    WHERE a.enabled = TRUE
+      AND b.enabled = TRUE
+      AND ST_Intersects(a.geom, b.geom)
+      AND (ST_Area(ST_Intersection(a.geom, b.geom)::geography) / 10000) > ll.tolerance_ha
+    ORDER BY intersection_area_ha DESC
+    LIMIT 1
+  `, [layoutId, lotId, companyId]);
+
+  if (overlapResult.rows.length) {
+    const overlap = overlapResult.rows[0];
+    throw httpError(
+      409,
+      `Hay sublotes que se superponen (${overlap.sub_lot_a_code} y ${overlap.sub_lot_b_code}).`,
+      'Conflict',
+      {
+        sub_lot_a_id: overlap.sub_lot_a_id,
+        sub_lot_b_id: overlap.sub_lot_b_id,
+        sub_lot_a_client_id: overlap.sub_lot_a_client_id,
+        sub_lot_b_client_id: overlap.sub_lot_b_client_id,
+        intersection_area_ha: Number(overlap.intersection_area_ha || 0),
+      }
+    );
+  }
+
+  return rows;
+}
+
 async function validateLayoutById(client, lotId, layoutId, companyId) {
   const layoutResult = await client.query(
     `
@@ -497,9 +918,20 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
       valid: true,
       mode: 'full_lot',
       message: 'Esta división representa el lote completo.',
+      parent_area_ha: parentAreaHa,
+      assigned_area_ha: parentAreaHa,
+      missing_area_ha: 0,
+      excess_area_ha: 0,
+      coverage_percent: 100,
+      within_tolerance: true,
       summary: {
         sub_lots_count: 0,
         parent_area_ha: parentAreaHa,
+        assigned_area_ha: parentAreaHa,
+        missing_area_ha: 0,
+        excess_area_ha: 0,
+        coverage_percent: 100,
+        within_tolerance: true,
         tolerance_ha: toleranceHa,
         coverage_tolerance_ha: COVERAGE_TOLERANCE_HA,
         coverage_tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
@@ -544,6 +976,7 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
 
   const sumDeltaHa = Math.abs(sumAreaHa - parentAreaHa);
   const sumTolerance = getCoverageTolerance(parentAreaHa, sumAreaHa);
+  const sumExcessHa = Math.max(sumAreaHa - parentAreaHa, 0);
   if (!sumTolerance.within_tolerance && sumAreaHa < parentAreaHa) {
     issues.push({
       code: 'area_sum_mismatch',
@@ -558,6 +991,7 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
 
   const coverageDeltaHa = Math.abs(unionAreaHa - parentAreaHa);
   const coverageTolerance = getCoverageTolerance(parentAreaHa, unionAreaHa);
+  const coverageExcessHa = Math.max(unionAreaHa - parentAreaHa, 0);
   if (!coverageTolerance.within_tolerance && unionAreaHa < parentAreaHa) {
     issues.push({
       code: 'coverage_mismatch',
@@ -570,12 +1004,34 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
     });
   }
 
+  if (sumExcessHa > toleranceHa || coverageExcessHa > toleranceHa) {
+    issues.push({
+      code: 'coverage_excess',
+      message: 'La superficie asignada excede la superficie total del lote.',
+      excess_ha: Math.max(sumExcessHa, coverageExcessHa),
+      sum_excess_ha: sumExcessHa,
+      coverage_excess_ha: coverageExcessHa,
+      tolerance_ha: toleranceHa,
+    });
+  }
+
   return {
     valid: issues.length === 0,
     mode: 'subdivided',
+    parent_area_ha: parentAreaHa,
+    assigned_area_ha: unionAreaHa,
+    missing_area_ha: coverageTolerance.missing_ha,
+    excess_area_ha: coverageExcessHa,
+    coverage_percent: parentAreaHa > 0 ? (unionAreaHa / parentAreaHa) * 100 : 0,
+    within_tolerance: coverageTolerance.within_tolerance,
     summary: {
       sub_lots_count: subLotsCount,
       parent_area_ha: parentAreaHa,
+      assigned_area_ha: unionAreaHa,
+      missing_area_ha: coverageTolerance.missing_ha,
+      excess_area_ha: coverageExcessHa,
+      coverage_percent: parentAreaHa > 0 ? (unionAreaHa / parentAreaHa) * 100 : 0,
+      within_tolerance: coverageTolerance.within_tolerance,
       sum_area_ha: sumAreaHa,
       union_area_ha: unionAreaHa,
       tolerance_ha: toleranceHa,
@@ -1035,6 +1491,174 @@ exports.deleteSubLot = async (req, res, next) => {
     return res.json({ ok: true, id: rows[0].id });
   } catch (err) {
     next(err);
+  }
+};
+
+exports.replaceSubLots = async (req, res, next) => {
+  const client = await pool.connect();
+
+  const { company_id } = req.user;
+  const { lotId, layoutId } = req.params;
+
+  try {
+    const requestedSubLots = req.body.subLots;
+    if (!Array.isArray(requestedSubLots)) {
+      throw httpError(400, 'El formato de los sublotes no es válido.');
+    }
+
+    const subLots = normalizeSubLotSnapshotInput(requestedSubLots);
+
+    if (isDevelopment()) {
+      console.log('[SUBLOT BATCH SAVE BACKEND]', {
+        lotId,
+        layoutId,
+        companyId: company_id,
+        subLotsCount: subLots.length,
+        subLots: subLots.map((subLot) => ({
+          id: subLot.id,
+          clientId: subLot.client_id,
+          client_id: subLot.client_id,
+          code: subLot.code,
+          name: subLot.name,
+          geomType: subLot.geom?.type,
+          sort_order: subLot.sort_order,
+          enabled: subLot.enabled,
+        })),
+      });
+    }
+
+    await client.query('BEGIN');
+
+    await assertEditableLayout(client, lotId, layoutId, company_id);
+
+    const { rows: existingRows } = await client.query(
+      `
+      SELECT id
+      FROM sub_lots
+      WHERE layout_id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      FOR UPDATE
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const existingIds = new Set(existingRows.map((row) => row.id));
+    const submittedExistingIds = subLots
+      .map((subLot) => subLot.id)
+      .filter(Boolean);
+
+    const unknownIds = submittedExistingIds.filter((id) => !existingIds.has(id));
+    if (unknownIds.length) {
+      throw httpError(
+        404,
+        'Uno de los sublotes del borrador ya no existe en esta división.',
+        'NotFound',
+        { ids: unknownIds }
+      );
+    }
+
+    await createNormalizedSubLotSnapshotTable(client, lotId, layoutId, company_id, subLots);
+
+    const deletedExistingIds = existingRows
+      .map((row) => row.id)
+      .filter((id) => !submittedExistingIds.includes(id));
+    const deleteReferences = await getSubLotReferenceCounts(client, deletedExistingIds, company_id);
+    if (deleteReferences.length) {
+      throw httpError(409, SUB_LOT_IN_USE_MESSAGE, 'Conflict', {
+        sub_lot_ids: deletedExistingIds,
+        references: deleteReferences,
+      });
+    }
+
+    if (submittedExistingIds.length) {
+      await client.query(
+        `
+        DELETE FROM sub_lots
+        WHERE layout_id = $1
+          AND lot_id = $2
+          AND company_id = $3
+          AND id <> ALL($4::uuid[])
+        `,
+        [layoutId, lotId, company_id, submittedExistingIds]
+      );
+    } else {
+      await client.query(
+        `
+        DELETE FROM sub_lots
+        WHERE layout_id = $1
+          AND lot_id = $2
+          AND company_id = $3
+        `,
+        [layoutId, lotId, company_id]
+      );
+    }
+
+    await client.query(
+      `
+      UPDATE sub_lots sl
+      SET code = snapshot.code,
+          name = snapshot.name,
+          geom = snapshot.geom,
+          sort_order = snapshot.sort_order,
+          enabled = snapshot.enabled
+      FROM tmp_sub_lot_snapshot snapshot
+      WHERE snapshot.id IS NOT NULL
+        AND sl.id = snapshot.id
+        AND sl.layout_id = $1
+        AND sl.lot_id = $2
+        AND sl.company_id = $3
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    await client.query(
+      `
+      INSERT INTO sub_lots (layout_id, lot_id, company_id, code, name, geom, sort_order, enabled)
+      SELECT
+        $1,
+        $2,
+        $3,
+        code,
+        name,
+        geom,
+        sort_order,
+        enabled
+      FROM tmp_sub_lot_snapshot
+      WHERE id IS NULL
+      ORDER BY row_index
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const validation = await validateLayoutById(client, lotId, layoutId, company_id);
+    const layout = await getLayout(client, lotId, layoutId, company_id);
+
+    await client.query('COMMIT');
+    return res.json({ layout, validation });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    logSubLotBatchError(err);
+
+    if (err.code === '23503') {
+      return next(httpError(409, SUB_LOT_IN_USE_MESSAGE, 'Conflict'));
+    }
+
+    if (err.code === '23505' && /sub_lots.*code|layout.*code|unique/i.test(err.constraint || err.detail || err.message || '')) {
+      return next(httpError(409, 'Ya existe un sublote con ese código en esta división.', 'Conflict'));
+    }
+
+    if (err.code === '22P02') {
+      return next(httpError(400, 'Uno de los identificadores del snapshot no es válido.'));
+    }
+
+    if (isGeometrySqlError(err)) {
+      return next(httpError(400, 'La geometría de uno de los sublotes no es válida.'));
+    }
+
+    return next(err);
+  } finally {
+    client.release();
   }
 };
 

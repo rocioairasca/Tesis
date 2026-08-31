@@ -234,7 +234,7 @@ const Vehicles = () => {
         height={isMobile ? "90vh" : undefined}
         width={isMobile ? "100%" : 420}
         styles={{ body: { paddingBottom: 80 } }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Form.Item

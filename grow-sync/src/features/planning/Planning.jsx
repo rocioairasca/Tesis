@@ -53,7 +53,7 @@ import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 dayjs.extend(isBetween);
 
 const { RangePicker } = DatePicker;
-const CAMPAIGN_HELP_TEXT = "La campaña representa el ciclo productivo completo, desde la siembra hasta la cosecha. Ejemplo: 2025/26.";
+const CAMPAIGN_HELP_TEXT = "La campaña representa un ciclo productivo completo, por ejemplo Fina 2026 o Gruesa 2025/26. Distintas campañas pueden desarrollarse al mismo tiempo.";
 
 // --- helpers ---
 const getId = (r) => r?.id ?? r?._id;
@@ -103,18 +103,19 @@ const campaignContainsRange = (campaign, range) => {
   if (!campaign || !start || !end) return true;
 
   const campaignStart = dayjs(campaign.start_date).startOf("day");
-  const campaignEnd = dayjs(campaign.end_date).endOf("day");
-  return !start.isBefore(campaignStart) && !end.isAfter(campaignEnd);
+  const campaignEnd = campaign.end_date ? dayjs(campaign.end_date).endOf("day") : null;
+  return !start.isBefore(campaignStart) && (!campaignEnd || !end.isAfter(campaignEnd));
 };
 const campaignContainsDate = (campaign, date) => {
   if (!campaign || !date) return false;
-  return date.isBetween(
-    dayjs(campaign.start_date).startOf("day"),
-    dayjs(campaign.end_date).endOf("day"),
-    null,
-    "[]"
-  );
+  const campaignStart = dayjs(campaign.start_date).startOf("day");
+  const campaignEnd = campaign.end_date ? dayjs(campaign.end_date).endOf("day") : null;
+  return !date.isBefore(campaignStart) && (!campaignEnd || !date.isAfter(campaignEnd));
 };
+
+const getCompatibleCampaigns = (campaigns, date) => (
+  date ? campaigns.filter((campaign) => campaignContainsDate(campaign, date)) : []
+);
 
 const statusTag = (s) => <Tag color={STATUS_COLORS[s] || "default"}>{statusLabel(s)}</Tag>;
 
@@ -500,11 +501,6 @@ const Planning = () => {
     ];
   }, [crops, editing]);
 
-  const activeCampaign = useMemo(
-    () => campaigns.find((campaign) => campaign.status === "active") || null,
-    [campaigns]
-  );
-
   const campaignOptions = useMemo(() => {
     const currentCampaignId = editing?.campaign_id;
     const currentCampaignName = editing?.campaign_name;
@@ -533,7 +529,12 @@ const Planning = () => {
   const suggestedCampaign = useMemo(() => {
     const [start] = selectedDateRange || [];
     if (!start) return null;
-    return campaigns.find((campaign) => campaignContainsDate(campaign, start)) || null;
+    const compatibleCampaigns = getCompatibleCampaigns(campaigns, start);
+    return compatibleCampaigns.length === 1 ? compatibleCampaigns[0] : null;
+  }, [campaigns, selectedDateRange]);
+  const compatibleCampaignCount = useMemo(() => {
+    const [start] = selectedDateRange || [];
+    return getCompatibleCampaigns(campaigns, start).length;
   }, [campaigns, selectedDateRange]);
   const campaignDateMismatch = Boolean(
     selectedCampaign
@@ -546,9 +547,11 @@ const Planning = () => {
     const [start] = range || [];
     if (!start) return;
 
-    const containingCampaign = campaigns.find((campaign) => campaignContainsDate(campaign, start));
-    if (containingCampaign) {
-      form.setFieldValue("campaign_id", containingCampaign.id ?? containingCampaign._id);
+    const compatibleCampaigns = getCompatibleCampaigns(campaigns, start);
+    if (compatibleCampaigns.length === 1) {
+      form.setFieldValue("campaign_id", compatibleCampaigns[0].id ?? compatibleCampaigns[0]._id);
+    } else {
+      form.setFieldValue("campaign_id", undefined);
     }
   }, [campaigns, form]);
 
@@ -927,7 +930,7 @@ const Planning = () => {
       form.setFieldsValue({
         status: "planificado",
         products: [],
-        campaign_id: activeCampaign?.id,
+        campaign_id: undefined,
       });
     }
     setIsDrawerOpen(true);
@@ -1029,9 +1032,12 @@ const Planning = () => {
     try {
       const payload = {
         name: values.name?.trim(),
-        start_date: values.date_range?.[0]?.format("YYYY-MM-DD"),
-        end_date: values.date_range?.[1]?.format("YYYY-MM-DD"),
+        start_date: values.start_date?.format("YYYY-MM-DD"),
+        end_date: values.end_date ? values.end_date.format("YYYY-MM-DD") : null,
       };
+      if (import.meta.env.DEV) {
+        console.log("[CAMPAIGN CREATE]", payload);
+      }
       const { data } = await api.post("/campaigns", payload);
       await fetchCampaigns();
       form.setFieldValue("campaign_id", data?.id);
@@ -1051,10 +1057,8 @@ const Planning = () => {
     setEditingCampaign(campaign);
     editCampaignForm.setFieldsValue({
       name: campaign.name,
-      date_range: [
-        campaign.start_date ? dayjs(campaign.start_date) : null,
-        campaign.end_date ? dayjs(campaign.end_date) : null,
-      ],
+      start_date: campaign.start_date ? dayjs(campaign.start_date) : null,
+      end_date: campaign.end_date ? dayjs(campaign.end_date) : null,
     });
     setIsEditCampaignModalOpen(true);
   };
@@ -1072,8 +1076,8 @@ const Planning = () => {
     try {
       const payload = {
         name: values.name?.trim(),
-        start_date: values.date_range?.[0]?.format("YYYY-MM-DD"),
-        end_date: values.date_range?.[1]?.format("YYYY-MM-DD"),
+        start_date: values.start_date?.format("YYYY-MM-DD"),
+        end_date: values.end_date ? values.end_date.format("YYYY-MM-DD") : null,
       };
 
       const campaignId = editingCampaign.id ?? editingCampaign._id;
@@ -1620,7 +1624,7 @@ const Planning = () => {
         open={isDrawerOpen}
         height={isMobile ? "90vh" : undefined}
         width={isMobile ? "100%" : 480}
-        destroyOnClose
+        destroyOnHidden
         styles={{ body: { paddingBottom: 80 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
@@ -1685,6 +1689,11 @@ const Planning = () => {
                   <div style={{ color: "#cf1322" }}>
                     La fecha seleccionada no corresponde a la campaña elegida.
                     {suggestedCampaign ? ` Campaña sugerida: ${suggestedCampaign.name}.` : ""}
+                  </div>
+                )}
+                {!campaignDateMismatch && compatibleCampaignCount > 1 && !selectedCampaignId && (
+                  <div style={{ color: "#595959" }}>
+                    Hay varias campañas compatibles con la fecha. Seleccioná la que corresponde.
                   </div>
                 )}
               </>
@@ -1851,7 +1860,7 @@ const Planning = () => {
         open={isDetailOpen}
         height={isMobile ? "85vh" : undefined}
         width={isMobile ? "100%" : 500}
-        destroyOnClose
+        destroyOnHidden
       >
         {viewing && (
           <Space direction="vertical" style={{ width: "100%" }} size="large">
@@ -1942,7 +1951,7 @@ const Planning = () => {
         width={isMobile ? "100%" : 520}
         placement={isMobile ? "bottom" : "right"}
         height={isMobile ? "80vh" : undefined}
-        destroyOnClose
+        destroyOnHidden
       >
         {selectedCalendarGroups.length ? (
           <div className="planning-month-list">
@@ -1968,7 +1977,7 @@ const Planning = () => {
         okText="Confirmar siembra"
         cancelText="Cancelar"
         confirmLoading={completingSowing}
-        destroyOnClose
+        destroyOnHidden
       >
         {sowingCompletion.planning && (
           <Space direction="vertical" size="middle" style={{ width: "100%" }}>
@@ -2042,7 +2051,7 @@ const Planning = () => {
         okText="Confirmar trabajo"
         cancelText="Cancelar"
         confirmLoading={completingWork}
-        destroyOnClose
+        destroyOnHidden
       >
         {workCompletion.planning && (
           <Space direction="vertical" size="middle" style={{ width: "100%" }}>
@@ -2114,7 +2123,7 @@ const Planning = () => {
         onCancel={() => setIsCampaignModalOpen(false)}
         footer={null}
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" style={{ width: "100%" }} size="large">
           <Alert type="info" showIcon message={CAMPAIGN_HELP_TEXT} />
@@ -2122,13 +2131,32 @@ const Planning = () => {
           <Form form={campaignForm} layout="vertical" onFinish={handleCreateCampaign}>
             <Row gutter={12}>
               <Col xs={24} md={8}>
-                <Form.Item name="name" label="Campaña" rules={[{ required: true, message: "Ingresá el nombre de la campaña" }]}>
-                  <Input placeholder="Ej: 2026/27" />
+                <Form.Item name="name" label="Nombre" rules={[{ required: true, message: "Ingresá el nombre de la campaña" }]}>
+                  <Input placeholder="Ej: Fina 2026" />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={10}>
-                <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
-                  <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              <Col xs={24} md={5}>
+                <Form.Item name="start_date" label="Fecha de inicio" rules={[{ required: true, message: "Seleccioná la fecha de inicio" }]}>
+                  <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={5}>
+                <Form.Item
+                  name="end_date"
+                  label="Fecha de finalización"
+                  dependencies={["start_date"]}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator: (_, value) => {
+                        const start = getFieldValue("start_date");
+                        if (!start || !value || !value.isBefore(start, "day")) return Promise.resolve();
+                        return Promise.reject(new Error("La fecha de finalización no puede ser anterior a la fecha de inicio."));
+                      },
+                    }),
+                  ]}
+                  extra="Podés dejar la fecha de finalización sin definir mientras la campaña esté en curso."
+                >
+                  <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
@@ -2157,7 +2185,7 @@ const Planning = () => {
               {
                 title: "Fin",
                 dataIndex: "end_date",
-                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "—",
+                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "En curso",
               },
               {
                 title: "Estado",
@@ -2242,7 +2270,7 @@ const Planning = () => {
         okText="Guardar"
         cancelText="Cancelar"
         confirmLoading={savingCampaign}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" style={{ width: "100%" }} size="middle">
           <Alert type="info" showIcon message={CAMPAIGN_HELP_TEXT} />
@@ -2257,11 +2285,29 @@ const Planning = () => {
             </Form.Item>
 
             <Form.Item
-              name="date_range"
-              label="Período"
-              rules={[{ required: true, message: "Seleccioná el período" }]}
+              name="start_date"
+              label="Fecha de inicio"
+              rules={[{ required: true, message: "Seleccioná la fecha de inicio" }]}
             >
-              <RangePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+            </Form.Item>
+
+            <Form.Item
+              name="end_date"
+              label="Fecha de finalización"
+              dependencies={["start_date"]}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator: (_, value) => {
+                    const start = getFieldValue("start_date");
+                    if (!start || !value || !value.isBefore(start, "day")) return Promise.resolve();
+                    return Promise.reject(new Error("La fecha de finalización no puede ser anterior a la fecha de inicio."));
+                  },
+                }),
+              ]}
+              extra="Podés dejar la fecha de finalización sin definir mientras la campaña esté en curso."
+            >
+              <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
             </Form.Item>
           </Form>
         </Space>
@@ -2275,7 +2321,7 @@ const Planning = () => {
         confirmLoading={savingCrop}
         okText="Guardar"
         cancelText="Cancelar"
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={cropForm} layout="vertical" onFinish={handleCreateCrop}>
           <Form.Item

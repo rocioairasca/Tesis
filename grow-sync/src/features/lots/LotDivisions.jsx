@@ -58,9 +58,8 @@ const toDateKey = (value) => value ? dayjs(value).format('YYYY-MM-DD') : null;
 
 const campaignContainsDate = (campaign, dateKey) => (
   campaign?.start_date
-  && campaign?.end_date
   && dateKey >= String(campaign.start_date).slice(0, 10)
-  && dateKey <= String(campaign.end_date).slice(0, 10)
+  && (!campaign.end_date || dateKey <= String(campaign.end_date).slice(0, 10))
 );
 
 const statusColor = {
@@ -88,6 +87,56 @@ const friendlyErrorMessage = (error, fallback = 'No pudimos guardar los cambios.
   getUserFriendlyError(error, fallback)
 );
 
+const findSingleCompatibleCampaign = (campaigns = [], dateKey) => {
+  const compatible = campaigns.filter((campaign) => campaignContainsDate(campaign, dateKey));
+  return compatible.length === 1 ? compatible[0] : null;
+};
+
+class SubLotEditorErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.boundaryKey !== this.props.boundaryKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[SUBLOT EDITOR ERROR]', { error, info });
+  }
+
+  retry = () => {
+    this.setState({ hasError: false });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="No pudimos cargar el editor de sublotes."
+          description="Reintentá abrir el editor. Si vuelve a fallar, los detalles quedaron registrados en la consola."
+          action={(
+            <Button size="small" onClick={this.retry}>
+              Reintentar
+            </Button>
+          )}
+        />
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const LotDivisions = () => {
   const { lotId } = useParams();
   const navigate = useNavigate();
@@ -105,6 +154,7 @@ const LotDivisions = () => {
   const [crops, setCrops] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [cropModal, setCropModal] = useState({ open: false, mode: 'create', unit: null, assignment: null });
+  const [subLotDirty, setSubLotDirty] = useState(false);
   const [cropForm] = Form.useForm();
 
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
@@ -308,95 +358,47 @@ const LotDivisions = () => {
     });
   };
 
-  const createSubLot = async (payload) => {
+  const saveSubLotChanges = async ({ subLots = [] } = {}) => {
     if (!selectedLayoutId) return;
+
+    const url = `/lots/${lotId}/layouts/${selectedLayoutId}/sub-lots`;
+    const payload = { subLots };
+
     setSaving(true);
     try {
       setValidation(null);
-      await api.post(`/lots/${lotId}/layouts/${selectedLayoutId}/sub-lots`, payload);
-      notification.success({ message: 'Sublote guardado' });
+
+      if (import.meta.env.DEV) {
+        console.log('[SUBLOT BATCH SAVE]', {
+          method: 'PUT',
+          url,
+          lotId,
+          layoutId: selectedLayoutId,
+          subLots: payload.subLots,
+        });
+      }
+
+      const { data } = await api.put(url, payload);
+      if (data?.validation) setValidation(data.validation);
+      if (data?.layout) setSelectedLayout(data.layout);
+      notification.success({ message: 'Cambios guardados' });
+      setSubLotDirty(false);
       await refreshAll(selectedLayoutId);
     } catch (error) {
-      console.error('Error al guardar sublote:', error);
+      console.error('Error al guardar cambios de sublotes:', error);
+      if (import.meta.env.DEV) {
+        console.error('[SUBLOT BATCH SAVE ERROR]', {
+          status: error.response?.status,
+          data: error.response?.data,
+          url,
+          payload,
+        });
+      }
       notification.error({
-        message: 'No se pudo guardar el sublote',
+        message: 'No pudimos guardar la división. Revisá los datos e intentá nuevamente.',
         description: friendlyErrorMessage(error),
       });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateSubLot = async (subLotId, payload) => {
-    if (!selectedLayoutId) return;
-    setSaving(true);
-    try {
-      setValidation(null);
-      await api.put(`/lots/${lotId}/layouts/${selectedLayoutId}/sub-lots/${subLotId}`, payload);
-      notification.success({ message: 'Sublote actualizado' });
-      await refreshAll(selectedLayoutId);
-    } catch (error) {
-      console.error('Error al actualizar sublote:', error);
-      notification.error({
-        message: 'No se pudo actualizar el sublote',
-        description: friendlyErrorMessage(error),
-      });
-      await refreshAll(selectedLayoutId);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteSubLot = async (subLotId) => {
-    if (!selectedLayoutId) return;
-
-    Modal.confirm({
-      title: 'Eliminar sublote',
-      content: 'El sublote se quitará de esta división en edición.',
-      okText: 'Eliminar',
-      cancelText: 'Cancelar',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        setSaving(true);
-        try {
-          setValidation(null);
-          await api.delete(`/lots/${lotId}/layouts/${selectedLayoutId}/sub-lots/${subLotId}`);
-          notification.success({ message: 'Sublote eliminado' });
-          await refreshAll(selectedLayoutId);
-        } catch (error) {
-          console.error('Error al eliminar sublote:', error);
-          notification.error({
-            message: 'No se pudo eliminar el sublote',
-            description: friendlyErrorMessage(error),
-          });
-        } finally {
-          setSaving(false);
-        }
-      },
-    });
-  };
-
-  const fillRemainingSubLot = async () => {
-    if (!selectedLayoutId) return;
-    setSaving(true);
-    try {
-      setValidation(null);
-      const { data } = await api.post(`/lots/${lotId}/layouts/${selectedLayoutId}/fill-remaining`);
-      const subLot = data?.sub_lot;
-      notification.success({
-        message: 'Sublote restante creado',
-        description: subLot ? `${subLot.name} - ${formatHa(subLot.area_ha)} ha` : undefined,
-      });
-      await refreshAll(selectedLayoutId);
-    } catch (error) {
-      console.error('Error al crear superficie restante:', error);
-      const response = error?.response?.data;
-      notification.error({
-        message: response?.error === 'MultipleRemainingRegions'
-          ? 'Quedan varias superficies separadas'
-          : 'No se pudo crear la superficie restante',
-        description: friendlyErrorMessage(error),
-      });
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -404,6 +406,11 @@ const LotDivisions = () => {
 
   const validateLayout = async () => {
     if (!selectedLayoutId) return null;
+    if (subLotDirty) {
+      notification.warning({ message: 'Guardá los cambios antes de comprobar la división.' });
+      return null;
+    }
+
     setSaving(true);
     try {
       const { data } = await api.post(`/lots/${lotId}/layouts/${selectedLayoutId}/validate`);
@@ -461,10 +468,6 @@ const LotDivisions = () => {
     });
   };
 
-  const getCampaignForDate = (dateKey) => (
-    campaigns.find((campaign) => campaignContainsDate(campaign, dateKey)) || null
-  );
-
   const openCropModal = async ({ mode = 'create', unit = null, assignment = null } = {}) => {
     try {
       let availableCampaigns = campaigns;
@@ -478,7 +481,7 @@ const LotDivisions = () => {
       const dateKey = toDateKey(startDate);
       const suggestedCampaign = assignment?.campaign_id
         ? null
-        : (availableCampaigns.find((campaign) => campaignContainsDate(campaign, dateKey)) || null);
+        : findSingleCompatibleCampaign(availableCampaigns, dateKey);
       const selectedLocation = assignment
         ? `${assignment.lot_id}|${assignment.sub_lot_id || ''}`
         : (unit ? `${unit.lot_id || lotId}|${unit.sub_lot_id || ''}` : undefined);
@@ -507,7 +510,7 @@ const LotDivisions = () => {
 
   const handleStartDateChange = (dateValue) => {
     const dateKey = toDateKey(dateValue);
-    const matchingCampaign = getCampaignForDate(dateKey);
+    const matchingCampaign = findSingleCompatibleCampaign(campaigns, dateKey);
     if (matchingCampaign) {
       cropForm.setFieldValue('campaign_id', matchingCampaign.id);
     }
@@ -697,13 +700,34 @@ const LotDivisions = () => {
     </Card>
   );
 
+  const confirmDiscardSubLotChanges = (onDiscard) => {
+    if (!subLotDirty) {
+      onDiscard();
+      return;
+    }
+
+    Modal.confirm({
+      title: 'Tenés cambios sin guardar. ¿Querés descartarlos?',
+      okText: 'Descartar cambios',
+      cancelText: 'Seguir editando',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setSubLotDirty(false);
+        onDiscard();
+      },
+    });
+  };
+
   const renderLayoutCard = (layout) => {
     const subLots = layout.sub_lots || [];
     const isSelected = selectedLayoutId === layout.id;
 
     return (
       <List.Item
-        onClick={() => setSelectedLayoutId(layout.id)}
+        onClick={() => {
+          if (layout.id === selectedLayoutId) return;
+          confirmDiscardSubLotChanges(() => setSelectedLayoutId(layout.id));
+        }}
         style={{
           cursor: 'pointer',
           background: isSelected ? '#f6ffed' : '#fff',
@@ -765,7 +789,7 @@ const LotDivisions = () => {
           <Space align="center" wrap>
             <Button
               icon={<ArrowLeftOutlined />}
-              onClick={() => navigate('/lotes')}
+              onClick={() => confirmDiscardSubLotChanges(() => navigate('/lotes'))}
               shape={isMobile ? 'circle' : undefined}
             >
               {isMobile ? null : 'Volver'}
@@ -836,20 +860,20 @@ const LotDivisions = () => {
             )}
           >
             {selectedLayout ? (
-              <SubLotEditor
-                lot={lot}
-                layout={selectedLayout}
-                editable={editable}
-                validation={validation}
-                saving={saving}
-                isMobile={isMobile}
-                onCreateSubLot={createSubLot}
-                onUpdateSubLot={updateSubLot}
-                onDeleteSubLot={deleteSubLot}
-                onFillRemaining={fillRemainingSubLot}
-                onValidate={validateLayout}
-                onActivate={activateLayout}
-              />
+              <SubLotEditorErrorBoundary boundaryKey={selectedLayout.id}>
+                <SubLotEditor
+                  lot={lot}
+                  layout={selectedLayout}
+                  editable={editable}
+                  validation={validation}
+                  saving={saving}
+                  isMobile={isMobile}
+                  onValidate={validateLayout}
+                  onActivate={activateLayout}
+                  onSaveChanges={saveSubLotChanges}
+                  onDirtyChange={setSubLotDirty}
+                />
+              </SubLotEditorErrorBoundary>
             ) : (
               <Empty description="Seleccioná o creá una división" />
             )}
@@ -869,7 +893,7 @@ const LotDivisions = () => {
         okText={cropModal.mode === 'finalize' ? 'Finalizar ciclo' : 'Guardar'}
         cancelText="Cancelar"
         confirmLoading={saving}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form layout="vertical" form={cropForm} onFinish={saveCropAssignment}>
           {cropModal.mode !== 'finalize' ? (

@@ -6,13 +6,13 @@ exports.createBody = z.object({
   body: z.object({
     name: z.string().trim().min(1, 'Nombre requerido'),
     start_date: YMD,
-    end_date: YMD,
+    end_date: YMD.nullable().optional(),
     status: z.enum(['active', 'closed']).optional(),
   }).superRefine((val, ctx) => {
-    if (val.start_date > val.end_date) {
+    if (val.end_date && val.start_date > val.end_date) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'La fecha de inicio no puede ser posterior a la fecha de finalización',
+        message: 'La fecha de finalización no puede ser anterior a la fecha de inicio.',
         path: ['end_date'],
       });
     }
@@ -24,7 +24,7 @@ exports.updateBody = z.object({
   body: z.object({
     name: z.string().trim().min(1, 'Nombre requerido').optional(),
     start_date: YMD.optional(),
-    end_date: YMD.optional(),
+    end_date: YMD.nullable().optional(),
     status: z.enum(['active', 'closed']).optional(),
   }),
 });
