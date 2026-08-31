@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MapContainer,
   Polygon,
+  Polyline,
   GeoJSON,
   TileLayer,
   Tooltip as LeafletTooltip,
@@ -14,6 +15,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   List,
   Modal,
   Space,
@@ -379,6 +381,28 @@ const getSinglePolygonGeometry = (feature) => {
   return largest?.coordinates ? { type: 'Polygon', coordinates: largest.coordinates } : null;
 };
 
+const getPolygonGeometryContainingPoint = (feature, lngLat) => {
+  const geometry = feature?.geometry || feature;
+  if (geometry?.type === 'Polygon') return geometry;
+  if (geometry?.type !== 'MultiPolygon' || !Array.isArray(geometry.coordinates)) return null;
+
+  const point = turf.point(lngLat);
+  return geometry.coordinates
+    .map((coordinates) => ({ type: 'Polygon', coordinates }))
+    .filter((geom) => getGeometryAreaHa(geom) > 0.0001)
+    .find((geom) => turf.booleanPointInPolygon(point, geom))
+    || null;
+};
+
+const getAvailablePolygonForCut = (feature, lngLat) => {
+  const geometry = feature?.geometry || feature;
+  if (!geometry) return null;
+  if (geometry.type === 'Polygon') {
+    return turf.booleanPointInPolygon(turf.point(lngLat), geometry) ? geometry : null;
+  }
+  return getPolygonGeometryContainingPoint(geometry, lngLat);
+};
+
 const getPolygonGeometriesFromFeature = (feature) => {
   const geometry = feature?.geometry || feature;
   if (geometry?.type === 'Polygon') return [geometry];
@@ -403,59 +427,131 @@ const intersectFeatures = (featureA, featureB) => {
   }
 };
 
-const generateSurfaceGeometry = ({ parentFeature, availableFeature, centerLngLat, targetAreaHa }) => {
-  const targetSquareMeters = toNumber(targetAreaHa) * 10000;
-  if (!parentFeature || targetSquareMeters <= 0) return null;
+const getProjectionRange = (geometry, normal) => {
+  const [minX, minY, maxX, maxY] = turf.bbox(geometry);
+  const margin = Math.max(maxX - minX, maxY - minY, 0.001) * 4;
+  const corners = [
+    [minX - margin, minY - margin],
+    [minX - margin, maxY + margin],
+    [maxX + margin, minY - margin],
+    [maxX + margin, maxY + margin],
+  ];
+  const projections = corners.map(([lng, lat]) => lng * normal[0] + lat * normal[1]);
+  return {
+    min: Math.min(...projections),
+    max: Math.max(...projections),
+    minX: minX - margin,
+    minY: minY - margin,
+    maxX: maxX + margin,
+    maxY: maxY + margin,
+  };
+};
 
-  const center = turf.point(centerLngLat);
-  const usableFeature = availableFeature || parentFeature;
-  const targetRadiusKm = Math.sqrt(targetSquareMeters / Math.PI) / 1000;
-
-  const makeCandidate = (scale) => {
-    const circle = turf.circle(center, Math.max(targetRadiusKm * scale, 0.001), {
-      steps: 24,
-      units: 'kilometers',
-    });
-    const clipped = intersectFeatures(circle, usableFeature);
-    const geom = getSinglePolygonGeometry(clipped);
-    return geom ? {
-      geom,
-      areaHa: getGeometryAreaHa(geom),
-    } : null;
+const makeHalfPlanePolygon = (range, normal, threshold, side) => {
+  const corners = [
+    [range.minX, range.minY],
+    [range.maxX, range.minY],
+    [range.maxX, range.maxY],
+    [range.minX, range.maxY],
+  ];
+  const inside = ([lng, lat]) => {
+    const projection = lng * normal[0] + lat * normal[1];
+    return side === 'low' ? projection <= threshold : projection >= threshold;
+  };
+  const intersectEdge = (a, b) => {
+    const projectionA = a[0] * normal[0] + a[1] * normal[1];
+    const projectionB = b[0] * normal[0] + b[1] * normal[1];
+    const ratio = (threshold - projectionA) / (projectionB - projectionA);
+    return [
+      a[0] + (b[0] - a[0]) * ratio,
+      a[1] + (b[1] - a[1]) * ratio,
+    ];
   };
 
-  let high = 1;
-  let best = makeCandidate(high);
-  for (let index = 0; index < 8 && (!best || best.areaHa < targetAreaHa * 0.98); index += 1) {
-    high *= 1.7;
-    const candidate = makeCandidate(high);
-    if (!candidate) continue;
-    best = !best || Math.abs(candidate.areaHa - targetAreaHa) < Math.abs(best.areaHa - targetAreaHa)
-      ? candidate
-      : best;
-  }
+  const clipped = [];
+  corners.forEach((current, index) => {
+    const previous = corners[(index + corners.length - 1) % corners.length];
+    const currentInside = inside(current);
+    const previousInside = inside(previous);
 
-  let low = 0.05;
-  for (let index = 0; index < 18; index += 1) {
-    const mid = (low + high) / 2;
-    const candidate = makeCandidate(mid);
-    if (!candidate) {
-      low = mid;
-      continue;
-    }
+    if (currentInside && !previousInside) clipped.push(intersectEdge(previous, current));
+    if (currentInside) clipped.push(current);
+    if (!currentInside && previousInside) clipped.push(intersectEdge(previous, current));
+  });
 
-    if (!best || Math.abs(candidate.areaHa - targetAreaHa) < Math.abs(best.areaHa - targetAreaHa)) {
+  return clipped.length >= 3 ? turf.polygon([closeRing(clipped)]) : null;
+};
+
+const getClippedAreaCandidate = (availableFeature, range, normal, threshold, side) => {
+  const halfPlane = makeHalfPlanePolygon(range, normal, threshold, side);
+  if (!halfPlane) return null;
+  const clipped = intersectFeatures(availableFeature, halfPlane);
+  const geom = getSinglePolygonGeometry(clipped);
+  if (!geom) return null;
+  return {
+    geom,
+    areaHa: getGeometryAreaHa(geom),
+  };
+};
+
+const findCutCandidate = ({ availableFeature, normal, targetAreaHa, side }) => {
+  const range = getProjectionRange(availableFeature.geometry || availableFeature, normal);
+  let low = range.min;
+  let high = range.max;
+  let best = null;
+
+  for (let index = 0; index < 28; index += 1) {
+    const threshold = (low + high) / 2;
+    const candidate = getClippedAreaCandidate(availableFeature, range, normal, threshold, side);
+    const areaHa = candidate?.areaHa || 0;
+
+    if (candidate && (!best || Math.abs(areaHa - targetAreaHa) < Math.abs(best.areaHa - targetAreaHa))) {
       best = candidate;
     }
 
-    if (candidate.areaHa < targetAreaHa) {
-      low = mid;
+    if (Math.abs(areaHa - targetAreaHa) <= targetAreaHa * 0.01) break;
+
+    if (side === 'low') {
+      if (areaHa < targetAreaHa) low = threshold;
+      else high = threshold;
+    } else if (areaHa < targetAreaHa) {
+      high = threshold;
     } else {
-      high = mid;
+      low = threshold;
     }
   }
 
-  return best?.geom || null;
+  return best;
+};
+
+const generateSurfaceGeometry = ({ availableFeature, cutStartLngLat, cutEndLngLat, targetAreaHa }) => {
+  if (!availableFeature || toNumber(targetAreaHa) <= 0) return null;
+  const dx = cutEndLngLat[0] - cutStartLngLat[0];
+  const dy = cutEndLngLat[1] - cutStartLngLat[1];
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length <= 0) return null;
+
+  const normal = [-dy / length, dx / length];
+  const polygonGeometry = getAvailablePolygonForCut(availableFeature, cutStartLngLat);
+  if (!polygonGeometry) return null;
+
+  const polygonFeature = turf.feature(polygonGeometry);
+  const componentAreaHa = getGeometryAreaHa(polygonGeometry);
+  if (toNumber(targetAreaHa) > componentAreaHa + AREA_TOLERANCE_HA) return null;
+
+  const lowSide = findCutCandidate({ availableFeature: polygonFeature, normal, targetAreaHa, side: 'low' });
+  const highSide = findCutCandidate({ availableFeature: polygonFeature, normal, targetAreaHa, side: 'high' });
+  const candidates = [lowSide, highSide].filter(Boolean);
+  const firstPoint = turf.point(cutStartLngLat);
+  candidates.sort((a, b) => {
+    const areaDiffA = Math.abs(a.areaHa - targetAreaHa);
+    const areaDiffB = Math.abs(b.areaHa - targetAreaHa);
+    if (Math.abs(areaDiffA - areaDiffB) > targetAreaHa * 0.01) return areaDiffA - areaDiffB;
+    return turf.distance(firstPoint, turf.centerOfMass(turf.feature(a.geom)))
+      - turf.distance(firstPoint, turf.centerOfMass(turf.feature(b.geom)));
+  });
+
+  return candidates[0]?.geom || null;
 };
 
 const computeLocalIssues = (parentFeature, subLots, parentAreaHa) => {
@@ -576,15 +672,20 @@ const MapGeomanInitializer = ({ enabled, onReadyChange, onError }) => {
   return null;
 };
 
-const SurfacePlacementHandler = ({ enabled, onPick }) => {
+const SurfacePlacementHandler = ({ enabled, onPick, onMove }) => {
   const map = useMap();
 
   useEffect(() => {
     if (!enabled) return undefined;
     const handleClick = (event) => onPick([event.latlng.lng, event.latlng.lat]);
+    const handleMove = (event) => onMove?.([event.latlng.lng, event.latlng.lat]);
     map.on('click', handleClick);
-    return () => map.off('click', handleClick);
-  }, [enabled, map, onPick]);
+    map.on('mousemove', handleMove);
+    return () => {
+      map.off('click', handleClick);
+      map.off('mousemove', handleMove);
+    };
+  }, [enabled, map, onMove, onPick]);
 
   return null;
 };
@@ -832,6 +933,7 @@ const SubLotEditor = ({
   const [dirty, setDirty] = useState(false);
   const [surfaceModalOpen, setSurfaceModalOpen] = useState(false);
   const [surfacePlacement, setSurfacePlacement] = useState(null);
+  const [surfacePreviewPoint, setSurfacePreviewPoint] = useState(null);
   const [mapGeomanReady, setMapGeomanReady] = useState(false);
   const [geomanError, setGeomanError] = useState(null);
   const [surfaceForm] = Form.useForm();
@@ -878,6 +980,18 @@ const SubLotEditor = ({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [dirty]);
 
+  useEffect(() => {
+    if (!surfacePlacement) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSurfacePlacement(null);
+        setSurfacePreviewPoint(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [surfacePlacement]);
+
   const assignedArea = useMemo(() => (
     draftSubLots.reduce((acc, subLot) => acc + toNumber(subLot.area_ha), 0)
   ), [draftSubLots]);
@@ -893,8 +1007,12 @@ const SubLotEditor = ({
       coverage: parentApprox > 0 ? (assignedApprox / parentApprox) * 100 : 0,
     };
   }, [assignedArea, parentArea, parentFeature]);
-  const remainingAreaHa = useMemo(() => getGeometryAreaHa(remainingFeature), [remainingFeature]);
+  const remainingAreaHa = useMemo(() => (
+    remainingFeature ? getGeometryAreaHa(remainingFeature) : 0
+  ), [remainingFeature]);
+  const availableAreaHa = remainingFeature ? remainingAreaHa : (draftSubLots.length ? 0 : visualAreas.parent);
   const canFillRemaining = editable && remainingAreaHa > AREA_TOLERANCE_HA;
+  const canCreateBySurface = editable && availableAreaHa > AREA_TOLERANCE_HA;
 
   const localIssues = useMemo(() => (
     parentFeature ? computeLocalIssues(parentFeature, draftSubLots, visualAreas.parent) : []
@@ -1026,6 +1144,7 @@ const SubLotEditor = ({
     setDirty(false);
     setDrawing(false);
     setSurfacePlacement(null);
+    setSurfacePreviewPoint(null);
   }, [layoutSubLots]);
 
   const confirmDiscard = useCallback(() => {
@@ -1041,18 +1160,26 @@ const SubLotEditor = ({
   const openSurfaceModal = useCallback(() => {
     surfaceForm.setFieldsValue({
       name: `${lot.name}-${nextCode(draftSubLots)}`,
-      target_area_ha: Math.max(Math.min(visualAreas.remaining || visualAreas.parent, visualAreas.parent), 0.01),
+      target_area_ha: Math.max(Math.min(availableAreaHa, visualAreas.parent), 0.01),
     });
     setSurfaceModalOpen(true);
-  }, [draftSubLots, lot.name, surfaceForm, visualAreas.parent, visualAreas.remaining]);
+  }, [availableAreaHa, draftSubLots, lot.name, surfaceForm, visualAreas.parent]);
 
   const handleSurfaceSubmit = useCallback(async () => {
     const values = await surfaceForm.validateFields();
-    setSurfacePlacement(values);
+    const targetAreaHa = toNumber(values.target_area_ha);
+    if (targetAreaHa > availableAreaHa + AREA_TOLERANCE_HA) {
+      notification.warning({
+        message: `Quedan aproximadamente ${formatHa(availableAreaHa)} ha disponibles en el lote.`,
+      });
+      return;
+    }
+
+    setSurfacePlacement({ ...values, cutPoints: [] });
+    setSurfacePreviewPoint(null);
     setSurfaceModalOpen(false);
     setDrawing(false);
-    notification.info({ message: 'Hacé clic dentro del lote para ubicar el sublote.' });
-  }, [surfaceForm]);
+  }, [availableAreaHa, surfaceForm]);
 
   const handleSurfacePick = useCallback((lngLat) => {
     if (!surfacePlacement || !parentFeature) return;
@@ -1064,26 +1191,53 @@ const SubLotEditor = ({
 
     const availableFeature = remainingFeature || parentFeature;
     if (remainingFeature && !turf.booleanPointInPolygon(point, remainingFeature)) {
-      notification.warning({ message: 'Elegí un punto sobre superficie sin asignar.' });
+      notification.warning({ message: 'Esa zona ya está asignada a otro sublote.' });
+      return;
+    }
+
+    if (toNumber(surfacePlacement.target_area_ha) > availableAreaHa + AREA_TOLERANCE_HA) {
+      notification.warning({
+        message: `Quedan aproximadamente ${formatHa(availableAreaHa)} ha disponibles en el lote.`,
+      });
+      return;
+    }
+
+    const cutPoints = surfacePlacement.cutPoints || [];
+    if (!cutPoints.length) {
+      const polygonGeometry = getAvailablePolygonForCut(availableFeature, lngLat);
+      const componentAreaHa = getGeometryAreaHa(polygonGeometry);
+      if (toNumber(surfacePlacement.target_area_ha) > componentAreaHa + AREA_TOLERANCE_HA) {
+        notification.warning({
+          message: `Quedan aproximadamente ${formatHa(componentAreaHa)} ha disponibles en esta zona.`,
+        });
+        return;
+      }
+
+      setSurfacePlacement((current) => current ? { ...current, cutPoints: [lngLat] } : current);
+      setSurfacePreviewPoint(null);
+      return;
+    }
+
+    if (turf.distance(turf.point(cutPoints[0]), point) < 0.005) {
+      notification.warning({ message: 'Marcá un segundo punto distinto para definir la dirección del corte.' });
       return;
     }
 
     const rawGeom = generateSurfaceGeometry({
-      parentFeature,
       availableFeature,
-      centerLngLat: lngLat,
+      cutStartLngLat: cutPoints[0],
+      cutEndLngLat: lngLat,
       targetAreaHa: surfacePlacement.target_area_ha,
     });
 
     if (!rawGeom) {
-      notification.error({ message: 'No se pudo generar una forma inicial para esa ubicación.' });
+      notification.error({ message: 'No se pudo generar un corte para esa superficie.' });
       return;
     }
 
     const code = nextCode(draftSubLots);
     const normalizedGeom = normalizePolygonToReferences(rawGeom, draftLayout);
     const areaHa = getGeometryAreaHa(normalizedGeom);
-    const diffHa = Math.abs(areaHa - toNumber(surfacePlacement.target_area_ha));
 
     setDirtyDraftSubLots((current) => [
       ...current,
@@ -1101,13 +1255,12 @@ const SubLotEditor = ({
       }),
     ]);
     setSurfacePlacement(null);
+    setSurfacePreviewPoint(null);
     notification.success({
       message: 'Sublote generado',
-      description: diffHa > AREA_TOLERANCE_HA
-        ? `Quedó en ${formatHa(areaHa)} ha. Ajustá los vértices para acercarlo a ${formatHa(surfacePlacement.target_area_ha)} ha.`
-        : undefined,
+      description: `Objetivo: ${formatHa(surfacePlacement.target_area_ha)} ha. Actual: ${formatHa(areaHa)} ha.`,
     });
-  }, [draftLayout, draftSubLots, lot.name, parentFeature, remainingFeature, setDirtyDraftSubLots, surfacePlacement]);
+  }, [availableAreaHa, draftLayout, draftSubLots, lot.name, parentFeature, remainingFeature, setDirtyDraftSubLots, surfacePlacement]);
 
   const handleFillRemainingLocal = useCallback(() => {
     const remainingGeometries = getPolygonGeometriesFromFeature(remainingFeature);
@@ -1183,6 +1336,7 @@ const SubLotEditor = ({
   }
 
   return (
+    <>
     <div
       style={{
         display: 'grid',
@@ -1240,6 +1394,20 @@ const SubLotEditor = ({
                 onError={handleGeomanError}
               />
             ) : null}
+            <SurfacePlacementHandler
+              enabled={editable && Boolean(surfacePlacement)}
+              onPick={handleSurfacePick}
+              onMove={setSurfacePreviewPoint}
+            />
+            {surfacePlacement?.cutPoints?.length === 1 && surfacePreviewPoint ? (
+              <Polyline
+                positions={[
+                  [surfacePlacement.cutPoints[0][1], surfacePlacement.cutPoints[0][0]],
+                  [surfacePreviewPoint[1], surfacePreviewPoint[0]],
+                ]}
+                pathOptions={{ color: '#1677ff', weight: 2, dashArray: '6 6' }}
+              />
+            ) : null}
             <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />
           </MapContainer>
         </div>
@@ -1259,6 +1427,14 @@ const SubLotEditor = ({
               disabled={!geomanReady}
             >
               Dibujar sublote
+            </Button>
+          ) : null}
+          {canCreateBySurface ? (
+            <Button
+              icon={<PlusOutlined />}
+              onClick={openSurfaceModal}
+            >
+              Dividir por superficie
             </Button>
           ) : null}
           {canFillRemaining ? (
@@ -1307,6 +1483,14 @@ const SubLotEditor = ({
           />
         ) : null}
 
+        {surfacePlacement ? (
+          <Text type="secondary">
+            {surfacePlacement.cutPoints?.length
+              ? 'Marcá el segundo punto para definir la dirección del corte.'
+              : `Marcá el primer punto de la dirección del corte para el sublote de ${formatHa(surfacePlacement.target_area_ha)} ha.`}
+          </Text>
+        ) : null}
+
         {!editable ? (
           <Alert
             type="warning"
@@ -1324,39 +1508,56 @@ const SubLotEditor = ({
           bordered
           dataSource={draftSubLots}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin sublotes" /> }}
-          renderItem={(subLot) => (
-            <List.Item
-              actions={editable ? [
-                <Button
-                  key="delete"
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  aria-label="Eliminar sublote"
-                  onClick={() => handleDeleteDraft(subLot)}
-                />,
-              ] : []}
-            >
-              <List.Item.Meta
-                title={(
-                  <Space size={8} wrap style={{ width: '100%' }}>
-                    <Tag color="blue">{subLot.code}</Tag>
-                    {editable ? (
-                      <Input
-                        size="small"
-                        value={subLot.name}
-                        onChange={(event) => handleNameChange(getDraftId(subLot), event.target.value)}
-                        style={{ maxWidth: 220 }}
-                      />
-                    ) : (
-                      <Text strong>{subLot.name}</Text>
-                    )}
-                  </Space>
-                )}
-                description={<Text type="secondary">{formatHa(subLot.area_ha)} ha</Text>}
-              />
-            </List.Item>
-          )}
+          renderItem={(subLot) => {
+            const targetAreaHa = toNumber(subLot.target_area_ha);
+            const targetDiffPercent = targetAreaHa > 0
+              ? Math.abs(toNumber(subLot.area_ha) - targetAreaHa) / targetAreaHa * 100
+              : 0;
+
+            return (
+              <List.Item
+                actions={editable ? [
+                  <Button
+                    key="delete"
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    aria-label="Eliminar sublote"
+                    onClick={() => handleDeleteDraft(subLot)}
+                  />,
+                ] : []}
+              >
+                <List.Item.Meta
+                  title={(
+                    <Space size={8} wrap style={{ width: '100%' }}>
+                      <Tag color="blue">{subLot.code}</Tag>
+                      {editable ? (
+                        <Input
+                          size="small"
+                          value={subLot.name}
+                          onChange={(event) => handleNameChange(getDraftId(subLot), event.target.value)}
+                          style={{ maxWidth: 220 }}
+                        />
+                      ) : (
+                        <Text strong>{subLot.name}</Text>
+                      )}
+                    </Space>
+                  )}
+                  description={(
+                    <Space size={6} wrap>
+                      <Text type="secondary">{formatHa(subLot.area_ha)} ha</Text>
+                      {targetAreaHa > 0 ? (
+                        <Text type="secondary">Objetivo {formatHa(targetAreaHa)} ha</Text>
+                      ) : null}
+                      {targetAreaHa > 0 && targetDiffPercent > 3 ? (
+                        <Tag color="gold">Ajustar</Tag>
+                      ) : null}
+                    </Space>
+                  )}
+                />
+              </List.Item>
+            );
+          }}
         />
 
         {validation?.issues?.length ? (
@@ -1415,6 +1616,46 @@ const SubLotEditor = ({
         </Space>
       </Space>
     </div>
+    <Modal
+      title="Dividir por superficie"
+      open={surfaceModalOpen}
+      onCancel={() => {
+        setSurfaceModalOpen(false);
+        setSurfacePlacement(null);
+        setSurfacePreviewPoint(null);
+      }}
+      onOk={handleSurfaceSubmit}
+      okText="Definir corte"
+      cancelText="Cancelar"
+      destroyOnHidden
+    >
+      <Form layout="vertical" form={surfaceForm}>
+        <Form.Item
+          name="name"
+          label="Nombre"
+          rules={[{ required: true, message: 'Ingresá un nombre.' }]}
+        >
+          <Input />
+        </Form.Item>
+        <Form.Item
+          name="target_area_ha"
+          label="Superficie deseada"
+          rules={[{ required: true, message: 'Ingresá la superficie deseada.' }]}
+        >
+          <InputNumber
+            min={0.01}
+            max={Math.max(availableAreaHa, 0.01)}
+            decimalSeparator=","
+            precision={2}
+            step={0.1}
+            addonAfter="ha"
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+        <Text type="secondary">Después marcá en el mapa la dirección del corte.</Text>
+      </Form>
+    </Modal>
+    </>
   );
 };
 
