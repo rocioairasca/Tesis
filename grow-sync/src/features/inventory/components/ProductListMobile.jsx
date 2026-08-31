@@ -9,7 +9,7 @@ import React from 'react';
 import { Button, Popconfirm, Tag, Tooltip } from 'antd';
 import {
     EditOutlined, DeleteOutlined, AppstoreOutlined, InboxOutlined,
-    DollarOutlined, CalendarOutlined, ExclamationCircleOutlined
+    CalendarOutlined, ExclamationCircleOutlined
 } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -25,10 +25,10 @@ const ProductListMobile = ({
     rowKey,
     getId,
     formatUnit,
-    formatCurrency,
     formatDateDDMMYYYY,
     isExpired,
-    isExpiringSoon
+    isExpiringSoon,
+    expirationValue,
 }) => {
     return (
         <div className="inventory-cards-container">
@@ -68,7 +68,7 @@ const ProductListMobile = ({
                         </div>
 
                         <p>
-                            <AppstoreOutlined /> <strong>Tipo:</strong> {product.type}
+                            <AppstoreOutlined /> <strong>Categoría:</strong> {product.category || "—"}
                         </p>
                         <p><InboxOutlined /> <strong>Total:</strong> {product.total_quantity} {formatUnit(product.unit)}</p>
                         <p>
@@ -86,16 +86,14 @@ const ProductListMobile = ({
                             </Tag>
                         </p>
 
-                        <p><DollarOutlined /> <strong>Precio:</strong> {formatCurrency(product.price)}</p>
-
                         <p>
                             <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                            {formatDateDDMMYYYY(product.acquisition_date)}{" "}
+                            {formatDateDDMMYYYY(expirationValue(product))}{" "}
                             {/* ícono de alerta en mobile */}
-                            {isExpired(product.acquisition_date) && (
+                            {isExpired(expirationValue(product)) && (
                                 <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
                             )}
-                            {!isExpired(product.acquisition_date) && isExpiringSoon(product.acquisition_date) && (
+                            {!isExpired(expirationValue(product)) && isExpiringSoon(expirationValue(product)) && (
                                 <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
                             )}
                         </p>

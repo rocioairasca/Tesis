@@ -9,7 +9,7 @@
  *  - Extracción de vistas de tabla (Desktop) y lista (Mobile) a componentes.
  *  - Lógica de alertas de vencimiento centralizada en el fetch.
  */
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Button, Drawer, Form, Input, InputNumber, Select, Space,
   notification, Row, Col, Dropdown
@@ -60,17 +60,11 @@ const UNIT_DISPLAY = {
 };
 const formatUnit = (u) => UNIT_DISPLAY[String(u || "").toLowerCase()] || (u || "-");
 
-const formatCurrency = (v) => {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "-";
-  return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
-};
-
 const pad2 = (n) => String(n).padStart(2, "0");
 const formatDateDDMMYYYY = (d) => {
-  if (!d) return "-";
+  if (!d) return "—";
   const dt = new Date(d);
-  if (isNaN(dt)) return "-";
+  if (isNaN(dt)) return "—";
   return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
 };
 
@@ -83,6 +77,14 @@ const daysTo = (d) => {
 const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
 const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
 
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
+const isLowStock = (product) => {
+  const available = Number(product.available_quantity || 0);
+  const total = Number(product.total_quantity || 0);
+  return total > 0 && available > 0 && available <= total * 0.1;
+};
+
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 
 const canCreate = hasPermission(currentUser, PERMISSIONS.INVENTORY_CREATE);
@@ -93,6 +95,10 @@ const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const notifiedRef = useRef(false);
+  const [searchText, setSearchText] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [tablePagination, setTablePagination] = useState({ current: 1, pageSize: 10 });
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -104,6 +110,53 @@ const Inventory = () => {
 
   const getId = (r) => r?.id ?? r?._id;
   const rowKey = (r) => getId(r) ?? r?.name;
+  const expirationValue = (product) => product?.expiration_date || product?.acquisition_date || null;
+
+  const categoryOptions = useMemo(() => {
+    const categories = [...new Set(products.map((product) => product.category).filter(Boolean))]
+      .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+    return [
+      { value: "all", label: "Todas las categorías" },
+      ...categories.map((category) => ({
+        value: category,
+        label: CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category,
+      })),
+    ];
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    const search = normalizeText(searchText);
+    const withIndex = products.map((product, index) => ({ product, index }));
+
+    return withIndex
+      .filter(({ product }) => {
+        const matchesSearch = !search
+          || normalizeText(product.name).includes(search)
+          || normalizeText(product.category).includes(search);
+        const matchesCategory = categoryFilter === "all" || product.category === categoryFilter;
+        const available = Number(product.available_quantity || 0);
+        const matchesStock =
+          stockFilter === "all"
+          || (stockFilter === "in_stock" && available > 0)
+          || (stockFilter === "out_of_stock" && available <= 0)
+          || (stockFilter === "low_stock" && isLowStock(product));
+
+        return matchesSearch && matchesCategory && matchesStock;
+      })
+      .sort((a, b) => {
+        const nameCompare = String(a.product.name || "").localeCompare(
+          String(b.product.name || ""),
+          "es",
+          { sensitivity: "base" }
+        );
+        return nameCompare || a.index - b.index;
+      })
+      .map(({ product }) => product);
+  }, [categoryFilter, products, searchText, stockFilter]);
+
+  const resetTablePage = () => {
+    setTablePagination((current) => ({ ...current, current: 1 }));
+  };
 
   // ------------------------- API -------------------------
   const fetchProducts = useCallback(async () => {
@@ -115,8 +168,8 @@ const Inventory = () => {
 
       // Notificar solo una vez por montaje
       if (!notifiedRef.current) {
-        const expired = list.filter(p => isExpired(p.acquisition_date));
-        const soon = list.filter(p => isExpiringSoon(p.acquisition_date));
+        const expired = list.filter(p => isExpired(expirationValue(p)));
+        const soon = list.filter(p => isExpiringSoon(expirationValue(p)));
 
         if (expired.length) {
           notification.error({
@@ -161,13 +214,13 @@ const Inventory = () => {
         unit: "",
         acquisition_date: null,
         total_quantity: undefined,
-        price: undefined,
         name: "",
       });
     } else {
       setEditingProduct(product);
-      const acquisitionDate = product.acquisition_date
-        ? new Date(product.acquisition_date).toISOString().split("T")[0]
+      const productExpiration = expirationValue(product);
+      const acquisitionDate = productExpiration
+        ? new Date(productExpiration).toISOString().split("T")[0]
         : null;
 
       form.setFieldsValue({
@@ -175,7 +228,6 @@ const Inventory = () => {
         category: product.category,
         unit: product.unit ?? "kg",
         total_quantity: product.total_quantity ?? undefined,
-        price: product.price ?? undefined,
         acquisition_date: acquisitionDate,
       });
     }
@@ -190,9 +242,12 @@ const Inventory = () => {
 
   const handleSubmit = async (values) => {
     try {
+      const expirationDate = values.acquisition_date || null;
       const payload = {
         ...values,
         unit: values.unit || "kg",
+        acquisition_date: expirationDate,
+        expiration_date: expirationDate,
         // si es creación, la disponible = total; si es edición, se conserva
         available_quantity: editingProduct
           ? editingProduct.available_quantity
@@ -261,54 +316,113 @@ const Inventory = () => {
                 <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
               </Dropdown>
             )}
-            {!isMobile && (
-              <Space>
-                {canViewDisabled && (
-                  <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
-                    Ver Productos Deshabilitados
-                  </Button>
-                )}
-                {canCreate && (
-                  <Button type="primary" onClick={() => openDrawer(null)}>
-                    Agregar Producto
-                  </Button>
-                )}
-              </Space>
-            )}
           </Space>
         </Col>
+      </Row>
+
+      <Row
+        gutter={[12, 12]}
+        align="middle"
+        justify="space-between"
+        style={{ marginBottom: 16 }}
+      >
+        <Col xs={24} lg={14}>
+          <Row gutter={[8, 8]}>
+            <Col xs={24} md={10}>
+              <Input.Search
+                allowClear
+                placeholder="Buscar producto..."
+                value={searchText}
+                onChange={(event) => {
+                  setSearchText(event.target.value);
+                  resetTablePage();
+                }}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={7}>
+              <Select
+                value={categoryFilter}
+                options={categoryOptions}
+                onChange={(value) => {
+                  setCategoryFilter(value);
+                  resetTablePage();
+                }}
+                style={{ width: "100%" }}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={7}>
+              <Select
+                value={stockFilter}
+                options={[
+                  { value: "all", label: "Todos" },
+                  { value: "in_stock", label: "Con stock" },
+                  { value: "out_of_stock", label: "Sin stock" },
+                  { value: "low_stock", label: "Stock bajo" },
+                ]}
+                onChange={(value) => {
+                  setStockFilter(value);
+                  resetTablePage();
+                }}
+                style={{ width: "100%" }}
+              />
+            </Col>
+          </Row>
+        </Col>
+        {!isMobile && (
+          <Col>
+            <Space wrap>
+              {canViewDisabled && (
+                <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
+                  Ver Productos Deshabilitados
+                </Button>
+              )}
+              {canCreate && (
+                <Button type="primary" onClick={() => openDrawer(null)}>
+                  Agregar Producto
+                </Button>
+              )}
+            </Space>
+          </Col>
+        )}
       </Row>
 
       {/* Tabla solo en desktop */}
       {!isMobile && (
         <ProductTable
-          products={products}
+          products={filteredProducts}
           loading={loading}
           onEdit={openDrawer}
           onDelete={handleDelete}
           rowKey={rowKey}
           getId={getId}
           formatUnit={formatUnit}
-          formatCurrency={formatCurrency}
           formatDateDDMMYYYY={formatDateDDMMYYYY}
           isExpired={isExpired}
           isExpiringSoon={isExpiringSoon}
+          expirationValue={expirationValue}
+          pagination={tablePagination}
+          onPaginationChange={(pagination) => {
+            setTablePagination({
+              current: pagination.current,
+              pageSize: 10,
+            });
+          }}
         />
       )}
 
       {/* Cards solo en mobile */}
       {isMobile && (
         <ProductListMobile
-          products={products}
+          products={filteredProducts}
           onEdit={openDrawer}
           onDelete={handleDelete}
           rowKey={rowKey}
           getId={getId}
           formatUnit={formatUnit}
-          formatCurrency={formatCurrency}
           formatDateDDMMYYYY={formatDateDDMMYYYY}
           isExpired={isExpired}
           isExpiringSoon={isExpiringSoon}
+          expirationValue={expirationValue}
         />
       )}
 
@@ -371,23 +485,15 @@ const Inventory = () => {
           </Form.Item>
 
           <Form.Item
-            name="price"
-            label="Precio"
-            rules={[{ required: true, message: "Por favor ingresá el precio." }]}
-          >
-            <InputNumber min={0} style={{ width: "100%" }} prefix="$" placeholder="Ingresá el precio." />
-          </Form.Item>
-
-          <Form.Item
             name="acquisition_date"
             label="Fecha de Vencimiento"
             rules={[
-              { required: true, message: "Por favor ingresá la fecha de vencimiento." },
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve();
-                  if (editingProduct?.acquisition_date) {
-                    const currentValue = new Date(editingProduct.acquisition_date).toISOString().split("T")[0];
+                  const currentExpiration = expirationValue(editingProduct);
+                  if (currentExpiration) {
+                    const currentValue = new Date(currentExpiration).toISOString().split("T")[0];
                     if (value === currentValue) return Promise.resolve();
                   }
                   const inputTs = new Date(value).getTime();

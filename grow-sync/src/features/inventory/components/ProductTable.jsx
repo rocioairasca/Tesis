@@ -32,47 +32,54 @@ const ProductTable = ({
     rowKey,
     getId,
     formatUnit,
-    formatCurrency,
     formatDateDDMMYYYY,
     isExpired,
-    isExpiringSoon
+    isExpiringSoon,
+    expirationValue,
+    pagination,
+    onPaginationChange,
 }) => {
 
     const columns = [
         {
-            title: "#",
-            dataIndex: "index",
-            key: "index",
-            render: (_, __, index) => index + 1,
-            width: 64,
+            title: "Nombre",
+            dataIndex: "name",
+            key: "name",
+            sorter: (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "es", { sensitivity: "base" }),
+            defaultSortOrder: "ascend",
         },
-        { title: "Nombre", dataIndex: "name", key: "name" },
         {
             title: "Cantidad Total",
             dataIndex: "total_quantity",
             key: "total_quantity",
+            sorter: (a, b) => Number(a.total_quantity || 0) - Number(b.total_quantity || 0),
         },
         {
             title: "Cantidad Disponible",
             dataIndex: "available_quantity",
             key: "available_quantity",
             render: (v, r) => (v > 0 ? v : <Tag color="red">Agotado</Tag>),
+            sorter: (a, b) => Number(a.available_quantity || 0) - Number(b.available_quantity || 0),
         },
         {
             title: "Unidad", dataIndex: "unit", key: "unit",
             render: (u) => formatUnit(u),
-        },
-        {
-            title: "Precio",
-            dataIndex: "price",
-            key: "price",
-            render: (v) => formatCurrency(v),
+            sorter: (a, b) => String(a.unit || "").localeCompare(String(b.unit || ""), "es", { sensitivity: "base" }),
         },
         {
             title: "Fecha de Vencimiento",
             dataIndex: "acquisition_date",
             key: "acquisition_date",
-            render: (d) => {
+            sorter: (a, b) => {
+                const dateA = expirationValue(a);
+                const dateB = expirationValue(b);
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                return new Date(dateA).getTime() - new Date(dateB).getTime();
+            },
+            render: (_, record) => {
+                const d = expirationValue(record);
                 const expired = isExpired(d);
                 const soon = isExpiringSoon(d);
                 return (
@@ -139,7 +146,13 @@ const ProductTable = ({
             columns={columns}
             dataSource={products}
             loading={loading}
-            pagination={{ pageSize: 5, position: ["bottomCenter"] }}
+            pagination={{
+                current: pagination.current,
+                pageSize: 10,
+                showSizeChanger: false,
+                position: ["bottomCenter"],
+            }}
+            onChange={onPaginationChange}
             rowKey={rowKey}
         />
     );
