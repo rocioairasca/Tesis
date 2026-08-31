@@ -4,6 +4,9 @@ const EDITABLE_STATUSES = new Set(['draft']);
 const TERMINAL_STATUSES = new Set(['locked', 'archived']);
 const CONTAINMENT_TOLERANCE_METERS = 0.75;
 const CONTAINMENT_OUTSIDE_AREA_TOLERANCE_HA = 0.0025; // 25 m2.
+const COVERAGE_TOLERANCE_HA = 0.10;
+const COVERAGE_TOLERANCE_PERCENT = 0.5;
+const LAYOUT_IN_USE_MESSAGE = 'Esta división ya tiene información asociada y no puede eliminarse.';
 
 function httpError(status, message, error = 'BadRequest', details = null) {
   const err = new Error(message);
@@ -39,6 +42,23 @@ function layoutStatusLabel(status) {
     locked: 'histórica',
     archived: 'archivada',
   })[status] || status;
+}
+
+function getCoverageTolerance(parentAreaHa, assignedAreaHa) {
+  const parent = Number(parentAreaHa || 0);
+  const assigned = Number(assignedAreaHa || 0);
+  const missingHa = Math.max(parent - assigned, 0);
+  const missingPercent = parent > 0 ? (missingHa / parent) * 100 : 0;
+
+  return {
+    missing_ha: missingHa,
+    missing_percent: missingPercent,
+    tolerance_ha: COVERAGE_TOLERANCE_HA,
+    tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
+    within_tolerance:
+      missingHa <= COVERAGE_TOLERANCE_HA
+      || missingPercent <= COVERAGE_TOLERANCE_PERCENT,
+  };
 }
 
 function nextSubLotCode(subLots = []) {
@@ -144,6 +164,56 @@ async function assertEditableLayout(client, lotId, layoutId, companyId) {
     throw httpError(409, `Esta división está ${layoutStatusLabel(layout.status)}. Creá una nueva división para realizar cambios.`, 'Conflict');
   }
   return layout;
+}
+
+async function getLayoutReferenceCounts(client, layoutId, companyId) {
+  const { rows } = await client.query(
+    `
+    WITH layout_sub_lots AS (
+      SELECT id
+      FROM sub_lots
+      WHERE layout_id = $1
+        AND company_id = $2
+    ),
+    refs AS (
+      SELECT 'planning_lots' AS table_name, COUNT(*)::int AS count
+      FROM planning_lots pl
+      JOIN layout_sub_lots sl ON sl.id = pl.sub_lot_id
+      UNION ALL
+      SELECT 'usage_lots' AS table_name, COUNT(*)::int AS count
+      FROM usage_lots ul
+      JOIN layout_sub_lots sl ON sl.id = ul.sub_lot_id
+      UNION ALL
+      SELECT 'harvest_records' AS table_name, COUNT(*)::int AS count
+      FROM harvest_records hr
+      JOIN layout_sub_lots sl ON sl.id = hr.sub_lot_id
+      UNION ALL
+      SELECT 'crop_assignments' AS table_name, COUNT(*)::int AS count
+      FROM crop_assignments ca
+      JOIN layout_sub_lots sl ON sl.id = ca.sub_lot_id
+    )
+    SELECT table_name, count
+    FROM refs
+    WHERE count > 0
+    ORDER BY table_name
+    `,
+    [layoutId, companyId]
+  );
+
+  return rows;
+}
+
+async function assertLayoutCanBeDeleted(client, layout) {
+  if (!layout) throw httpError(404, 'División no encontrada', 'NotFound');
+
+  if (layout.status !== 'draft' || layout.activated_at || layout.locked_at || layout.archived_at) {
+    throw httpError(409, 'Solo se pueden eliminar divisiones en edición que nunca fueron activadas.', 'Conflict');
+  }
+
+  const references = await getLayoutReferenceCounts(client, layout.id, layout.company_id);
+  if (references.length) {
+    throw httpError(409, LAYOUT_IN_USE_MESSAGE, 'Conflict', { references });
+  }
 }
 
 async function normalizeSubLotGeometryForSave(client, lotId, layoutId, companyId, geoJsonText, ignoreSubLotId = null) {
@@ -431,6 +501,11 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
         sub_lots_count: 0,
         parent_area_ha: parentAreaHa,
         tolerance_ha: toleranceHa,
+        coverage_tolerance_ha: COVERAGE_TOLERANCE_HA,
+        coverage_tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
+        coverage_missing_ha: 0,
+        coverage_missing_percent: 0,
+        coverage_within_tolerance: true,
       },
       issues,
     };
@@ -468,20 +543,30 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
   }
 
   const sumDeltaHa = Math.abs(sumAreaHa - parentAreaHa);
-  if (sumDeltaHa > toleranceHa) {
+  const sumTolerance = getCoverageTolerance(parentAreaHa, sumAreaHa);
+  if (!sumTolerance.within_tolerance && sumAreaHa < parentAreaHa) {
     issues.push({
       code: 'area_sum_mismatch',
       message: 'La suma de superficies no coincide con la superficie total del lote.',
       delta_ha: sumDeltaHa,
+      missing_ha: sumTolerance.missing_ha,
+      missing_percent: sumTolerance.missing_percent,
+      coverage_tolerance_ha: COVERAGE_TOLERANCE_HA,
+      coverage_tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
     });
   }
 
   const coverageDeltaHa = Math.abs(unionAreaHa - parentAreaHa);
-  if (coverageDeltaHa > toleranceHa) {
+  const coverageTolerance = getCoverageTolerance(parentAreaHa, unionAreaHa);
+  if (!coverageTolerance.within_tolerance && unionAreaHa < parentAreaHa) {
     issues.push({
       code: 'coverage_mismatch',
       message: 'Todavía queda superficie del lote sin asignar.',
       delta_ha: coverageDeltaHa,
+      missing_ha: coverageTolerance.missing_ha,
+      missing_percent: coverageTolerance.missing_percent,
+      coverage_tolerance_ha: COVERAGE_TOLERANCE_HA,
+      coverage_tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
     });
   }
 
@@ -494,8 +579,13 @@ async function validateLayoutById(client, lotId, layoutId, companyId) {
       sum_area_ha: sumAreaHa,
       union_area_ha: unionAreaHa,
       tolerance_ha: toleranceHa,
+      coverage_tolerance_ha: COVERAGE_TOLERANCE_HA,
+      coverage_tolerance_percent: COVERAGE_TOLERANCE_PERCENT,
       sum_delta_ha: sumDeltaHa,
       coverage_delta_ha: coverageDeltaHa,
+      coverage_missing_ha: coverageTolerance.missing_ha,
+      coverage_missing_percent: coverageTolerance.missing_percent,
+      coverage_within_tolerance: coverageTolerance.within_tolerance,
     },
     issues,
   };
@@ -706,6 +796,97 @@ exports.updateLayout = async (req, res, next) => {
     return res.json({ layout: mapLayout(rows[0]) });
   } catch (err) {
     next(err);
+  }
+};
+
+exports.deleteLayout = async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const { company_id } = req.user;
+    const { lotId, layoutId } = req.params;
+
+    await client.query('BEGIN');
+
+    const lot = await getLot(client, lotId, company_id);
+    if (!lot) throw httpError(404, 'Lote no encontrado', 'NotFound');
+
+    const { rows } = await client.query(
+      `
+      SELECT
+        id,
+        lot_id,
+        company_id,
+        version,
+        status,
+        activated_at,
+        locked_at,
+        archived_at
+      FROM lot_layouts
+      WHERE id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      FOR UPDATE
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const layout = rows[0] || null;
+    await assertLayoutCanBeDeleted(client, layout);
+
+    await client.query(
+      `
+      SELECT id
+      FROM sub_lots
+      WHERE layout_id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      FOR UPDATE
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    await client.query(
+      `
+      DELETE FROM sub_lots
+      WHERE layout_id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    const deleteResult = await client.query(
+      `
+      DELETE FROM lot_layouts
+      WHERE id = $1
+        AND lot_id = $2
+        AND company_id = $3
+      RETURNING id, version
+      `,
+      [layoutId, lotId, company_id]
+    );
+
+    if (!deleteResult.rows.length) {
+      throw httpError(404, 'División no encontrada', 'NotFound');
+    }
+
+    await client.query('COMMIT');
+    return res.json({
+      ok: true,
+      id: deleteResult.rows[0].id,
+      version: deleteResult.rows[0].version,
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+
+    if (err.code === '23503') {
+      return next(httpError(409, LAYOUT_IN_USE_MESSAGE, 'Conflict'));
+    }
+
+    return next(err);
+  } finally {
+    client.release();
   }
 };
 

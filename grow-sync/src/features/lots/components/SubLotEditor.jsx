@@ -21,6 +21,8 @@ const SUB_LOT_COLORS = ['#2f80ed', '#27ae60', '#f2994a', '#9b51e0', '#eb5757', '
 const SNAP_DISTANCE_PX = 40;
 const SHARED_BORDER_TOLERANCE_METERS = 0.75;
 const SMALL_REMAINING_AREA_HA = 0.05;
+const COVERAGE_TOLERANCE_HA = 0.10;
+const COVERAGE_TOLERANCE_PERCENT = 0.5;
 const SNAP_OPTIONS = {
   snappable: true,
   snapDistance: SNAP_DISTANCE_PX,
@@ -37,7 +39,23 @@ const toNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const formatHa = (value) => toNumber(value).toFixed(2);
+const formatHa = (value) => toNumber(value).toLocaleString('es-AR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const formatPercent = (value) => toNumber(value).toLocaleString('es-AR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const isCoverageWithinTolerance = (remainingHa, parentAreaHa) => {
+  const missingHa = Math.max(toNumber(remainingHa), 0);
+  const parentHa = toNumber(parentAreaHa);
+  const missingPercent = parentHa > 0 ? (missingHa / parentHa) * 100 : 0;
+
+  return missingHa <= COVERAGE_TOLERANCE_HA
+    || missingPercent <= COVERAGE_TOLERANCE_PERCENT;
+};
 
 const statusEditMessage = {
   active: 'Esta división ya está en uso. Para realizar cambios, creá una nueva división.',
@@ -492,22 +510,26 @@ const SubLotEditor = ({
   ), [subLots]);
 
   const visualAreas = useMemo(() => {
-    const parentApprox = parentFeature ? turf.area(parentFeature) / 10000 : parentArea;
-    const assignedApprox = subLots.reduce((acc, subLot) => {
-      const feature = getFeature(subLot);
-      return acc + (feature ? turf.area(feature) / 10000 : toNumber(subLot.area_ha));
-    }, 0);
+    const parentApprox = parentArea || (parentFeature ? turf.area(parentFeature) / 10000 : 0);
+    const assignedApprox = assignedArea;
 
     return {
       parent: parentApprox,
       assigned: assignedApprox,
       remaining: Math.max(parentApprox - assignedApprox, 0),
-      coverage: parentApprox > 0 ? Math.min((assignedApprox / parentApprox) * 100, 100) : 0,
+      coverage: parentApprox > 0 ? (assignedApprox / parentApprox) * 100 : 0,
     };
-  }, [parentArea, parentFeature, subLots]);
+  }, [assignedArea, parentArea, parentFeature]);
 
   const hasSmallRemainingArea = visualAreas.remaining > 0.005
     && visualAreas.remaining <= SMALL_REMAINING_AREA_HA;
+  const validationSummary = validation?.summary || {};
+  const coverageMissingHa = validationSummary.coverage_missing_ha != null
+    ? toNumber(validationSummary.coverage_missing_ha)
+    : visualAreas.remaining;
+  const coverageWithinTolerance = validationSummary.coverage_within_tolerance === true
+    || isCoverageWithinTolerance(coverageMissingHa, visualAreas.parent);
+  const showCoverageTolerance = visualAreas.remaining > 0.005 && coverageWithinTolerance;
 
   const handleCreate = useCallback(async (layer) => {
     const geom = layerToGeoJsonPolygon(layer);
@@ -602,8 +624,14 @@ const SubLotEditor = ({
           <Statistic title="Superficie total" value={formatHa(visualAreas.parent)} suffix="ha" />
           <Statistic title="Asignada" value={formatHa(assignedArea || visualAreas.assigned)} suffix="ha" />
           <Statistic title="Sin asignar" value={formatHa(visualAreas.remaining)} suffix="ha" />
-          <Statistic title="Cobertura" value={formatHa(visualAreas.coverage)} suffix="%" />
+          <Statistic title="Cobertura" value={formatPercent(visualAreas.coverage)} suffix="%" />
         </div>
+
+        {showCoverageTolerance ? (
+          <Tag color="green" style={{ alignSelf: 'flex-start' }}>
+            Dentro de tolerancia
+          </Tag>
+        ) : null}
 
         {editable && snapActive ? (
           <Alert
@@ -627,7 +655,7 @@ const SubLotEditor = ({
           />
         )}
 
-        {hasSmallRemainingArea ? (
+        {hasSmallRemainingArea && !coverageWithinTolerance ? (
           <Alert
             type="warning"
             showIcon
@@ -689,7 +717,9 @@ const SubLotEditor = ({
           <Alert
             type="success"
             showIcon
-            message="La división cubre correctamente el 100% del lote."
+            message={showCoverageTolerance
+              ? 'La división está dentro de la tolerancia de cobertura.'
+              : 'La división cubre correctamente el lote.'}
           />
         ) : null}
 

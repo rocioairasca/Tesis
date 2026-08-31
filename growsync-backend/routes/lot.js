@@ -102,6 +102,12 @@ router.put('/:lotId/layouts/:layoutId',
   layouts.updateLayout
 );
 
+router.delete('/:lotId/layouts/:layoutId',
+  validate(schema.layoutParam),
+  checkRole(2),
+  layouts.deleteLayout
+);
+
 router.post('/:lotId/layouts/:layoutId/sub-lots',
   validate(schema.createSubLotBody),
   checkRole(2),

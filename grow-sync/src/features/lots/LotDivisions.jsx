@@ -28,6 +28,7 @@ import { hasPermission } from '../../utils/permissions';
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
+  DeleteOutlined,
   PlusOutlined,
   SyncOutlined,
 } from '../../components/AppIcons';
@@ -76,6 +77,13 @@ const statusLabel = {
   archived: 'Archivada',
 };
 
+const canRequestDeleteLayout = (layout) => (
+  layout?.status === 'draft'
+  && !layout?.activated_at
+  && !layout?.locked_at
+  && !layout?.archived_at
+);
+
 const friendlyErrorMessage = (error, fallback = 'No pudimos guardar los cambios. Intentá nuevamente.') => (
   getUserFriendlyError(error, fallback)
 );
@@ -115,7 +123,7 @@ const LotDivisions = () => {
 
   const locationOptions = useMemo(() => productiveUnits.map((unit) => ({
     value: `${unit.lot_id}|${unit.sub_lot_id || ''}`,
-    label: unit.sub_lot_id ? unit.name : `${lot?.name || unit.name} completo`,
+    label: unit.sub_lot_id ? `Lote ${unit.name}` : `Lote completo (${lot?.name || unit.name})`,
     lot_id: unit.lot_id,
     sub_lot_id: unit.sub_lot_id || null,
   })), [lot?.name, productiveUnits]);
@@ -266,6 +274,40 @@ const LotDivisions = () => {
     }
   };
 
+  const deleteLayout = async (layout) => {
+    if (!layout?.id) return;
+
+    Modal.confirm({
+      title: '¿Eliminar esta versión?',
+      content: 'Se eliminará la división que está en edición. Esta acción no afecta la división activa del lote.',
+      okText: 'Eliminar',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setSaving(true);
+        try {
+          setValidation(null);
+          await api.delete(`/lots/${lotId}/layouts/${layout.id}`);
+          notification.success({ message: 'Versión eliminada' });
+          await refreshAll(
+            selectedLayoutId === layout.id ? null : selectedLayoutId
+          );
+        } catch (error) {
+          console.error('Error al eliminar división:', error);
+          notification.error({
+            message: 'No se pudo eliminar la versión',
+            description: friendlyErrorMessage(
+              error,
+              'Esta división ya tiene información asociada y no puede eliminarse.'
+            ),
+          });
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
+
   const createSubLot = async (payload) => {
     if (!selectedLayoutId) return;
     setSaving(true);
@@ -366,8 +408,15 @@ const LotDivisions = () => {
     try {
       const { data } = await api.post(`/lots/${lotId}/layouts/${selectedLayoutId}/validate`);
       setValidation(data);
+      const missingHa = Number(data?.summary?.coverage_missing_ha || 0);
+      const withinTolerance = data?.summary?.coverage_within_tolerance === true && missingHa > 0.005;
+
       if (data.valid) {
-        notification.success({ message: 'La división cubre correctamente el 100% del lote.' });
+        notification.success({
+          message: withinTolerance
+            ? 'La división está dentro de la tolerancia de cobertura.'
+            : 'La división cubre correctamente el lote.',
+        });
       } else {
         notification.warning({ message: 'La división todavía tiene observaciones' });
       }
@@ -432,7 +481,7 @@ const LotDivisions = () => {
         : (availableCampaigns.find((campaign) => campaignContainsDate(campaign, dateKey)) || null);
       const selectedLocation = assignment
         ? `${assignment.lot_id}|${assignment.sub_lot_id || ''}`
-        : `${unit?.lot_id || lotId}|${unit?.sub_lot_id || ''}`;
+        : (unit ? `${unit.lot_id || lotId}|${unit.sub_lot_id || ''}` : undefined);
 
       setCropModal({ open: true, mode, unit, assignment });
       cropForm.setFieldsValue({
@@ -529,7 +578,7 @@ const LotDivisions = () => {
       size="small"
       title="Estado productivo"
       extra={canManageProductiveState && productiveUnits.length > 0 ? (
-        <Button size="small" type="primary" onClick={() => openCropModal({ unit: productiveUnits[0] })}>
+        <Button size="small" type="primary" onClick={() => openCropModal()}>
           Registrar cultivo
         </Button>
       ) : null}
@@ -552,11 +601,6 @@ const LotDivisions = () => {
                     <Text type="secondary">{formatHa(unit.area_ha)} ha</Text>
                   </Space>
                 )}
-                extra={canManageProductiveState ? (
-                  <Button size="small" onClick={() => openCropModal({ unit })}>
-                    Registrar cultivo
-                  </Button>
-                ) : null}
               >
                 <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12}>
@@ -671,7 +715,7 @@ const LotDivisions = () => {
       >
         <List.Item.Meta
           title={(
-            <Space wrap>
+            <Space wrap align="center">
               <Text strong>Versión {layout.version}</Text>
               <Tag color={statusColor[layout.status] || 'default'}>
                 {statusLabel[layout.status] || layout.status}
@@ -688,6 +732,20 @@ const LotDivisions = () => {
             </Space>
           )}
         />
+        {canRequestDeleteLayout(layout) ? (
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            title="Eliminar versión"
+            aria-label="Eliminar versión"
+            loading={saving}
+            onClick={(event) => {
+              event.stopPropagation();
+              deleteLayout(layout);
+            }}
+          />
+        ) : null}
       </List.Item>
     );
   };
@@ -818,10 +876,14 @@ const LotDivisions = () => {
             <>
               <Form.Item
                 name="location_key"
-                label="Ubicación"
-                rules={[{ required: true, message: 'Seleccioná la ubicación.' }]}
+                label="Superficie"
+                rules={[{ required: true, message: 'Seleccioná la superficie.' }]}
               >
-                <Select options={cropLocationOptions} disabled={Boolean(cropModal.unit)} />
+                <Select
+                  placeholder="Seleccioná la superficie"
+                  options={cropLocationOptions}
+                  disabled={Boolean(cropModal.unit)}
+                />
               </Form.Item>
               <Form.Item
                 name="crop_id"
