@@ -12,6 +12,7 @@ import AppLayout from "./layout/Layout.jsx";
 import MobileBottomNavigationWrapper from "./components/MobileBottomNavigationWrapper.jsx";
 import { NotificationsProvider } from "./context/NotificationsContext.jsx";
 import GuardedRoute from "./routes/GuardedRoute.jsx";
+import { useAppVersionChecker } from "./hooks/useAppVersionChecker.jsx";
 
 import "./App.css";
 
@@ -122,6 +123,8 @@ const PrivatePage = ({
 );
 
 function App() {
+  useAppVersionChecker();
+
   return (
     <Router>
       <Suspense fallback={<PageLoader />}>

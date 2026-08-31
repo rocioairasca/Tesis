@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar";
 import AppHeader from "./Header";
 
 import useIsMobile from "../hooks/useIsMobile";
+import { APP_VERSION_LABEL } from "../config/appVersion";
 
 const { Content } = Layout;
 const { Text } = Typography;
@@ -56,7 +57,7 @@ const AppLayout = ({ children }) => {
 
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Text type="secondary">
-            Copyright © 2026 - Grow Sync
+            Copyright © 2026 - Grow Sync · {APP_VERSION_LABEL}
           </Text>
         </div>
       </Layout>
