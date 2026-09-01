@@ -54,6 +54,21 @@ const formatDate = (value) => {
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
+const formatActivity = (value) => {
+  const labels = {
+    siembra: 'Siembra',
+    fumigacion: 'Fumigación',
+    fertilizacion: 'Fertilización',
+    cosecha: 'Cosecha',
+    riego: 'Riego',
+    mantenimiento: 'Mantenimiento',
+    otro: 'Actividad',
+    uso_producto: 'Uso de producto',
+    ciclo_cultivo: 'Ciclo de cultivo',
+  };
+  return labels[value] || value || 'Actividad';
+};
+
 const toDateKey = (value) => value ? dayjs(value).format('YYYY-MM-DD') : null;
 
 const campaignContainsDate = (campaign, dateKey) => (
@@ -252,11 +267,9 @@ const LotDivisions = () => {
   }, [lotId]);
 
   const fetchProductiveHistory = useCallback(async () => {
-    const { data } = await api.get('/crop-assignments', {
-      params: { lotId },
-    });
+    const { data } = await api.get(`/lots/${lotId}/history`);
     const list = Array.isArray(data) ? data : data?.data || [];
-    setHistory([...list].sort((a, b) => String(b.start_date).localeCompare(String(a.start_date))));
+    setHistory(list);
   }, [lotId]);
 
   const fetchProductiveOptions = useCallback(async () => {
@@ -661,41 +674,99 @@ const LotDivisions = () => {
     </Card>
   );
 
+  const renderHistoryProducts = (products = []) => {
+    if (!products.length) return null;
+
+    return (
+      <Space direction="vertical" size={2}>
+        <Text type="secondary">{products.length === 1 ? 'Producto' : 'Productos'}</Text>
+        {products.map((product) => (
+          <Text key={`${product.product_id}-${product.name}`}>
+            {product.name || 'Producto'}
+            {' · '}
+            {Number(product.amount || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+            {product.unit ? ` ${product.unit}` : ''}
+          </Text>
+        ))}
+      </Space>
+    );
+  };
+
+  const renderHistoryDetails = (event) => {
+    if (event.type === 'harvest') {
+      return (
+        <Space direction="vertical" size={2}>
+          {event.details?.yield_kg_ha != null && (
+            <Text>Rendimiento: {Number(event.details.yield_kg_ha).toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg/ha</Text>
+          )}
+          {event.details?.production_kg != null && (
+            <Text>Producción: {Number(event.details.production_kg).toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg</Text>
+          )}
+        </Space>
+      );
+    }
+
+    if (event.type === 'crop_cycle') {
+      return (
+        <Text type="secondary">
+          {formatDate(event.details?.start_date)} - {formatDate(event.details?.end_date)}
+        </Text>
+      );
+    }
+
+    return null;
+  };
+
   const renderProductiveHistory = () => (
-    <Card size="small" title="Historial productivo">
+    <Card size="small" title="Historial del lote">
       <List
         dataSource={history}
-        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No hay cultivos registrados" /> }}
-        renderItem={(assignment) => (
-          <List.Item
-            actions={canManageProductiveState ? [
-              <Button type="link" size="small" onClick={() => openCropModal({ mode: 'edit', assignment })}>
-                Editar
-              </Button>,
-            ] : []}
-          >
-            <List.Item.Meta
-              title={(
-                <Space wrap>
-                  <Text strong>{assignment.crop_name}</Text>
-                  {assignment.campaign_name && <Tag>{assignment.campaign_name}</Tag>}
-                </Space>
-              )}
-              description={(
-                <Space direction="vertical" size={2}>
-                  <Text>
-                    {(assignment.sub_lot_name || assignment.lot_name)}
-                    {' · '}
-                    {formatHa(assignment.area_ha)} ha
-                  </Text>
-                  <Text type="secondary">
-                    {formatDate(assignment.start_date)} - {formatDate(assignment.end_date)}
-                  </Text>
-                </Space>
-              )}
-            />
-          </List.Item>
-        )}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No hay actividades registradas" /> }}
+        renderItem={(event) => {
+          const isManualCropCycle = event.type === 'crop_cycle';
+          const cropAssignment = isManualCropCycle ? {
+            ...event,
+            id: event.source_id,
+            crop_name: event.crop,
+            campaign_name: event.campaign,
+            start_date: event.details?.start_date,
+            end_date: event.details?.end_date,
+          } : null;
+
+          return (
+            <List.Item
+              actions={canManageProductiveState && isManualCropCycle ? [
+                <Button type="link" size="small" onClick={() => openCropModal({ mode: 'edit', assignment: cropAssignment })}>
+                  Editar
+                </Button>,
+              ] : []}
+            >
+              <List.Item.Meta
+                title={(
+                  <Space wrap>
+                    <Text strong>{event.title || formatActivity(event.activity_type)}</Text>
+                    {event.campaign && <Tag>{event.campaign}</Tag>}
+                    {event.registered_retroactively && <Tag>Registrada posteriormente</Tag>}
+                  </Space>
+                )}
+                description={(
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary">
+                      {formatDate(event.event_date)}
+                      {' · '}
+                      {event.sub_lot_name || 'Lote completo'}
+                      {event.area_ha ? ` · ${formatHa(event.area_ha)} ha` : ''}
+                    </Text>
+                    {event.crop && <Text>Cultivo: {event.crop}</Text>}
+                    {renderHistoryProducts(event.products)}
+                    {renderHistoryDetails(event)}
+                    {event.description && <Text type="secondary">{event.description}</Text>}
+                  </Space>
+                )}
+              />
+            </List.Item>
+          );
+        }}
       />
     </Card>
   );

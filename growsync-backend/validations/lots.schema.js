@@ -55,6 +55,13 @@ exports.productiveStateParam = z.object({
   }),
 });
 
+exports.lotHistoryParam = z.object({
+  params: z.object({ lotId: z.string().uuid() }),
+  query: z.object({
+    subLotId: z.string().uuid().optional(),
+  }),
+});
+
 exports.productiveStateQuery = z.object({
   query: z.object({
     date: YMD.optional(),

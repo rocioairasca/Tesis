@@ -11,11 +11,11 @@
  *  - Se extrajo la lista mobile a `components/PlanningListMobile.jsx`.
  *  - Se mantiene la lógica de estado y handlers aquí.
  */
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Alert,
   Button, Card, Drawer, Form, Input, InputNumber, Select, DatePicker,
-  Dropdown, Space, Row, Col, Tag, notification,
+  Dropdown, Space, Row, Col, Tag, notification, Switch,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
 import {
@@ -88,6 +88,10 @@ const formatDate = (value) => {
   if (!value) return "—";
   return dayjs(value).format("DD/MM/YYYY");
 };
+const formatQuantity = (value) => (
+  Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })
+);
+const getProductId = (product) => product?.id ?? product?._id;
 const getCampaignWorkStartValue = (campaign) => campaign?.work_start_date ?? campaign?.start_date;
 const formatCampaignWorkStart = (campaign) => formatDate(getCampaignWorkStartValue(campaign));
 const getCampaignWorkStartDate = (campaign) => (
@@ -253,7 +257,7 @@ const Planning = () => {
     [crops]
   );
   const prodIx = useMemo(
-    () => Object.fromEntries(products.map(p => [p.id ?? p._id, p.name])),
+    () => Object.fromEntries(products.map(p => [getProductId(p), p.name])),
     [products]
   );
   const vehIx = useMemo(
@@ -275,6 +279,9 @@ const Planning = () => {
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedDateRange = Form.useWatch("date_range", form);
   const selectedCampaignId = Form.useWatch("campaign_id", form);
+  const registerCompleted = Boolean(Form.useWatch("register_completed", form));
+  const selectedEffectiveDate = Form.useWatch("effective_date", form);
+  const selectedFormProducts = Form.useWatch("products", form) || [];
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
@@ -286,6 +293,8 @@ const Planning = () => {
   const [workCompletion, setWorkCompletion] = useState({ open: false, planning: null });
   const [completingWork, setCompletingWork] = useState(false);
   const [statusActionLoading, setStatusActionLoading] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -311,7 +320,11 @@ const Planning = () => {
   }, [lots, selectedLotKeys]);
 
   const getCatalogProduct = useCallback((planningProduct) => (
-    products.find(product => (product.id ?? product._id) === planningProduct?.product_id)
+    products.find(product => getProductId(product) === planningProduct?.product_id)
+  ), [products]);
+
+  const getCatalogProductById = useCallback((productId) => (
+    products.find(product => getProductId(product) === productId)
   ), [products]);
 
   const getPlanningProductUnit = useCallback((planningProduct) => (
@@ -323,6 +336,49 @@ const Planning = () => {
     if (directValue !== undefined && directValue !== null) return Number(directValue || 0);
     return Number(getCatalogProduct(planningProduct)?.available_quantity || 0);
   }, [getCatalogProduct]);
+
+  const productOptions = useMemo(() => (
+    products.map(product => ({
+      value: getProductId(product),
+      label: product.name,
+      searchLabel: product.name || "",
+    }))
+  ), [products]);
+
+  const selectedProductsHaveItems = useMemo(() => (
+    Array.isArray(selectedFormProducts)
+    && selectedFormProducts.some(item => item?.product_id)
+  ), [selectedFormProducts]);
+
+  const productStockExceeded = useMemo(() => (
+    Array.isArray(selectedFormProducts)
+    && selectedFormProducts.some((item) => {
+      if (!item?.product_id) return false;
+      const amount = parseDecimalInput(item.amount);
+      if (!Number.isFinite(amount)) return false;
+      const available = Number(getCatalogProductById(item.product_id)?.available_quantity || 0);
+      return amount > available;
+    })
+  ), [getCatalogProductById, selectedFormProducts]);
+
+  const campaignCompatibilityRange = useMemo(() => (
+    registerCompleted && selectedEffectiveDate
+      ? [selectedEffectiveDate, selectedEffectiveDate]
+      : selectedDateRange
+  ), [registerCompleted, selectedDateRange, selectedEffectiveDate]);
+
+  const campaignContainsPlanningRange = useCallback((campaign, range) => {
+    if (registerCompleted && selectedActivityType === "siembra") {
+      const [date] = range || [];
+      return campaignContainsFormalDate(campaign, date);
+    }
+    return campaignContainsWorkRange(campaign, range);
+  }, [registerCompleted, selectedActivityType]);
+
+  const getCompatiblePlanningCampaigns = useCallback((range) => {
+    if (!range?.[0] || !range?.[1]) return campaigns;
+    return campaigns.filter((campaign) => campaignContainsPlanningRange(campaign, range));
+  }, [campaignContainsPlanningRange, campaigns]);
 
   const buildActualProductFields = useCallback((planning) => {
     const values = {};
@@ -564,8 +620,8 @@ const Planning = () => {
   }, [campaigns, editing]);
 
   const planningCampaignOptions = useMemo(() => {
-    const hasCompleteRange = selectedDateRange?.[0] && selectedDateRange?.[1];
-    const compatibleCampaigns = hasCompleteRange ? getCompatibleCampaigns(campaigns, selectedDateRange) : campaigns;
+    const hasCompleteRange = campaignCompatibilityRange?.[0] && campaignCompatibilityRange?.[1];
+    const compatibleCampaigns = getCompatiblePlanningCampaigns(campaignCompatibilityRange);
     const hasSelectedCampaign = selectedCampaignId
       && compatibleCampaigns.some((campaign) => (campaign.id ?? campaign._id) === selectedCampaignId);
     const selectedIncompatibleCampaign = hasCompleteRange && selectedCampaignId && !hasSelectedCampaign
@@ -587,31 +643,31 @@ const Planning = () => {
         searchLabel: `${campaign.name} ${formatCampaignOptionMeta(campaign)}`,
       })),
     ];
-  }, [campaigns, selectedCampaignId, selectedDateRange]);
+  }, [campaignCompatibilityRange, campaigns, getCompatiblePlanningCampaigns, selectedCampaignId]);
 
   const selectedCampaign = useMemo(
     () => campaigns.find((campaign) => (campaign.id ?? campaign._id) === selectedCampaignId) || null,
     [campaigns, selectedCampaignId]
   );
   const suggestedCampaign = useMemo(() => {
-    const compatibleCampaigns = getCompatibleCampaigns(campaigns, selectedDateRange);
+    const compatibleCampaigns = getCompatiblePlanningCampaigns(campaignCompatibilityRange);
     return compatibleCampaigns.length === 1 ? compatibleCampaigns[0] : null;
-  }, [campaigns, selectedDateRange]);
+  }, [campaignCompatibilityRange, getCompatiblePlanningCampaigns]);
   const compatibleCampaignCount = useMemo(() => {
-    return getCompatibleCampaigns(campaigns, selectedDateRange).length;
-  }, [campaigns, selectedDateRange]);
+    return getCompatiblePlanningCampaigns(campaignCompatibilityRange).length;
+  }, [campaignCompatibilityRange, getCompatiblePlanningCampaigns]);
   const campaignDateMismatch = Boolean(
     selectedCampaign
-    && selectedDateRange?.[0]
-    && selectedDateRange?.[1]
-    && !campaignContainsWorkRange(selectedCampaign, selectedDateRange)
+    && campaignCompatibilityRange?.[0]
+    && campaignCompatibilityRange?.[1]
+    && !campaignContainsPlanningRange(selectedCampaign, campaignCompatibilityRange)
   );
   const selectedPlanningStartsBeforeCampaign = Boolean(
     selectedCampaign
-    && selectedDateRange?.[0]
-    && campaignContainsWorkRange(selectedCampaign, selectedDateRange)
+    && campaignCompatibilityRange?.[0]
+    && campaignContainsPlanningRange(selectedCampaign, campaignCompatibilityRange)
     && getCampaignStartDate(selectedCampaign)
-    && selectedDateRange[0].isBefore(getCampaignStartDate(selectedCampaign), "day")
+    && campaignCompatibilityRange[0].isBefore(getCampaignStartDate(selectedCampaign), "day")
   );
 
   const syncCampaignForRange = useCallback((range) => {
@@ -621,7 +677,7 @@ const Planning = () => {
       return;
     }
 
-    const compatibleCampaigns = getCompatibleCampaigns(campaigns, range);
+    const compatibleCampaigns = getCompatiblePlanningCampaigns(range);
     const currentCampaignId = form.getFieldValue("campaign_id");
     const currentIsCompatible = compatibleCampaigns.some((campaign) => (
       (campaign.id ?? campaign._id) === currentCampaignId
@@ -633,7 +689,12 @@ const Planning = () => {
     } else {
       form.setFieldValue("campaign_id", undefined);
     }
-  }, [campaigns, form]);
+  }, [form, getCompatiblePlanningCampaigns]);
+
+  useEffect(() => {
+    if (!registerCompleted || !selectedEffectiveDate) return;
+    syncCampaignForRange([selectedEffectiveDate, selectedEffectiveDate]);
+  }, [registerCompleted, selectedEffectiveDate, syncCampaignForRange]);
 
   const activeExtraFilterCount = [
     filters.campaignId,
@@ -1004,6 +1065,8 @@ const Planning = () => {
           unit: p.unit,
         })) : [],
         status: row.status || "planificado",
+        register_completed: false,
+        effective_date: row.effective_date ? dayjs(row.effective_date) : undefined,
       });
     } else {
       form.resetFields();
@@ -1011,6 +1074,8 @@ const Planning = () => {
         status: "planificado",
         products: [],
         campaign_id: undefined,
+        register_completed: false,
+        effective_date: undefined,
       });
     }
     setIsDrawerOpen(true);
@@ -1033,8 +1098,16 @@ const Planning = () => {
   };
 
   const handleSubmit = async (values) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
     try {
-      const [start, end] = values.date_range || [];
+      const shouldRegisterCompleted = !editing && values.register_completed;
+      const effectiveDate = values.effective_date;
+      const [start, end] = shouldRegisterCompleted
+        ? [effectiveDate, effectiveDate]
+        : values.date_range || [];
 
       // Build payload conditionally to avoid sending empty strings
       const lotSelections = (values.lot_selection_keys || [])
@@ -1048,9 +1121,10 @@ const Planning = () => {
         start_at: start?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
         end_at: end?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
         responsible_user: values.responsible_user,
-        status: values.status || "planificado",
+        status: shouldRegisterCompleted ? undefined : values.status || "planificado",
         lot_selections: lotSelections,
       };
+      if (payload.status === undefined) delete payload.status;
 
       // Only include optional fields if they have values
       if (values.description?.trim()) {
@@ -1065,8 +1139,12 @@ const Planning = () => {
         payload.products = values.products.map(p => ({
           product_id: p.product_id,
           amount: Number(p.amount ?? 0),
-          unit: p.unit || products.find(x => x.id === p.product_id)?.unit || "",
+          unit: getCatalogProductById(p.product_id)?.unit || p.unit || "",
         }));
+      }
+
+      if (shouldRegisterCompleted) {
+        payload.effective_date = effectiveDate?.format("YYYY-MM-DD");
       }
 
       console.log("📤 Payload a enviar:", JSON.stringify(payload, null, 2));
@@ -1075,6 +1153,9 @@ const Planning = () => {
         // actualizar; para status usamos PATCH (según colección)
         await api.patch(`/planning/${getId(editing)}`, payload);
         notification.success({ message: "Planificación actualizada" });
+      } else if (shouldRegisterCompleted) {
+        await api.post("/planning/register-completed", payload);
+        notification.success({ message: "Actividad registrada correctamente." });
       } else {
         await api.post("/planning", payload);
         notification.success({ message: "Planificación creada" });
@@ -1086,6 +1167,9 @@ const Planning = () => {
       notification.error({
         message: getUserFriendlyError(e, "No se pudo guardar la planificación."),
       });
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -1715,6 +1799,17 @@ const Planning = () => {
             Planificación
           </div>
 
+          {!editing && (
+            <Form.Item
+              name="register_completed"
+              label="Registrar como realizada"
+              valuePropName="checked"
+              style={{ marginBottom: 16 }}
+            >
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )}
+
           <Form.Item
             name="crop_id"
             label="Cultivo"
@@ -1784,7 +1879,7 @@ const Planning = () => {
                     Este trabajo se realizará antes del inicio de la campaña y quedará asociado a ella.
                   </div>
                 )}
-                {!campaignDateMismatch && selectedDateRange?.[0] && selectedDateRange?.[1] && compatibleCampaignCount === 0 && (
+                {!campaignDateMismatch && campaignCompatibilityRange?.[0] && campaignCompatibilityRange?.[1] && compatibleCampaignCount === 0 && (
                   <div style={{ color: "#595959" }}>
                     No hay campañas que admitan trabajos en las fechas indicadas.
                   </div>
@@ -1810,13 +1905,32 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
-            <RangePicker
-              format="DD/MM/YYYY"
-              style={{ width: "100%" }}
-              onChange={syncCampaignForRange}
-            />
-          </Form.Item>
+          {(!registerCompleted || editing) && (
+            <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
+              <RangePicker
+                format="DD/MM/YYYY"
+                style={{ width: "100%" }}
+                onChange={syncCampaignForRange}
+              />
+            </Form.Item>
+          )}
+
+          {!editing && registerCompleted && (
+            <Form.Item
+              name="effective_date"
+              label="Fecha real de realización"
+              extra="Indicá la fecha en la que el trabajo se realizó efectivamente."
+              rules={[{ required: true, message: "Seleccioná la fecha real de realización." }]}
+            >
+              <DatePicker
+                format="DD/MM/YYYY"
+                style={{ width: "100%" }}
+                onChange={(date) => {
+                  syncCampaignForRange(date ? [date, date] : null);
+                }}
+              />
+            </Form.Item>
+          )}
 
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
             Ubicación
@@ -1889,40 +2003,98 @@ const Planning = () => {
                   <Button type="dashed" onClick={() => add()} size="small">Agregar producto</Button>
                 </div>
 
+                {!editing && registerCompleted && selectedProductsHaveItems && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="Los productos indicados se descontarán del stock actual."
+                    style={{ marginBottom: 12 }}
+                  />
+                )}
+
                 {fields.map(({ key, name, ...rest }) => (
-                  <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="start" wrap>
-                    <Form.Item
-                      {...rest}
-                      name={[name, "product_id"]}
-                      rules={[{ required: true, message: "Producto" }]}
-                    >
-                      <Select
-                        placeholder="Producto"
-                        style={{ width: 200 }}
-                        options={products.map(p => ({ value: p.id ?? p._id, label: prodIx[p.id ?? p._id] }))}
-                        onChange={(pid) => {
-                          const prod = products.find(p => (p.id ?? p._id) === pid);
-                          const current = form.getFieldValue("products") || [];
-                          current[name] = { ...(current[name] || {}), unit: prod?.unit || "" };
-                          form.setFieldsValue({ products: current });
+                  <div key={key} className="planning-product-row">
+                    <div className="planning-product-field">
+                      <Form.Item
+                        {...rest}
+                        name={[name, "product_id"]}
+                        label="Producto"
+                        rules={[{ required: true, message: "Producto" }]}
+                      >
+                        <Select
+                          showSearch
+                          placeholder="Producto"
+                          options={productOptions}
+                          optionFilterProp="searchLabel"
+                          filterOption={(input, option) => (
+                            String(option?.searchLabel || "")
+                              .toLowerCase()
+                              .includes(input.toLowerCase())
+                          )}
+                          onChange={(productId) => {
+                            const unit = getCatalogProductById(productId)?.unit || "";
+                            const current = form.getFieldValue("products") || [];
+                            current[name] = { ...(current[name] || {}), unit };
+                            form.setFieldsValue({ products: current });
+                            if (current[name]?.amount !== undefined) {
+                              form.validateFields([["products", name, "amount"]]).catch(() => {});
+                            }
+                          }}
+                        />
+                      </Form.Item>
+                    </div>
+
+                    <div className="planning-product-field">
+                      <Form.Item
+                        shouldUpdate={(prev, current) => (
+                          prev.products?.[name]?.product_id !== current.products?.[name]?.product_id
+                          || prev.register_completed !== current.register_completed
+                        )}
+                        noStyle
+                      >
+                        {({ getFieldValue }) => {
+                          const productId = getFieldValue(["products", name, "product_id"]);
+                          const unit = getCatalogProductById(productId)?.unit || getFieldValue(["products", name, "unit"]) || "";
+                          const available = Number(getCatalogProductById(productId)?.available_quantity || 0);
+                          const stockLabel = `Disponible: ${formatQuantity(available)}${unit ? ` ${unit}` : ""}`;
+                          return (
+                            <Form.Item
+                              {...rest}
+                              name={[name, "amount"]}
+                              label={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
+                              extra={productId ? stockLabel : null}
+                              rules={[
+                                { required: true, message: "Cantidad" },
+                                {
+                                  validator: (_, value) => {
+                                    if (!productId) return Promise.resolve();
+                                    const amount = parseDecimalInput(value);
+                                    if (!Number.isFinite(amount) || amount <= available) {
+                                      return Promise.resolve();
+                                    }
+                                    return Promise.reject(new Error("La cantidad supera el stock disponible."));
+                                  },
+                                },
+                              ]}
+                            >
+                              <InputNumber
+                                min={0}
+                                placeholder={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
+                                style={{ width: "100%" }}
+                                addonAfter={unit || undefined}
+                              />
+                            </Form.Item>
+                          );
                         }}
-                      />
-                    </Form.Item>
+                      </Form.Item>
+                    </div>
 
-                    <Form.Item
-                      {...rest}
-                      name={[name, "amount"]}
-                      rules={[{ required: true, message: "Cantidad" }]}
-                    >
-                      <InputNumber min={0} placeholder="Cantidad" style={{ width: 120 }} />
+                    <Form.Item label=" " colon={false} className="planning-product-remove">
+                      <Button danger type="text" onClick={() => remove(name)}>
+                        Eliminar
+                      </Button>
                     </Form.Item>
-
-                    <Form.Item {...rest} name={[name, "unit"]}>
-                      <Input placeholder="Unidad" style={{ width: 100 }} />
-                    </Form.Item>
-
-                    <Button danger type="text" onClick={() => remove(name)}>Eliminar</Button>
-                  </Space>
+                  </div>
                 ))}
               </>
             )}
@@ -1932,25 +2104,33 @@ const Planning = () => {
             Información adicional
           </div>
 
-          <Form.Item name="status" label="Estado">
-            <Select
-              options={[
-                { value: "planificado", label: "Planificado" },
-                { value: "pendiente", label: "Pendiente" },
-                { value: "en_progreso", label: "En progreso" },
-                { value: "completado", label: "Completado" },
-              ]}
-              placeholder="Estado"
-            />
-          </Form.Item>
+          {(!registerCompleted || editing) && (
+            <Form.Item name="status" label="Estado">
+              <Select
+                options={[
+                  { value: "planificado", label: "Planificado" },
+                  { value: "pendiente", label: "Pendiente" },
+                  { value: "en_progreso", label: "En progreso" },
+                  { value: "completado", label: "Completado" },
+                ]}
+                placeholder="Estado"
+              />
+            </Form.Item>
+          )}
 
           <Form.Item name="description" label="Descripción">
             <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" block>
-              {editing ? "Actualizar" : "Crear Planificación"}
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={isSubmitting}
+              disabled={isSubmitting || productStockExceeded}
+            >
+              {editing ? "Actualizar" : registerCompleted ? "Registrar actividad" : "Crear Planificación"}
             </Button>
           </Form.Item>
         </Form>
@@ -1982,6 +2162,16 @@ const Planning = () => {
               <Descriptions.Item label="Período">
                 {formatPeriod(viewing)}
               </Descriptions.Item>
+              {viewing.registered_retroactively === true && (
+                <Descriptions.Item label="Registro">
+                  <Space direction="vertical" size={2}>
+                    <span>Registrada posteriormente</span>
+                    {viewing.effective_date && (
+                      <span style={{ color: "#595959" }}>Realizada el {formatDate(viewing.effective_date)}</span>
+                    )}
+                  </Space>
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="Responsable">
                 {userIx[viewing.responsible_user] || "—"}
               </Descriptions.Item>

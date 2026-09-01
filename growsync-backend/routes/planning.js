@@ -56,6 +56,14 @@ router.get('/',
   ctrl.list
 );
 
+// Crear una planificación y registrarla como realizada en una sola transacción
+router.post('/register-completed',
+  validate(schema.registerCompletedSchema),
+  requirePermission(PERMISSIONS.PLANNING_CREATE),
+  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  ctrl.registerCompleted
+);
+
 // Completar siembra y registrar estado productivo
 router.post('/:id/complete-sowing',
   validate(schema.completeSowingSchema),

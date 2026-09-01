@@ -2,6 +2,7 @@ const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 const { createNotification } = require('./notifications');
 const { PERMISSIONS, getEffectivePermissions } = require('../constants/permissions');
+const planningCompletion = require('../services/planningCompletion');
 
 const lotSelectionJsonSql = `
   SELECT json_agg(
@@ -169,24 +170,6 @@ const ACTIVITY_LABELS = {
 };
 
 const activityLabel = (activityType) => ACTIVITY_LABELS[activityType] || 'actividad';
-const PRODUCT_CONSUMING_ACTIVITIES = new Set(['fumigacion', 'fertilizacion', 'siembra']);
-
-const toNum = (value, fallback = 0) => {
-  const normalized = typeof value === 'string' ? value.replace(',', '.') : value;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const assertEffectiveWorkDate = (value, label = 'La fecha efectiva no es válida.') => {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    const err = new Error(label);
-    err.status = 400;
-    throw err;
-  }
-  return String(value);
-};
-
-const getEffectiveWorkDate = (value) => assertEffectiveWorkDate(value, 'La fecha efectiva del trabajo no es válida.');
 
 const assertPlanningStatusTransition = (currentStatus, nextStatus) => {
   if (!nextStatus) return;
@@ -492,466 +475,6 @@ const insertPlanningLots = async (client, planningId, selections) => {
   );
 };
 
-const getPlanningSelectionsForUsage = async (client, planningId, companyId) => {
-  const { rows } = await client.query(
-    `
-    SELECT
-      pl.lot_id,
-      pl.sub_lot_id,
-      pl.area_ha,
-      l.name AS lot_name,
-      sl.name AS sub_lot_name
-    FROM planning_lots pl
-    JOIN lots l
-      ON l.id = pl.lot_id
-     AND l.company_id = $2
-    LEFT JOIN sub_lots sl
-      ON sl.id = pl.sub_lot_id
-     AND sl.company_id = $2
-    WHERE pl.planning_id = $1
-    ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST;
-    `,
-    [planningId, companyId]
-  );
-
-  return rows;
-};
-
-const getPlanningProductsForUsage = async (client, planningId, companyId) => {
-  const { rows } = await client.query(
-    `
-    SELECT
-      pp.id,
-      pp.planning_id,
-      pp.product_id,
-      pp.amount,
-      pp.unit,
-      pr.name AS product_name,
-      pr.unit AS product_unit,
-      pr.available_quantity,
-      pr.enabled
-    FROM planning_products pp
-    JOIN products pr
-      ON pr.id = pp.product_id
-     AND pr.company_id = $2
-    WHERE pp.planning_id = $1
-    ORDER BY pr.name ASC, pp.id ASC
-    FOR UPDATE OF pp;
-    `,
-    [planningId, companyId]
-  );
-
-  return rows;
-};
-
-const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
-  const plannedIds = new Set(plannedProducts.map(planned => String(planned.id)));
-  const byId = new Map();
-  for (const item of actualProducts || []) {
-    const key = String(item.planning_product_id);
-    if (!plannedIds.has(key)) {
-      const err = new Error('Uno de los productos informados no pertenece a esta planificación.');
-      err.status = 400;
-      throw err;
-    }
-    if (byId.has(key)) {
-      const err = new Error('Hay productos repetidos en la confirmación.');
-      err.status = 400;
-      throw err;
-    }
-    byId.set(key, item);
-  }
-
-  return plannedProducts.map((planned) => {
-    const provided = byId.get(String(planned.id));
-    const actualAmount = provided
-      ? toNum(provided.actual_amount, NaN)
-      : toNum(planned.amount, 0);
-
-    if (!Number.isFinite(actualAmount) || actualAmount < 0) {
-      const err = new Error(`La cantidad utilizada de ${planned.product_name || 'producto'} no es válida.`);
-      err.status = 400;
-      throw err;
-    }
-
-    return {
-      ...planned,
-      actual_amount: actualAmount,
-    };
-  });
-};
-
-const getCurrentCropLabelForUsage = (planning) => (
-  planning.crop_name || null
-);
-
-const assertNoPlanningProductCompletions = async (client, planningId, companyId) => {
-  const { rows } = await client.query(
-    `
-    SELECT 1
-    FROM planning_product_completions ppc
-    JOIN planning p
-      ON p.id = ppc.planning_id
-     AND p.company_id = $2
-    WHERE ppc.planning_id = $1
-    LIMIT 1;
-    `,
-    [planningId, companyId]
-  );
-
-  return rows.length === 0;
-};
-
-const applyPlanningProductUsage = async (
-  client,
-  {
-    planning,
-    selections,
-    plannedProducts,
-    actualProducts,
-    effectiveDate,
-    companyId,
-  }
-) => {
-  if (!plannedProducts.length) {
-    return { usage_count: 0, consumed_products: 0 };
-  }
-
-  const normalizedProducts = normalizeActualProducts(plannedProducts, actualProducts);
-  const productIds = [...new Set(normalizedProducts.map((item) => item.product_id))];
-
-  const { rows: lockedProducts } = await client.query(
-    `
-    SELECT id, name, unit, available_quantity, enabled
-    FROM products
-    WHERE company_id = $1
-      AND id = ANY($2::uuid[])
-    FOR UPDATE;
-    `,
-    [companyId, productIds]
-  );
-  const productsById = new Map(lockedProducts.map((product) => [String(product.id), product]));
-  const requestedByProduct = new Map();
-
-  for (const planned of normalizedProducts) {
-    const product = productsById.get(String(planned.product_id));
-    if (!product || product.enabled === false) {
-      const err = new Error(`${planned.product_name || 'Producto'} no está disponible.`);
-      err.status = 409;
-      throw err;
-    }
-    if ((planned.unit || product.unit) !== product.unit) {
-      const err = new Error(`La unidad de ${product.name} no coincide con su stock.`);
-      err.status = 400;
-      throw err;
-    }
-    requestedByProduct.set(
-      String(planned.product_id),
-      (requestedByProduct.get(String(planned.product_id)) || 0) + planned.actual_amount
-    );
-  }
-
-  for (const [productId, requestedAmount] of requestedByProduct.entries()) {
-    const product = productsById.get(productId);
-    if (requestedAmount > Number(product.available_quantity || 0)) {
-      const err = new Error(`No hay stock suficiente de ${product.name}. Disponible: ${product.available_quantity} ${product.unit}.`);
-      err.status = 409;
-      throw err;
-    }
-  }
-
-  const totalArea = selections.reduce((sum, selection) => sum + Number(selection.area_ha || 0), 0);
-  const currentCrop = getCurrentCropLabelForUsage(planning);
-  let usageCount = 0;
-  let consumedProducts = 0;
-
-  for (const planned of normalizedProducts) {
-    let usageId = null;
-
-    if (planned.actual_amount > 0) {
-      const { rows: usageRows } = await client.query(
-        `
-        INSERT INTO usage_records (
-          date,
-          product_id,
-          amount_used,
-          unit,
-          total_area,
-          previous_crop,
-          current_crop,
-          crop_id,
-          user_id,
-          company_id,
-          source_planning_id,
-          source_planning_product_id
-        )
-        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11)
-        RETURNING id;
-        `,
-        [
-          effectiveDate,
-          planned.product_id,
-          planned.actual_amount,
-          planned.unit || planned.product_unit,
-          totalArea,
-          currentCrop,
-          planning.crop_id || null,
-          planning.responsible_user,
-          companyId,
-          planning.id,
-          planned.id,
-        ]
-      );
-
-      usageId = usageRows[0].id;
-      usageCount += 1;
-      consumedProducts += 1;
-
-      const usageLotValues = selections.map((_, index) => {
-        const base = index * 2 + 2;
-        return `($1, $${base}, $${base + 1})`;
-      });
-      const usageLotParams = [usageId];
-      selections.forEach((selection) => {
-        usageLotParams.push(selection.lot_id, selection.sub_lot_id || null);
-      });
-
-      if (usageLotValues.length) {
-        await client.query(
-          `
-          INSERT INTO usage_lots (usage_id, lot_id, sub_lot_id)
-          VALUES ${usageLotValues.join(', ')}
-          `,
-          usageLotParams
-        );
-      }
-
-      await client.query(
-        `
-        UPDATE products
-        SET available_quantity = COALESCE(available_quantity, 0) - $1
-        WHERE id = $2
-          AND company_id = $3;
-        `,
-        [planned.actual_amount, planned.product_id, companyId]
-      );
-    }
-
-    await client.query(
-      `
-      INSERT INTO planning_product_completions (
-        planning_product_id,
-        planning_id,
-        usage_id,
-        actual_amount
-      )
-      VALUES ($1, $2, $3, $4);
-      `,
-      [planned.id, planning.id, usageId, planned.actual_amount]
-    );
-  }
-
-  return { usage_count: usageCount, consumed_products: consumedProducts };
-};
-
-const getEffectiveSowingDate = (value) => {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    const err = new Error('La fecha de siembra no es válida.');
-    err.status = 400;
-    throw err;
-  }
-  return String(value);
-};
-
-const assertSowingDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
-  const { rows } = await client.query(
-    `
-    SELECT id, name, status, start_date, end_date
-    FROM campaigns
-    WHERE id = $1
-      AND company_id = $2
-      AND $3::date >= start_date
-      AND (end_date IS NULL OR $3::date <= end_date)
-    LIMIT 1;
-    `,
-    [campaignId, companyId, effectiveDate]
-  );
-
-  if (!rows.length) {
-    const err = new Error('La fecha efectiva de siembra debe estar dentro del período formal de la campaña.');
-    err.status = 400;
-    throw err;
-  }
-
-  return rows[0];
-};
-
-const assertWorkDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
-  const { rows } = await client.query(
-    `
-    SELECT id, name, status, work_start_date, start_date, end_date
-    FROM campaigns
-    WHERE id = $1
-      AND company_id = $2
-      AND $3::date >= COALESCE(work_start_date, start_date)
-      AND (end_date IS NULL OR $3::date <= end_date)
-    LIMIT 1;
-    `,
-    [campaignId, companyId, effectiveDate]
-  );
-
-  if (!rows.length) {
-    const err = new Error('La fecha seleccionada está fuera del período de trabajos de la campaña.');
-    err.status = 400;
-    throw err;
-  }
-
-  return rows[0];
-};
-
-const resolveOpenCropAssignmentsForSowing = async (client, selection, companyId, effectiveDate) => {
-  const { rows } = await client.query(
-    `
-    WITH selected_surface AS (
-      SELECT
-        pl.lot_id,
-        pl.sub_lot_id,
-        COALESCE(sl.geom, l.geom) AS geom
-      FROM planning_lots pl
-      JOIN lots l
-        ON l.id = pl.lot_id
-       AND l.company_id = $2
-      LEFT JOIN sub_lots sl
-        ON sl.id = pl.sub_lot_id
-       AND sl.company_id = $2
-      WHERE pl.planning_id = $1
-        AND pl.lot_id = $3
-        AND (
-          (pl.sub_lot_id IS NULL AND $4::uuid IS NULL)
-          OR pl.sub_lot_id = $4::uuid
-        )
-      LIMIT 1
-    ),
-    open_assignments AS (
-      SELECT
-        ca.id,
-        ca.lot_id,
-        ca.sub_lot_id,
-        COALESCE(ca_sl.geom, ca_lot.geom) AS geom
-      FROM crop_assignments ca
-      JOIN lots ca_lot
-        ON ca_lot.id = ca.lot_id
-       AND ca_lot.company_id = $2
-      LEFT JOIN sub_lots ca_sl
-        ON ca_sl.id = ca.sub_lot_id
-       AND ca_sl.company_id = $2
-      WHERE ca.company_id = $2
-        AND ca.lot_id = $3
-        AND ca.start_date < $5::date
-        AND (ca.end_date IS NULL OR ca.end_date >= $5::date)
-    ),
-    measured AS (
-      SELECT
-        oa.id,
-        oa.sub_lot_id,
-        ST_Area(ST_CollectionExtract(ST_MakeValid(oa.geom), 3)::geography) AS assignment_area_m2,
-        ST_Area(
-          ST_CollectionExtract(
-            ST_Intersection(
-              ST_CollectionExtract(ST_MakeValid(ss.geom), 3),
-              ST_CollectionExtract(ST_MakeValid(oa.geom), 3)
-            ),
-            3
-          )::geography
-        ) AS intersection_area_m2
-      FROM selected_surface ss
-      JOIN open_assignments oa ON ss.geom IS NOT NULL AND oa.geom IS NOT NULL
-    )
-    SELECT
-      id,
-      sub_lot_id,
-      assignment_area_m2,
-      intersection_area_m2,
-      (assignment_area_m2 - intersection_area_m2) AS outside_selected_m2
-    FROM measured
-    WHERE intersection_area_m2 > 1;
-    `,
-    [selection.planning_id, companyId, selection.lot_id, selection.sub_lot_id, effectiveDate]
-  );
-
-  const partial = rows.find(row => Number(row.outside_selected_m2 || 0) > 1);
-  if (partial) {
-    const err = new Error('El lote tiene un cultivo registrado sobre toda su superficie. Antes de completar esta siembra, actualizá el estado productivo para reflejar la nueva división.');
-    err.status = 409;
-    err.details = { open_assignment_id: partial.id };
-    throw err;
-  }
-
-  return rows.map(row => row.id);
-};
-
-const assertNoRemainingSowingConflicts = async (client, selections, companyId, effectiveDate) => {
-  const lotIds = selections.map(selection => selection.lot_id);
-  const subLotIds = selections.map(selection => selection.sub_lot_id);
-
-  const { rows } = await client.query(
-    `
-    WITH requested AS (
-      SELECT lot_id, sub_lot_id
-      FROM unnest($1::uuid[], $2::uuid[]) AS r(lot_id, sub_lot_id)
-    ),
-    requested_geom AS (
-      SELECT
-        r.lot_id,
-        r.sub_lot_id,
-        COALESCE(sl.geom, l.geom) AS geom
-      FROM requested r
-      JOIN lots l
-        ON l.id = r.lot_id
-       AND l.company_id = $3
-      LEFT JOIN sub_lots sl
-        ON sl.id = r.sub_lot_id
-       AND sl.company_id = $3
-    ),
-    conflicts AS (
-      SELECT ca.id
-      FROM requested_geom rg
-      JOIN crop_assignments ca
-        ON ca.company_id = $3
-       AND ca.lot_id = rg.lot_id
-       AND daterange(ca.start_date, COALESCE(ca.end_date, 'infinity'::date), '[]')
-         && daterange($4::date, 'infinity'::date, '[]')
-      JOIN lots ca_lot
-        ON ca_lot.id = ca.lot_id
-       AND ca_lot.company_id = $3
-      LEFT JOIN sub_lots ca_sl
-        ON ca_sl.id = ca.sub_lot_id
-       AND ca_sl.company_id = $3
-      WHERE rg.geom IS NOT NULL
-        AND COALESCE(ca_sl.geom, ca_lot.geom) IS NOT NULL
-        AND ST_Area(
-          ST_CollectionExtract(
-            ST_Intersection(
-              ST_CollectionExtract(ST_MakeValid(rg.geom), 3),
-              ST_CollectionExtract(ST_MakeValid(COALESCE(ca_sl.geom, ca_lot.geom)), 3)
-            ),
-            3
-          )::geography
-        ) > 1
-      LIMIT 1
-    )
-    SELECT id FROM conflicts;
-    `,
-    [lotIds, subLotIds, companyId, effectiveDate]
-  );
-
-  if (rows.length) {
-    const err = new Error('No se pudo registrar el cultivo porque existe un ciclo productivo superpuesto en esa superficie.');
-    err.status = 409;
-    throw err;
-  }
-};
-
 /**
  * Controlador: Planificación
  * Ubicación: controllers/planning.js
@@ -1170,134 +693,146 @@ exports.getOne = async (req, res, next) => {
  * Valida conflictos de fechas en lotes y vehículo.
  * Inserta lotes/productos relacionados.
  */
+const createPlanningRecord = async (
+  client,
+  {
+    body,
+    companyId,
+    userId,
+    allowClosedHistorical = false,
+    forcedStatus = null,
+    skipScheduleConflicts = false,
+  }
+) => {
+  const {
+    title,
+    description,
+    activity_type,
+    start_at,
+    end_at,
+    responsible_user,
+    status = 'pendiente',
+    vehicle_id,
+    campaign_id,
+    crop_id,
+    lot_ids = [],
+    lot_selections,
+    products = [],
+    created_by,
+  } = body;
+
+  const effectiveStatus = forcedStatus || status;
+  const creator = created_by || userId || null;
+
+  await resolveCampaign(client, campaign_id, companyId, {
+    startAt: start_at,
+    endAt: end_at,
+    allowClosedHistorical,
+  });
+  validateRequiredCrop(activity_type, crop_id);
+  assertSowingUsesCompletionEndpoint(activity_type, effectiveStatus);
+  const resolvedCrop = await resolveCrop(client, crop_id, companyId);
+
+  const requestedSelections = normalizeLotSelections(lot_ids, lot_selections);
+  const resolvedSelections = await resolveLotSelections(client, requestedSelections, companyId);
+
+  if (!skipScheduleConflicts && resolvedSelections.length && start_at && end_at) {
+    const conflicts = await checkLotScheduleConflicts(client, resolvedSelections, start_at, end_at, companyId);
+    if (conflicts.length) {
+      const err = new Error('Ya existe una planificación para ese lote o sublote en el mismo período.');
+      err.status = 409;
+      throw err;
+    }
+  }
+
+  if (!skipScheduleConflicts && vehicle_id && start_at && end_at) {
+    const q = `
+      SELECT 1
+      FROM planning p
+      WHERE p.vehicle_id = $1
+        AND p.status <> 'cancelado'
+        AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
+        AND p.company_id = $4
+      LIMIT 1;
+    `;
+    const { rows } = await client.query(q, [vehicle_id, start_at, end_at, companyId]);
+    if (rows.length) {
+      const err = new Error('El vehículo ya está asignado en ese período.');
+      err.status = 409;
+      throw err;
+    }
+  }
+
+  const insertSql = `
+    INSERT INTO planning(
+      title, description, activity_type, start_at, end_at, campaign_id, crop_id,
+      responsible_user, status, vehicle_id, created_by, company_id
+    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING id;
+  `;
+  const { rows: newPlan } = await client.query(insertSql, [
+    title?.trim() || null,
+    description ?? null,
+    activity_type,
+    start_at,
+    end_at,
+    campaign_id,
+    crop_id ?? null,
+    responsible_user,
+    effectiveStatus,
+    vehicle_id ?? null,
+    creator,
+    companyId,
+  ]);
+  const id = newPlan[0].id;
+
+  await insertPlanningLots(client, id, resolvedSelections);
+
+  if (Array.isArray(products) && products.length) {
+    const tuples = products
+      .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
+      .join(',');
+    const params = [id];
+    products.forEach(p => {
+      params.push(p.product_id, p.amount ?? null, p.unit ?? null);
+    });
+    await client.query(
+      `INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`,
+      params
+    );
+  }
+
+  return { id, resolvedCrop, resolvedSelections };
+};
+
 exports.create = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const {
-      title,
-      description,
-      activity_type,
-      start_at,
-      end_at,
-      responsible_user,
-      status = 'pendiente',
-      vehicle_id,
-      campaign_id,
-      crop_id,
-      lot_ids = [],
-      lot_selections,
-      products = [],
-      created_by, // opcional, si no va el user de req
-    } = req.body;
-
     const { company_id, id: userId } = req.user;
     if (!company_id) {
       client.release();
       return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
-    const creator = created_by || userId || null;
-
     await client.query('BEGIN');
-
-    await resolveCampaign(client, campaign_id, company_id, {
-      startAt: start_at,
-      endAt: end_at,
+    const { id, resolvedCrop } = await createPlanningRecord(client, {
+      body: req.body,
+      companyId: company_id,
+      userId,
       allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
     });
-    validateRequiredCrop(activity_type, crop_id);
-    assertSowingUsesCompletionEndpoint(activity_type, status);
-    const resolvedCrop = await resolveCrop(client, crop_id, company_id);
-
-    const requestedSelections = normalizeLotSelections(lot_ids, lot_selections);
-    const resolvedSelections = await resolveLotSelections(client, requestedSelections, company_id);
-
-    // Revalidar conflictos de lotes
-    if (resolvedSelections.length && start_at && end_at) {
-      const conflicts = await checkLotScheduleConflicts(client, resolvedSelections, start_at, end_at, company_id);
-      if (conflicts.length) {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(409).json({
-          message: 'Ya existe una planificación para ese lote o sublote en el mismo período.',
-        });
-      }
-    }
-
-    // Revalidar conflictos de vehículo
-    if (vehicle_id && start_at && end_at) {
-      const q = `
-        SELECT 1
-        FROM planning p
-        WHERE p.vehicle_id = $1
-          AND p.status <> 'cancelado'
-          AND p.date_range && tstzrange($2::timestamptz, $3::timestamptz, '[]')
-          AND p.company_id = $4
-        LIMIT 1;
-      `;
-      const { rows } = await client.query(q, [vehicle_id, start_at, end_at, company_id]);
-      if (rows.length) {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(409).json({
-          message: 'El vehículo ya está asignado en ese período.',
-        });
-      }
-    }
-
-    // Insert planning
-    const insertSql = `
-      INSERT INTO planning(
-        title, description, activity_type, start_at, end_at, campaign_id, crop_id,
-        responsible_user, status, vehicle_id, created_by, company_id
-      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING id;
-    `;
-    const { rows: newPlan } = await client.query(insertSql, [
-      title?.trim() || null,
-      description ?? null,
-      activity_type,
-      start_at,
-      end_at,
-      campaign_id,
-      crop_id ?? null,
-      responsible_user,
-      status,
-      vehicle_id ?? null,
-      creator,
-      company_id,
-    ]);
-    const id = newPlan[0].id;
-
-    // Insert lotes
-    await insertPlanningLots(client, id, resolvedSelections);
-
-    // Insert productos
-    if (Array.isArray(products) && products.length) {
-      const tuples = products
-        .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
-        .join(',');
-      const params = [id];
-      products.forEach(p => {
-        params.push(p.product_id, p.amount ?? null, p.unit ?? null);
-      });
-      await client.query(
-        `INSERT INTO planning_products(planning_id, product_id, amount, unit) VALUES ${tuples}`,
-        params
-      );
-    }
 
     await client.query('COMMIT');
 
     // [NOTIFICACIÓN] Nueva asignación
-    if (responsible_user) {
+    if (req.body.responsible_user) {
       createNotification(
-        responsible_user,
+        req.body.responsible_user,
         'planning_assigned',
         'low',
         'Nueva planificación asignada',
-        `Se te asignó una planificación de ${activityLabel(activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
-        { planning_id: id, activity_type },
+        `Se te asignó una planificación de ${activityLabel(req.body.activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
+        { planning_id: id, activity_type: req.body.activity_type },
         company_id
       ).catch(err => console.error('Error enviando notificación:', err));
     }
@@ -1313,13 +848,101 @@ exports.create = async (req, res, next) => {
   }
 };
 
+exports.registerCompleted = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { company_id, id: userId } = req.user;
+    if (!company_id) {
+      client.release();
+      return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
+    }
+
+    const effectiveDate = req.body.activity_type === 'siembra'
+      ? planningCompletion.getEffectiveSowingDate(req.body.effective_date)
+      : planningCompletion.getEffectiveWorkDate(req.body.effective_date);
+
+    await client.query('BEGIN');
+
+    const { id, resolvedCrop } = await createPlanningRecord(client, {
+      body: req.body,
+      companyId: company_id,
+      userId,
+      allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
+      forcedStatus: 'pendiente',
+      skipScheduleConflicts: true,
+    });
+
+    const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    let completion;
+
+    if (planning.activity_type === 'siembra') {
+      await resolveCrop(client, planning.crop_id, company_id);
+      completion = await planningCompletion.completeSowingPlanning(client, planning, {
+        effectiveDate,
+        companyId: company_id,
+        historical: true,
+        registeredRetroactively: true,
+      });
+    } else if (
+      planningCompletion.PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type)
+    ) {
+      completion = await planningCompletion.completeWorkPlanning(client, planning, {
+        effectiveDate,
+        companyId: company_id,
+        registeredRetroactively: true,
+      });
+    } else {
+      completion = await planningCompletion.completeActivityWithoutProductiveEffects(client, planning, {
+        effectiveDate,
+        companyId: company_id,
+        registeredRetroactively: true,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    if (req.body.responsible_user) {
+      createNotification(
+        req.body.responsible_user,
+        'planning_assigned',
+        'low',
+        'Actividad registrada como realizada',
+        `Se registró como realizada una actividad de ${activityLabel(req.body.activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
+        { planning_id: id, activity_type: req.body.activity_type, new_status: 'completado' },
+        company_id
+      ).catch(err => console.error('Error enviando notificación:', err));
+    }
+
+    return res.status(201).json({
+      ok: true,
+      id,
+      status: 'completado',
+      effective_date: effectiveDate,
+      registered_retroactively: true,
+      assignments_created: completion.assignments_created || 0,
+      closed_previous_cycles: completion.closed_previous_cycles || 0,
+      usage_records_created: completion.usage_records_created || 0,
+    });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    if (e.code === '23505') {
+      return res.status(409).json({ message: 'Esta planificación ya registró sus efectos de completado.' });
+    }
+    next(e);
+  } finally {
+    client.release();
+  }
+};
+
 exports.completeSowing = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
     const { actual_products = [] } = req.body;
     const { company_id } = req.user;
-    const effectiveDate = getEffectiveSowingDate(req.body.effective_date);
+    const effectiveDate = planningCompletion.getEffectiveSowingDate(req.body.effective_date);
 
     if (!company_id) {
       return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
@@ -1327,195 +950,27 @@ exports.completeSowing = async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    const { rows: planningRows } = await client.query(
-      `
-      SELECT
-        p.id,
-        p.activity_type,
-        p.status,
-        p.enabled,
-        p.campaign_id,
-        p.crop_id,
-        p.responsible_user,
-        c.name AS crop_name,
-        cp.name AS campaign_name
-      FROM planning p
-      LEFT JOIN crops c
-        ON c.id = p.crop_id
-       AND c.company_id = p.company_id
-      LEFT JOIN campaigns cp
-        ON cp.id = p.campaign_id
-       AND cp.company_id = p.company_id
-      WHERE p.id = $1
-        AND p.company_id = $2
-      FOR UPDATE OF p
-      LIMIT 1;
-      `,
-      [id, company_id]
-    );
-
-    if (!planningRows.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
-    }
-
-    const planning = planningRows[0];
-
-    const { rows: existingSourceRows } = await client.query(
-      `
-      SELECT id
-      FROM crop_assignments
-      WHERE source_planning_id = $1
-        AND company_id = $2
-      LIMIT 1;
-      `,
-      [id, company_id]
-    );
-
-    if (existingSourceRows.length) {
-      await client.query('COMMIT');
-      return res.status(200).json({
-        ok: true,
-        already_applied: true,
-        message: 'Esta siembra ya fue registrada en el estado productivo.',
-      });
-    }
-
-    if (planning.activity_type !== 'siembra') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Esta acción sólo está disponible para planificaciones de siembra.' });
-    }
-
-    if (planning.status === 'cancelado' || planning.enabled === false) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'No se puede completar una planificación cancelada.' });
-    }
-
-    if (planning.status === 'completado') {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        message: 'Esta siembra ya está completada. Registrá el cultivo manualmente si corresponde corregir el historial.',
-      });
-    }
-
-    if (!planning.crop_id) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La siembra debe tener un cultivo seleccionado.' });
-    }
-
-    if (!planning.campaign_id) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La siembra debe tener una campaña seleccionada.' });
-    }
-
+    const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
     await resolveCrop(client, planning.crop_id, company_id);
-    await assertSowingDateMatchesCampaign(client, planning.campaign_id, company_id, effectiveDate);
-
-    const { rows: selections } = await client.query(
-      `
-      SELECT
-        pl.planning_id,
-        pl.lot_id,
-        pl.sub_lot_id,
-        pl.area_ha,
-        l.name AS lot_name,
-        sl.name AS sub_lot_name
-      FROM planning_lots pl
-      JOIN lots l
-        ON l.id = pl.lot_id
-       AND l.company_id = $2
-      LEFT JOIN sub_lots sl
-        ON sl.id = pl.sub_lot_id
-       AND sl.company_id = $2
-      WHERE pl.planning_id = $1
-      ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST;
-      `,
-      [id, company_id]
-    );
-
-    if (!selections.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La siembra debe tener al menos un lote o sublote seleccionado.' });
-    }
-
-    const { rows: previousEndDateRows } = await client.query(
-      `SELECT ($1::date - INTERVAL '1 day')::date AS previous_end_date;`,
-      [effectiveDate]
-    );
-    const previousEndDate = previousEndDateRows[0].previous_end_date;
-    const closeIds = new Set();
-
-    for (const selection of selections) {
-      const idsToClose = await resolveOpenCropAssignmentsForSowing(
-        client,
-        selection,
-        company_id,
-        effectiveDate
-      );
-      idsToClose.forEach(closeId => closeIds.add(closeId));
-    }
-
-    if (closeIds.size) {
-      await client.query(
-        `
-        UPDATE crop_assignments
-        SET end_date = $1
-        WHERE company_id = $2
-          AND id = ANY($3::uuid[]);
-        `,
-        [previousEndDate, company_id, Array.from(closeIds)]
-      );
-    }
-
-    await assertNoRemainingSowingConflicts(client, selections, company_id, effectiveDate);
-
-    const params = [company_id, planning.campaign_id, planning.crop_id, effectiveDate, id];
-    const values = selections.map((selection, index) => {
-      const base = index * 3 + 6;
-      params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha);
-      return `($1, $2, $${base}, $${base + 1}, $3, $4, NULL, $${base + 2}, $5)`;
-    });
-
-    const { rows: assignmentRows } = await client.query(
-      `
-      INSERT INTO crop_assignments (
-        company_id, campaign_id, lot_id, sub_lot_id, crop_id, start_date, end_date, area_ha, source_planning_id
-      )
-      VALUES ${values.join(', ')}
-      RETURNING id, lot_id, sub_lot_id;
-      `,
-      params
-    );
-
-    if (assignmentRows.length !== selections.length) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ message: 'Esta siembra ya fue registrada en el estado productivo.' });
-    }
-
-    const plannedProducts = await getPlanningProductsForUsage(client, id, company_id);
-    const productUsage = await applyPlanningProductUsage(client, {
-      planning,
-      selections,
-      plannedProducts,
+    const completion = await planningCompletion.completeSowingPlanning(client, planning, {
       actualProducts: actual_products,
       effectiveDate,
       companyId: company_id,
+      registeredRetroactively: false,
     });
-
-    await client.query(
-      `
-      UPDATE planning
-      SET status = 'completado'
-      WHERE id = $1
-        AND company_id = $2;
-      `,
-      [id, company_id]
-    );
 
     await client.query('COMMIT');
 
+    if (completion.already_applied) {
+      return res.status(200).json({
+        ok: true,
+        already_applied: true,
+        message: completion.message,
+      });
+    }
+
     if (planning.responsible_user) {
-      const locationText = selections
+      const locationText = completion.selections
         .map(selection => selection.sub_lot_name || selection.lot_name)
         .join(', ');
       createNotification(
@@ -1531,12 +986,12 @@ exports.completeSowing = async (req, res, next) => {
 
     return res.json({
       ok: true,
-      message: plannedProducts.length
+      message: completion.planned_products_count
         ? 'La siembra fue completada, el cultivo quedó registrado y se actualizaron los productos utilizados.'
         : 'La siembra fue completada y el cultivo quedó registrado.',
-      assignments_created: assignmentRows.length,
-      closed_previous_cycles: closeIds.size,
-      usage_records_created: productUsage.usage_count,
+      assignments_created: completion.assignments_created,
+      closed_previous_cycles: completion.closed_previous_cycles,
+      usage_records_created: completion.usage_records_created,
     });
   } catch (e) {
     try {
@@ -1556,7 +1011,7 @@ exports.completeWork = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { actual_products = [] } = req.body;
-    const effectiveDate = getEffectiveWorkDate(req.body.effective_date);
+    const effectiveDate = planningCompletion.getEffectiveWorkDate(req.body.effective_date);
     const { company_id } = req.user;
 
     if (!company_id) {
@@ -1565,102 +1020,26 @@ exports.completeWork = async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    const { rows: planningRows } = await client.query(
-      `
-      SELECT
-        p.id,
-        p.activity_type,
-        p.status,
-        p.enabled,
-        p.campaign_id,
-        p.crop_id,
-        p.responsible_user,
-        c.name AS crop_name,
-        cp.name AS campaign_name
-      FROM planning p
-      LEFT JOIN crops c
-        ON c.id = p.crop_id
-       AND c.company_id = p.company_id
-      LEFT JOIN campaigns cp
-        ON cp.id = p.campaign_id
-       AND cp.company_id = p.company_id
-      WHERE p.id = $1
-        AND p.company_id = $2
-      FOR UPDATE OF p
-      LIMIT 1;
-      `,
-      [id, company_id]
-    );
-
-    if (!planningRows.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
-    }
-
-    const planning = planningRows[0];
-
-    if (!PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type) || planning.activity_type === 'siembra') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Esta acción no corresponde a la actividad seleccionada.' });
-    }
-
-    if (planning.status === 'cancelado' || planning.enabled === false) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'No se puede completar una planificación cancelada.' });
-    }
-
-    const hasNoCompletions = await assertNoPlanningProductCompletions(client, id, company_id);
-    if (!hasNoCompletions) {
-      await client.query('COMMIT');
-      return res.status(200).json({
-        ok: true,
-        already_applied: true,
-        message: 'Esta planificación ya registró sus consumos.',
-      });
-    }
-
-    if (planning.status === 'completado') {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ message: 'Esta planificación ya está completada.' });
-    }
-
-    if (!planning.campaign_id) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La planificación debe tener una campaña seleccionada.' });
-    }
-
-    await assertWorkDateMatchesCampaign(client, planning.campaign_id, company_id, effectiveDate);
-
-    const selections = await getPlanningSelectionsForUsage(client, id, company_id);
-    if (!selections.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La planificación debe tener al menos un lote o sublote seleccionado.' });
-    }
-
-    const plannedProducts = await getPlanningProductsForUsage(client, id, company_id);
-    const productUsage = await applyPlanningProductUsage(client, {
-      planning,
-      selections,
-      plannedProducts,
+    const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    const completion = await planningCompletion.completeWorkPlanning(client, planning, {
       actualProducts: actual_products,
       effectiveDate,
       companyId: company_id,
+      registeredRetroactively: false,
     });
-
-    await client.query(
-      `
-      UPDATE planning
-      SET status = 'completado'
-      WHERE id = $1
-        AND company_id = $2;
-      `,
-      [id, company_id]
-    );
 
     await client.query('COMMIT');
 
+    if (completion.already_applied) {
+      return res.status(200).json({
+        ok: true,
+        already_applied: true,
+        message: completion.message,
+      });
+    }
+
     if (planning.responsible_user) {
-      const locationText = selections
+      const locationText = completion.selections
         .map(selection => selection.sub_lot_name || selection.lot_name)
         .join(', ');
       createNotification(
@@ -1676,10 +1055,10 @@ exports.completeWork = async (req, res, next) => {
 
     return res.json({
       ok: true,
-      message: plannedProducts.length
+      message: completion.planned_products_count
         ? 'El trabajo fue completado y los productos utilizados quedaron registrados.'
         : 'El trabajo fue completado.',
-      usage_records_created: productUsage.usage_count,
+      usage_records_created: completion.usage_records_created,
     });
   } catch (e) {
     try {

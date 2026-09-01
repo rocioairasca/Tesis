@@ -56,7 +56,7 @@ const ActualProductItem = z.object({
 });
 
 // Body base (CREATE)
-const baseBody = z.object({
+const baseBodyShape = {
   title: Title,
   description: Description,
   activity_type: ActivityType,
@@ -71,8 +71,9 @@ const baseBody = z.object({
   lot_selections: lotSelectionArrayNoDup.optional(),
   products: z.array(ProductItem).optional(),
   created_by: z.string().uuid().optional().nullable(),
-})
-.superRefine((val, ctx) => {
+};
+
+const refinePlanningBody = (val, ctx) => {
   requireLotSelection(val, ctx);
 
   if (ACTIVITIES_REQUIRING_CROP.has(val.activity_type) && !val.crop_id) {
@@ -97,10 +98,20 @@ const baseBody = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'products contiene product_id duplicados', path: ['products'] });
     }
   }
-});
+};
+
+const baseBody = z.object(baseBodyShape).superRefine(refinePlanningBody);
 
 // Schemas exportados
 exports.createSchema = z.object({ body: baseBody });
+
+exports.registerCompletedSchema = z.object({
+  body: z.object({
+    ...baseBodyShape,
+    status: EditableStatus.optional(),
+    effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+  }).superRefine(refinePlanningBody),
+});
 
 exports.updateSchema = z.object({
   params: z.object({ id: z.string().uuid() }),

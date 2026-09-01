@@ -14,6 +14,7 @@ const {
 
 const layouts = require('../controllers/lots/layouts.js');
 const productiveState = require('../controllers/lots/productiveState.js');
+const lotHistory = require('../controllers/lots/history.js');
 
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
@@ -82,6 +83,16 @@ router.get('/:lotId/productive-state',
     PERMISSIONS.HARVEST_EDIT
   ),
   productiveState.getLotProductiveState
+);
+
+router.get('/:lotId/history',
+  validate(schema.lotHistoryParam),
+  requireAnyPermission(
+    PERMISSIONS.LOTS_VIEW,
+    PERMISSIONS.PLANNING_VIEW,
+    PERMISSIONS.HARVEST_VIEW
+  ),
+  lotHistory.getLotHistory
 );
 
 router.post('/:lotId/layouts',

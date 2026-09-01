@@ -361,6 +361,53 @@ html {
   overflow-x: hidden;
 }
 
+.planning-product-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(150px, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.planning-product-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.planning-product-field {
+  min-width: 0;
+}
+
+.planning-product-remove {
+  min-width: 76px;
+}
+
+.planning-product-remove .ant-form-item-control-input {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+@media (max-width: 575px) {
+  .planning-product-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .planning-product-remove {
+    min-width: 0;
+  }
+
+  .planning-product-remove .ant-form-item-label {
+    display: none;
+  }
+
+  .planning-product-remove .ant-btn {
+    min-height: 36px;
+    padding-inline: 0;
+  }
+}
+
 .planning-month-list {
   display: flex;
   flex-direction: column;
