@@ -5,10 +5,18 @@ const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD');
 exports.createBody = z.object({
   body: z.object({
     name: z.string().trim().min(1, 'Nombre requerido'),
+    work_start_date: YMD.nullable().optional(),
     start_date: YMD,
     end_date: YMD.nullable().optional(),
     status: z.enum(['active', 'closed']).optional(),
   }).superRefine((val, ctx) => {
+    if (val.work_start_date && val.work_start_date > val.start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La fecha "Trabajos desde" no puede ser posterior a la fecha de inicio.',
+        path: ['work_start_date'],
+      });
+    }
     if (val.end_date && val.start_date > val.end_date) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -23,6 +31,7 @@ exports.updateBody = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     name: z.string().trim().min(1, 'Nombre requerido').optional(),
+    work_start_date: YMD.nullable().optional(),
     start_date: YMD.optional(),
     end_date: YMD.nullable().optional(),
     status: z.enum(['active', 'closed']).optional(),

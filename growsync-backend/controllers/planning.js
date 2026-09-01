@@ -212,6 +212,8 @@ const assertSowingUsesCompletionEndpoint = (activityType, nextStatus) => {
 
 const calendarDateSql = (param) => `left($${param}::text, 10)::date`;
 
+const campaignWorkStartSql = 'COALESCE(work_start_date, start_date)';
+
 const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   if (!campaignId) {
     const err = new Error('Seleccioná una campaña.');
@@ -227,7 +229,7 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   } = options;
   const { rows } = await client.query(
     `
-    SELECT id, name, status, start_date, end_date
+    SELECT id, name, status, work_start_date, start_date, end_date
     FROM campaigns
     WHERE id = $1
       AND company_id = $2
@@ -246,26 +248,37 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   if (startAt && endAt) {
     const { rows: dateRows } = await client.query(
       `
+      WITH compatible_campaigns AS (
+        SELECT id, name, status, start_date
+        FROM campaigns
+        WHERE company_id = $5
+          AND ${calendarDateSql(1)} >= ${campaignWorkStartSql}
+          AND (end_date IS NULL OR ${calendarDateSql(1)} <= end_date)
+      )
       SELECT
         (
           ${calendarDateSql(1)} >= $3::date
           AND ($4::date IS NULL OR ${calendarDateSql(2)} <= $4::date)
         ) AS matches_campaign,
         (
-          SELECT json_build_object('id', id, 'name', name, 'status', status)
-          FROM campaigns
-          WHERE company_id = $5
-            AND ${calendarDateSql(1)} >= start_date
-            AND (end_date IS NULL OR ${calendarDateSql(1)} <= end_date)
-          ORDER BY status = 'active' DESC, start_date DESC
+          SELECT CASE
+            WHEN COUNT(*) = 1 THEN (
+              SELECT json_build_object('id', id, 'name', name, 'status', status)
+              FROM compatible_campaigns
+              ORDER BY start_date DESC, name ASC
+              LIMIT 1
+            )
+            ELSE NULL
+          END
+          FROM compatible_campaigns
           LIMIT 1
         ) AS suggested_campaign;
       `,
-      [startAt, endAt, campaign.start_date, campaign.end_date, companyId]
+      [startAt, endAt, campaign.work_start_date || campaign.start_date, campaign.end_date, companyId]
     );
 
     if (!dateRows[0]?.matches_campaign) {
-      const err = new Error('La fecha seleccionada no corresponde a la campaña elegida.');
+      const err = new Error('La campaña seleccionada no admite trabajos en las fechas indicadas.');
       err.status = 400;
       err.details = { suggested_campaign: dateRows[0]?.suggested_campaign || null };
       throw err;
@@ -765,7 +778,30 @@ const assertSowingDateMatchesCampaign = async (client, campaignId, companyId, ef
   );
 
   if (!rows.length) {
-    const err = new Error('La fecha de siembra no corresponde a la campaña seleccionada.');
+    const err = new Error('La fecha efectiva de siembra debe estar dentro del período formal de la campaña.');
+    err.status = 400;
+    throw err;
+  }
+
+  return rows[0];
+};
+
+const assertWorkDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
+  const { rows } = await client.query(
+    `
+    SELECT id, name, status, work_start_date, start_date, end_date
+    FROM campaigns
+    WHERE id = $1
+      AND company_id = $2
+      AND $3::date >= COALESCE(work_start_date, start_date)
+      AND (end_date IS NULL OR $3::date <= end_date)
+    LIMIT 1;
+    `,
+    [campaignId, companyId, effectiveDate]
+  );
+
+  if (!rows.length) {
+    const err = new Error('La fecha seleccionada está fuera del período de trabajos de la campaña.');
     err.status = 400;
     throw err;
   }
@@ -1587,6 +1623,13 @@ exports.completeWork = async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Esta planificación ya está completada.' });
     }
+
+    if (!planning.campaign_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La planificación debe tener una campaña seleccionada.' });
+    }
+
+    await assertWorkDateMatchesCampaign(client, planning.campaign_id, company_id, effectiveDate);
 
     const selections = await getPlanningSelectionsForUsage(client, id, company_id);
     if (!selections.length) {

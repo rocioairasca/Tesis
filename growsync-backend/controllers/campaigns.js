@@ -1,6 +1,6 @@
 const { pool } = require('../db/supabaseClient');
 
-const fields = 'id, name, start_date, end_date, status, created_at, updated_at';
+const fields = 'id, name, work_start_date, start_date, end_date, status, created_at, updated_at';
 const CAMPAIGN_IN_USE_MESSAGE = 'Esta campaña tiene información asociada y no puede eliminarse.';
 const CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE = 'No se pueden guardar estas fechas porque existen registros asociados fuera del período seleccionado.';
 const CAMPAIGN_NAME_UNIQUE_INDEX = 'campaigns_company_name_ci_unique';
@@ -63,7 +63,8 @@ const getCampaignReferenceCounts = async (client, companyId, campaignId) => {
   return rows;
 };
 
-const assertCampaignDatesContainReferences = async (client, companyId, campaignId, startDate, endDate) => {
+const assertCampaignDatesContainReferences = async (client, companyId, campaignId, workStartDate, startDate, endDate) => {
+  const effectiveWorkStartDate = workStartDate || startDate;
   const { rows } = await client.query(
     `
     WITH referenced_dates AS (
@@ -104,7 +105,7 @@ const assertCampaignDatesContainReferences = async (client, companyId, campaignI
     WHERE date_value < $3::date
        OR ($4::date IS NOT NULL AND date_value > $4::date);
     `,
-    [companyId, campaignId, startDate, endDate]
+    [companyId, campaignId, effectiveWorkStartDate, endDate]
   );
 
   const outOfRangeCount = Number(rows[0]?.out_of_range_count || 0);
@@ -172,11 +173,12 @@ exports.create = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { company_id } = req.user;
-    const { name, start_date, end_date } = req.body;
+    const { name, work_start_date = null, start_date, end_date } = req.body;
 
     logCampaignCreate('REQUEST', {
       name,
       company_id,
+      work_start_date: work_start_date || null,
       start_date,
       end_date: end_date || null,
     });
@@ -188,6 +190,7 @@ exports.create = async (req, res, next) => {
     logCampaignCreate('INSERT', {
       name: insertName,
       company_id,
+      work_start_date: work_start_date || null,
       start_date,
       end_date: end_date || null,
       status,
@@ -195,11 +198,11 @@ exports.create = async (req, res, next) => {
 
     const { rows } = await client.query(
       `
-      INSERT INTO campaigns (company_id, name, start_date, end_date, status)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO campaigns (company_id, name, work_start_date, start_date, end_date, status)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING ${fields};
       `,
-      [company_id, insertName, start_date, end_date || null, status]
+      [company_id, insertName, work_start_date || null, start_date, end_date || null, status]
     );
 
     await client.query('COMMIT');
@@ -234,7 +237,7 @@ exports.update = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: currentRows } = await client.query(
-      'SELECT id, start_date, end_date, status FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      'SELECT id, work_start_date, start_date, end_date, status FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, company_id]
     );
 
@@ -243,12 +246,26 @@ exports.update = async (req, res, next) => {
       return res.status(404).json({ error: 'NotFound', message: 'Campaña no encontrada' });
     }
 
+    const nextWorkStart = req.body.work_start_date !== undefined
+      ? req.body.work_start_date
+      : currentRows[0].work_start_date;
     const nextStart = req.body.start_date ?? currentRows[0].start_date;
     const nextEnd = req.body.end_date !== undefined ? req.body.end_date : currentRows[0].end_date;
     const { rows: dateOrderRows } = await client.query(
-      'SELECT ($2::date IS NULL OR $1::date <= $2::date) AS valid_date_order',
-      [nextStart, nextEnd]
+      `
+      SELECT
+        ($1::date IS NULL OR $1::date <= $2::date) AS valid_work_start,
+        ($3::date IS NULL OR $2::date <= $3::date) AS valid_date_order;
+      `,
+      [nextWorkStart, nextStart, nextEnd]
     );
+    if (!dateOrderRows[0]?.valid_work_start) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'BadRequest',
+        message: 'La fecha "Trabajos desde" no puede ser posterior a la fecha de inicio.',
+      });
+    }
     if (!dateOrderRows[0]?.valid_date_order) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -257,7 +274,7 @@ exports.update = async (req, res, next) => {
       });
     }
 
-    await assertCampaignDatesContainReferences(client, company_id, id, nextStart, nextEnd);
+    await assertCampaignDatesContainReferences(client, company_id, id, nextWorkStart, nextStart, nextEnd);
 
     const nextStatus = req.body.status;
 
@@ -269,6 +286,7 @@ exports.update = async (req, res, next) => {
     };
 
     if (req.body.name !== undefined) push(req.body.name.trim(), 'name');
+    if (req.body.work_start_date !== undefined) push(req.body.work_start_date, 'work_start_date');
     if (req.body.start_date !== undefined) push(req.body.start_date, 'start_date');
     if (req.body.end_date !== undefined) push(req.body.end_date, 'end_date');
     if (nextStatus !== undefined) push(nextStatus, 'status');
