@@ -64,12 +64,14 @@ const HarvestForm = ({
   productiveStates = [],
   loadingProductiveStates = false,
   initialRecord = null,
+  onHarvestDateChange,
   onSuccess,
   onCancel
 }) => {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const isAppliedRecord = !!initialRecord?.closes_productive_cycle;
+  const selectedItems = Form.useWatch('items', form) || [];
 
   const productiveStateBySurface = useMemo(() => {
     const map = new Map();
@@ -122,8 +124,20 @@ const HarvestForm = ({
     const cropId = unit?.current_crop?.crop_id;
     if (cropId) {
       form.setFieldValue(['items', fieldName, 'crop_id'], cropId);
+    } else {
+      form.setFieldValue(['items', fieldName, 'crop_id'], undefined);
     }
   };
+
+  useEffect(() => {
+    selectedItems.forEach((item, index) => {
+      if (!item?.surface_key) return;
+      const cropId = getSurfaceState(item.surface_key)?.current_crop?.crop_id;
+      if (cropId !== item.crop_id) {
+        form.setFieldValue(['items', index, 'crop_id'], cropId || undefined);
+      }
+    });
+  }, [form, productiveStateBySurface, selectedItems]);
 
   useEffect(() => {
     if (initialRecord) {
@@ -247,6 +261,7 @@ const HarvestForm = ({
               style={{ width: '100%' }}
               format="DD/MM/YYYY"
               disabled={isAppliedRecord}
+              onChange={onHarvestDateChange}
             />
           </Form.Item>
         </Col>
@@ -479,6 +494,7 @@ const HarvestForm = ({
           htmlType="submit"
           icon={<SaveOutlined />}
           loading={submitting}
+          disabled={loadingProductiveStates}
         >
           Guardar cosecha
         </Button>

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Button, Col, Drawer, Dropdown, Row, Space, notification } from "antd";
+import dayjs from "dayjs";
 import { MoreOutlined, PlusOutlined } from "../../components/AppIcons";
 import { useNavigate } from "react-router-dom";
 
@@ -27,8 +28,10 @@ const Harvest = () => {
   const [crops, setCrops] = useState([]);
   const [productiveStates, setProductiveStates] = useState([]);
   const [loadingProductiveStates, setLoadingProductiveStates] = useState(false);
+  const [productiveStateDate, setProductiveStateDate] = useState(dayjs().format("YYYY-MM-DD"));
 
   const openDrawer = (record = null) => {
+    setProductiveStateDate(record?.harvest_date ? dayjs(record.harvest_date).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"));
     setEditingRecord(record);
     setIsDrawerOpen(true);
   };
@@ -40,7 +43,7 @@ const Harvest = () => {
 
   const handleSuccess = () => {
     setRefreshKey((prev) => prev + 1);
-    fetchProductiveStates();
+    fetchProductiveStates(productiveStateDate);
     closeDrawer();
   };
 
@@ -84,11 +87,14 @@ const Harvest = () => {
     }
   }, []);
 
-  const fetchProductiveStates = useCallback(async () => {
+  const fetchProductiveStates = useCallback(async (date) => {
     setLoadingProductiveStates(true);
+    setProductiveStates([]);
 
     try {
-      const { data } = await api.get("/lots/productive-states");
+      const { data } = await api.get("/lots/productive-states", {
+        params: { date },
+      });
       setProductiveStates(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
       console.error("→ productive states error:", error);
@@ -101,11 +107,18 @@ const Harvest = () => {
     }
   }, []);
 
+  const handleHarvestDateChange = useCallback((date) => {
+    setProductiveStateDate(date ? date.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"));
+  }, []);
+
   useEffect(() => {
     fetchLots();
     fetchCrops();
-    fetchProductiveStates();
-  }, [fetchLots, fetchCrops, fetchProductiveStates]);
+  }, [fetchLots, fetchCrops]);
+
+  useEffect(() => {
+    fetchProductiveStates(productiveStateDate);
+  }, [fetchProductiveStates, productiveStateDate]);
 
   const disabledMenu = [
     canViewDisabled && {
@@ -175,6 +188,7 @@ const Harvest = () => {
           productiveStates={productiveStates}
           loadingProductiveStates={loadingProductiveStates}
           initialRecord={editingRecord}
+          onHarvestDateChange={handleHarvestDateChange}
           onSuccess={handleSuccess}
           onCancel={closeDrawer}
         />

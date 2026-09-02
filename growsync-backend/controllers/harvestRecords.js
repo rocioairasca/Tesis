@@ -480,7 +480,7 @@ exports.createHarvestRecord = async (req, res, next) => {
         crop.id,
         normalizeCrop(crop.name),
         assignments[0].campaign_id,
-        assignments[0].campaign_name || legacyCampaignFromDates(assignments[0].campaign_start_date, assignments[0].campaign_end_date),
+        legacyCampaignFromDates(assignments[0].campaign_start_date, assignments[0].campaign_end_date),
         harvest_date,
         productionKg,
         harvestedAreaHa,
