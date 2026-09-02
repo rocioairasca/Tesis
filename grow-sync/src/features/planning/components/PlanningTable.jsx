@@ -8,11 +8,11 @@
 import React from 'react';
 import { Table, Button, Tooltip, Dropdown, Tag, Modal } from 'antd';
 import { EditOutlined, MoreOutlined, EyeOutlined } from '../../../components/AppIcons';
-import dayjs from 'dayjs';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
 import {
     ACTIVITY_TAG_STYLES,
+    formatPlanningPeriod,
     formatActivity,
     getCropDisplayName,
     summarizePlanningLots,
@@ -29,14 +29,6 @@ const getPlanningArea = (row) => {
     const plannedArea = Number(row?.planned_area_ha || 0);
     if (plannedArea > 0) return plannedArea;
     return (row?.lots || []).reduce((sum, lot) => sum + Number(lot?.area_ha || 0), 0);
-};
-const formatPeriod = (row) => {
-    if (!row?.start_at || !row?.end_at) return "—";
-    const start = dayjs(row.start_at);
-    const end = dayjs(row.end_at);
-    return start.isSame(end, "day")
-        ? start.format("DD/MM/YYYY")
-        : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
 };
 const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
     const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
@@ -170,7 +162,7 @@ const PlanningTable = ({
         {
             title: "Período",
             key: "period",
-            render: (_, r) => formatPeriod(r),
+            render: (_, r) => formatPlanningPeriod(r),
             width: 145,
         },
         {

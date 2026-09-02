@@ -2,11 +2,11 @@ import React from 'react';
 import { Button, Dropdown, Modal, Tooltip } from 'antd';
 import { EditOutlined, EyeOutlined, MoreOutlined } from '../../../components/AppIcons';
 import { Calendar as CalIcon, User as UserIcon, MapPin } from '../../../components/AppIcons';
-import dayjs from 'dayjs';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
 import {
     formatActivity,
+    formatPlanningPeriod,
     getPlanningDisplayName,
     getPlanningLotName,
 } from "../planningDisplay";
@@ -22,14 +22,6 @@ const getPlanningArea = (row) => {
     const plannedArea = Number(row?.planned_area_ha || 0);
     if (plannedArea > 0) return plannedArea;
     return (row?.lots || []).reduce((sum, lot) => sum + Number(lot?.area_ha || 0), 0);
-};
-const formatPeriod = (row) => {
-    if (!row?.start_at || !row?.end_at) return "-";
-    const start = dayjs(row.start_at);
-    const end = dayjs(row.end_at);
-    return start.isSame(end, "day")
-        ? start.format("DD/MM/YYYY")
-        : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
 };
 const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
     const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
@@ -93,7 +85,7 @@ const PlanningListMobile = ({
         <div className="inventory-cards-container">
             {list.map((r) => {
                 const lotsText = (r.lots || []).map(getPlanningLotName).filter(Boolean).join(", ") || "-";
-                const period = formatPeriod(r);
+                const period = formatPlanningPeriod(r, "-");
                 const primaryAction = getPrimaryStatusAction?.(r);
                 const menuItems = buildStatusMenuItems(
                     r,

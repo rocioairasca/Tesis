@@ -41,7 +41,9 @@ import {
   ACTIVITY_EVENT_STYLES,
   STATUS_COLORS,
   formatActivity,
+  formatPlanningPeriod,
   getCropDisplayName,
+  getPlanningDatePart,
   getPlanningDisplayName,
   getPlanningEventLabel,
   getPlanningLotName,
@@ -77,9 +79,14 @@ const getPlanningArea = (row) => {
 };
 const getEffectiveSowingDate = (row) => {
   const source = row?.end_at || row?.start_at;
-  return source ? dayjs(source) : dayjs();
+  const datePart = getPlanningDatePart(source);
+  return datePart ? dayjs(datePart) : dayjs();
 };
 const getEffectiveWorkDate = getEffectiveSowingDate;
+const getPlanningDayjs = (value) => {
+  const datePart = getPlanningDatePart(value);
+  return datePart ? dayjs(datePart) : null;
+};
 const parseDecimalInput = (value) => {
   if (typeof value === "string") return Number(value.replace(",", "."));
   return Number(value);
@@ -195,12 +202,7 @@ const getEventIdentityAlpha = (id) => {
   return (0.07 + (hash % 5) * 0.025).toFixed(3);
 };
 const formatPeriod = (row) => {
-  if (!row?.start_at || !row?.end_at) return "—";
-  const start = dayjs(row.start_at);
-  const end = dayjs(row.end_at);
-  return start.isSame(end, "day")
-    ? start.format("DD/MM/YYYY")
-    : `${start.format("DD/MM/YYYY")} → ${end.format("DD/MM/YYYY")}`;
+  return formatPlanningPeriod(row);
 };
 const getCampaignDisplayStatus = (campaign) => {
   if (!campaign) return "—";
@@ -282,6 +284,7 @@ const Planning = () => {
   const registerCompleted = Boolean(Form.useWatch("register_completed", form));
   const selectedEffectiveDate = Form.useWatch("effective_date", form);
   const selectedFormProducts = Form.useWatch("products", form) || [];
+  const isEditingCompleted = editing?.status === "completado";
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
@@ -351,6 +354,7 @@ const Planning = () => {
   ), [selectedFormProducts]);
 
   const productStockExceeded = useMemo(() => (
+    !isEditingCompleted &&
     Array.isArray(selectedFormProducts)
     && selectedFormProducts.some((item) => {
       if (!item?.product_id) return false;
@@ -359,7 +363,7 @@ const Planning = () => {
       const available = Number(getCatalogProductById(item.product_id)?.available_quantity || 0);
       return amount > available;
     })
-  ), [getCatalogProductById, selectedFormProducts]);
+  ), [getCatalogProductById, isEditingCompleted, selectedFormProducts]);
 
   const campaignCompatibilityRange = useMemo(() => (
     registerCompleted && selectedEffectiveDate
@@ -705,7 +709,7 @@ const Planning = () => {
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
   const comparePlanningEvents = (a, b) => {
-    const startDiff = dayjs(a.start_at).valueOf() - dayjs(b.start_at).valueOf();
+    const startDiff = (getPlanningDayjs(a.start_at)?.valueOf() || 0) - (getPlanningDayjs(b.start_at)?.valueOf() || 0);
     if (startDiff) return startDiff;
 
     const activityDiff = String(a.activity_type || "").localeCompare(String(b.activity_type || ""), "es");
@@ -730,9 +734,9 @@ const Planning = () => {
       .sort(comparePlanningEvents);
 
     events.forEach((event) => {
-      const eventStart = dayjs(event.start_at).startOf("day");
-      const eventEnd = dayjs(event.end_at).startOf("day");
-      if (!eventStart.isValid() || !eventEnd.isValid()) return;
+      const eventStart = getPlanningDayjs(event.start_at)?.startOf("day");
+      const eventEnd = getPlanningDayjs(event.end_at)?.startOf("day");
+      if (!eventStart?.isValid() || !eventEnd?.isValid()) return;
 
       let cursor = weekStart(eventStart);
       const lastWeek = weekStart(eventEnd);
@@ -808,9 +812,9 @@ const Planning = () => {
     return [...list]
       .filter((event) => {
         if (!event.start_at || !event.end_at) return false;
-        const eventStart = dayjs(event.start_at).startOf("day");
-        const eventEnd = dayjs(event.end_at).endOf("day");
-        if (!eventStart.isValid() || !eventEnd.isValid()) return false;
+        const eventStart = getPlanningDayjs(event.start_at)?.startOf("day");
+        const eventEnd = getPlanningDayjs(event.end_at)?.endOf("day");
+        if (!eventStart?.isValid() || !eventEnd?.isValid()) return false;
         return !eventStart.isAfter(monthEnd) && !eventEnd.isBefore(monthStart);
       })
       .sort(comparePlanningEvents);
@@ -826,8 +830,7 @@ const Planning = () => {
   const selectedCalendarGroups = useMemo(() => {
     const groups = new Map();
     selectedCalendarEvents.forEach((event) => {
-      const start = dayjs(event.start_at);
-      const key = start.isValid() ? start.format("YYYY-MM-DD") : "sin-fecha";
+      const key = getPlanningDatePart(event.start_at) || "sin-fecha";
       const items = groups.get(key) || [];
       items.push(event);
       groups.set(key, items);
@@ -1053,7 +1056,7 @@ const Planning = () => {
         activity_type: row.activity_type,
         campaign_id: row.campaign_id,
         crop_id: row.crop_id,
-        date_range: [row.start_at ? dayjs(row.start_at) : null, row.end_at ? dayjs(row.end_at) : null],
+        date_range: [getPlanningDayjs(row.start_at), getPlanningDayjs(row.end_at)],
         responsible_user: row.responsible_user,
         vehicle_id: row.vehicle_id,
         lot_selection_keys: (row.lots || [])
@@ -1145,6 +1148,22 @@ const Planning = () => {
 
       if (shouldRegisterCompleted) {
         payload.effective_date = effectiveDate?.format("YYYY-MM-DD");
+      }
+
+      if (isEditingCompleted) {
+        const completedPayload = {
+          responsible_user: values.responsible_user,
+          description: values.description?.trim() || null,
+        };
+        if (values.title !== undefined) {
+          completedPayload.title = values.title?.trim() || null;
+        }
+        console.log("📤 Payload a enviar:", JSON.stringify(completedPayload, null, 2));
+        await api.patch(`/planning/${getId(editing)}`, completedPayload);
+        notification.success({ message: "Planificación actualizada" });
+        fetchPlanning();
+        closeDrawer();
+        return;
       }
 
       console.log("📤 Payload a enviar:", JSON.stringify(payload, null, 2));
@@ -1799,6 +1818,15 @@ const Planning = () => {
             Planificación
           </div>
 
+          {isEditingCompleted && (
+            <Alert
+              type="info"
+              showIcon
+              message="Los datos productivos de una actividad completada no pueden modificarse desde esta edición."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           {!editing && (
             <Form.Item
               name="register_completed"
@@ -1813,8 +1841,8 @@ const Planning = () => {
           <Form.Item
             name="crop_id"
             label="Cultivo"
-            required={ACTIVITIES_REQUIRING_CROP.has(selectedActivityType)}
-            rules={[
+            required={!isEditingCompleted && ACTIVITIES_REQUIRING_CROP.has(selectedActivityType)}
+            rules={isEditingCompleted ? [] : [
               {
                 validator: (_, value) => {
                   if (ACTIVITIES_REQUIRING_CROP.has(selectedActivityType) && !value) {
@@ -1827,6 +1855,7 @@ const Planning = () => {
           >
             <Select
               allowClear
+              disabled={isEditingCompleted}
               placeholder="Seleccioná un cultivo"
               options={cropOptions}
               onChange={(value) => {
@@ -1839,14 +1868,14 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <Form.Item name="activity_type" label="Actividad" rules={[{ required: true, message: "Seleccioná la actividad" }]}>
-            <Select options={ACTIVITY_OPTIONS} placeholder="Seleccioná la actividad" />
+          <Form.Item name="activity_type" label="Actividad" rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná la actividad" }]}>
+            <Select disabled={isEditingCompleted} options={ACTIVITY_OPTIONS} placeholder="Seleccioná la actividad" />
           </Form.Item>
 
           <Form.Item
             name="campaign_id"
             label="Campaña"
-            rules={[
+            rules={isEditingCompleted ? [] : [
               { required: true, message: "Seleccioná una campaña." },
               {
                 validator: () => (
@@ -1893,6 +1922,7 @@ const Planning = () => {
             )}
           >
             <Select
+              disabled={isEditingCompleted}
               placeholder="Seleccioná una campaña"
               options={planningCampaignOptions}
               optionFilterProp="searchLabel"
@@ -1906,8 +1936,9 @@ const Planning = () => {
           </Form.Item>
 
           {(!registerCompleted || editing) && (
-            <Form.Item name="date_range" label="Período" rules={[{ required: true, message: "Seleccioná el período" }]}>
+            <Form.Item name="date_range" label="Período" rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná el período" }]}>
               <RangePicker
+                disabled={isEditingCompleted}
                 format="DD/MM/YYYY"
                 style={{ width: "100%" }}
                 onChange={syncCampaignForRange}
@@ -1939,7 +1970,7 @@ const Planning = () => {
           <Form.Item
             name="lot_selection_keys"
             label="Lotes y sublotes"
-            rules={[
+            rules={isEditingCompleted ? [] : [
               { required: true, message: "Seleccioná al menos un lote o sublote" },
               {
                 validator: (_, value = []) => {
@@ -1961,6 +1992,7 @@ const Planning = () => {
             ]}
           >
             <Select
+              disabled={isEditingCompleted}
               mode="multiple"
               placeholder="Seleccioná lotes completos o sublotes"
               options={lotSelectionOptions}
@@ -1988,6 +2020,7 @@ const Planning = () => {
           <Form.Item name="vehicle_id" label="Vehículo">
             <Select
               allowClear
+              disabled={isEditingCompleted}
               placeholder="Seleccioná un vehículo"
               options={vehicles
                 .filter(v => v.status === 'activo')
@@ -2000,7 +2033,7 @@ const Planning = () => {
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <label style={{ fontWeight: 500 }}>Productos</label>
-                  <Button type="dashed" onClick={() => add()} size="small">Agregar producto</Button>
+                  <Button type="dashed" onClick={() => add()} size="small" disabled={isEditingCompleted}>Agregar producto</Button>
                 </div>
 
                 {!editing && registerCompleted && selectedProductsHaveItems && (
@@ -2019,9 +2052,10 @@ const Planning = () => {
                         {...rest}
                         name={[name, "product_id"]}
                         label="Producto"
-                        rules={[{ required: true, message: "Producto" }]}
+                        rules={isEditingCompleted ? [] : [{ required: true, message: "Producto" }]}
                       >
                         <Select
+                          disabled={isEditingCompleted}
                           showSearch
                           placeholder="Producto"
                           options={productOptions}
@@ -2063,7 +2097,7 @@ const Planning = () => {
                               name={[name, "amount"]}
                               label={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
                               extra={productId ? stockLabel : null}
-                              rules={[
+                              rules={isEditingCompleted ? [] : [
                                 { required: true, message: "Cantidad" },
                                 {
                                   validator: (_, value) => {
@@ -2078,6 +2112,7 @@ const Planning = () => {
                               ]}
                             >
                               <InputNumber
+                                disabled={isEditingCompleted}
                                 min={0}
                                 placeholder={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
                                 style={{ width: "100%" }}
@@ -2090,7 +2125,7 @@ const Planning = () => {
                     </div>
 
                     <Form.Item label=" " colon={false} className="planning-product-remove">
-                      <Button danger type="text" onClick={() => remove(name)}>
+                      <Button danger type="text" onClick={() => remove(name)} disabled={isEditingCompleted}>
                         Eliminar
                       </Button>
                     </Form.Item>
@@ -2107,6 +2142,7 @@ const Planning = () => {
           {(!registerCompleted || editing) && (
             <Form.Item name="status" label="Estado">
               <Select
+                disabled={isEditingCompleted}
                 options={[
                   { value: "planificado", label: "Planificado" },
                   { value: "pendiente", label: "Pendiente" },

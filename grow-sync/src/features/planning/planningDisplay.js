@@ -53,6 +53,29 @@ export const formatActivity = (activityType) => (
 
 export const statusLabel = (status) => STATUS_LABELS[status] || "—";
 
+export const getPlanningDatePart = (value) => {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+};
+
+export const formatPlanningDate = (value, fallback = "—") => {
+  const datePart = getPlanningDatePart(value);
+  if (!datePart) return fallback;
+  const [year, month, day] = datePart.split("-");
+  if (!year || !month || !day) return fallback;
+  return `${day}/${month}/${year}`;
+};
+
+export const formatPlanningPeriod = (row, fallback = "—") => {
+  const start = getPlanningDatePart(row?.start_at);
+  const end = getPlanningDatePart(row?.end_at);
+  if (!start || !end) return fallback;
+  return start === end
+    ? formatPlanningDate(start, fallback)
+    : `${formatPlanningDate(start, fallback)} → ${formatPlanningDate(end, fallback)}`;
+};
+
 export const getPlanningLotName = (lot) => (
   lot?.sub_lot_name ? `${lot.lot_name || lot.name} / ${lot.sub_lot_name}` : (lot?.lot_name || lot?.name)
 );
