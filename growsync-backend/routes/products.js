@@ -4,6 +4,7 @@ const {
   listProducts,
   addProduct,
   editProduct,
+  addStockToProduct,
   disableProduct,
 } = require('../controllers/products/products');
 
@@ -68,6 +69,16 @@ router.post('/',
   checkRole(2),
   requirePermission(PERMISSIONS.INVENTORY_CREATE),
   addProduct
+);
+
+// ─────────────────────────────────────────────────────────────
+// AGREGAR STOCK
+// ─────────────────────────────────────────────────────────────
+router.patch('/:id/add-stock',
+  validate(schema.addStockBody),
+  checkRole(2),
+  requirePermission(PERMISSIONS.INVENTORY_EDIT),
+  addStockToProduct
 );
 
 // ─────────────────────────────────────────────────────────────

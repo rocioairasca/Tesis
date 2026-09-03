@@ -10,6 +10,7 @@
  *  - Documentación detallada de cada función.
  */
 const supabase = require('../../db/supabaseClient');
+const { pool } = require('../../db/supabaseClient');
 const { createNotification } = require('../notifications');
 
 /**
@@ -224,6 +225,52 @@ const editProduct = async (req, res, next) => {
 };
 
 /**
+ * AGREGAR STOCK
+ * Incrementa total_quantity y available_quantity sin reemplazar valores.
+ */
+const addStockToProduct = async (req, res, next) => {
+  try {
+    const { company_id } = req.user;
+    if (!company_id) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
+    }
+    if (!pool) {
+      return res.status(500).json({ error: 'DatabaseUnavailable', message: 'Conexion SQL no disponible' });
+    }
+
+    const { id } = req.params;
+    const quantity = Number(req.body.quantity);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'ValidationError', message: 'quantity debe ser mayor a 0' });
+    }
+
+    const { rows } = await pool.query(
+      `
+        UPDATE products
+        SET
+          total_quantity = COALESCE(total_quantity, 0) + $1,
+          available_quantity = COALESCE(available_quantity, 0) + $1
+        WHERE id = $2
+          AND company_id = $3
+          AND enabled = true
+        RETURNING id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at
+      `,
+      [quantity, id, company_id]
+    );
+
+    const product = rows[0];
+    if (!product) {
+      return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado' });
+    }
+
+    return res.json({ product });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * DESHABILITAR PRODUCTO (soft delete)
  * Solo cambia enabled=false si esta true. 404 si no existe o ya esta deshabilitado.
  */
@@ -262,6 +309,7 @@ module.exports = {
   listProducts,
   addProduct,
   editProduct,
+  addStockToProduct,
   disableProduct
 };
 

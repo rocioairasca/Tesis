@@ -12,7 +12,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Button, Drawer, Form, Input, InputNumber, Select, Space,
-  notification, Row, Col, Dropdown
+  notification, Row, Col, Dropdown, Modal, Typography
 } from "antd";
 import {
   PlusOutlined, MoreOutlined
@@ -102,7 +102,11 @@ const Inventory = () => {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [stockProduct, setStockProduct] = useState(null);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [addStockLoading, setAddStockLoading] = useState(false);
   const [form] = Form.useForm();
+  const [stockForm] = Form.useForm();
   const selectedCategory = Form.useWatch("category", form);
   const unitOptions = UNIT_OPTIONS_BY_CATEGORY[selectedCategory] || [];
 
@@ -240,6 +244,19 @@ const Inventory = () => {
     form.resetFields();
   };
 
+  const openAddStockModal = (product) => {
+    setStockProduct(product);
+    stockForm.resetFields();
+    setIsStockModalOpen(true);
+  };
+
+  const closeAddStockModal = () => {
+    if (addStockLoading) return;
+    setIsStockModalOpen(false);
+    setStockProduct(null);
+    stockForm.resetFields();
+  };
+
   const handleSubmit = async (values) => {
     try {
       const expirationDate = values.acquisition_date || null;
@@ -284,6 +301,29 @@ const Inventory = () => {
       notification.error({
         message: getUserFriendlyError(error, "No se pudo deshabilitar el producto."),
       });
+    }
+  };
+
+  const handleAddStock = async (values) => {
+    if (addStockLoading || !stockProduct) return;
+
+    try {
+      setAddStockLoading(true);
+      await api.patch(`/products/${getId(stockProduct)}/add-stock`, {
+        quantity: values.quantity,
+      });
+      notification.success({ message: "Stock agregado exitosamente" });
+      await fetchProducts();
+      setIsStockModalOpen(false);
+      setStockProduct(null);
+      stockForm.resetFields();
+    } catch (error) {
+      console.error("→ add stock error:", error);
+      notification.error({
+        message: getUserFriendlyError(error, "No se pudo agregar stock."),
+      });
+    } finally {
+      setAddStockLoading(false);
     }
   };
 
@@ -392,6 +432,7 @@ const Inventory = () => {
           products={filteredProducts}
           loading={loading}
           onEdit={openDrawer}
+          onAddStock={openAddStockModal}
           onDelete={handleDelete}
           rowKey={rowKey}
           getId={getId}
@@ -415,6 +456,7 @@ const Inventory = () => {
         <ProductListMobile
           products={filteredProducts}
           onEdit={openDrawer}
+          onAddStock={openAddStockModal}
           onDelete={handleDelete}
           rowKey={rowKey}
           getId={getId}
@@ -516,7 +558,58 @@ const Inventory = () => {
         </Form>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && canCreate && (
+      <Modal
+        title="Agregar stock"
+        open={isStockModalOpen}
+        onCancel={closeAddStockModal}
+        footer={null}
+        destroyOnHidden
+      >
+        <Form layout="vertical" form={stockForm} onFinish={handleAddStock}>
+          <Space direction="vertical" size={4} style={{ width: "100%", marginBottom: 16 }}>
+            <Typography.Text strong>{stockProduct?.name || "Producto"}</Typography.Text>
+            <Typography.Text type="secondary">
+              Stock disponible actual: {stockProduct?.available_quantity ?? 0} {formatUnit(stockProduct?.unit)}
+            </Typography.Text>
+          </Space>
+
+          <Form.Item
+            name="quantity"
+            label="Cantidad a agregar"
+            rules={[
+              { required: true, message: "Ingresá la cantidad a agregar." },
+              {
+                validator: (_, value) => (
+                  Number(value) > 0
+                    ? Promise.resolve()
+                    : Promise.reject(new Error("La cantidad debe ser mayor a 0."))
+                ),
+              },
+            ]}
+          >
+            <InputNumber
+              min={0}
+              addonAfter={formatUnit(stockProduct?.unit)}
+              style={{ width: "100%" }}
+              disabled={addStockLoading}
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={addStockLoading}
+              disabled={addStockLoading}
+            >
+              Confirmar
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {isMobile && !isDrawerOpen && !isStockModalOpen && canCreate && (
         <button
           type="button"
           className="fab-button"

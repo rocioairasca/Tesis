@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tooltip, Popconfirm, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '../../../components/AppIcons';
+import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined, PlusOutlined } from '../../../components/AppIcons';
 
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -28,6 +28,7 @@ const ProductTable = ({
     products,
     loading,
     onEdit,
+    onAddStock,
     onDelete,
     rowKey,
     getId,
@@ -102,9 +103,19 @@ const ProductTable = ({
         {
             title: "Acciones",
             key: "actions",
-            width: 96,
+            width: 180,
             render: (_, record) => (
                 <Space size="small">
+                    {canEdit && (
+                        <Button
+                            type="link"
+                            icon={<PlusOutlined />}
+                            onClick={() => onAddStock(record)}
+                        >
+                            Agregar stock
+                        </Button>
+                    )}
+
                     <Tooltip title="Editar">
                         {canEdit && (
                             <Button

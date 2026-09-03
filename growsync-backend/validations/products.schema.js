@@ -30,6 +30,13 @@ exports.updateBody = z.object({
   }),
 });
 
+exports.addStockBody = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    quantity: z.coerce.number().finite().positive('quantity debe ser mayor a 0'),
+  }),
+});
+
 exports.idParam = z.object({
   params: z.object({ id: z.string().uuid() }),
 });

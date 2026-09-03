@@ -9,7 +9,7 @@ import React from 'react';
 import { Button, Popconfirm, Tag, Tooltip } from 'antd';
 import {
     EditOutlined, DeleteOutlined, AppstoreOutlined, InboxOutlined,
-    CalendarOutlined, ExclamationCircleOutlined
+    CalendarOutlined, ExclamationCircleOutlined, PlusOutlined
 } from '../../../components/AppIcons';
 import { PERMISSIONS } from "../../../constants/permissions";
 import { hasPermission } from "../../../utils/permissions";
@@ -21,6 +21,7 @@ const canEdit = hasPermission(currentUser, PERMISSIONS.INVENTORY_EDIT);
 const ProductListMobile = ({
     products,
     onEdit,
+    onAddStock,
     onDelete,
     rowKey,
     getId,
@@ -38,6 +39,15 @@ const ProductListMobile = ({
                         <div className="card-header">
                             <h3>{product.name}</h3>
                             <div className="card-icons">
+                                {canEdit && <Tooltip title="Agregar stock">
+                                    <Button
+                                        type="text"
+                                        shape="circle"
+                                        aria-label={`Agregar stock a ${product.name}`}
+                                        icon={<PlusOutlined />}
+                                        onClick={() => onAddStock(product)}
+                                    />
+                                </Tooltip>}
                                 {canEdit && <Tooltip title="Editar">
                                     <Button
                                         type="text"
