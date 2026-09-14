@@ -40,6 +40,7 @@ export default defineConfig(({ command }) => {
         },
         server: {
             port: 3000,
+            fs: { allow: [".."] }, // shared inventory catalog in the monorepo root
         },
     };
 });

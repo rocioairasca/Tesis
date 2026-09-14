@@ -1,44 +1,38 @@
 .bottom-nav {
-    box-sizing: border-box;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 60px;
-    background: #fff;
-    border-top: 1px solid #eee;
-    display: flex;
-    justify-content: space-evenly;
-    align-items: center;
-    padding: 0 10px;
-    z-index: 1000;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
-    gap: 18px;
+  box-sizing: border-box;
+  position: fixed;
+  inset: auto 0 0;
+  min-height: 56px;
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: var(--gs-surface);
+  border-top: 1px solid var(--gs-border);
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  z-index: 900;
 }
-
 .bottom-nav__button {
-    width: 44px;
-    height: 44px;
-    border: 0;
-    background: transparent;
-    color: #666;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border-radius: 8px;
+  flex: 1;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gs-text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 2px;
+  cursor: pointer;
 }
-
-.bottom-nav__button:focus-visible {
-    outline: 2px solid #437118;
-    outline-offset: 2px;
-}
-
-.bottom-nav__button--active {
-    color: #1D2A62;
-    background: #edf4e4;
-}
-
-.bottom-nav__button svg {
-    font-size: 30px !important;
-}
+.bottom-nav__button span { font-size: 10px; line-height: 12px; overflow-wrap: anywhere; }
+.bottom-nav__button svg { width: 22px; height: 22px; flex-shrink: 0; }
+.bottom-nav__button:hover { background: var(--gs-surface-subtle); }
+.bottom-nav__button:active { background: var(--gs-surface-selected); }
+.bottom-nav__button--active { color: var(--gs-brand-navigation); background: var(--gs-surface-selected); box-shadow: inset 0 3px 0 var(--gs-brand-navigation); }
+.bottom-nav__button--active span { font-weight: 600; }
+.bottom-nav__button:focus-visible { outline: 3px solid var(--gs-info); outline-offset: -3px; }
+.bottom-nav__button:disabled { color: var(--gs-text-disabled); cursor: not-allowed; }
+.bottom-nav__button svg { width:20px; height:20px; }

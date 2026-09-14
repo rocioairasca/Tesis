@@ -1,3 +1,5 @@
+import { campaignLabel } from '../../utils/campaigns.mjs';
+import { calendarDateKey, parseCalendarDate } from '../../utils/calendarDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -11,10 +13,13 @@ import {
   Row,
   Select,
   Space,
+  Steps,
   Typography,
   notification
 } from 'antd';
 import dayjs from 'dayjs';
+import HarvestTrace, { retroactiveReasons } from './HarvestTrace';
+import HarvestCycleFields from './HarvestCycleFields';
 import {
   MinusCircleOutlined,
   PlusOutlined,
@@ -23,7 +28,7 @@ import {
 } from '../../components/AppIcons';
 
 import { createHarvestRecord, updateHarvestRecord } from '../../services/harvestService';
-import { calculateYieldKgHa, formatNumber } from '../../utils/harvestUtils';
+import { calculateYieldKgHa, formatNumber, formatHectares, parseHectaresInput } from '../../utils/harvestUtils';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
 const { Text } = Typography;
@@ -50,11 +55,6 @@ const getActiveSubLots = (lot) => (
   Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
 
-const formatHa = (value) => `${Number(value || 0).toLocaleString('es-AR', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-})} ha`;
-
 const getCropName = (crop) => crop?.name || crop?.crop_name || crop?.crop || '';
 
 const HarvestForm = ({
@@ -64,13 +64,21 @@ const HarvestForm = ({
   productiveStates = [],
   loadingProductiveStates = false,
   initialRecord = null,
+  registrationMode = "current",
   onHarvestDateChange,
   onSuccess,
   onCancel
 }) => {
   const [form] = Form.useForm();
+  const [step, setStep] = useState(0);
+  const [mode, setMode] = useState(registrationMode);
+  const chosenDate = Form.useWatch('harvest_date', form);
+  const historicalReason = Form.useWatch('retroactive_reason', form);
+  const today = dayjs().format('YYYY-MM-DD');
+  const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const needsHistorical = !initialRecord && mode === 'current' && calendarDateKey(chosenDate) < today;
   const [submitting, setSubmitting] = useState(false);
-  const isAppliedRecord = !!initialRecord?.closes_productive_cycle;
+  const isAppliedRecord = !!initialRecord?.has_productive_cycle;
   const selectedItems = Form.useWatch('items', form) || [];
 
   const productiveStateBySurface = useMemo(() => {
@@ -94,7 +102,7 @@ const HarvestForm = ({
       if (!subLots.length) {
         return {
           value: fullLotKey(lot.id),
-          label: `${lot.name} · ${formatHa(lotArea)}`,
+          label: `${lot.name} · ${formatHectares(lotArea)}`,
           area_ha: lotArea,
         };
       }
@@ -104,12 +112,12 @@ const HarvestForm = ({
         options: [
           {
             value: fullLotKey(lot.id),
-            label: `Lote completo · ${formatHa(lotArea)}`,
+            label: `Lote completo · ${formatHectares(lotArea)}`,
             area_ha: lotArea,
           },
           ...subLots.map((subLot) => ({
             value: subLotKey(lot.id, subLot.id),
-            label: `${subLot.name || subLot.code} · ${formatHa(subLot.area_ha)}`,
+            label: `${subLot.name || subLot.code} · ${formatHectares(subLot.area_ha)}`,
             area_ha: subLot.area_ha,
           })),
         ],
@@ -130,14 +138,16 @@ const HarvestForm = ({
   };
 
   useEffect(() => {
+    if (initialRecord) return;
     selectedItems.forEach((item, index) => {
       if (!item?.surface_key) return;
+      if (!getSurfaceState(item.surface_key)) return;
       const cropId = getSurfaceState(item.surface_key)?.current_crop?.crop_id;
       if (cropId !== item.crop_id) {
         form.setFieldValue(['items', index, 'crop_id'], cropId || undefined);
       }
     });
-  }, [form, productiveStateBySurface, selectedItems]);
+  }, [form, productiveStateBySurface, selectedItems, initialRecord]);
 
   useEffect(() => {
     if (initialRecord) {
@@ -149,7 +159,7 @@ const HarvestForm = ({
       ));
 
       form.setFieldsValue({
-        harvest_date: initialRecord.harvest_date ? dayjs(initialRecord.harvest_date) : dayjs(),
+        harvest_date: initialRecord.harvest_date ? parseCalendarDate(initialRecord.harvest_date) : dayjs(),
         notes: initialRecord.notes || '',
         items: [{
           surface_key: surfaceKey,
@@ -163,7 +173,7 @@ const HarvestForm = ({
     }
 
     form.setFieldsValue({
-      harvest_date: dayjs(),
+      harvest_date: registrationMode === 'historical' ? null : dayjs(),
       notes: '',
       items: [initialItem]
     });
@@ -172,7 +182,7 @@ const HarvestForm = ({
   const resetForm = () => {
     form.resetFields();
     form.setFieldsValue({
-      harvest_date: dayjs(),
+      harvest_date: registrationMode === 'historical' ? null : dayjs(),
       notes: '',
       items: [initialItem]
     });
@@ -183,6 +193,10 @@ const HarvestForm = ({
       setSubmitting(true);
 
       const { harvest_date, notes, items } = values;
+      const trace = { registered_retroactively: mode === 'historical',
+        retroactive_reason: mode === 'historical' ? values.retroactive_reason : null,
+        retroactive_notes: mode === 'historical' ? values.retroactive_notes || null : null,
+        registration_timezone: clientTimezone };
 
       if (!items || items.length === 0) {
         notification.error({
@@ -198,20 +212,22 @@ const HarvestForm = ({
         await updateHarvestRecord(initialRecord.id, {
           ...surface,
           crop_id: item.crop_id,
-          harvest_date: dayjs(harvest_date).format('YYYY-MM-DD'),
+          client_timezone: clientTimezone,
+          harvest_date: calendarDateKey(harvest_date),
           production_kg: item.production_kg,
-          harvested_area_ha: item.harvested_area_ha,
+          harvested_area_ha: parseHectaresInput(item.harvested_area_ha),
           notes: item.notes || notes || null
         });
       } else {
         for (const item of items) {
           const surface = parseSurfaceKey(item.surface_key);
           await createHarvestRecord({
+            ...trace,
             ...surface,
             crop_id: item.crop_id,
-            harvest_date: dayjs(harvest_date).format('YYYY-MM-DD'),
+            harvest_date: calendarDateKey(harvest_date),
             production_kg: item.production_kg,
-            harvested_area_ha: item.harvested_area_ha,
+            harvested_area_ha: parseHectaresInput(item.harvested_area_ha),
             notes: item.notes || notes || null
           });
         }
@@ -235,18 +251,44 @@ const HarvestForm = ({
     }
   };
 
+  const nextStep = async () => {
+    const fields = step === 0 ? ['harvest_date', ...(mode === 'historical' && !initialRecord ? ['retroactive_reason', 'retroactive_notes'] : [])]
+      : selectedItems.flatMap((_, index) => (step === 1 ? ['surface_key', 'crop_id', 'harvested_area_ha'] : ['production_kg']).map(key => ['items', index, key]));
+    try { await form.validateFields(fields); setStep(value => value + 1); } catch { /* Existing field errors remain visible. */ }
+  };
+  const showInvalidStep = ({ errorFields }) => {
+    const name = errorFields[0]?.name || [];
+    setStep(name[0] !== 'items' ? 0 : name.at(-1) === 'production_kg' ? 2 : 1);
+  };
   return (
     <Form
       form={form}
       layout="vertical"
-      onFinish={handleSubmit}
+      onFinish={values => step === 3 ? handleSubmit(values) : nextStep()}
+      onFinishFailed={showInvalidStep}
+      className={`gs-harvest-form gs-harvest-step-${step}`}
     >
+      <Steps size="small" current={step} items={['Datos generales','Lote y superficie','Producción','Confirmación'].map(title=>({title}))}/>
+      <h2>{['Datos generales','Lote y superficie','Producción','Confirmación'][step]}</h2>
+      <div className="gs-harvest-general">
+      {initialRecord ? <HarvestTrace record={initialRecord} /> : <>
+        <Space style={{ marginBottom: 16 }}>
+          <Button type={mode === 'current' ? 'primary' : 'default'} onClick={() => setMode('current')}>Cosecha actual</Button>
+          <Button type={mode === 'historical' ? 'primary' : 'default'} onClick={() => setMode('historical')}>Cosecha histórica</Button>
+        </Space>
+        {needsHistorical && <Alert type="info" showIcon message="Seleccionaste una fecha pasada."
+          action={<Button onClick={() => setMode('historical')}>Cambiar a histórica</Button>} />}
+        {mode === 'historical' && <>
+          <Form.Item name="retroactive_reason" label="Motivo del registro retroactivo" rules={[{ required: true, message: 'Seleccioná el motivo' }]}><Select options={retroactiveReasons} /></Form.Item>
+          <Form.Item name="retroactive_notes" label="Observación del registro retroactivo" rules={[{ required: historicalReason === 'other', whitespace: true, message: 'Describí el motivo Otro' }]}><Input.TextArea maxLength={2000} /></Form.Item>
+        </>}
+      </>}
       {isAppliedRecord ? (
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Esta cosecha ya cerró un ciclo productivo. Podés corregir producción, superficie u observaciones; para cambiar lote, cultivo o fecha corregí primero el estado productivo."
+          message="Esta cosecha está vinculada a un ciclo productivo. Las correcciones de superficie recalculan su pendiente. Lote, cultivo y fecha se conservan."
         />
       ) : null}
 
@@ -255,12 +297,19 @@ const HarvestForm = ({
           <Form.Item
             label="Fecha de cosecha"
             name="harvest_date"
-            rules={[{ required: true, message: 'Seleccioná la fecha' }]}
+            rules={[{ required: true, message: 'Seleccioná la fecha' }, { validator: (_, value) => {
+              const key = calendarDateKey(value);
+              if (!key || key > today) return Promise.reject(new Error('Seleccioná una fecha válida, no futura.'));
+              if (!initialRecord && mode === 'historical' && key >= today) return Promise.reject(new Error('Seleccioná una fecha pasada.'));
+              if (!initialRecord && mode === 'current' && key < today) return Promise.reject(new Error('Cambiá al modo histórico para conservar esta fecha.'));
+              return Promise.resolve();
+            } }]}
           >
             <DatePicker
               style={{ width: '100%' }}
               format="DD/MM/YYYY"
-              disabled={isAppliedRecord}
+              disabled={isAppliedRecord || initialRecord?.registered_retroactively != null}
+              disabledDate={value => calendarDateKey(value) > today}
               onChange={onHarvestDateChange}
             />
           </Form.Item>
@@ -273,6 +322,7 @@ const HarvestForm = ({
         </Col>
       </Row>
 
+      </div>
       <Form.List name="items">
         {(fields, { add, remove }) => (
           <>
@@ -283,13 +333,15 @@ const HarvestForm = ({
                 return (
                 <Card
                   key={key}
+                  className="gs-harvest-item"
                   size="small"
                   title={`Registro ${index + 1}`}
                   extra={
-                    !initialRecord && fields.length > 1 ? (
+                    !initialRecord && fields.length > 1 && step === 1 ? (
                       <Button
                         danger
                         type="text"
+                        aria-label={`Quitar registro ${index + 1}`}
                         icon={<MinusCircleOutlined />}
                         onClick={() => remove(field.name)}
                       />
@@ -297,7 +349,7 @@ const HarvestForm = ({
                   }
                 >
                   <Row gutter={[16, 16]}>
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={12} className="gs-harvest-surface-fields">
                       <Form.Item
                         {...fieldProps}
                         label="Lote o sublote"
@@ -316,7 +368,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={12} className="gs-harvest-surface-fields">
                       <Form.Item
                         {...fieldProps}
                         label="Cultivo"
@@ -336,7 +388,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={12} className="gs-harvest-surface-fields">
                       <Form.Item
                         noStyle
                         shouldUpdate={(prev, current) => (
@@ -370,30 +422,18 @@ const HarvestForm = ({
                               message={mismatch
                                 ? `Cultivo vigente: ${currentCrop.crop_name}. Seleccionaste ${getCropName(selectedCrop)}.`
                                 : `Cultivo vigente: ${currentCrop.crop_name}`}
-                              description={currentCrop.campaign_name ? `Campaña: ${currentCrop.campaign_name}` : null}
+                              description={currentCrop.campaign_name ? `Campaña: ${campaignLabel(currentCrop)}` : null}
                             />
                           );
                         }}
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={8}>
-                      <Form.Item
-                        {...fieldProps}
-                        label="Superficie cosechada (ha)"
-                        name={[field.name, 'harvested_area_ha']}
-                        rules={[{ required: true, message: 'Ingresá la superficie' }]}
-                      >
-                        <InputNumber
-                          min={0.01}
-                          step={0.01}
-                          style={{ width: '100%' }}
-                          placeholder="0.00"
-                        />
-                      </Form.Item>
+                    <Col xs={24} className="gs-harvest-surface-fields">
+                      <HarvestCycleFields form={form} fieldName={field.name} initialRecord={initialRecord} onFinalized={onSuccess} />
                     </Col>
 
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={12} className="gs-harvest-production-fields">
                       <Form.Item
                         {...fieldProps}
                         label="Producción (kg)"
@@ -409,7 +449,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={12} className="gs-harvest-production-fields">
                       <Form.Item label="Rendimiento">
                         <Form.Item
                           noStyle
@@ -441,7 +481,7 @@ const HarvestForm = ({
                       </Form.Item>
                     </Col>
 
-                    <Col xs={24}>
+                    <Col xs={24} className="gs-harvest-production-fields">
                       <Form.Item
                         {...fieldProps}
                         label="Observaciones del registro"
@@ -460,6 +500,7 @@ const HarvestForm = ({
             </Space>
 
             <Button
+              className="gs-harvest-add"
               style={{ marginTop: 16 }}
               type="dashed"
               onClick={() => add(initialItem)}
@@ -473,31 +514,38 @@ const HarvestForm = ({
         )}
       </Form.List>
 
-      <div
-        style={{
-          marginTop: 24,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 12,
-          flexWrap: 'wrap'
-        }}
-      >
+      {step === 3 && <section className="gs-harvest-confirmation">
+        <p>Fecha: {chosenDate?.format('DD/MM/YYYY')} · {initialRecord ? (initialRecord.registered_retroactively === true ? 'Registro histórico' : initialRecord.registered_retroactively === false ? 'Registro actual' : 'Procedencia no documentada') : mode === 'historical' ? 'Registro histórico' : 'Registro actual'}</p>
+        {selectedItems.map((item,index)=>{
+          const surface = surfaceOptions.flatMap(option=>option.options || [option]).find(option=>option.value===item.surface_key);
+          return <Card key={index} size="small" title={`Registro ${index+1}`}>
+            <strong>{surface?.label || 'Superficie seleccionada'}</strong>
+            <p>{crops.find(crop=>crop.id===item.crop_id)?.name || initialRecord?.crop_name || initialRecord?.crop}</p>
+            <p>{formatHectares(item.harvested_area_ha)} · {formatNumber(item.production_kg)} kg · {formatNumber(calculateYieldKgHa(item.production_kg,item.harvested_area_ha))} kg/ha</p>
+            {(item.notes || form.getFieldValue('notes')) && <p>{item.notes || form.getFieldValue('notes')}</p>}
+          </Card>;
+        })}
+      </section>}
+      <div className="gs-harvest-form-actions">
+        {step > 0 && <Button disabled={submitting} onClick={()=>setStep(value=>value-1)}>Anterior</Button>}
         <Button
           onClick={onCancel}
+          disabled={submitting}
           icon={<CloseOutlined />}
         >
           Cancelar
         </Button>
 
-        <Button
+        {step < 3 ? <Button key="next" htmlType="button" type="primary" disabled={loadingProductiveStates} onClick={nextStep}>Siguiente</Button> : <Button
+          key="confirm"
           type="primary"
           htmlType="submit"
           icon={<SaveOutlined />}
           loading={submitting}
           disabled={loadingProductiveStates}
         >
-          Guardar cosecha
-        </Button>
+          Confirmar y guardar cosecha
+        </Button>}
       </div>
     </Form>
   );

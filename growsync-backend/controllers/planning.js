@@ -1,7 +1,10 @@
+const {assertSameUnit} = require('../services/inventoryUnits');
+const inventoryStock = require('../services/stock');
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 const { createNotification } = require('./notifications');
 const { PERMISSIONS, getEffectivePermissions } = require('../constants/permissions');
+const requirePermission = require('../middleware/requirePermission');
 const planningCompletion = require('../services/planningCompletion');
 
 const lotSelectionJsonSql = `
@@ -598,7 +601,7 @@ exports.list = async (req, res, next) => {
                END AS status_effective,
                u.name AS responsible_name,
                c.name AS crop_name,
-               cp.name AS campaign_name
+               cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
@@ -615,12 +618,13 @@ exports.list = async (req, res, next) => {
              COALESCE((
                SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
-               JOIN products pr ON pr.id = pp.product_id
+               JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
     `;
     const { rows } = await pool.query(dataSql, p);
+    await decoratePlanningProducts(rows, company_id);
 
     return res.json({
       data: rows,
@@ -654,7 +658,7 @@ exports.getOne = async (req, res, next) => {
                END AS status_effective,
                u.name AS responsible_name,
                c.name AS crop_name,
-               cp.name AS campaign_name
+               cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
@@ -670,7 +674,7 @@ exports.getOne = async (req, res, next) => {
              COALESCE((
                SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
-               JOIN products pr ON pr.id = pp.product_id
+               JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
@@ -682,6 +686,12 @@ exports.getOne = async (req, res, next) => {
       return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
     }
 
+    if (rows[0].enabled === false) {
+      let allowed = false;
+      requirePermission(PERMISSIONS.PLANNING_VIEW_DISABLED)(req, res, () => { allowed = true; });
+      if (!allowed) return;
+    }
+    await decoratePlanningProducts(rows, company_id);
     return res.json(rows[0]);
   } catch (e) {
     next(e);
@@ -789,6 +799,7 @@ const createPlanningRecord = async (
   await insertPlanningLots(client, id, resolvedSelections);
 
   if (Array.isArray(products) && products.length) {
+    await assertProductTenancy(client, products, companyId);
     const tuples = products
       .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
       .join(',');
@@ -878,6 +889,7 @@ exports.registerCompleted = async (req, res, next) => {
     if (planning.activity_type === 'siembra') {
       await resolveCrop(client, planning.crop_id, company_id);
       completion = await planningCompletion.completeSowingPlanning(client, planning, {
+        actorId: req.user.id,
         effectiveDate,
         companyId: company_id,
         historical: true,
@@ -887,6 +899,7 @@ exports.registerCompleted = async (req, res, next) => {
       planningCompletion.PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type)
     ) {
       completion = await planningCompletion.completeWorkPlanning(client, planning, {
+        actorId: req.user.id,
         effectiveDate,
         companyId: company_id,
         registeredRetroactively: true,
@@ -953,6 +966,7 @@ exports.completeSowing = async (req, res, next) => {
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
     await resolveCrop(client, planning.crop_id, company_id);
     const completion = await planningCompletion.completeSowingPlanning(client, planning, {
+        actorId: req.user.id,
       actualProducts: actual_products,
       effectiveDate,
       companyId: company_id,
@@ -1022,6 +1036,7 @@ exports.completeWork = async (req, res, next) => {
 
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
     const completion = await planningCompletion.completeWorkPlanning(client, planning, {
+        actorId: req.user.id,
       actualProducts: actual_products,
       effectiveDate,
       companyId: company_id,
@@ -1313,6 +1328,7 @@ exports.update = async (req, res, next) => {
 
     // Productos
     if (Array.isArray(products)) {
+      await assertProductTenancy(client, products, company_id);
       await client.query('DELETE FROM planning_products WHERE planning_id = $1', [id]);
       if (products.length) {
         const tuples = products
@@ -1536,7 +1552,7 @@ exports.listDisabled = async (req, res, next) => {
                END AS status_effective,
                u.name AS responsible_name,
                c.name AS crop_name,
-               cp.name AS campaign_name
+               cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
         JOIN users u ON u.id = p.responsible_user
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
@@ -1553,12 +1569,13 @@ exports.listDisabled = async (req, res, next) => {
              COALESCE((
                SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
-               JOIN products pr ON pr.id = pp.product_id
+               JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
     `;
     const { rows } = await pool.query(dataSql, p);
+    await decoratePlanningProducts(rows, company_id);
 
     return res.json({
       data: rows,
@@ -1604,3 +1621,18 @@ exports.enable = async (req, res, next) => {
     next(e);
   }
 };
+
+async function decoratePlanningProducts(rows, companyId) {
+  if (!inventoryStock.isEnabled(companyId)) return;
+  const ids = [...new Set(rows.flatMap(row => (row.products || []).map(p => p.product_id)))];
+  const stock = await inventoryStock.balances(pool, companyId, ids);
+  for (const row of rows) for (const p of row.products || []) p.available_quantity = stock.get(p.product_id)?.available_quantity || '0';
+}
+
+async function assertProductTenancy(client, products, companyId) {
+  if (!products.length) return;
+  const ids = [...new Set(products.map(p=>p.product_id))];
+  const {rows} = await client.query('SELECT id,unit FROM products WHERE company_id=$1 AND id=ANY($2::uuid[]) AND enabled=true ORDER BY id FOR UPDATE', [companyId,ids]);
+  if (rows.length !== ids.length) throw inventoryStock.fail('Productos no disponibles en esta empresa.',400);
+  for(const item of products) item.unit=assertSameUnit(rows.find(row=>row.id===item.product_id).unit,item.unit);
+}

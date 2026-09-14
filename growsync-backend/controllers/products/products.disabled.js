@@ -10,6 +10,7 @@
  *  - Documentación clara de la funcionalidad.
  */
 const supabase = require('../../db/supabaseClient');
+const stock = require('../../services/stock');
 
 /**
  * LISTAR PRODUCTOS DESHABILITADOS
@@ -18,6 +19,8 @@ const supabase = require('../../db/supabaseClient');
  */
 const listDisabledProducts = async (req, res, next) => {
   try {
+    const company_id = req.user?.company_id;
+    if (!company_id) return res.status(400).json({message: 'Usuario no asignado a una empresa'});
     const {
       q,
       category,              // 'semillas' | 'agroquimicos' | 'fertilizantes' | 'combustible'
@@ -29,18 +32,12 @@ const listDisabledProducts = async (req, res, next) => {
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     // Columnas explicitas
-    const columns = [
-      'id', 'name', 'category', 'unit',
-      'price', 'cost',
-      'total_quantity', 'available_quantity',
-      'expiration_date', 'acquisition_date',
-      'enabled', 'created_at'
-    ].join(',');
 
     let query = supabase
       .from('products')
-      .select(columns, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('enabled', false)
+      .eq('company_id', company_id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -55,7 +52,7 @@ const listDisabledProducts = async (req, res, next) => {
     if (error) throw error;
 
     return res.json({
-      data: data || [],
+      data: await stock.decorate(supabase.pool, company_id, data || []),
       page: Number(page),
       pageSize: limit,
       total: count ?? (data?.length || 0),
@@ -72,6 +69,8 @@ const listDisabledProducts = async (req, res, next) => {
  */
 const enableProduct = async (req, res, next) => {
   try {
+    const company_id = req.user?.company_id;
+    if (!company_id) return res.status(400).json({message: 'Usuario no asignado a una empresa'});
     const { id } = req.params;
 
     const { data, error } = await supabase
@@ -79,6 +78,7 @@ const enableProduct = async (req, res, next) => {
       .update({ enabled: true })
       .eq('id', id)
       .eq('enabled', false)
+      .eq('company_id', company_id)
       .select('id,name,enabled')
       .maybeSingle();
 

@@ -9,6 +9,8 @@
  *  - Ya implementa manejo de errores con `next(e)`.
  */
 const { pool } = require('../db/supabaseClient');
+const requirePermission = require('../middleware/requirePermission');
+const { PERMISSIONS } = require('../constants/permissions');
 const { parsePage, parsePageSize } = require('../utils/pagination');
 const { createNotification } = require('./notifications');
 
@@ -86,6 +88,9 @@ exports.getOne = async (req, res, next) => {
       [req.params.id, company_id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'NotFound', message: 'Vehículo no encontrado' });
+    if (rows[0].enabled === false) {
+      return requirePermission(PERMISSIONS.VEHICLES_VIEW_DISABLED)(req, res, () => res.json(rows[0]));
+    }
     res.json(rows[0]);
   } catch (e) { next(e); }
 };

@@ -1,0 +1,103 @@
+.gs-shell { height: 100vh; height: 100dvh; box-sizing: border-box; overflow: hidden; }
+.gs-shell-main { margin-left: var(--gs-sidebar-width); min-width: 0; min-height: 0; height: 100%; transition: margin-left .2s ease; }
+/* The header stays outside the only scrolling region. Contain Leaflet's layers
+   here; Ant Design portals remain above the shell in the document body. */
+.gs-shell-scroll { flex: 1; min-height: 0; overflow: auto; position: relative; isolation: isolate; display: flex; flex-direction: column; }
+.gs-header.ant-layout-header { flex-shrink: 0; }
+.gs-shell-scroll > .gs-workspace { flex: 1 0 auto; }
+.gs-shell-footer { flex-shrink: 0; }
+.grow-sidebar.ant-layout-sider { position: fixed; inset: 0 auto 0 0; height: 100vh; height: 100dvh; z-index: 900; background: var(--gs-brand-navigation); }
+.grow-sidebar .ant-layout-sider-children { display: flex; flex-direction: column; }
+.grow-sidebar nav { flex: 0 1 auto; min-height: 0; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; padding: 12px 4px; }
+.grow-sidebar .ant-menu { border: 0; }
+.grow-sidebar .ant-menu-item-selected { font-weight: 600; box-shadow: inset 3px 0 0 var(--gs-brand-lime); }
+.grow-sidebar :focus-visible { outline-color: var(--gs-brand-lime); outline-offset: -3px; }
+.gs-sidebar-brand { display: flex; align-items: center; gap: 12px; height: 80px; flex-shrink: 0; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.gs-sidebar-brand img { width: 40px; height: 40px; object-fit: contain; }
+.gs-sidebar-wordmark { color: white; font-size: 24px; font-weight: 600; letter-spacing: -.5px; }
+.gs-sidebar-collapse { padding: 12px; flex-shrink: 0; }
+.gs-sidebar-toggle.ant-btn { color: #E0E6F1; width: 100%; min-height: 44px; justify-content: flex-start; }
+.gs-sidebar-toggle.ant-btn:hover { background: rgba(255,255,255,.1); color: white; }
+.ant-layout-sider-collapsed .gs-sidebar-toggle { justify-content: center; }
+.gs-header.ant-layout-header { height: 72px; line-height: normal; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 32px; background: var(--gs-surface); border-bottom: 1px solid var(--gs-border); position: sticky; top: 0; z-index: 900; }
+.gs-company-context { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.gs-company-context > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gs-company-context img { width: 32px; height: 32px; object-fit: contain; }
+.gs-company-caption { font-size: 12px; color: var(--gs-text-secondary); }
+.gs-company-context strong { color: var(--gs-text-primary); font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.gs-header-actions .ant-btn { min-width: 44px; height: 44px; }
+.gs-user-menu-trigger.ant-btn { padding: 4px; }
+.gs-user-menu-trigger .ant-avatar { background: var(--gs-surface-selected); color: var(--gs-brand-navigation); font-weight: 600; }
+.gs-user-menu-identity { display: flex; flex-direction: column; gap: 4px; max-width: min(300px, 75vw); padding: 4px 0; color: var(--gs-text-primary); overflow-wrap: anywhere; }
+.gs-user-menu-identity span { color: var(--gs-text-secondary); font-size: 12px; }
+.gs-workspace { width: 100%; max-width: 1600px; box-sizing: border-box; margin: 0 auto; padding: 32px; min-width: 0; }
+.gs-workspace--wide { max-width: none; }
+.gs-workspace-surface { background: var(--gs-surface); border: 1px solid var(--gs-border); border-radius: 12px; min-width: 0; }
+.gs-shell-footer { padding: 16px 24px 24px; text-align: center; font-size: 12px; }
+.gs-skip-link { position: fixed; left: 16px; top: -80px; z-index: 3000; background: var(--gs-surface); color: var(--gs-brand-navigation); padding: 12px 16px; border-radius: 8px; }
+.gs-skip-link:focus { top: 12px; }
+/* Opt-in typography for future page redesigns; existing page markup is preserved. */
+.gs-page-title { font-size: 28px; font-weight: 600; line-height: 1.3; margin: 0; }
+.gs-section-title { font-size: 20px; font-weight: 600; line-height: 1.4; }
+.gs-card-title { font-size: 16px; font-weight: 600; }
+.gs-label { font-size: 13px; font-weight: 500; }
+.gs-helper { font-size: 12px; color: var(--gs-text-secondary); }
+@media (min-width: 768px) and (max-width: 1023px) {
+  .gs-workspace { padding: 24px; }
+  .gs-header.ant-layout-header { padding-inline: 24px; }
+}
+@media (max-width: 767px) {
+  .gs-shell { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .gs-workspace { padding: 16px; }
+  .gs-header.ant-layout-header { height: 64px; padding-inline: 16px; }
+  .gs-header-actions { gap: 8px; }
+  .gs-company-caption { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gs-shell-main, .grow-sidebar { transition: none !important; }
+}
+/* Reserve space below navigation; the field extends behind the collapse control. */
+.gs-sidebar-field {
+  position: relative;
+  flex: 0 999 clamp(112px, calc(28dvh - 68px), 162px);
+  min-height: 0;
+  margin-top: auto;
+  pointer-events: none;
+  clip-path: inset(0 0 -68px);
+}
+.gs-sidebar-field img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: calc(100% + 68px);
+  object-fit: cover;
+  object-position: center bottom;
+  transform: scale(1.5);
+  transform-origin: center bottom;
+  filter: saturate(.45) contrast(.88);
+}
+.gs-sidebar-field::after {
+  content: "";
+  position: absolute;
+  inset: -1px 0 -68px;
+  background: linear-gradient(to bottom, #1D2A62 0%, rgba(29,42,98,.98) 12%, rgba(29,42,98,.88) 35%, rgba(29,42,98,.70) 70%, rgba(29,42,98,.64) 100%);
+}
+.ant-layout-sider-collapsed .gs-sidebar-collapse { margin-top: auto; }
+.ant-layout-sider-collapsed .gs-sidebar-field { display: none; }
+.grow-sidebar nav,.gs-sidebar-brand,.gs-sidebar-collapse { position:relative; z-index:1; }
+.gs-sidebar-toggle.ant-btn { justify-content:center; }
+
+.grow-sidebar .ant-menu-item-icon svg,.grow-sidebar svg.ant-menu-item-icon { width:22px; height:22px; }
+
+.gs-sidebar-toggle.ant-btn:not(:disabled),
+.gs-sidebar-toggle.ant-btn:not(:disabled):hover,
+.gs-sidebar-toggle.ant-btn:not(:disabled):active,
+.gs-sidebar-toggle.ant-btn:not(:disabled):focus { background:transparent; color:var(--gs-brand-accent); box-shadow:none; }
+.gs-sidebar-toggle.ant-btn:focus-visible { outline:2px solid var(--gs-brand-lime); outline-offset:-4px; }
+.gs-sidebar-toggle.ant-btn svg { color:inherit; opacity:1; }
+@media (max-height:650px) { .gs-sidebar-field { flex-basis: 44px; } }
+@media (max-width:767px), (max-height:480px) {
+  .gs-sidebar-field { display: none; }
+  .gs-sidebar-collapse { margin-top: auto; }
+}

@@ -1,0 +1,363 @@
+TAP version 13
+# Subtest: Q01: stock=5, usage=2, edit to 20 rejects 409 and rolls back all state
+ok 1 - Q01: stock=5, usage=2, edit to 20 rejects 409 and rolls back all state # SKIP test name does not match pattern
+  ---
+  duration_ms: 9659.7124
+  ...
+# Subtest: Q01: insufficient replacement product cannot leave refund behind
+ok 2 - Q01: insufficient replacement product cannot leave refund behind # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6238
+  ...
+# Subtest: Q01: unit mismatch leaves complete state unchanged
+ok 3 - Q01: unit mismatch leaves complete state unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5201
+  ...
+# Subtest: Q01: foreign lot leaves complete state unchanged
+ok 4 - Q01: foreign lot leaves complete state unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3682
+  ...
+# Subtest: Q01: foreign product leaves complete state unchanged
+ok 5 - Q01: foreign product leaves complete state unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2958
+  ...
+# Subtest: Q01: foreign responsible leaves complete state unchanged
+ok 6 - Q01: foreign responsible leaves complete state unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3716
+  ...
+# Subtest: Q01: invalid amount leaves complete state unchanged
+ok 7 - Q01: invalid amount leaves complete state unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.7962
+  ...
+# Subtest: Q01: rollback after injected /UPDATE products/
+ok 8 - Q01: rollback after injected /UPDATE products/ # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4067
+  ...
+# Subtest: Q01: rollback after injected /DELETE FROM usage_lots/
+ok 9 - Q01: rollback after injected /DELETE FROM usage_lots/ # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.9014
+  ...
+# Subtest: Q01: rollback after injected /INSERT INTO usage_lots/
+ok 10 - Q01: rollback after injected /INSERT INTO usage_lots/ # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6421
+  ...
+# Subtest: Q01: rollback after injected /UPDATE usage_records/
+ok 11 - Q01: rollback after injected /UPDATE usage_records/ # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5365
+  ...
+# Subtest: Q01: rollback after injected /SELECT DISTINCT crop_id/
+ok 12 - Q01: rollback after injected /SELECT DISTINCT crop_id/ # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4639
+  ...
+# Subtest: Q01: product + unit + quantity + lots commit together; identical retry has zero delta
+ok 13 - Q01: product + unit + quantity + lots commit together; identical retry has zero delta # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5164
+  ...
+# Subtest: Q02: disable persistence failure and retries leave exact state
+ok 14 - Q02: disable persistence failure and retries leave exact state # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5196
+  ...
+# Subtest: Q02: restore persistence failure and retries leave exact state
+ok 15 - Q02: restore persistence failure and retries leave exact state # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.9083
+  ...
+# Subtest: Q02: restore with insufficient stock rolls back enabled and quantity
+ok 16 - Q02: restore with insufficient stock rolls back enabled and quantity # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4744
+  ...
+# Subtest: Q02: simultaneous double submit is serialized, one transition and one replay
+ok 17 - Q02: simultaneous double submit is serialized, one transition and one replay # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2478
+  ...
+# Subtest: Q03: another company cannot edit, disable or restore a Usage
+ok 18 - Q03: another company cannot edit, disable or restore a Usage # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3361
+  ...
+# Subtest: automatic Usage remains protected; disabled Usage cannot be edited
+ok 19 - automatic Usage remains protected; disabled Usage cannot be edited # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3521
+  ...
+# Subtest: Q01 original probe through controller: 409, usage 2 and stock 5
+ok 20 - Q01 original probe through controller: 409, usage 2 and stock 5
+  ---
+  duration_ms: 70.7341
+  ...
+# {"case":"LEGACY_EDIT_INSUFFICIENT","status":409,"usage":2,"stock":5}
+# Subtest: Q02 original probe through controller: two storage failures never reintegrate stock
+ok 21 - Q02 original probe through controller: two storage failures never reintegrate stock
+  ---
+  duration_ms: 92.6299
+  ...
+# {"case":"LEGACY_DISABLE_RETRY_AFTER_FAILURE","usageEnabled":true,"stock":5}
+# Subtest: post-commit notification failure does not turn a committed mutation into a failed request
+ok 22 - post-commit notification failure does not turn a committed mutation into a failed request # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3727
+  ...
+# Subtest: V1 dispatch and edit/enable rejection remain unchanged
+ok 23 - V1 dispatch and edit/enable rejection remain unchanged # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.276
+  ...
+# Subtest: Q03 harvestRecords GET /stats/filters: role/custom permission matrix
+ok 24 - Q03 harvestRecords GET /stats/filters: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 6.7812
+  ...
+# Subtest: Q03 harvestRecords GET /stats/summary: role/custom permission matrix
+ok 25 - Q03 harvestRecords GET /stats/summary: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4323
+  ...
+# Subtest: Q03 harvestRecords GET /stats/by-crop: role/custom permission matrix
+ok 26 - Q03 harvestRecords GET /stats/by-crop: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.7562
+  ...
+# Subtest: Q03 harvestRecords GET /stats/by-campaign: role/custom permission matrix
+ok 27 - Q03 harvestRecords GET /stats/by-campaign: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4187
+  ...
+# Subtest: Q03 harvestRecords GET /: role/custom permission matrix
+ok 28 - Q03 harvestRecords GET /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4276
+  ...
+# Subtest: Q03 harvestRecords GET /:id: role/custom permission matrix
+ok 29 - Q03 harvestRecords GET /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6105
+  ...
+# Subtest: Q03 harvestRecords GET /disabled: role/custom permission matrix
+ok 30 - Q03 harvestRecords GET /disabled: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 1.1821
+  ...
+# Subtest: Q03 harvestRecords POST /: role/custom permission matrix
+ok 31 - Q03 harvestRecords POST /: role/custom permission matrix
+  ---
+  duration_ms: 4.8593
+  ...
+# {"case":"HARVEST_EMPLOYEE_NO_PERMISSION_REACHES_CREATE","status":403,"controllerReached":false}
+# Subtest: Q03 harvestRecords PUT /:id: role/custom permission matrix
+ok 32 - Q03 harvestRecords PUT /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6235
+  ...
+# Subtest: Q03 harvestRecords PATCH /:id/disable: role/custom permission matrix
+ok 33 - Q03 harvestRecords PATCH /:id/disable: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6542
+  ...
+# Subtest: Q03 harvestRecords PATCH /:id/enable: role/custom permission matrix
+ok 34 - Q03 harvestRecords PATCH /:id/enable: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4378
+  ...
+# Subtest: Q03 harvestRecords GET /context: role/custom permission matrix
+ok 35 - Q03 harvestRecords GET /context: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4657
+  ...
+# Subtest: Q03 harvestRecords POST /cycles/:assignmentId/finalize: role/custom permission matrix
+ok 36 - Q03 harvestRecords POST /cycles/:assignmentId/finalize: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3318
+  ...
+# Subtest: Q03 usage GET /: role/custom permission matrix
+ok 37 - Q03 usage GET /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5381
+  ...
+# Subtest: Q03 usage GET /disabled: role/custom permission matrix
+ok 38 - Q03 usage GET /disabled: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5073
+  ...
+# Subtest: Q03 usage POST /: role/custom permission matrix
+ok 39 - Q03 usage POST /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6751
+  ...
+# Subtest: Q03 usage PUT /:id: role/custom permission matrix
+ok 40 - Q03 usage PUT /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4497
+  ...
+# Subtest: Q03 usage DELETE /:id: role/custom permission matrix
+ok 41 - Q03 usage DELETE /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.9626
+  ...
+# Subtest: Q03 usage PUT /enable/:id: role/custom permission matrix
+ok 42 - Q03 usage PUT /enable/:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4738
+  ...
+# Subtest: Q03 vehicle GET /: role/custom permission matrix
+ok 43 - Q03 vehicle GET /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5884
+  ...
+# Subtest: Q03 vehicle GET /:id: role/custom permission matrix
+ok 44 - Q03 vehicle GET /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3993
+  ...
+# Subtest: Q03 vehicle GET /disabled: role/custom permission matrix
+ok 45 - Q03 vehicle GET /disabled: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3378
+  ...
+# Subtest: Q03 vehicle POST /: role/custom permission matrix
+ok 46 - Q03 vehicle POST /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2948
+  ...
+# Subtest: Q03 vehicle PATCH /:id: role/custom permission matrix
+ok 47 - Q03 vehicle PATCH /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2765
+  ...
+# Subtest: Q03 vehicle DELETE /:id: role/custom permission matrix
+ok 48 - Q03 vehicle DELETE /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.276
+  ...
+# Subtest: Q03 vehicle PUT /enable/:id: role/custom permission matrix
+ok 49 - Q03 vehicle PUT /enable/:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2596
+  ...
+# Subtest: Q03 planning GET /: role/custom permission matrix
+ok 50 - Q03 planning GET /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2465
+  ...
+# Subtest: Q03 planning GET /:id: role/custom permission matrix
+ok 51 - Q03 planning GET /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2589
+  ...
+# Subtest: Q03 planning GET /disabled: role/custom permission matrix
+ok 52 - Q03 planning GET /disabled: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2679
+  ...
+# Subtest: Q03 planning POST /: role/custom permission matrix
+ok 53 - Q03 planning POST /: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2808
+  ...
+# Subtest: Q03 planning PATCH /:id: role/custom permission matrix
+ok 54 - Q03 planning PATCH /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3371
+  ...
+# Subtest: Q03 planning POST /:id/complete-work: role/custom permission matrix
+ok 55 - Q03 planning POST /:id/complete-work: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5163
+  ...
+# Subtest: Q03 planning POST /:id/complete-sowing: role/custom permission matrix
+ok 56 - Q03 planning POST /:id/complete-sowing: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5292
+  ...
+# Subtest: Q03 planning PUT /enable/:id: role/custom permission matrix
+ok 57 - Q03 planning PUT /enable/:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3375
+  ...
+# Subtest: Q03 planning DELETE /:id: role/custom permission matrix
+ok 58 - Q03 planning DELETE /:id: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3291
+  ...
+# Subtest: Q03 planning POST /register-completed: role/custom permission matrix
+ok 59 - Q03 planning POST /register-completed: role/custom permission matrix # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.4187
+  ...
+# Subtest: Q03 harvest context also accepts edit alone
+ok 60 - Q03 harvest context also accepts edit alone # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3706
+  ...
+# Subtest: Q03 harvestRecords {"includeDisabled":"true"} cannot bypass view_disabled
+ok 61 - Q03 harvestRecords {"includeDisabled":"true"} cannot bypass view_disabled # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3243
+  ...
+# Subtest: Q03 harvestRecords {"onlyDisabled":"true"} cannot bypass view_disabled
+ok 62 - Q03 harvestRecords {"onlyDisabled":"true"} cannot bypass view_disabled # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3202
+  ...
+# Subtest: Q03 usage {"includeDisabled":"true"} cannot bypass view_disabled
+ok 63 - Q03 usage {"includeDisabled":"true"} cannot bypass view_disabled # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2718
+  ...
+# Subtest: Q03 planning {"includeDisabled":"true"} cannot bypass view_disabled
+ok 64 - Q03 planning {"includeDisabled":"true"} cannot bypass view_disabled # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2627
+  ...
+# Subtest: Q03 vehicle {"includeDisabled":"true"} cannot bypass view_disabled
+ok 65 - Q03 vehicle {"includeDisabled":"true"} cannot bypass view_disabled # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5946
+  ...
+# Subtest: Q03 tenant middleware rejects missing/invalid company without reaching private routes
+ok 66 - Q03 tenant middleware rejects missing/invalid company without reaching private routes # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3435
+  ...
+# Subtest: Q03 harvest mutations scope the locked record to the authenticated company
+ok 67 - Q03 harvest mutations scope the locked record to the authenticated company # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.6454
+  ...
+# Subtest: Q03 harvestRecords: disabled detail requires view_disabled and foreign record returns 404
+ok 68 - Q03 harvestRecords: disabled detail requires view_disabled and foreign record returns 404 # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.3268
+  ...
+# Subtest: Q03 vehicle: disabled detail requires view_disabled and foreign record returns 404
+ok 69 - Q03 vehicle: disabled detail requires view_disabled and foreign record returns 404 # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.5004
+  ...
+# Subtest: Q03 planning: disabled detail requires view_disabled and foreign record returns 404
+ok 70 - Q03 planning: disabled detail requires view_disabled and foreign record returns 404 # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.2686
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 67
+# todo 0
+# duration_ms 11572.9659

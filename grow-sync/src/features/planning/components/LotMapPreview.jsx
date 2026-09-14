@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Polygon, Tooltip, useMap } from 'react-leaflet';
+import React, { useMemo } from 'react';
+import MapViewport from '../../../components/MapViewport';
+import { MapContainer, TileLayer, Polygon, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 const parseJsonValue = (value) => {
@@ -134,45 +135,6 @@ const getParentGeometry = (selection) => (
         : null
 );
 
-// Componente auxiliar para ajustar el zoom al polígono
-const FitBounds = ({ bounds }) => {
-    const map = useMap();
-
-    useEffect(() => {
-        if (bounds && bounds.length > 0) {
-            // Pequeño delay para asegurar que el mapa esté completamente renderizado
-            const timer = setTimeout(() => {
-                try {
-                    if (bounds.length > 0) {
-                        map.fitBounds(bounds, {
-                            padding: [40, 40],
-                            maxZoom: 18
-                        });
-                    }
-                } catch (e) {
-                    console.error("Error fitting bounds:", e);
-                }
-            }, 300);
-
-            return () => clearTimeout(timer);
-        }
-    }, [bounds, map]);
-
-    return null;
-};
-
-// Componente para invalidar tamaño del mapa al montar (fix rendering en drawer)
-const MapInvalidator = () => {
-    const map = useMap();
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            map.invalidateSize();
-        }, 200);
-        return () => clearTimeout(timer);
-    }, [map]);
-    return null;
-};
-
 const LotMapPreview = ({ location, allLots = [], selections = [] }) => {
     const selectedGeometries = useMemo(() => {
         if (Array.isArray(selections) && selections.length) {
@@ -234,9 +196,9 @@ const LotMapPreview = ({ location, allLots = [], selections = [] }) => {
                 dragging={false}
                 zoomControl={false}
                 doubleClickZoom={false}
-                attributionControl={false}
+
             >
-                <TileLayer
+                <TileLayer attribution="Imagery © Esri"
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                 />
 
@@ -258,8 +220,8 @@ const LotMapPreview = ({ location, allLots = [], selections = [] }) => {
                     </Polygon>
                 ))}
 
-                <FitBounds bounds={bounds} />
-                <MapInvalidator />
+                <MapViewport bounds={bounds} maxZoom={18} />
+
             </MapContainer>
         </div>
     );

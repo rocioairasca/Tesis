@@ -46,8 +46,8 @@ const requireLotSelection = (val, ctx) => {
 // Products item
 const ProductItem = z.object({
   product_id: z.string().uuid(),
-  amount: z.coerce.number().positive().optional().nullable(),
-  unit: z.string().trim().optional().nullable(),
+  amount: require('../services/inventoryQuantity').quantitySchema.positive().optional().nullable(),
+  unit: require('../services/inventoryUnits').unitSchema.optional().nullable(),
 });
 
 const ActualProductItem = z.object({

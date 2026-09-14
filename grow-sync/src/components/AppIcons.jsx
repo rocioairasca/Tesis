@@ -1,3 +1,44 @@
+import { HouseIcon as PhHouse } from '@phosphor-icons/react/dist/csr/House';
+import { CalendarDotsIcon as PhCalendarDots } from '@phosphor-icons/react/dist/csr/CalendarDots';
+import { MapPinIcon as PhMapPin } from '@phosphor-icons/react/dist/csr/MapPin';
+import { PackageIcon as PhPackage } from '@phosphor-icons/react/dist/csr/Package';
+import { ChartBarIcon as PhChartBar } from '@phosphor-icons/react/dist/csr/ChartBar';
+import { TractorIcon as PhTractor } from '@phosphor-icons/react/dist/csr/Tractor';
+import { UsersIcon as PhUsers } from '@phosphor-icons/react/dist/csr/Users';
+import { BellIcon as PhBell } from '@phosphor-icons/react/dist/csr/Bell';
+import { GearIcon as PhGear } from '@phosphor-icons/react/dist/csr/Gear';
+import { CloudIcon as PhCloud } from '@phosphor-icons/react/dist/csr/Cloud';
+import { SunIcon as PhSun } from '@phosphor-icons/react/dist/csr/Sun';
+import { CloudSunIcon as PhCloudSun } from '@phosphor-icons/react/dist/csr/CloudSun';
+import { CloudMoonIcon as PhCloudMoon } from '@phosphor-icons/react/dist/csr/CloudMoon';
+import { MoonIcon as PhMoon } from '@phosphor-icons/react/dist/csr/Moon';
+import { CloudRainIcon as PhCloudRain } from '@phosphor-icons/react/dist/csr/CloudRain';
+import { CloudLightningIcon as PhCloudLightning } from '@phosphor-icons/react/dist/csr/CloudLightning';
+import { CloudSnowIcon as PhCloudSnow } from '@phosphor-icons/react/dist/csr/CloudSnow';
+import { CloudFogIcon as PhCloudFog } from '@phosphor-icons/react/dist/csr/CloudFog';
+import { WindIcon as PhWind } from '@phosphor-icons/react/dist/csr/Wind';
+import { DropIcon as PhDrop } from '@phosphor-icons/react/dist/csr/Drop';
+import { ThermometerIcon as PhThermometer } from '@phosphor-icons/react/dist/csr/Thermometer';
+import { TornadoIcon as PhTornado } from '@phosphor-icons/react/dist/csr/Tornado';
+import { WarningCircleIcon as PhWarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
+import { PlantIcon as PhPlant } from '@phosphor-icons/react/dist/csr/Plant';
+import { FlaskIcon as PhFlask } from '@phosphor-icons/react/dist/csr/Flask';
+import { WrenchIcon as PhWrench } from '@phosphor-icons/react/dist/csr/Wrench';
+import { DotsThreeIcon as PhDotsThree } from '@phosphor-icons/react/dist/csr/DotsThree';
+import { StackIcon as PhStack } from '@phosphor-icons/react/dist/csr/Stack';
+import { RulerIcon as PhRuler } from '@phosphor-icons/react/dist/csr/Ruler';
+import { ClockIcon as PhClock } from '@phosphor-icons/react/dist/csr/Clock';
+import { UserIcon as PhUser } from '@phosphor-icons/react/dist/csr/User';
+import { ClipboardTextIcon as PhClipboardText } from '@phosphor-icons/react/dist/csr/ClipboardText';
+import { CaretLeftIcon as PhCaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
+import { SignOutIcon as PhSignOut } from '@phosphor-icons/react/dist/csr/SignOut';
+import { TruckIcon as PhTruck } from '@phosphor-icons/react/dist/csr/Truck';
+import { CarIcon as PhCar } from '@phosphor-icons/react/dist/csr/Car';
+import { CubeIcon as PhCube } from '@phosphor-icons/react/dist/csr/Cube';
+import { WarningIcon as PhWarning } from '@phosphor-icons/react/dist/csr/Warning';
+import { ClockCountdownIcon as PhClockCountdown } from '@phosphor-icons/react/dist/csr/ClockCountdown';
+import { XCircleIcon as PhXCircle } from '@phosphor-icons/react/dist/csr/XCircle';
+import { WavesIcon as PhWaves } from '@phosphor-icons/react/dist/csr/Waves';
 import React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -118,3 +159,22 @@ export const Truck = createIcon(TruckIcon);
 export const User = createIcon(UserIcon);
 export const UserAddOutlined = createIcon(UserAdd01Icon);
 export const UserOutlined = createIcon(UserIcon);
+
+// Official family for redesigned surfaces. Legacy aliases above remain unchanged
+// until their modules are migrated, avoiding a global visual refactor.
+function phosphor(Icon, fallbackSize = 18) {
+  return function DomainIcon({ size, style, weight = 'regular', strokeWidth, ...props }) {
+    return <Icon size={normalizeSize(size, style, fallbackSize)} weight={weight} style={style} aria-hidden={props['aria-label'] ? undefined : true} {...props} />;
+  };
+}
+export const AppIcons = {
+  home:phosphor(PhHouse,20), planning:phosphor(PhCalendarDots,20), lots:phosphor(PhMapPin,20), inventory:phosphor(PhPackage,20),
+  harvest:phosphor(PhChartBar,20), vehicle:phosphor(PhTractor,20), users:phosphor(PhUsers,20), notifications:phosphor(PhBell,20), settings:phosphor(PhGear,20),
+  cloud:phosphor(PhCloud), sun:phosphor(PhSun), partlyCloudy:phosphor(PhCloudSun), cloudNight:phosphor(PhCloudMoon), moon:phosphor(PhMoon),
+  rain:phosphor(PhCloudRain), storm:phosphor(PhCloudLightning), snow:phosphor(PhCloudSnow), fog:phosphor(PhCloudFog), wind:phosphor(PhWind), drop:phosphor(PhDrop),
+  temperature:phosphor(PhThermometer), tornado:phosphor(PhTornado), warning:phosphor(PhWarning), alert:phosphor(PhWarningCircle),
+  crop:phosphor(PhPlant), spray:phosphor(PhFlask), maintenance:phosphor(PhWrench), more:phosphor(PhDotsThree,20), divisions:phosphor(PhStack), area:phosphor(PhRuler),
+  clock:phosphor(PhClock,16), person:phosphor(PhUser,16), usage:phosphor(PhClipboardText,20), collapse:phosphor(PhCaretLeft,20), logout:phosphor(PhSignOut),
+  truck:phosphor(PhTruck), car:phosphor(PhCar), cube:phosphor(PhCube), expiring:phosphor(PhClockCountdown), unavailable:phosphor(PhXCircle), irrigation:phosphor(PhWaves),
+};
+export const activityIcons = { siembra:AppIcons.crop, fumigacion:AppIcons.spray, fertilizacion:AppIcons.spray, riego:AppIcons.irrigation, cosecha:AppIcons.vehicle, mantenimiento:AppIcons.maintenance, otro:AppIcons.more };

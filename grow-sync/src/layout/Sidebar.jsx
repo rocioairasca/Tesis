@@ -1,20 +1,13 @@
 import React, { useMemo } from "react";
-import { Layout, Menu } from "antd";
-import {
-  CalendarOutlined,
-  CarOutlined,
-  UserOutlined,
-  DashboardOutlined,
-  HarvestOutlined,
-  CloudOutlined,
-  AppstoreOutlined,
-  EnvironmentOutlined,
-  FormOutlined,
-} from '../components/AppIcons';
+import { Layout, Menu, Button } from "antd";
+import { tokens } from '../theme/tokens';
+import { AppIcons } from '../components/AppIcons';
+const { planning: CalendarOutlined, vehicle: CarOutlined, users: UserOutlined, home: DashboardOutlined, harvest: HarvestOutlined, cloud: CloudOutlined, inventory: AppstoreOutlined, lots: EnvironmentOutlined, usage: FormOutlined, collapse: ArrowLeftOutlined } = AppIcons;
 import { Link, useLocation } from "react-router-dom";
 
 import { PERMISSIONS } from "../constants/permissions";
 import { hasPermission } from "../utils/permissions";
+import sidebarField from "../assets/illustrations/sidebar-field.png";
 
 const { Sider } = Layout;
 
@@ -58,6 +51,7 @@ const Sidebar = ({ collapsed, onCollapse }) => {
     },
     {
       key: "inventario",
+      title: "Inventario",
       icon: <AppstoreOutlined />,
       label: <Link to="/inventario">Inventario</Link>,
       show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
@@ -84,38 +78,57 @@ const Sidebar = ({ collapsed, onCollapse }) => {
 
   const menuItems = allItems
     .filter((item) => item.show)
-    .map(({ show, ...item }) => item);
+    .map(({ show, ...item }) => ({...item,title:item.label.props.children}));
+  const routeKey = location.pathname.startsWith('/planificaciones') ? 'planning'
+    : location.pathname.startsWith('/productos-') ? 'inventario'
+    : location.pathname.startsWith('/usages-') ? 'usage'
+    : location.pathname.startsWith('/lotes') ? 'lotes'
+    : location.pathname.startsWith('/vehiculos') ? 'vehiculos'
+    : location.pathname.startsWith('/harvest') ? 'harvest'
+    : location.pathname.split('/')[1];
 
   return (
     <Sider
       className="grow-sidebar"
       breakpoint="md"
       collapsible
+      width={tokens.sidebar.expanded}
+      collapsedWidth={tokens.sidebar.collapsed}
+      trigger={null}
       collapsed={collapsed}
       onCollapse={onCollapse}
     >
-      <div style={{ padding: "16px", display: "flex", alignItems: "center" }}>
+      <div className="gs-sidebar-brand">
         <img
           src="/LogoGrande.png"
-          alt="Logo"
-          style={{ width: "45px", height: "auto", transition: "all 0.3s" }}
+          alt={collapsed ? 'GrowSync' : ''}
         />
 
         {!collapsed && (
-          <div style={{ marginTop: "10px", color: "white", fontSize: "25px" }}>
+          <div className="gs-sidebar-wordmark">
             GrowSync
           </div>
         )}
       </div>
 
-      <Menu
+      <nav aria-label="Navegación principal"><Menu
         theme="dark"
         mode="inline"
         inlineCollapsed={collapsed}
-        selectedKeys={[location.pathname.split("/")[1] || "dashboard"]}
-        style={{ background: "#1D2A62" }}
+        selectedKeys={[routeKey || "dashboard"]}
         items={menuItems}
-      />
+      /></nav>
+      {!collapsed && (
+        <div className="gs-sidebar-field" aria-hidden="true">
+          <img src={sidebarField} alt="" draggable={false} />
+        </div>
+      )}
+      <div className="gs-sidebar-collapse">
+        <Button type="text" className="gs-sidebar-toggle" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-expanded={!collapsed}
+          onClick={()=>onCollapse(!collapsed)} icon={<ArrowLeftOutlined style={{transform:collapsed?'rotate(180deg)':undefined}}/>}>
+
+        </Button>
+      </div>
     </Sider>
   );
 };

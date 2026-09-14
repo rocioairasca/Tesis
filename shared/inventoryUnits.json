@@ -1,0 +1,11 @@
+{
+  "units": [
+    { "value": "L", "label": "L" },
+    { "value": "mL", "label": "mL" },
+    { "value": "kg", "label": "kg" },
+    { "value": "g", "label": "g" },
+    { "value": "unit", "label": "Unidades" },
+    { "value": "bag", "label": "Bolsas" }
+  ],
+  "legacyAliases": { "litros": "L", "litro": "L", "lt": "L", "l": "L", "kilos": "kg", "kilo": "kg", "bolsas": "bag", "bolsa": "bag", "unidades": "unit", "unidad": "unit" }
+}

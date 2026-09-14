@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "case": "LEGACY_EDIT_INSUFFICIENT",
+      "status": 409,
+      "usage": 2,
+      "stock": 5
+    },
+    {
+      "case": "LEGACY_DISABLE_RETRY_AFTER_FAILURE",
+      "usageEnabled": true,
+      "stock": 5
+    },
+    {
+      "case": "HARVEST_EMPLOYEE_NO_PERMISSION_REACHES_CREATE",
+      "status": 403,
+      "controllerReached": false
+    }
+  ]
+}

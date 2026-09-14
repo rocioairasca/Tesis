@@ -1,3 +1,5 @@
+const {sameUnit} = require('./inventoryUnits');
+const stock = require('./stock');
 const PRODUCT_CONSUMING_ACTIVITIES = new Set(['fumigacion', 'fertilizacion', 'siembra']);
 
 const toNum = (value, fallback = 0) => {
@@ -151,7 +153,7 @@ const getPlanningProductsForUsage = async (client, planningId, companyId) => {
       pr.available_quantity,
       pr.enabled
     FROM planning_products pp
-    JOIN products pr
+    LEFT JOIN products pr
       ON pr.id = pp.product_id
      AND pr.company_id = $2
     WHERE pp.planning_id = $1
@@ -194,6 +196,7 @@ const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
       throw err;
     }
 
+    stock.decimal(actualAmount); // reject precision loss instead of silently rounding completion
     return {
       ...planned,
       actual_amount: actualAmount,
@@ -228,6 +231,7 @@ const applyPlanningProductUsage = async (
     effectiveDate,
     companyId,
     historicalStockConsumption = false,
+    actorId,
   }
 ) => {
   if (!plannedProducts.length) {
@@ -243,11 +247,13 @@ const applyPlanningProductUsage = async (
     FROM products
     WHERE company_id = $1
       AND id = ANY($2::uuid[])
+    ORDER BY id
     FOR UPDATE;
     `,
     [companyId, productIds]
   );
-  const productsById = new Map(lockedProducts.map((product) => [String(product.id), product]));
+  const currentProducts = await stock.decorate(client, companyId, lockedProducts);
+  const productsById = new Map(currentProducts.map((product) => [String(product.id), product]));
   const requestedByProduct = new Map();
 
   for (const planned of normalizedProducts) {
@@ -257,20 +263,20 @@ const applyPlanningProductUsage = async (
       err.status = 409;
       throw err;
     }
-    if ((planned.unit || product.unit) !== product.unit) {
+    if (!sameUnit(planned.unit || product.unit,product.unit)) {
       const err = new Error(`La unidad de ${product.name} no coincide con su stock.`);
       err.status = 400;
       throw err;
     }
     requestedByProduct.set(
       String(planned.product_id),
-      (requestedByProduct.get(String(planned.product_id)) || 0) + planned.actual_amount
+      (requestedByProduct.get(String(planned.product_id)) || 0n) + stock.decimal(planned.actual_amount)
     );
   }
 
   for (const [productId, requestedAmount] of requestedByProduct.entries()) {
     const product = productsById.get(productId);
-    if (requestedAmount > Number(product.available_quantity || 0)) {
+    if (requestedAmount > stock.decimal(product.available_quantity || 0)) {
       const err = new Error(historicalStockConsumption
         ? `No hay stock actual suficiente de ${product.name} para registrar este consumo histórico. Disponible: ${product.available_quantity} ${product.unit}.`
         : `No hay stock suficiente de ${product.name}. Disponible: ${product.available_quantity} ${product.unit}.`);
@@ -311,7 +317,7 @@ const applyPlanningProductUsage = async (
           effectiveDate,
           planned.product_id,
           planned.actual_amount,
-          planned.unit || planned.product_unit,
+          productsById.get(String(planned.product_id)).unit,
           totalArea,
           currentCrop,
           planning.crop_id || null,
@@ -345,6 +351,12 @@ const applyPlanningProductUsage = async (
         );
       }
 
+      if (stock.isEnabled(companyId)) {
+        await stock.consumeStock(client, { companyId, productId: planned.product_id,
+          actorId, usageId, quantity: planned.actual_amount, unit: productsById.get(String(planned.product_id)).unit,
+          key: 'planning-product:' + planned.id });
+        await client.query('UPDATE usage_records SET created_by=$1 WHERE company_id=$2 AND id=$3', [actorId, companyId, usageId]);
+      } else {
       await client.query(
         `
         UPDATE products
@@ -354,6 +366,7 @@ const applyPlanningProductUsage = async (
         `,
         [planned.actual_amount, planned.product_id, companyId]
       );
+      }
     }
 
     await client.query(
@@ -806,6 +819,7 @@ const completeSowingPlanning = async (
     companyId,
     historical = false,
     registeredRetroactively = false,
+    actorId,
   }
 ) => {
   if (planning.activity_type !== 'siembra') {
@@ -880,6 +894,7 @@ const completeSowingPlanning = async (
     actualProducts,
     effectiveDate,
     companyId,
+    actorId,
     historicalStockConsumption: registeredRetroactively,
   });
 
@@ -906,6 +921,7 @@ const completeWorkPlanning = async (
     effectiveDate,
     companyId,
     registeredRetroactively = false,
+    actorId,
   }
 ) => {
   if (!PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type) || planning.activity_type === 'siembra') {
@@ -958,6 +974,7 @@ const completeWorkPlanning = async (
     actualProducts,
     effectiveDate,
     companyId,
+    actorId,
     historicalStockConsumption: registeredRetroactively,
   });
 

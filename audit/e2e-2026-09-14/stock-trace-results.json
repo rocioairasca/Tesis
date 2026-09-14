@@ -1,0 +1,81 @@
+[
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "L",
+    "opening": "38",
+    "actual": "8.5",
+    "balance": "29.500000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  },
+  {
+    "case": "V1_DISABLED_LOT_ACCEPTED",
+    "result": {
+      "ok": true,
+      "id": "71d5bde4-00e5-4953-b0d4-98744063e94a"
+    }
+  },
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "mL",
+    "opening": "100",
+    "actual": "0.125",
+    "balance": "99.875000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  },
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "kg",
+    "opening": "1",
+    "actual": "0.005",
+    "balance": "0.995000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  },
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "g",
+    "opening": "130",
+    "actual": "35",
+    "balance": "95.000000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  },
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "unit",
+    "opening": "10",
+    "actual": "1",
+    "balance": "9.000000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  },
+  {
+    "case": "PRODUCT_RECEIPT_COMPLETION_USAGE_MOVEMENT",
+    "unit": "bag",
+    "opening": "10",
+    "actual": "1.25",
+    "balance": "8.750000",
+    "linkedRows": 1,
+    "response": {
+      "usage_count": 1,
+      "consumed_products": 1
+    }
+  }
+]

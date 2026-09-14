@@ -1,0 +1,363 @@
+{
+  "test_id": "20260909-B49342",
+  "company_id": "2601c129-efd5-484d-bee5-d7a6e82dc249",
+  "lot_id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+  "crop_id": "1b5df5d7-4f0e-437e-8f51-f4c3ae28db4a",
+  "campaign_id": "468c2ee8-d2e0-4365-b690-a761a7811927",
+  "crop_assignment_id": "bdcfd5a1-a8ab-4779-9465-df7302bacac6",
+  "names": {
+    "lot": "TEST TEMP — Cosechas parciales — 20260909-B49342",
+    "crop": "TEST TEMP — Cultivo cosechas parciales — 20260909-B49342",
+    "campaign": "TEST TEMP — Cosechas parciales — 20260909-B49342"
+  },
+  "created_at": "2026-09-09 17:18:12.440051+00",
+  "purpose": "Prueba funcional de cosechas parciales",
+  "temporary": true,
+  "start_date": "2026-09-05",
+  "campaign_start_date": "2026-09-04",
+  "area_ha": 48.03,
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -64,
+          -34
+        ],
+        [
+          -64,
+          -33.99315398455279
+        ],
+        [
+          -63.99315398455279,
+          -33.99315398455279
+        ],
+        [
+          -63.99315398455279,
+          -34
+        ],
+        [
+          -64,
+          -34
+        ]
+      ]
+    ]
+  },
+  "separation": {
+    "overlaps": 0,
+    "nearest_meters": 187646.19337444,
+    "missing_geometries": 3,
+    "missing_geometry_summary": [
+      {
+        "current_company": false,
+        "enabled": true,
+        "count": 1
+      },
+      {
+        "current_company": true,
+        "enabled": false,
+        "count": 2
+      }
+    ],
+    "limitation": "No overlap with any existing available geometry; three lots have no usable geometry (two disabled in this company, one in another company). Their geographic overlap cannot be evaluated."
+  },
+  "planned_harvests_only": [
+    20,
+    20,
+    8.03
+  ],
+  "status": "committed",
+  "before": {
+    "campaigns": {
+      "n": 7,
+      "hash": "f979f6d55d1bc4c48d3a522e4efe1ed4"
+    },
+    "companies": {
+      "n": 6,
+      "hash": "6f05411b97d141030f60889bda6486d1"
+    },
+    "crop_assignments": {
+      "n": 19,
+      "hash": "60302af1b298c245985b1de6f0ce828d"
+    },
+    "crops": {
+      "n": 31,
+      "hash": "0d23136f4e8a2be186dcb512fa870820"
+    },
+    "harvest_crop_assignments": {
+      "n": 13,
+      "hash": "9d14cf9b8343d0f6caaabdaa28e4259f"
+    },
+    "harvest_cycle_closures": {
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "harvest_records": {
+      "n": 19,
+      "hash": "f52ef1e907ffafd7bd19505ffc2d6f8f"
+    },
+    "lot_layouts": {
+      "n": 35,
+      "hash": "c33bcd45faddda9bf4b5914974ba5917"
+    },
+    "lots": {
+      "n": 28,
+      "hash": "71071e4aef3ca30ec38acd7c842e0a9e"
+    },
+    "planning": {
+      "n": 47,
+      "hash": "c90495fead87140b1fb3c841fc147ca4"
+    },
+    "planning_lots": {
+      "n": 56,
+      "hash": "09f82e64b0e2642c32b770c8195c2462"
+    },
+    "planning_product_completions": {
+      "n": 32,
+      "hash": "615c7a1dc096e95c426e2307ead61f3d"
+    },
+    "planning_products": {
+      "n": 37,
+      "hash": "09f8a00992b21390b6bb416d08cc405b"
+    },
+    "plans": {
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "products": {
+      "n": 60,
+      "hash": "8db0cfc93bac47f5aee3858f1be5a411"
+    },
+    "sub_lots": {
+      "n": 22,
+      "hash": "4a3825605124fc965ebc5129162783c8"
+    },
+    "usage_lots": {
+      "n": 32,
+      "hash": "86bc0d4256da03e04c3ac247a7565241"
+    },
+    "usage_records": {
+      "n": 37,
+      "hash": "e7102c850d7f10d50ff684bb82048c64"
+    }
+  },
+  "cleanup": [
+    "No cleanup is authorized or executed by this file. Obtain explicit approval after the UI test.",
+    "Use exact IDs and company_id from this manifest; never delete by name pattern or company.",
+    "Read all incoming foreign keys and references again; inventory every harvest linked to this assignment OR temporary lot/crop/campaign, including disabled rows.",
+    "Confirm each dependent record belongs exclusively to this test; stop if any productive or shared dependency exists. Back up the exact rows first.",
+    "In one transaction, remove only approved test closure records and harvest-assignment links, then test harvest records; respect current trigger rules without disabling integrity constraints.",
+    "Delete the temporary crop_assignment, then temporary lot, crop and campaign by exact IDs and company. Do not delete the company.",
+    "No Planning, uses, sublots, products or inventories were created. Unexpected references require review, not cascade cleanup.",
+    "Verify no references or test records remain and unrelated row fingerprints/counts remain unchanged. Retain this manifest and cleanup audit."
+  ],
+  "verification": {
+    "lot": {
+      "id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+      "area": "48.03",
+      "area_ha": "48.0300",
+      "enabled": true
+    },
+    "assignment": {
+      "id": "bdcfd5a1-a8ab-4779-9465-df7302bacac6",
+      "company_id": "2601c129-efd5-484d-bee5-d7a6e82dc249",
+      "campaign_id": "468c2ee8-d2e0-4365-b690-a761a7811927",
+      "lot_id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+      "sub_lot_id": null,
+      "crop_id": "1b5df5d7-4f0e-437e-8f51-f4c3ae28db4a",
+      "start_date": "2026-09-05T00:00:00.000Z",
+      "end_date": null,
+      "area_ha": "48.03",
+      "created_at": "2026-09-09T17:18:12.440Z",
+      "updated_at": "2026-09-09T17:18:12.440Z",
+      "source_planning_id": null,
+      "harvest_closure_source": null,
+      "creation_timestamp": "2026-09-09 17:18:12.440051+00"
+    },
+    "referenceCounts": [
+      {
+        "table": "plans",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "planning_lots",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "usage_lots",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "planning",
+        "column": "crop_id",
+        "count": 0
+      },
+      {
+        "table": "harvest_records",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "lot_layouts",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "sub_lots",
+        "column": "lot_id",
+        "count": 0
+      },
+      {
+        "table": "crop_assignments",
+        "column": "campaign_id",
+        "count": 1
+      },
+      {
+        "table": "crop_assignments",
+        "column": "lot_id",
+        "count": 1
+      },
+      {
+        "table": "crop_assignments",
+        "column": "crop_id",
+        "count": 1
+      },
+      {
+        "table": "planning",
+        "column": "campaign_id",
+        "count": 0
+      },
+      {
+        "table": "harvest_records",
+        "column": "crop_id",
+        "count": 0
+      },
+      {
+        "table": "harvest_records",
+        "column": "campaign_id",
+        "count": 0
+      },
+      {
+        "table": "harvest_crop_assignments",
+        "column": "crop_assignment_id",
+        "count": 0
+      },
+      {
+        "table": "usage_records",
+        "column": "crop_id",
+        "count": 0
+      },
+      {
+        "table": "harvest_cycle_closures",
+        "column": "crop_assignment_id",
+        "count": 0
+      }
+    ],
+    "unrelated_rows_unchanged": true,
+    "after": {
+      "campaigns": {
+        "n": 7,
+        "hash": "f979f6d55d1bc4c48d3a522e4efe1ed4"
+      },
+      "companies": {
+        "n": 6,
+        "hash": "6f05411b97d141030f60889bda6486d1"
+      },
+      "crop_assignments": {
+        "n": 19,
+        "hash": "60302af1b298c245985b1de6f0ce828d"
+      },
+      "crops": {
+        "n": 31,
+        "hash": "0d23136f4e8a2be186dcb512fa870820"
+      },
+      "harvest_crop_assignments": {
+        "n": 13,
+        "hash": "9d14cf9b8343d0f6caaabdaa28e4259f"
+      },
+      "harvest_cycle_closures": {
+        "n": 0,
+        "hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "harvest_records": {
+        "n": 19,
+        "hash": "f52ef1e907ffafd7bd19505ffc2d6f8f"
+      },
+      "lot_layouts": {
+        "n": 35,
+        "hash": "c33bcd45faddda9bf4b5914974ba5917"
+      },
+      "lots": {
+        "n": 28,
+        "hash": "71071e4aef3ca30ec38acd7c842e0a9e"
+      },
+      "planning": {
+        "n": 47,
+        "hash": "c90495fead87140b1fb3c841fc147ca4"
+      },
+      "planning_lots": {
+        "n": 56,
+        "hash": "09f82e64b0e2642c32b770c8195c2462"
+      },
+      "planning_product_completions": {
+        "n": 32,
+        "hash": "615c7a1dc096e95c426e2307ead61f3d"
+      },
+      "planning_products": {
+        "n": 37,
+        "hash": "09f8a00992b21390b6bb416d08cc405b"
+      },
+      "plans": {
+        "n": 0,
+        "hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "products": {
+        "n": 60,
+        "hash": "8db0cfc93bac47f5aee3858f1be5a411"
+      },
+      "sub_lots": {
+        "n": 22,
+        "hash": "4a3825605124fc965ebc5129162783c8"
+      },
+      "usage_lots": {
+        "n": 32,
+        "hash": "86bc0d4256da03e04c3ac247a7565241"
+      },
+      "usage_records": {
+        "n": 37,
+        "hash": "e7102c850d7f10d50ff684bb82048c64"
+      }
+    },
+    "productive_state": {
+      "lot_id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+      "lot_name": "TEST TEMP — Cosechas parciales — 20260909-B49342",
+      "date": "2026-09-06",
+      "mode": "whole_lot",
+      "units": [
+        {
+          "lot_id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+          "sub_lot_id": null,
+          "name": "TEST TEMP — Cosechas parciales — 20260909-B49342",
+          "area_ha": "48.0300",
+          "current_crop": {
+            "assignment_id": "bdcfd5a1-a8ab-4779-9465-df7302bacac6",
+            "lot_id": "923c0338-0897-47ec-bc88-34b1e4d7eb36",
+            "sub_lot_id": null,
+            "crop_id": "1b5df5d7-4f0e-437e-8f51-f4c3ae28db4a",
+            "crop_name": "TEST TEMP — Cultivo cosechas parciales — 20260909-B49342",
+            "campaign_id": "468c2ee8-d2e0-4365-b690-a761a7811927",
+            "campaign_name": "TEST TEMP — Cosechas parciales — 20260909-B49342",
+            "campaign_status": "active",
+            "start_date": "2026-09-05",
+            "end_date": null
+          },
+          "previous_crops": []
+        }
+      ]
+    },
+    "reference_date": "2026-09-06"
+  }
+}

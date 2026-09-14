@@ -1,18 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import {
-  HomeOutlined,
-  AppstoreOutlined,
-  FormOutlined,
-  EnvironmentOutlined,
-  MoreOutlined,
-  UserOutlined,
-  CarOutlined,
-  CloudOutlined,
-  HarvestOutlined,
-  CalendarOutlined
-} from './AppIcons';
-import { Drawer, List } from "antd";
+import { AppIcons } from './AppIcons';
+const { home: HomeOutlined, inventory: AppstoreOutlined, usage: FormOutlined, lots: EnvironmentOutlined, more: MoreOutlined, users: UserOutlined, vehicle: CarOutlined, cloud: CloudOutlined, harvest: HarvestOutlined, planning: CalendarOutlined } = AppIcons;
+import { Drawer, List, Button } from "antd";
 import "../css/BottomNavigation.css";
 import { PERMISSIONS } from "../constants/permissions";
 import { hasPermission } from "../utils/permissions";
@@ -24,13 +14,14 @@ const BottomNavigation = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 
-  const isActive = (path) => currentPath === path;
+  const isActive = (path) => currentPath === path || currentPath.startsWith(`${path}/`) || currentPath.startsWith(`${path}-`)
+    || (path==='/inventario'&&currentPath==='/productos-deshabilitados') || (path==='/usage'&&currentPath==='/usages-disabled');
 
   const primaryItems = [
     {
       key: "dashboard",
       path: "/dashboard",
-      label: "Dashboard",
+      label: "Inicio",
       icon: <HomeOutlined />,
       show: true,
     },
@@ -42,11 +33,11 @@ const BottomNavigation = () => {
       show: hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW),
     },
     {
-      key: "cosecha",
-      path: "/harvest",
-      label: "Cosechas",
-      icon: <HarvestOutlined />,
-      show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
+      key: "inventario",
+      path: "/inventario",
+      label: "Inventario",
+      icon: <AppstoreOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
     },
     {
       key: "lotes",
@@ -55,16 +46,16 @@ const BottomNavigation = () => {
       icon: <EnvironmentOutlined />,
       show: hasPermission(currentUser, PERMISSIONS.LOTS_VIEW),
     },
-  ].filter((item) => item.show);
+  ].filter((item) => item.show).sort((a,b)=>['dashboard','planning','lotes','inventario'].indexOf(a.key)-['dashboard','planning','lotes','inventario'].indexOf(b.key));
 
   const menuItems = [
     {
-      key: "inventario",
-      label: "Inventario",
-      icon: <AppstoreOutlined />,
-      show: hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW),
+      key: "cosecha",
+      label: "Cosechas",
+      icon: <HarvestOutlined />,
+      show: hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW),
       onClick: () => {
-        navigate("/inventario");
+        navigate("/harvest");
         setDrawerVisible(false);
       },
     },
@@ -90,7 +81,7 @@ const BottomNavigation = () => {
     },
     {
       key: "vehiculos",
-      label: "Vehiculos",
+      label: "Vehículos",
       icon: <CarOutlined />,
       show: hasPermission(currentUser, PERMISSIONS.VEHICLES_VIEW),
       onClick: () => {
@@ -112,48 +103,48 @@ const BottomNavigation = () => {
 
   return (
     <>
-      <div className="bottom-nav">
+      <nav className="bottom-nav" aria-label="Navegación principal mobile">
         {primaryItems.map((item) => (
           <button
             key={item.key}
             type="button"
             className={`bottom-nav__button${isActive(item.path) ? " bottom-nav__button--active" : ""}`}
             aria-label={item.label}
+            aria-current={isActive(item.path) ? 'page' : undefined}
             onClick={() => navigate(item.path)}
           >
             {item.icon}
+
           </button>
         ))}
         {menuItems.length > 0 && (
           <button
             type="button"
-            className="bottom-nav__button"
-            aria-label="Mas opciones"
+            className={`bottom-nav__button${!primaryItems.some(item=>isActive(item.path))?' bottom-nav__button--active':''}`}
+            aria-label="Más opciones"
+            aria-expanded={drawerVisible}
+            aria-haspopup="dialog"
             onClick={() => setDrawerVisible(true)}
           >
             <MoreOutlined />
+
           </button>
         )}
-      </div>
+      </nav>
 
       <Drawer
-        title="Mas opciones"
-        placement="left"
+        title="Más opciones"
+        placement="bottom"
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
-        width={250}
+        height="auto"
+        styles={{body:{maxHeight:'70dvh',overflowY:'auto',paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))'}}}
       >
         <List
           dataSource={menuItems}
           renderItem={(item) => (
-            <List.Item
-              onClick={item.onClick}
-              style={{ cursor: "pointer", padding: "12px 0" }}
-            >
-              <List.Item.Meta
-                avatar={<span style={{ fontSize: 20, color: "#1D2A62" }}>{item.icon}</span>}
-                title={<span style={{ fontSize: 16 }}>{item.label}</span>}
-              />
+            <List.Item>
+              <Button type="text" block onClick={item.onClick} icon={item.icon} style={{minHeight:44,justifyContent:'flex-start'}}>{item.label}</Button>
             </List.Item>
           )}
         />

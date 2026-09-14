@@ -12,6 +12,18 @@
 const supabase = require('../../db/supabaseClient');
 const { pool } = require('../../db/supabaseClient');
 const { createNotification } = require('../notifications');
+const stock = require('../../services/stock');
+const { getEffectivePermissions, PERMISSIONS } = require('../../constants/permissions');
+const {normalizeUnit,validUnit} = require('../../services/inventoryUnits');
+const {decorateUnitHistory,resolveUnitChange} = require('../../services/productUnitHistory');
+const metadata = ['active_ingredient','formulation','manufacturer','minimum_stock','notes'];
+const legacyFields = ['total_quantity','available_quantity','expiration_date','acquisition_date','price','cost'];
+function guardStockFields(req) {
+  if (stock.isEnabled(req.user.company_id) && legacyFields.some(k => Object.hasOwn(req.body,k))) {
+    throw stock.fail('Registrá un ingreso o ajuste; el saldo y los datos de compra pertenecen a las partidas.',400);
+  }
+  if (Object.hasOwn(req.body,'enabled')) throw stock.fail('Usá la acción de habilitar o deshabilitar.',400);
+}
 
 /**
  * LISTAR PRODUCTOS (habilitados por defecto)
@@ -30,27 +42,27 @@ const listProducts = async (req, res, next) => {
       category,                 // 'semillas' | 'agroquimicos' | 'fertilizantes' | 'combustible'
       page = 1,
       pageSize = 50,
-      includeDisabled = false,
+      includeDisabled: includeDisabledValue = false,
     } = req.query;
 
+    const includeDisabled = [true, 'true', '1'].includes(includeDisabledValue);
     const limit = Math.min(Math.max(Number(pageSize) || 50, 1), 1000);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
-    const columns = [
-      'id', 'name', 'category', 'unit',
-      'price', 'cost',
-      'total_quantity', 'available_quantity',
-      'expiration_date', 'acquisition_date',
-      'enabled', 'created_at'
-    ].join(',');
 
     let query = supabase
       .from('products')
-      .select(columns, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('company_id', company_id) // Multi-tenancy filter
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
+    if (includeDisabled) {
+      const permissions = getEffectivePermissions(req.user);
+      if (!permissions.includes('all') && !permissions.includes(PERMISSIONS.INVENTORY_VIEW_DISABLED)) {
+        return res.status(403).json({message:'No tenés permiso para ver productos deshabilitados.'});
+      }
+    }
     if (!includeDisabled) query = query.eq('enabled', true);
     if (category) query = query.eq('category', category);
     if (q && q.trim().length >= 2) query = query.ilike('name', `%${q.trim()}%`);
@@ -60,7 +72,9 @@ const listProducts = async (req, res, next) => {
     if (error) throw error;
 
     return res.json({
-      data: data || [],
+      data: await stock.decorate(pool, company_id, await decorateUnitHistory(pool,company_id,data || [])),
+      stock_model: stock.isEnabled(company_id) ? 'batches' : 'legacy',
+      inventory_v1_enabled: stock.isEnabled(company_id),
       page: Number(page),
       pageSize: limit,
       total: count ?? (data?.length || 0),
@@ -94,6 +108,9 @@ const addProduct = async (req, res, next) => {
       acquisition_date,
     } = req.body;
 
+    guardStockFields(req);
+    if (!validUnit(unit)) throw stock.fail('Unidad base inválida.',400);
+
     // Regla de negocio simple: available ≤ total si ambos vienen
     if (
       total_quantity != null &&
@@ -109,23 +126,24 @@ const addProduct = async (req, res, next) => {
     const { data, error } = await supabase
       .from('products')
       .insert([{
+        ...Object.fromEntries(metadata.filter(k=>Object.hasOwn(req.body,k)).map(k=>[k,req.body[k]])),
         company_id, // Multi-tenancy injection
         name,
         category,
-        unit,
+        unit: normalizeUnit(unit),
         expiration_date,
         cost,
         price,
-        total_quantity,
-        available_quantity,
+        total_quantity: total_quantity ?? 0,
+        available_quantity: available_quantity ?? 0,
         acquisition_date,
       }])
-      .select('id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at')
+      .select('*')
       .single();
 
     if (error) throw error;
 
-    return res.status(201).json({ product: data });
+    return res.status(201).json({ product: (await stock.decorate(pool, company_id, await decorateUnitHistory(pool,company_id,[data])))[0] });
   } catch (err) {
     next(err);
   }
@@ -145,11 +163,13 @@ const editProduct = async (req, res, next) => {
 
     const { id } = req.params;
 
+    guardStockFields(req);
+    if (req.body.unit && !validUnit(req.body.unit)) throw stock.fail('Unidad base inválida.',400);
     // Armamos el objeto de update solo con campos definidos
     const allowed = [
       'name', 'category', 'unit', 'expiration_date',
       'cost', 'price', 'total_quantity', 'available_quantity', 'acquisition_date',
-      'enabled'
+      ...metadata
     ];
     const updateData = {};
     for (const k of allowed) {
@@ -170,15 +190,17 @@ const editProduct = async (req, res, next) => {
       });
     }
 
-    const { data, error } = await supabase
-      .from('products')
-      .update(updateData)
-      .eq('id', id)
-      .eq('company_id', company_id) // Security check: only own products
-      .select('id,name,category,unit,price,cost,total_quantity,available_quantity,expiration_date,acquisition_date,enabled,created_at')
-      .maybeSingle();
-
-    if (error) throw error;
+    const data = await stock.transaction(pool, async client => {
+      const {rows}=await client.query('SELECT * FROM products WHERE id=$1 AND company_id=$2 FOR UPDATE',[id,company_id]);
+      const current=rows[0];
+      if(!current)return null;
+      if(Object.hasOwn(updateData,'unit')) updateData.unit=await resolveUnitChange(client,company_id,current,updateData.unit);
+      const fields=Object.keys(updateData);
+      if(!fields.length)return current;
+      // Field names come only from the server allowlist above.
+      const result=await client.query(`UPDATE products SET ${fields.map((key,index)=>'"'+key+'"=$'+(index+1)).join(',')} WHERE id=$${fields.length+1} AND company_id=$${fields.length+2} RETURNING *`,[...fields.map(key=>updateData[key]),id,company_id]);
+      return result.rows[0];
+    });
 
     if (!data) {
       return res.status(404).json({ error: 'NotFound', message: 'Producto no encontrado' });
@@ -190,7 +212,7 @@ const editProduct = async (req, res, next) => {
       // Si el nuevo stock es <= 5, notificamos.
       // Nota: Aquí no verificamos el "anterior" para evitar doble fetch, 
       // asumimos que si lo editan a un valor bajo es relevante saberlo.
-      if (newQty <= 5) {
+      if (stock.isLowStock({...data, available_quantity:newQty})) {
         try {
           const { data: recipients } = await supabase
             .from('users')
@@ -218,7 +240,7 @@ const editProduct = async (req, res, next) => {
       }
     }
 
-    return res.json({ product: data });
+    return res.json({ product: (await stock.decorate(pool, company_id, await decorateUnitHistory(pool,company_id,[data])))[0] });
   } catch (err) {
     next(err);
   }
@@ -239,6 +261,7 @@ const addStockToProduct = async (req, res, next) => {
     }
 
     const { id } = req.params;
+    if (stock.isEnabled(company_id)) throw stock.fail('Usá Registrar ingreso para agregar una partida.');
     const quantity = Number(req.body.quantity);
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -283,6 +306,10 @@ const disableProduct = async (req, res, next) => {
 
     const { id } = req.params;
 
+    if(stock.isEnabled(company_id)) {
+      return res.json(await stock.transaction(pool,c=>stock.disableStockProduct(c,company_id,id)));
+    }
+
     const { data, error } = await supabase
       .from('products')
       .update({ enabled: false })
@@ -312,4 +339,3 @@ module.exports = {
   addStockToProduct,
   disableProduct
 };
-

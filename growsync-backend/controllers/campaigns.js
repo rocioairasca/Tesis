@@ -158,7 +158,7 @@ exports.list = async (req, res, next) => {
           ) AS references_count
       ) refs ON TRUE
       WHERE ${where.join(' AND ')}
-      ORDER BY c.status ASC, c.start_date DESC, c.name ASC;
+      ORDER BY c.start_date DESC NULLS LAST, c.id ASC;
       `,
       params
     );

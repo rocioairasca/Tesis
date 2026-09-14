@@ -1,0 +1,125 @@
+{
+  "migration": "applied",
+  "sha256": "3a1c98760cde7771a0f58cd6be777d6c6aad3a3933928bd82706d1027717e56a",
+  "started_at": "2026-09-09T18:00:32.841Z",
+  "columns_before": [],
+  "before": {
+    "harvest_records": {
+      "count": 22,
+      "fingerprint": "ad8f7c28fa93e3fd6a471ada628abc61"
+    },
+    "harvest_crop_assignments": {
+      "count": 16,
+      "fingerprint": "0a3e3fb3ad02a913053bc42230be5d61"
+    },
+    "crop_assignments": {
+      "count": 20,
+      "fingerprint": "bd94a14ff65da65a034f3227ea1604c2"
+    },
+    "harvest_cycle_closures": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "lots": {
+      "count": 29,
+      "fingerprint": "74039158366f407580ccd5e0f7ebc0fa"
+    },
+    "sub_lots": {
+      "count": 22,
+      "fingerprint": "4a3825605124fc965ebc5129162783c8"
+    }
+  },
+  "existing_ids": [
+    "0aab18cc-6bfc-4ee4-9410-642a0696a84b",
+    "18a8bac3-ac82-4e42-8778-bb8f1dc79bde",
+    "2286c8ee-c78a-47f9-a08e-5aa7980deffe",
+    "3d24cb65-f39a-4c22-9b08-a06ac3795bbb",
+    "3ef69204-16b1-413a-a3fb-960057767b9a",
+    "4acaadf1-9b65-42b2-b7d6-bdb9aaa4aa08",
+    "616dc025-7a0f-465a-aaf5-ad214eda5cca",
+    "6348a48e-0b30-4206-be99-e4d2886dce22",
+    "6e8388a5-899f-4079-b2a4-d9ebaa2c9de5",
+    "70c95784-312e-4827-aa59-d86562738a5a",
+    "77c0a72f-d622-466c-b094-5d192cca72fd",
+    "78e452d6-51e3-47f3-947d-09eb50866573",
+    "7f95f333-a1ae-4b2e-8e00-424b66ab7311",
+    "821539c5-9bb3-407c-a98d-47e1d139e085",
+    "88bbe2f7-6762-4906-81de-72216e29dc4e",
+    "aacf2ea4-8243-4f9b-8f3d-513da4f68cb8",
+    "b092ca8d-ce83-499d-8aa8-06eaa7c65775",
+    "e63b29ec-6a2c-4d3b-85b0-c5e3bf55db1c",
+    "ecd0461d-1da5-4fa3-98da-a2e3549f14f3",
+    "f68e8919-0801-4cc9-9e1c-b395f278b94c",
+    "fce3ddcf-a570-4660-811a-07e9f0736c3e",
+    "fffaa1fb-f30e-49b3-bfda-febd6d8c9d05"
+  ],
+  "columns_after": [
+    {
+      "column_name": "registered_retroactively",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "registration_timezone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "retroactive_notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "retroactive_reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "harvest_registration_trace_check",
+      "convalidated": true,
+      "definition": "CHECK ((((registered_retroactively IS NULL) AND (retroactive_reason IS NULL) AND (retroactive_notes IS NULL) AND (registration_timezone IS NULL)) OR ((registered_retroactively IS FALSE) AND (retroactive_reason IS NULL) AND (retroactive_notes IS NULL) AND (registration_timezone IS NOT NULL)) OR ((registered_retroactively IS TRUE) AND (registration_timezone IS NOT NULL) AND (retroactive_reason IS NOT NULL) AND (retroactive_reason = ANY (ARRAY['pending_record'::text, 'historical_regularization'::text, 'information_correction'::text, 'other'::text])) AND ((retroactive_reason <> 'other'::text) OR (COALESCE(length(btrim(retroactive_notes)), 0) > 0)))))"
+    },
+    {
+      "conname": "harvest_retroactive_notes_length",
+      "convalidated": true,
+      "definition": "CHECK ((length(retroactive_notes) <= 2000))"
+    }
+  ],
+  "after": {
+    "harvest_records": {
+      "count": 22,
+      "fingerprint": "ad8f7c28fa93e3fd6a471ada628abc61"
+    },
+    "harvest_crop_assignments": {
+      "count": 16,
+      "fingerprint": "0a3e3fb3ad02a913053bc42230be5d61"
+    },
+    "crop_assignments": {
+      "count": 20,
+      "fingerprint": "bd94a14ff65da65a034f3227ea1604c2"
+    },
+    "harvest_cycle_closures": {
+      "count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "lots": {
+      "count": 29,
+      "fingerprint": "74039158366f407580ccd5e0f7ebc0fa"
+    },
+    "sub_lots": {
+      "count": 22,
+      "fingerprint": "4a3825605124fc965ebc5129162783c8"
+    }
+  },
+  "legacy": {
+    "existing_count": 22,
+    "all_trace_null": 22
+  },
+  "result": "OK"
+}

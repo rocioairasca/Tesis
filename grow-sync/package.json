@@ -12,6 +12,7 @@
     "@geoman-io/leaflet-geoman-free": "^2.19.3",
     "@hugeicons/core-free-icons": "^4.1.4",
     "@hugeicons/react": "^1.1.6",
+    "@phosphor-icons/react": "^2.1.10",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",

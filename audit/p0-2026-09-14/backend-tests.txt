@@ -1,0 +1,597 @@
+TAP version 13
+# Subtest: hectares round to hundredths, including decimal ties; invalid values fail
+ok 1 - hectares round to hundredths, including decimal ties; invalid values fail
+  ---
+  duration_ms: 5.7612
+  ...
+# Subtest: 20 + 30 + 18.29 closes 68.29; partial journeys stay open
+ok 2 - 20 + 30 + 18.29 closes 68.29; partial journeys stay open
+  ---
+  duration_ms: 1.1731
+  ...
+# Subtest: out-of-order entries close on the chronological last journey, disabled entries do not count
+ok 3 - out-of-order entries close on the chronological last journey, disabled entries do not count
+  ---
+  duration_ms: 0.7712
+  ...
+# Subtest: allocation rejects excess, duplicate IDs, ambiguous multi-cycle distribution and legacy closure
+ok 4 - allocation rejects excess, duplicate IDs, ambiguous multi-cycle distribution and legacy closure
+  ---
+  duration_ms: 4.0589
+  ...
+# Subtest: manual finalization accepts weather, requires explanation for other
+ok 5 - manual finalization accepts weather, requires explanation for other
+  ---
+  duration_ms: 0.7904
+  ...
+# Subtest: current, historical and strict retroactive reason/description validation
+ok 6 - current, historical and strict retroactive reason/description validation
+  ---
+  duration_ms: 237.4622
+  ...
+# Subtest: local today is evaluated by server in the supplied IANA zone, not server timezone
+ok 7 - local today is evaluated by server in the supplied IANA zone, not server timezone
+  ---
+  duration_ms: 5.9762
+  ...
+# Subtest: Q01: stock=5, usage=2, edit to 20 rejects 409 and rolls back all state
+ok 8 - Q01: stock=5, usage=2, edit to 20 rejects 409 and rolls back all state
+  ---
+  duration_ms: 7690.0914
+  ...
+# Subtest: Q01: insufficient replacement product cannot leave refund behind
+ok 9 - Q01: insufficient replacement product cannot leave refund behind
+  ---
+  duration_ms: 45.1614
+  ...
+# Subtest: Q01: unit mismatch leaves complete state unchanged
+ok 10 - Q01: unit mismatch leaves complete state unchanged
+  ---
+  duration_ms: 57.3728
+  ...
+# Subtest: Q01: foreign lot leaves complete state unchanged
+ok 11 - Q01: foreign lot leaves complete state unchanged
+  ---
+  duration_ms: 58.8349
+  ...
+# Subtest: Q01: foreign product leaves complete state unchanged
+ok 12 - Q01: foreign product leaves complete state unchanged
+  ---
+  duration_ms: 34.1423
+  ...
+# Subtest: Q01: foreign responsible leaves complete state unchanged
+ok 13 - Q01: foreign responsible leaves complete state unchanged
+  ---
+  duration_ms: 52.5444
+  ...
+# Subtest: Q01: invalid amount leaves complete state unchanged
+ok 14 - Q01: invalid amount leaves complete state unchanged
+  ---
+  duration_ms: 42.9308
+  ...
+# Subtest: Q01: rollback after injected /UPDATE products/
+ok 15 - Q01: rollback after injected /UPDATE products/
+  ---
+  duration_ms: 41.3058
+  ...
+# Subtest: Q01: rollback after injected /DELETE FROM usage_lots/
+ok 16 - Q01: rollback after injected /DELETE FROM usage_lots/
+  ---
+  duration_ms: 47.4664
+  ...
+# Subtest: Q01: rollback after injected /INSERT INTO usage_lots/
+ok 17 - Q01: rollback after injected /INSERT INTO usage_lots/
+  ---
+  duration_ms: 64.2622
+  ...
+# Subtest: Q01: rollback after injected /UPDATE usage_records/
+ok 18 - Q01: rollback after injected /UPDATE usage_records/
+  ---
+  duration_ms: 64.4355
+  ...
+# Subtest: Q01: rollback after injected /SELECT DISTINCT crop_id/
+ok 19 - Q01: rollback after injected /SELECT DISTINCT crop_id/
+  ---
+  duration_ms: 59.0069
+  ...
+# Subtest: Q01: product + unit + quantity + lots commit together; identical retry has zero delta
+ok 20 - Q01: product + unit + quantity + lots commit together; identical retry has zero delta
+  ---
+  duration_ms: 109.6116
+  ...
+# Subtest: Q02: disable persistence failure and retries leave exact state
+ok 21 - Q02: disable persistence failure and retries leave exact state
+  ---
+  duration_ms: 70.5026
+  ...
+# Subtest: Q02: restore persistence failure and retries leave exact state
+ok 22 - Q02: restore persistence failure and retries leave exact state
+  ---
+  duration_ms: 100.068
+  ...
+# Subtest: Q02: restore with insufficient stock rolls back enabled and quantity
+ok 23 - Q02: restore with insufficient stock rolls back enabled and quantity
+  ---
+  duration_ms: 42.8873
+  ...
+# Subtest: Q02: simultaneous double submit is serialized, one transition and one replay
+ok 24 - Q02: simultaneous double submit is serialized, one transition and one replay
+  ---
+  duration_ms: 45.0754
+  ...
+# Subtest: Q03: another company cannot edit, disable or restore a Usage
+ok 25 - Q03: another company cannot edit, disable or restore a Usage
+  ---
+  duration_ms: 33.816
+  ...
+# Subtest: automatic Usage remains protected; disabled Usage cannot be edited
+ok 26 - automatic Usage remains protected; disabled Usage cannot be edited
+  ---
+  duration_ms: 31.3805
+  ...
+# Subtest: Q01 original probe through controller: 409, usage 2 and stock 5
+ok 27 - Q01 original probe through controller: 409, usage 2 and stock 5
+  ---
+  duration_ms: 42.0347
+  ...
+# {"case":"LEGACY_EDIT_INSUFFICIENT","status":409,"usage":2,"stock":5}
+# Subtest: Q02 original probe through controller: two storage failures never reintegrate stock
+ok 28 - Q02 original probe through controller: two storage failures never reintegrate stock
+  ---
+  duration_ms: 45.8245
+  ...
+# {"case":"LEGACY_DISABLE_RETRY_AFTER_FAILURE","usageEnabled":true,"stock":5}
+# Subtest: post-commit notification failure does not turn a committed mutation into a failed request
+ok 29 - post-commit notification failure does not turn a committed mutation into a failed request
+  ---
+  duration_ms: 29.3145
+  ...
+# Subtest: V1 dispatch and edit/enable rejection remain unchanged
+ok 30 - V1 dispatch and edit/enable rejection remain unchanged
+  ---
+  duration_ms: 25.9719
+  ...
+# Subtest: Q03 harvestRecords GET /stats/filters: role/custom permission matrix
+ok 31 - Q03 harvestRecords GET /stats/filters: role/custom permission matrix
+  ---
+  duration_ms: 6.8323
+  ...
+# Subtest: Q03 harvestRecords GET /stats/summary: role/custom permission matrix
+ok 32 - Q03 harvestRecords GET /stats/summary: role/custom permission matrix
+  ---
+  duration_ms: 0.6209
+  ...
+# Subtest: Q03 harvestRecords GET /stats/by-crop: role/custom permission matrix
+ok 33 - Q03 harvestRecords GET /stats/by-crop: role/custom permission matrix
+  ---
+  duration_ms: 1.0054
+  ...
+# Subtest: Q03 harvestRecords GET /stats/by-campaign: role/custom permission matrix
+ok 34 - Q03 harvestRecords GET /stats/by-campaign: role/custom permission matrix
+  ---
+  duration_ms: 0.596
+  ...
+# Subtest: Q03 harvestRecords GET /: role/custom permission matrix
+ok 35 - Q03 harvestRecords GET /: role/custom permission matrix
+  ---
+  duration_ms: 0.7467
+  ...
+# Subtest: Q03 harvestRecords GET /:id: role/custom permission matrix
+ok 36 - Q03 harvestRecords GET /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.4641
+  ...
+# Subtest: Q03 harvestRecords GET /disabled: role/custom permission matrix
+ok 37 - Q03 harvestRecords GET /disabled: role/custom permission matrix
+  ---
+  duration_ms: 0.6285
+  ...
+# Subtest: Q03 harvestRecords POST /: role/custom permission matrix
+ok 38 - Q03 harvestRecords POST /: role/custom permission matrix
+  ---
+  duration_ms: 1.2753
+  ...
+# {"case":"HARVEST_EMPLOYEE_NO_PERMISSION_REACHES_CREATE","status":403,"controllerReached":false}
+# Subtest: Q03 harvestRecords PUT /:id: role/custom permission matrix
+ok 39 - Q03 harvestRecords PUT /:id: role/custom permission matrix
+  ---
+  duration_ms: 1.3957
+  ...
+# Subtest: Q03 harvestRecords PATCH /:id/disable: role/custom permission matrix
+ok 40 - Q03 harvestRecords PATCH /:id/disable: role/custom permission matrix
+  ---
+  duration_ms: 1.2308
+  ...
+# Subtest: Q03 harvestRecords PATCH /:id/enable: role/custom permission matrix
+ok 41 - Q03 harvestRecords PATCH /:id/enable: role/custom permission matrix
+  ---
+  duration_ms: 0.6901
+  ...
+# Subtest: Q03 harvestRecords GET /context: role/custom permission matrix
+ok 42 - Q03 harvestRecords GET /context: role/custom permission matrix
+  ---
+  duration_ms: 1.4359
+  ...
+# Subtest: Q03 harvestRecords POST /cycles/:assignmentId/finalize: role/custom permission matrix
+ok 43 - Q03 harvestRecords POST /cycles/:assignmentId/finalize: role/custom permission matrix
+  ---
+  duration_ms: 0.5454
+  ...
+# Subtest: Q03 usage GET /: role/custom permission matrix
+ok 44 - Q03 usage GET /: role/custom permission matrix
+  ---
+  duration_ms: 0.9828
+  ...
+# Subtest: Q03 usage GET /disabled: role/custom permission matrix
+ok 45 - Q03 usage GET /disabled: role/custom permission matrix
+  ---
+  duration_ms: 1.6124
+  ...
+# Subtest: Q03 usage POST /: role/custom permission matrix
+ok 46 - Q03 usage POST /: role/custom permission matrix
+  ---
+  duration_ms: 0.9949
+  ...
+# Subtest: Q03 usage PUT /:id: role/custom permission matrix
+ok 47 - Q03 usage PUT /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.4813
+  ...
+# Subtest: Q03 usage DELETE /:id: role/custom permission matrix
+ok 48 - Q03 usage DELETE /:id: role/custom permission matrix
+  ---
+  duration_ms: 1.4104
+  ...
+# Subtest: Q03 usage PUT /enable/:id: role/custom permission matrix
+ok 49 - Q03 usage PUT /enable/:id: role/custom permission matrix
+  ---
+  duration_ms: 0.5385
+  ...
+# Subtest: Q03 vehicle GET /: role/custom permission matrix
+ok 50 - Q03 vehicle GET /: role/custom permission matrix
+  ---
+  duration_ms: 1.0134
+  ...
+# Subtest: Q03 vehicle GET /:id: role/custom permission matrix
+ok 51 - Q03 vehicle GET /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.5374
+  ...
+# Subtest: Q03 vehicle GET /disabled: role/custom permission matrix
+ok 52 - Q03 vehicle GET /disabled: role/custom permission matrix
+  ---
+  duration_ms: 0.8338
+  ...
+# Subtest: Q03 vehicle POST /: role/custom permission matrix
+ok 53 - Q03 vehicle POST /: role/custom permission matrix
+  ---
+  duration_ms: 1.2095
+  ...
+# Subtest: Q03 vehicle PATCH /:id: role/custom permission matrix
+ok 54 - Q03 vehicle PATCH /:id: role/custom permission matrix
+  ---
+  duration_ms: 1.3915
+  ...
+# Subtest: Q03 vehicle DELETE /:id: role/custom permission matrix
+ok 55 - Q03 vehicle DELETE /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.4156
+  ...
+# Subtest: Q03 vehicle PUT /enable/:id: role/custom permission matrix
+ok 56 - Q03 vehicle PUT /enable/:id: role/custom permission matrix
+  ---
+  duration_ms: 0.4091
+  ...
+# Subtest: Q03 planning GET /: role/custom permission matrix
+ok 57 - Q03 planning GET /: role/custom permission matrix
+  ---
+  duration_ms: 0.7496
+  ...
+# Subtest: Q03 planning GET /:id: role/custom permission matrix
+ok 58 - Q03 planning GET /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.5336
+  ...
+# Subtest: Q03 planning GET /disabled: role/custom permission matrix
+ok 59 - Q03 planning GET /disabled: role/custom permission matrix
+  ---
+  duration_ms: 0.4223
+  ...
+# Subtest: Q03 planning POST /: role/custom permission matrix
+ok 60 - Q03 planning POST /: role/custom permission matrix
+  ---
+  duration_ms: 0.2842
+  ...
+# Subtest: Q03 planning PATCH /:id: role/custom permission matrix
+ok 61 - Q03 planning PATCH /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.3321
+  ...
+# Subtest: Q03 planning POST /:id/complete-work: role/custom permission matrix
+ok 62 - Q03 planning POST /:id/complete-work: role/custom permission matrix
+  ---
+  duration_ms: 0.9104
+  ...
+# Subtest: Q03 planning POST /:id/complete-sowing: role/custom permission matrix
+ok 63 - Q03 planning POST /:id/complete-sowing: role/custom permission matrix
+  ---
+  duration_ms: 0.6988
+  ...
+# Subtest: Q03 planning PUT /enable/:id: role/custom permission matrix
+ok 64 - Q03 planning PUT /enable/:id: role/custom permission matrix
+  ---
+  duration_ms: 0.5839
+  ...
+# Subtest: Q03 planning DELETE /:id: role/custom permission matrix
+ok 65 - Q03 planning DELETE /:id: role/custom permission matrix
+  ---
+  duration_ms: 0.4524
+  ...
+# Subtest: Q03 planning POST /register-completed: role/custom permission matrix
+ok 66 - Q03 planning POST /register-completed: role/custom permission matrix
+  ---
+  duration_ms: 0.2402
+  ...
+# Subtest: Q03 harvest context also accepts edit alone
+ok 67 - Q03 harvest context also accepts edit alone
+  ---
+  duration_ms: 0.2423
+  ...
+# Subtest: Q03 harvestRecords {"includeDisabled":"true"} cannot bypass view_disabled
+ok 68 - Q03 harvestRecords {"includeDisabled":"true"} cannot bypass view_disabled
+  ---
+  duration_ms: 0.2893
+  ...
+# Subtest: Q03 harvestRecords {"onlyDisabled":"true"} cannot bypass view_disabled
+ok 69 - Q03 harvestRecords {"onlyDisabled":"true"} cannot bypass view_disabled
+  ---
+  duration_ms: 0.1824
+  ...
+# Subtest: Q03 usage {"includeDisabled":"true"} cannot bypass view_disabled
+ok 70 - Q03 usage {"includeDisabled":"true"} cannot bypass view_disabled
+  ---
+  duration_ms: 0.1768
+  ...
+# Subtest: Q03 planning {"includeDisabled":"true"} cannot bypass view_disabled
+ok 71 - Q03 planning {"includeDisabled":"true"} cannot bypass view_disabled
+  ---
+  duration_ms: 0.1922
+  ...
+# Subtest: Q03 vehicle {"includeDisabled":"true"} cannot bypass view_disabled
+ok 72 - Q03 vehicle {"includeDisabled":"true"} cannot bypass view_disabled
+  ---
+  duration_ms: 0.4003
+  ...
+# Subtest: Q03 tenant middleware rejects missing/invalid company without reaching private routes
+ok 73 - Q03 tenant middleware rejects missing/invalid company without reaching private routes
+  ---
+  duration_ms: 3.0657
+  ...
+# Subtest: Q03 harvest mutations scope the locked record to the authenticated company
+ok 74 - Q03 harvest mutations scope the locked record to the authenticated company
+  ---
+  duration_ms: 23.3486
+  ...
+# Subtest: Q03 harvestRecords: disabled detail requires view_disabled and foreign record returns 404
+ok 75 - Q03 harvestRecords: disabled detail requires view_disabled and foreign record returns 404
+  ---
+  duration_ms: 10.3784
+  ...
+# Subtest: Q03 vehicle: disabled detail requires view_disabled and foreign record returns 404
+ok 76 - Q03 vehicle: disabled detail requires view_disabled and foreign record returns 404
+  ---
+  duration_ms: 7.849
+  ...
+# Subtest: Q03 planning: disabled detail requires view_disabled and foreign record returns 404
+ok 77 - Q03 planning: disabled detail requires view_disabled and foreign record returns 404
+  ---
+  duration_ms: 14.7018
+  ...
+# Subtest: una partida, saldo exacto y legacy no se sobrescribe
+ok 78 - una partida, saldo exacto y legacy no se sobrescribe
+  ---
+  duration_ms: 7817.8399
+  ...
+# Subtest: varias partidas: FEFO, desempate ingreso, NULL al final, vencidas y disabled fuera
+ok 79 - varias partidas: FEFO, desempate ingreso, NULL al final, vencidas y disabled fuera
+  ---
+  duration_ms: 297.5424
+  ...
+# Subtest: insuficiente revierte todo y no permite saldo negativo
+ok 80 - insuficiente revierte todo y no permite saldo negativo
+  ---
+  duration_ms: 94.9254
+  ...
+# Subtest: idempotencia consumo y conflicto de payload
+ok 81 - idempotencia consumo y conflicto de payload
+  ---
+  duration_ms: 113.7558
+  ...
+# Subtest: ingreso idempotente conserva una partida y rechaza cambio de fecha/precio
+ok 82 - ingreso idempotente conserva una partida y rechaza cambio de fecha/precio
+  ---
+  duration_ms: 53.5541
+  ...
+# Subtest: fallo en segundo movimiento revierte también el primer débito
+ok 83 - fallo en segundo movimiento revierte también el primer débito
+  ---
+  duration_ms: 90.1838
+  ...
+# Subtest: reversión devuelve a originales aunque ahora estén bloqueadas; doble reversión impedida
+ok 84 - reversión devuelve a originales aunque ahora estén bloqueadas; doble reversión impedida
+  ---
+  duration_ms: 142.9232
+  ...
+# Subtest: movimientos inmutables y FK de empresa/unidad protegidas
+ok 85 - movimientos inmutables y FK de empresa/unidad protegidas
+  ---
+  duration_ms: 95.2813
+  ...
+# Subtest: reversión de operación ajena no es accesible
+ok 86 - reversión de operación ajena no es accesible
+  ---
+  duration_ms: 84.8787
+  ...
+# Subtest: manual Usage integra creación/lotes/descuento en la misma transacción e idempotencia
+ok 87 - manual Usage integra creación/lotes/descuento en la misma transacción e idempotencia
+  ---
+  duration_ms: 143.4529
+  ...
+# Subtest: fallo de Usage o lote de otra empresa revierte registro, lotes y movimientos
+ok 88 - fallo de Usage o lote de otra empresa revierte registro, lotes y movimientos
+  ---
+  duration_ms: 54.6967
+  ...
+# Subtest: Planning invoca mismo FEFO, reparto y completion sin tocar saldo legacy
+ok 89 - Planning invoca mismo FEFO, reparto y completion sin tocar saldo legacy
+  ---
+  duration_ms: 100.7572
+  ...
+# Subtest: Planning insuficiente revierte efectos previos de la transacción
+ok 90 - Planning insuficiente revierte efectos previos de la transacción
+  ---
+  duration_ms: 31.9361
+  ...
+# Subtest: apertura excluye Finesse, disabled, revisión, sin aprobación y otra empresa
+ok 91 - apertura excluye Finesse, disabled, revisión, sin aprobación y otra empresa
+  ---
+  duration_ms: 1.375
+  ...
+# Subtest: apertura explícita usa disponible aprobado, no total ni usos históricos
+ok 92 - apertura explícita usa disponible aprobado, no total ni usos históricos
+  ---
+  duration_ms: 32.2226
+  ...
+# Subtest: purchase y return requieren fecha, legacy y adjustment permiten NULL u omisión
+ok 93 - purchase y return requieren fecha, legacy y adjustment permiten NULL u omisión
+  ---
+  duration_ms: 149.0648
+  ...
+# Subtest: fechas suministradas siguen siendo válidas y no futuras para todos los orígenes
+ok 94 - fechas suministradas siguen siendo válidas y no futuras para todos los orígenes
+  ---
+  duration_ms: 42.0448
+  ...
+# Subtest: CHECK de DB impide NULL en compras/devoluciones y lo admite en legacy/ajustes
+ok 95 - CHECK de DB impide NULL en compras/devoluciones y lo admite en legacy/ajustes
+  ---
+  duration_ms: 17.6137
+  ...
+# Subtest: FEFO prioriza vencimiento, desempata fecha conocida antes de NULL y finalmente id
+ok 96 - FEFO prioriza vencimiento, desempata fecha conocida antes de NULL y finalmente id
+  ---
+  duration_ms: 142.9382
+  ...
+# Subtest: legacy conserva solo la fecha física verificada por producto y no exige fecha de corrida
+ok 97 - legacy conserva solo la fecha física verificada por producto y no exige fecha de corrida
+  ---
+  duration_ms: 56.2091
+  ...
+# Subtest: idempotencia normaliza fecha omitida y NULL, pero detecta fecha distinta
+ok 98 - idempotencia normaliza fecha omitida y NULL, pero detecta fecha distinta
+  ---
+  duration_ms: 29.5569
+  ...
+# Subtest: desactivado conserva legacy y activado sin partidas expone cero; lectura deriva partidas
+ok 99 - desactivado conserva legacy y activado sin partidas expone cero; lectura deriva partidas
+  ---
+  duration_ms: 38.8969
+  ...
+# Subtest: precisión, fechas inválidas y umbral unificado
+ok 100 - precisión, fechas inválidas y umbral unificado
+  ---
+  duration_ms: 1.5781
+  ...
+# Subtest: ajustes positivos auditados, NULL, replay y conflictos
+ok 101 - ajustes positivos auditados, NULL, replay y conflictos
+  ---
+  duration_ms: 66.403
+  ...
+# Subtest: ajuste negativo FEFO incluye vencidas, reparte y excluye deshabilitadas
+ok 102 - ajuste negativo FEFO incluye vencidas, reparte y excluye deshabilitadas
+  ---
+  duration_ms: 150.0954
+  ...
+# Subtest: ajustes validan cantidad, motivo, clave, activación y aislamiento
+ok 103 - ajustes validan cantidad, motivo, clave, activación y aislamiento
+  ---
+  duration_ms: 104.1138
+  ...
+# Subtest: V1 bloquea deshabilitar con stock y conserva partidas al deshabilitar saldo cero
+ok 104 - V1 bloquea deshabilitar con stock y conserva partidas al deshabilitar saldo cero
+  ---
+  duration_ms: 102.2192
+  ...
+# Error al crear registro de uso: Error: Producto no disponible en esta empresa.
+#     at Object.fail (C:\\Proyectos\\Tesis\\growsync-backend\\services\\stock.js:8:55)
+#     at validateUsageReferences (evalmachine.<anonymous>:543:36)
+#     at async Object.createUsage (evalmachine.<anonymous>:355:20)
+#     at async TestContext.<anonymous> (C:\\Proyectos\\Tesis\\growsync-backend\\tests\\stockPermissions.test.js:79:3)
+#     at async Test.run (node:internal/test_runner/test:797:9)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:526:7) {
+#   status: 404
+# }
+# Subtest: API exige fecha en purchase/return y deriva ajustes al endpoint con motivo
+ok 105 - API exige fecha en purchase/return y deriva ajustes al endpoint con motivo
+  ---
+  duration_ms: 46.1513
+  ...
+# Subtest: includeDisabled interpreta false/0 y valida entradas inválidas
+ok 106 - includeDisabled interpreta false/0 y valida entradas inválidas
+  ---
+  duration_ms: 4.5998
+  ...
+# Subtest: disabled list y enable restringen company_id y rechazan empresa ausente
+ok 107 - disabled list y enable restringen company_id y rechazan empresa ausente
+  ---
+  duration_ms: 5.1919
+  ...
+# Subtest: listado general exige permiso extra y false textual sigue filtrando enabled
+ok 108 - listado general exige permiso extra y false textual sigue filtrando enabled
+  ---
+  duration_ms: 7.0968
+  ...
+# Subtest: modelo activo rechaza saldo directo y toggle por edición
+ok 109 - modelo activo rechaza saldo directo y toggle por edición
+  ---
+  duration_ms: 6.1087
+  ...
+# Subtest: rutas usan inventory.edit y permisos explícitos en servicios nuevos
+ok 110 - rutas usan inventory.edit y permisos explícitos en servicios nuevos
+  ---
+  duration_ms: 1.0419
+  ...
+# Subtest: Usage legacy valida producto/empresa antes de insertar
+ok 111 - Usage legacy valida producto/empresa antes de insertar
+  ---
+  duration_ms: 26.2313
+  ...
+# Subtest: listado vacío informa flag booleano de la empresa sin exponer configuración
+ok 112 - listado vacío informa flag booleano de la empresa sin exponer configuración
+  ---
+  duration_ms: 4.8389
+  ...
+# Subtest: crear identidad sin activar partidas admite metadatos y saldo inicial cero
+ok 113 - crear identidad sin activar partidas admite metadatos y saldo inicial cero
+  ---
+  duration_ms: 4.6053
+  ...
+# Subtest: endpoints de historial e ingreso apagados no consultan ni escriben DB
+ok 114 - endpoints de historial e ingreso apagados no consultan ni escriben DB
+  ---
+  duration_ms: 12.1399
+  ...
+# Subtest: endpoint de ajuste valida motivo y devuelve producto actualizado
+ok 115 - endpoint de ajuste valida motivo y devuelve producto actualizado
+  ---
+  duration_ms: 13.0482
+  ...
+1..115
+# tests 115
+# suites 0
+# pass 115
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11065.9374

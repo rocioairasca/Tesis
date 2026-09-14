@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import {quantityLabel as formatQuantity,unitLabel,normalizeUnit} from '../../utils/inventoryUnits';
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
   Dropdown, Space, Popconfirm, Row, Col, notification, Tooltip, Descriptions, List, Tag
@@ -44,7 +45,6 @@ const Usage = () => {
   const formatArea = (value) => value == null
     ? "-"
     : `${Number(value || 0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ha`;
-  const formatQuantity = (value, unit) => `${Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })} ${unit || ""}`.trim();
   const productName = (usage) => usage?.products?.name || products.find((p) => p.id === usage?.product_id)?.name || "Producto";
   const lotNames = (usage) => {
     if (Array.isArray(usage?.lot_names) && usage.lot_names.length) return usage.lot_names.join(", ");
@@ -167,7 +167,7 @@ const Usage = () => {
       form.setFieldsValue({
         product_id: usage.product_id,
         amount_used: usage.amount_used,
-        unit: usage.unit,
+        unit: normalizeUnit(usage.unit),
         lot_ids: usage.usage_lots ? usage.usage_lots.map((l) => l.lot_id) : [],
         total_area: usage.total_area,
         previous_crop: usage.previous_crop,
@@ -200,6 +200,7 @@ const Usage = () => {
   const userId = storedUser?.id;
 
   // ---------- submit / delete ----------
+  const createRequest = useRef(null);
   const handleSubmit = async (values) => {
     try {
       const payload = {
@@ -218,7 +219,10 @@ const Usage = () => {
         await api.put(`/usages/${getId(editingUsage)}`, payload);
         notification.success({ message: "Registro de uso actualizado exitosamente" });
       } else {
-        await api.post("/usages", payload);
+        const serialized = JSON.stringify(payload);
+        if (createRequest.current?.payload !== serialized) createRequest.current = {payload:serialized,key:crypto.randomUUID()};
+        await api.post('/usages', payload, {headers:{'Idempotency-Key':createRequest.current.key}});
+        createRequest.current = null;
         notification.success({ message: "Registro de uso creado exitosamente" });
       }
 
@@ -246,7 +250,7 @@ const Usage = () => {
     const p = products.find((x) => x.id === productId) || null;
     setSelectedProduct(p);
     form.setFieldsValue({
-      unit: p?.unit || "",
+      unit: normalizeUnit(p?.unit) || "",
     });
   };
 
@@ -478,7 +482,7 @@ const Usage = () => {
             <label style={{ fontWeight: 500 }}>Cantidad Usada</label>
             {selectedProduct && (
               <div style={{ fontSize: 13, color: "#888" }}>
-                Disponible: <strong>{selectedProduct.available_quantity} {selectedProduct.unit}</strong>
+                Disponible: <strong>{formatQuantity(selectedProduct.available_quantity,selectedProduct.unit)}</strong>
               </div>
             )}
           </div>
@@ -497,15 +501,16 @@ const Usage = () => {
               },
             ]}
           >
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <InputNumber min={0} precision={6} decimalSeparator="," style={{ width: "100%" }} />
           </Form.Item>
 
+          <Form.Item label="Unidad base"><Input readOnly value={unitLabel(selectedProduct?.unit)} /></Form.Item>
           <Form.Item
             name="unit"
-            label="Unidad"
+            hidden
             rules={[{ required: true, message: "Ingresá la unidad" }]}
           >
-            <Input disabled placeholder="Se asigna según el producto seleccionado" />
+            <Input />
           </Form.Item>
 
           <Form.Item

@@ -10,22 +10,13 @@ const ctrl = require('../controllers/vehicle');
 const fuelCtrl = require('../controllers/vehicleFuel');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
+const requirePermission = require('../middleware/requirePermission');
+const requireDisabledRead = require('../middleware/requireDisabledRead');
+const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/vehicle.schema');
 const fuelSchema = require('../validations/vehicleFuel.schema');
 
-/**
- * Roles (referencia)
- *  0 = Empleado (logueado)
- *  1 = Supervisor
- *  2 = Dueño
- *  3 = Admin
- *
- * Notas:
- * - GET requieren login (checkRole(0)).
- * - POST/PATCH requieren Dueño+ (checkRole(2)).
- * - DELETE NO borra: debe hacer soft delete (enabled=false) en el controller.
- *   → Mantengo Dueño+ para coherencia con planificacion
- */
+// Functional permissions follow the shared catalog; custom permissions override role defaults.
 
 // ----------------------------------------------------------------------------
 // RUTAS ESPECÍFICAS (Deshabilitados)
@@ -34,13 +25,13 @@ const fuelSchema = require('../validations/vehicleFuel.schema');
 // Listar deshabilitados
 router.get('/disabled',
   validate(schema.listQuery),
-  checkRole(0),
+  requirePermission(PERMISSIONS.VEHICLES_VIEW_DISABLED),
   ctrl.listDisabled);
 
 // Habilitar (restaurar)
 router.put('/enable/:id',
   validate(schema.idParam),
-  checkRole(2),
+  requirePermission(PERMISSIONS.VEHICLES_ENABLE),
   ctrl.enable);
 
 // ----------------------------------------------------------------------------
@@ -72,31 +63,32 @@ router.delete('/:vehicleId/fuel-records/:recordId',
 // Listar (habilitados)
 router.get('/',
   validate(schema.listQuery),
-  checkRole(0),
+  requirePermission(PERMISSIONS.VEHICLES_VIEW),
+  requireDisabledRead(PERMISSIONS.VEHICLES_VIEW_DISABLED, q => q.includeDisabled === '1' || String(q.includeDisabled).toLowerCase() === 'true'),
   ctrl.list);
 
 // Detalle
 router.get('/:id',
   validate(schema.idParam),
-  checkRole(0),
+  requirePermission(PERMISSIONS.VEHICLES_VIEW),
   ctrl.getOne);
 
 // Crear
 router.post('/',
   validate(schema.createSchema),
-  checkRole(2),
+  requirePermission(PERMISSIONS.VEHICLES_CREATE),
   ctrl.create);
 
 // Actualizar
 router.patch('/:id',
   validate(schema.updateSchema),
-  checkRole(2),
+  requirePermission(PERMISSIONS.VEHICLES_EDIT),
   ctrl.update);
 
 // Deshabilitar (Soft Delete)
 router.delete('/:id',
   validate(schema.idParam),
-  checkRole(3),
+  requirePermission(PERMISSIONS.VEHICLES_DISABLE),
   ctrl.remove);
 
 module.exports = router;

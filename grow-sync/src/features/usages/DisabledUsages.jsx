@@ -1,3 +1,4 @@
+import {quantityLabel as formatQuantity,unitLabel,normalizeUnit} from '../../utils/inventoryUnits';
 import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, Row, Col, notification, Tooltip } from "antd";
 import { ArrowLeftOutlined, CalendarOutlined, CheckOutlined } from '../../components/AppIcons';
@@ -20,7 +21,6 @@ const parseLotIds = (lot_ids) => {
 const formatArea = (value) => value == null
   ? "-"
   : `${Number(value || 0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ha`;
-const formatQuantity = (value, unit) => `${Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })} ${unit || ""}`.trim();
 
 const DisabledUsages = () => {
   const [usages, setUsages] = useState([]);

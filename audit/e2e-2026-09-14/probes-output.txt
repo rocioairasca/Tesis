@@ -1,0 +1,215 @@
+[
+  {
+    "case": "LEGACY_EDIT_INSUFFICIENT",
+    "response": {
+      "status": 409,
+      "result": {
+        "error": "StockError",
+        "message": "Stock insuficiente"
+      }
+    },
+    "statusAfter": {
+      "usage": 20,
+      "stock": 5
+    },
+    "expected": "409 with usage=2 and stock=5 unchanged"
+  },
+  {
+    "case": "LEGACY_DISABLE_RETRY_AFTER_FAILURE",
+    "usageEnabled": true,
+    "stock": 9,
+    "expected": "failed requests leave stock=5"
+  },
+  {
+    "case": "LEGACY_DISABLED_LOT_EXPIRED_PRODUCT",
+    "response": {
+      "status": 201,
+      "result": {
+        "ok": true,
+        "id": "new-1-0"
+      }
+    },
+    "stock": 4,
+    "expected": "reject disabled lot and expired stock"
+  },
+  {
+    "case": "ROLE_VS_PERMISSIONS",
+    "roles": [
+      {
+        "role": 0,
+        "custom_permissions": null,
+        "usageRouteAllows": false,
+        "status": 403,
+        "effectivePermissions": [
+          "planning.view",
+          "inventory.view",
+          "lots.view",
+          "usage.create",
+          "vehicles.view"
+        ]
+      },
+      {
+        "role": 0,
+        "custom_permissions": [],
+        "usageRouteAllows": false,
+        "status": 403,
+        "effectivePermissions": []
+      },
+      {
+        "role": 1,
+        "custom_permissions": null,
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": [
+          "planning.view",
+          "inventory.view",
+          "lots.view",
+          "usage.view",
+          "usage.create",
+          "usage.edit",
+          "harvest.view",
+          "harvest.create",
+          "rain_records.view",
+          "rain_records.create",
+          "vehicles.view"
+        ]
+      },
+      {
+        "role": 1,
+        "custom_permissions": [],
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": []
+      },
+      {
+        "role": 2,
+        "custom_permissions": null,
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": [
+          "planning.view",
+          "planning.create",
+          "planning.edit",
+          "planning.disable",
+          "planning.enable",
+          "planning.view_disabled",
+          "inventory.view",
+          "inventory.create",
+          "inventory.edit",
+          "inventory.disable",
+          "inventory.enable",
+          "inventory.view_disabled",
+          "lots.view",
+          "lots.create",
+          "lots.edit",
+          "lots.disable",
+          "lots.enable",
+          "lots.view_disabled",
+          "usage.view",
+          "usage.create",
+          "usage.edit",
+          "usage.disable",
+          "usage.enable",
+          "usage.view_disabled",
+          "harvest.view",
+          "harvest.create",
+          "harvest.edit",
+          "harvest.disable",
+          "harvest.enable",
+          "harvest.view_disabled",
+          "rain_records.view",
+          "rain_records.create",
+          "rain_records.edit",
+          "rain_records.disable",
+          "rain_records.enable",
+          "rain_records.view_disabled",
+          "vehicles.view",
+          "vehicles.create",
+          "vehicles.edit",
+          "vehicles.disable",
+          "vehicles.enable",
+          "vehicles.view_disabled"
+        ]
+      },
+      {
+        "role": 2,
+        "custom_permissions": [],
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": []
+      },
+      {
+        "role": 3,
+        "custom_permissions": null,
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": [
+          "all"
+        ]
+      },
+      {
+        "role": 3,
+        "custom_permissions": [],
+        "usageRouteAllows": true,
+        "status": 200,
+        "effectivePermissions": []
+      }
+    ]
+  },
+  {
+    "case": "HARVEST_EMPLOYEE_NO_PERMISSION_REACHES_CREATE",
+    "controllerReached": true,
+    "expected": false,
+    "note": "authenticated identity injected; actual route middleware chain, controller stub; no writes"
+  },
+  {
+    "case": "CANCEL_AFTER_CONCURRENT_COMPLETION_SIMULATION",
+    "response": {
+      "status": 200,
+      "result": {
+        "ok": true
+      }
+    },
+    "planning": {
+      "id": "plan",
+      "status": "cancelado",
+      "enabled": false
+    },
+    "expected": "completion remains completed; cancellation rejects"
+  },
+  {
+    "case": "VEHICLE_BOOLEAN_QUERY",
+    "input": "false",
+    "parsed": true,
+    "expected": false
+  },
+  {
+    "case": "EXPRESS5_QUERY_REINJECTION",
+    "query": {
+      "includeDisabled": "false"
+    },
+    "actualType": "string",
+    "expected": "parsed query reaches controller as boolean"
+  },
+  {
+    "case": "EXPRESS5_DISABLED_ROUTE_FLAG",
+    "query": {},
+    "flag": null,
+    "expected": "onlyDisabled=true reaches list controller"
+  },
+  {
+    "case": "VEHICLE_UNVERIFIED_USER_REFERENCES",
+    "response": {
+      "status": 201,
+      "result": {
+        "vehicle": {
+          "id": "v"
+        }
+      }
+    },
+    "queries": 1,
+    "passedResponsible": "00000000-0000-0000-0000-000000000002",
+    "passedAuthor": "00000000-0000-0000-0000-000000000003",
+    "expected": "validate responsible belongs to tenant; author comes from session"
+  }
+]

@@ -1,3 +1,6 @@
+import { campaignLabel, sortCampaigns } from '../../utils/campaigns.mjs';
+import HarvestTrace from '../harvest/HarvestTrace';
+import { calendarDateKey, parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -50,8 +53,7 @@ const formatPercent = (value) => {
 
 const formatDate = (value) => {
   if (!value) return 'Actual';
-  const [year, month, day] = String(value).slice(0, 10).split('-');
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  return formatCalendarDate(value, 'Actual');
 };
 
 const formatActivity = (value) => {
@@ -69,7 +71,7 @@ const formatActivity = (value) => {
   return labels[value] || value || 'Actividad';
 };
 
-const toDateKey = (value) => value ? dayjs(value).format('YYYY-MM-DD') : null;
+const toDateKey = (value) => calendarDateKey(value);
 
 const campaignContainsDate = (campaign, dateKey) => (
   campaign?.start_date
@@ -277,7 +279,7 @@ const LotDivisions = () => {
       api.get('/campaigns', { params: { includeClosed: true } }),
       api.get('/crops'),
     ]);
-    const nextCampaigns = Array.isArray(campaignsResponse.data) ? campaignsResponse.data : [];
+    const nextCampaigns = sortCampaigns(Array.isArray(campaignsResponse.data) ? campaignsResponse.data : [], "desc");
     const nextCrops = Array.isArray(cropsResponse.data) ? cropsResponse.data : [];
     setCampaigns(nextCampaigns);
     setCrops(nextCrops);
@@ -490,7 +492,7 @@ const LotDivisions = () => {
         availableCampaigns = options.campaigns;
         availableCrops = options.crops;
       }
-      const startDate = assignment?.start_date ? dayjs(assignment.start_date) : dayjs();
+      const startDate = assignment?.start_date ? parseCalendarDate(assignment.start_date) : dayjs();
       const dateKey = toDateKey(startDate);
       const suggestedCampaign = assignment?.campaign_id
         ? null
@@ -505,7 +507,7 @@ const LotDivisions = () => {
         crop_id: assignment?.crop_id || availableCrops[0]?.id || undefined,
         campaign_id: assignment?.campaign_id || suggestedCampaign?.id || undefined,
         start_date: startDate,
-        end_date: assignment?.end_date ? dayjs(assignment.end_date) : null,
+        end_date: assignment?.end_date ? parseCalendarDate(assignment.end_date) : null,
       });
     } catch (error) {
       console.error('Error al cargar opciones productivas:', error);
@@ -693,9 +695,19 @@ const LotDivisions = () => {
   };
 
   const renderHistoryDetails = (event) => {
+    if (event.type === 'harvest_closure') {
+      const labels = { measurement_difference: 'Diferencia de medición', unharvested_area: 'Superficie no cosechada', loss: 'Pérdida', weather: 'Condiciones climáticas', other: 'Otro' };
+      return <Space direction="vertical" size={2}>
+        <Text>Motivo: {labels[event.details?.reason] || event.details?.reason}</Text>
+        <Text>Usuario: {event.details?.created_by || 'No documentado'} · Total: {formatHa(event.details?.total_area_ha)} ha</Text>
+        <Text>Cosechado al finalizar: {formatHa(event.details?.harvested_area_ha)} ha · Pendiente al finalizar: {formatHa(event.details?.remaining_area_ha)} ha</Text>
+        {event.details?.notes && <Text>{event.details.notes}</Text>}
+      </Space>;
+    }
     if (event.type === 'harvest') {
       return (
         <Space direction="vertical" size={2}>
+          <HarvestTrace record={event} />
           {event.details?.yield_kg_ha != null && (
             <Text>Rendimiento: {Number(event.details.yield_kg_ha).toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg/ha</Text>
           )}
@@ -1021,7 +1033,7 @@ const LotDivisions = () => {
               disabled={cropModal.mode === 'finalize'}
               options={campaigns.map((campaign) => ({
                 value: campaign.id,
-                label: `${campaign.name}${campaign.status === 'closed' ? ' · cerrada' : ''}`,
+                label: `${campaignLabel(campaign)}${campaign.status === 'closed' ? ' · cerrada' : ''}`,
               }))}
             />
           </Form.Item>

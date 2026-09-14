@@ -2,6 +2,7 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const postgres = require('postgres');
+const calendarDateTypes = require('./calendarDateType');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -18,7 +19,7 @@ let sql = null;
 let pool = null;
 
 if (connStr) {
-  sql = postgres(connStr, { max: 10 }); // conexión con postgres.js
+  sql = postgres(connStr, { max: 10, types: calendarDateTypes }); // DATE stays YYYY-MM-DD
 
   // Adaptador compatible con pg.Pool
   pool = {

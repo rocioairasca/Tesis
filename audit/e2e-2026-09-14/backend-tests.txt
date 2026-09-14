@@ -1,0 +1,244 @@
+TAP version 13
+# Subtest: hectares round to hundredths, including decimal ties; invalid values fail
+ok 1 - hectares round to hundredths, including decimal ties; invalid values fail
+  ---
+  duration_ms: 5.2011
+  ...
+# Subtest: 20 + 30 + 18.29 closes 68.29; partial journeys stay open
+ok 2 - 20 + 30 + 18.29 closes 68.29; partial journeys stay open
+  ---
+  duration_ms: 0.7937
+  ...
+# Subtest: out-of-order entries close on the chronological last journey, disabled entries do not count
+ok 3 - out-of-order entries close on the chronological last journey, disabled entries do not count
+  ---
+  duration_ms: 0.4756
+  ...
+# Subtest: allocation rejects excess, duplicate IDs, ambiguous multi-cycle distribution and legacy closure
+ok 4 - allocation rejects excess, duplicate IDs, ambiguous multi-cycle distribution and legacy closure
+  ---
+  duration_ms: 3.8301
+  ...
+# Subtest: manual finalization accepts weather, requires explanation for other
+ok 5 - manual finalization accepts weather, requires explanation for other
+  ---
+  duration_ms: 0.6087
+  ...
+# Subtest: current, historical and strict retroactive reason/description validation
+ok 6 - current, historical and strict retroactive reason/description validation
+  ---
+  duration_ms: 164.5544
+  ...
+# Subtest: local today is evaluated by server in the supplied IANA zone, not server timezone
+ok 7 - local today is evaluated by server in the supplied IANA zone, not server timezone
+  ---
+  duration_ms: 5.6918
+  ...
+# Subtest: una partida, saldo exacto y legacy no se sobrescribe
+ok 8 - una partida, saldo exacto y legacy no se sobrescribe
+  ---
+  duration_ms: 5198.0059
+  ...
+# Subtest: varias partidas: FEFO, desempate ingreso, NULL al final, vencidas y disabled fuera
+ok 9 - varias partidas: FEFO, desempate ingreso, NULL al final, vencidas y disabled fuera
+  ---
+  duration_ms: 201.3848
+  ...
+# Subtest: insuficiente revierte todo y no permite saldo negativo
+ok 10 - insuficiente revierte todo y no permite saldo negativo
+  ---
+  duration_ms: 57.0983
+  ...
+# Subtest: idempotencia consumo y conflicto de payload
+ok 11 - idempotencia consumo y conflicto de payload
+  ---
+  duration_ms: 68.9905
+  ...
+# Subtest: ingreso idempotente conserva una partida y rechaza cambio de fecha/precio
+ok 12 - ingreso idempotente conserva una partida y rechaza cambio de fecha/precio
+  ---
+  duration_ms: 45.2856
+  ...
+# Subtest: fallo en segundo movimiento revierte también el primer débito
+ok 13 - fallo en segundo movimiento revierte también el primer débito
+  ---
+  duration_ms: 69.5744
+  ...
+# Subtest: reversión devuelve a originales aunque ahora estén bloqueadas; doble reversión impedida
+ok 14 - reversión devuelve a originales aunque ahora estén bloqueadas; doble reversión impedida
+  ---
+  duration_ms: 126.4191
+  ...
+# Subtest: movimientos inmutables y FK de empresa/unidad protegidas
+ok 15 - movimientos inmutables y FK de empresa/unidad protegidas
+  ---
+  duration_ms: 80.7519
+  ...
+# Subtest: reversión de operación ajena no es accesible
+ok 16 - reversión de operación ajena no es accesible
+  ---
+  duration_ms: 50.2545
+  ...
+# Subtest: manual Usage integra creación/lotes/descuento en la misma transacción e idempotencia
+ok 17 - manual Usage integra creación/lotes/descuento en la misma transacción e idempotencia
+  ---
+  duration_ms: 78.689
+  ...
+# Subtest: fallo de Usage o lote de otra empresa revierte registro, lotes y movimientos
+ok 18 - fallo de Usage o lote de otra empresa revierte registro, lotes y movimientos
+  ---
+  duration_ms: 43.6334
+  ...
+# Subtest: Planning invoca mismo FEFO, reparto y completion sin tocar saldo legacy
+ok 19 - Planning invoca mismo FEFO, reparto y completion sin tocar saldo legacy
+  ---
+  duration_ms: 74.7446
+  ...
+# Subtest: Planning insuficiente revierte efectos previos de la transacción
+ok 20 - Planning insuficiente revierte efectos previos de la transacción
+  ---
+  duration_ms: 27.8188
+  ...
+# Subtest: apertura excluye Finesse, disabled, revisión, sin aprobación y otra empresa
+ok 21 - apertura excluye Finesse, disabled, revisión, sin aprobación y otra empresa
+  ---
+  duration_ms: 1.0113
+  ...
+# Subtest: apertura explícita usa disponible aprobado, no total ni usos históricos
+ok 22 - apertura explícita usa disponible aprobado, no total ni usos históricos
+  ---
+  duration_ms: 25.7717
+  ...
+# Subtest: purchase y return requieren fecha, legacy y adjustment permiten NULL u omisión
+ok 23 - purchase y return requieren fecha, legacy y adjustment permiten NULL u omisión
+  ---
+  duration_ms: 105.1101
+  ...
+# Subtest: fechas suministradas siguen siendo válidas y no futuras para todos los orígenes
+ok 24 - fechas suministradas siguen siendo válidas y no futuras para todos los orígenes
+  ---
+  duration_ms: 25.7505
+  ...
+# Subtest: CHECK de DB impide NULL en compras/devoluciones y lo admite en legacy/ajustes
+ok 25 - CHECK de DB impide NULL en compras/devoluciones y lo admite en legacy/ajustes
+  ---
+  duration_ms: 10.0801
+  ...
+# Subtest: FEFO prioriza vencimiento, desempata fecha conocida antes de NULL y finalmente id
+ok 26 - FEFO prioriza vencimiento, desempata fecha conocida antes de NULL y finalmente id
+  ---
+  duration_ms: 117.9625
+  ...
+# Subtest: legacy conserva solo la fecha física verificada por producto y no exige fecha de corrida
+ok 27 - legacy conserva solo la fecha física verificada por producto y no exige fecha de corrida
+  ---
+  duration_ms: 41.3988
+  ...
+# Subtest: idempotencia normaliza fecha omitida y NULL, pero detecta fecha distinta
+ok 28 - idempotencia normaliza fecha omitida y NULL, pero detecta fecha distinta
+  ---
+  duration_ms: 26.3187
+  ...
+# Subtest: desactivado conserva legacy y activado sin partidas expone cero; lectura deriva partidas
+ok 29 - desactivado conserva legacy y activado sin partidas expone cero; lectura deriva partidas
+  ---
+  duration_ms: 24.5655
+  ...
+# Subtest: precisión, fechas inválidas y umbral unificado
+ok 30 - precisión, fechas inválidas y umbral unificado
+  ---
+  duration_ms: 0.5915
+  ...
+# Subtest: ajustes positivos auditados, NULL, replay y conflictos
+ok 31 - ajustes positivos auditados, NULL, replay y conflictos
+  ---
+  duration_ms: 41.3408
+  ...
+# Subtest: ajuste negativo FEFO incluye vencidas, reparte y excluye deshabilitadas
+ok 32 - ajuste negativo FEFO incluye vencidas, reparte y excluye deshabilitadas
+  ---
+  duration_ms: 92.9438
+  ...
+# Subtest: ajustes validan cantidad, motivo, clave, activación y aislamiento
+ok 33 - ajustes validan cantidad, motivo, clave, activación y aislamiento
+  ---
+  duration_ms: 40.5663
+  ...
+# Subtest: V1 bloquea deshabilitar con stock y conserva partidas al deshabilitar saldo cero
+ok 34 - V1 bloquea deshabilitar con stock y conserva partidas al deshabilitar saldo cero
+  ---
+  duration_ms: 30.4573
+  ...
+# Error al crear registro de uso: Error: Producto no disponible en esta empresa.
+#     at Object.fail (C:\\Proyectos\\Tesis\\growsync-backend\\services\\stock.js:8:55)
+#     at validateUsageReferences (evalmachine.<anonymous>:708:36)
+#     at async Object.createUsage (evalmachine.<anonymous>:354:20)
+#     at async TestContext.<anonymous> (C:\\Proyectos\\Tesis\\growsync-backend\\tests\\stockPermissions.test.js:79:3)
+#     at async Test.run (node:internal/test_runner/test:797:9)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:526:7) {
+#   status: 404
+# }
+# Subtest: API exige fecha en purchase/return y deriva ajustes al endpoint con motivo
+ok 35 - API exige fecha en purchase/return y deriva ajustes al endpoint con motivo
+  ---
+  duration_ms: 28.4175
+  ...
+# Subtest: includeDisabled interpreta false/0 y valida entradas inválidas
+ok 36 - includeDisabled interpreta false/0 y valida entradas inválidas
+  ---
+  duration_ms: 2.8039
+  ...
+# Subtest: disabled list y enable restringen company_id y rechazan empresa ausente
+ok 37 - disabled list y enable restringen company_id y rechazan empresa ausente
+  ---
+  duration_ms: 4.0485
+  ...
+# Subtest: listado general exige permiso extra y false textual sigue filtrando enabled
+ok 38 - listado general exige permiso extra y false textual sigue filtrando enabled
+  ---
+  duration_ms: 4.8417
+  ...
+# Subtest: modelo activo rechaza saldo directo y toggle por edición
+ok 39 - modelo activo rechaza saldo directo y toggle por edición
+  ---
+  duration_ms: 3.1075
+  ...
+# Subtest: rutas usan inventory.edit y permisos explícitos en servicios nuevos
+ok 40 - rutas usan inventory.edit y permisos explícitos en servicios nuevos
+  ---
+  duration_ms: 0.8014
+  ...
+# Subtest: Usage legacy valida producto/empresa antes de insertar
+ok 41 - Usage legacy valida producto/empresa antes de insertar
+  ---
+  duration_ms: 13.9311
+  ...
+# Subtest: listado vacío informa flag booleano de la empresa sin exponer configuración
+ok 42 - listado vacío informa flag booleano de la empresa sin exponer configuración
+  ---
+  duration_ms: 3.5117
+  ...
+# Subtest: crear identidad sin activar partidas admite metadatos y saldo inicial cero
+ok 43 - crear identidad sin activar partidas admite metadatos y saldo inicial cero
+  ---
+  duration_ms: 2.7963
+  ...
+# Subtest: endpoints de historial e ingreso apagados no consultan ni escriben DB
+ok 44 - endpoints de historial e ingreso apagados no consultan ni escriben DB
+  ---
+  duration_ms: 7.5143
+  ...
+# Subtest: endpoint de ajuste valida motivo y devuelve producto actualizado
+ok 45 - endpoint de ajuste valida motivo y devuelve producto actualizado
+  ---
+  duration_ms: 10.7701
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7355.7419

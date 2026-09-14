@@ -1,7 +1,11 @@
+const {assertSameUnit} = require('../../services/inventoryUnits');
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require("../../db/supabaseClient");
 const { pool } = require("../../db/supabaseClient");
 const { createNotification } = require('../notifications');
+const stock = require('../../services/stock');
+const stockUsage = require('../../services/stockUsage');
+const legacyUsage = require('../../services/legacyUsage');
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -34,7 +38,7 @@ async function adjustStock(productId, delta, companyId) {
   // Fallback: leer-modificar-escribir
   const { data: prod, error: e1 } = await supabase
     .from('products')
-    .select('name, unit, available_quantity, enabled')
+    .select('*')
     .eq('id', productId)
     .eq('company_id', companyId)
     .maybeSingle();
@@ -76,7 +80,7 @@ async function adjustStock(productId, delta, companyId) {
 
   // [NOTIFICACIÓN] Low Stock
   // Si el stock bajó (delta < 0) y cruzó o tocó el umbral de 5
-  if (delta < 0 && current > 5 && next <= 5) {
+  if (delta < 0 && !stock.isLowStock({...prod,available_quantity:current}) && stock.isLowStock({...prod,available_quantity:next})) {
     try {
       // Buscar admins y managers de la misma compañia
       const { data: recipients } = await supabase
@@ -107,7 +111,8 @@ async function adjustStock(productId, delta, companyId) {
   return upd.available_quantity;
 }
 
-async function upsertUsageLots(usageId, lotIds) {
+async function upsertUsageLots(usageId, lotIds, companyId) {
+  await validateUsageReferences({companyId,lotIds});
   // Reemplazo total: borro y vuelvo a insertar
   const { error: delErr } = await supabase.from('usage_lots').delete().eq('usage_id', usageId);
   if (delErr) throw delErr;
@@ -218,6 +223,7 @@ const enrichUsagesWithProductiveContext = async (usages, companyId) => {
 
     return {
       ...usage,
+      products: usage.products?.company_id === companyId ? usage.products : null,
       usage_surfaces: usageSurfaces,
       lot_names: lotNames,
       current_crop_resolved: usage.crop?.name || usage.current_crop || 'Sin cultivo',
@@ -259,7 +265,7 @@ const listUsages = async (req, res) => {
     const selectCols = `
       id, date, product_id, amount_used, unit, total_area,
       previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
-      products:product_id ( id, name, unit ),
+      products:product_id ( id, name, unit, company_id ),
       crop:crops!usage_records_crop_id_fkey ( id, name ),
       planning:source_planning_id ( id, activity_type ),
       user:users!usage_records_user_id_fkey ( id, full_name, email ),
@@ -320,6 +326,12 @@ const listUsages = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────────
 const createUsage = async (req, res) => {
   try {
+    if (stock.isEnabled(req.user?.company_id)) {
+      return res.status(200).json(await stockUsage.createManualUsage(pool, {
+        companyId: req.user.company_id, actorId: req.user.id,
+        key: req.get('Idempotency-Key'), body: req.body,
+      }));
+    }
     const {
       product_id,
       amount_used,
@@ -340,6 +352,7 @@ const createUsage = async (req, res) => {
       return res.status(400).json({ error: 'ValidationError', message: 'product_id y amount_used (>0) son requeridos' });
     }
 
+    const baseUnit=await validateUsageReferences({companyId:company_id,productId:product_id,unit,lotIds:lot_ids,userId:user_id});
     const cropId = await resolveUsageCropIdSnapshot({ companyId: company_id, date, lotIds: lot_ids });
 
     // 1) Crear registro
@@ -348,7 +361,7 @@ const createUsage = async (req, res) => {
       .insert([{
         product_id,
         amount_used: qty,
-        unit,
+        unit: baseUnit,
         total_area,
         previous_crop,
         current_crop,
@@ -365,7 +378,7 @@ const createUsage = async (req, res) => {
 
     try {
       // 2) Relacionar lotes
-      await upsertUsageLots(usageId, lot_ids);
+      await upsertUsageLots(usageId, lot_ids, company_id);
 
       // 3) Descontar stock
       await adjustStock(product_id, -qty, company_id);
@@ -402,98 +415,15 @@ const createUsage = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────────
 const editUsage = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
-
-    // 0) Cargar registro actual
-    const { data: current, error: curErr } = await supabase
-      .from('usage_records')
-      .select('id, product_id, amount_used, date, source_planning_id')
-      .eq('id', id)
-      .eq('company_id', company_id)
-      .maybeSingle();
-
-    if (curErr) throw curErr;
-    if (!current) return res.status(404).json({ error: 'NotFound', message: 'Registro de uso no encontrado' });
-    if (current.source_planning_id) {
-      return res.status(409).json({
-        error: 'AutomaticUsage',
-        message: 'Este uso fue generado al completar una planificación y no puede modificarse de forma independiente.',
-      });
-    }
-
-    const {
-      product_id,
-      amount_used,
-      unit,
-      lot_ids,
-      total_area,
-      previous_crop,
-      current_crop,
-      user_id,
-      date,
-    } = req.body;
-
-    const prevProd = current.product_id;
-    const prevQty = toNum(current.amount_used, 0);
-    const newProd = product_id ?? prevProd;
-    const newQty = amount_used != null ? toNum(amount_used, NaN) : prevQty;
-
-    if (amount_used != null && (!Number.isFinite(newQty) || newQty <= 0)) {
-      return res.status(400).json({ error: 'ValidationError', message: 'amount_used debe ser > 0' });
-    }
-
-    // 1) Actualizar registro (solo campos presentes)
-    const updateData = {};
-    for (const [k, v] of Object.entries({ product_id, amount_used, unit, total_area, previous_crop, current_crop, user_id, date })) {
-      if (v !== undefined) updateData[k] = v;
-    }
-    if (date !== undefined || lot_ids !== undefined) {
-      let effectiveLotIds = lot_ids;
-      if (effectiveLotIds === undefined) {
-        const { data: currentLots, error: currentLotsErr } = await supabase
-          .from('usage_lots')
-          .select('lot_id')
-          .eq('usage_id', id);
-        if (currentLotsErr) throw currentLotsErr;
-        effectiveLotIds = (currentLots || []).map(item => item.lot_id);
-      }
-      updateData.crop_id = await resolveUsageCropIdSnapshot({
-        companyId: company_id,
-        date: date || current.date,
-        lotIds: effectiveLotIds,
-      });
-    }
-    const { error: upErr } = await supabase.from('usage_records').update(updateData).eq('id', id).eq('company_id', company_id);
-    if (upErr) throw upErr;
-
-    // 2) Actualizar lots si viene lot_ids
-    if (lot_ids !== undefined) {
-      await upsertUsageLots(id, lot_ids);
-    }
-
-    // 3) Ajuste de stock
-    try {
-      if (newProd !== prevProd) {
-        // Reintegrar todo al anterior y descontar todo del nuevo
-        if (prevQty > 0) await adjustStock(prevProd, +prevQty, company_id);
-        if (newQty > 0) await adjustStock(newProd, -newQty, company_id);
-      } else if (newQty !== prevQty) {
-        const delta = newQty - prevQty;
-        if (delta !== 0) await adjustStock(newProd, -delta, company_id); // delta>0 descuenta; delta<0 reintegra
-      }
-    } catch (stockErr) {
-      // Intento dejar el registro coherente si fallo stock 
-      console.error('Error ajustando stock en editUsage, revisar consistencia:', stockErr);
-      return res.status(stockErr.status || 409).json({ error: 'StockError', message: stockErr.message || 'Error de stock' });
-    }
-
-    return res.json({ ok: true, id });
+    if (stock.isEnabled(req.user?.company_id)) throw stock.fail('Con partidas, revertí el uso y registrá uno nuevo. Los usos legacy requieren conciliación.');
+    const { stockChanges, ...result } = await legacyUsage.mutate(pool, {
+      companyId: req.user?.company_id, usageId: req.params.id, body: req.body,
+    });
+    // External notifications happen only after COMMIT and cannot fail the mutation.
+    await notifyLegacyStockChanges(stockChanges, req.user.company_id);
+    return res.json(result);
   } catch (err) {
-    console.error('Error al actualizar registro de uso:', err);
-    return res.status(500).json({ error: 'InternalServerError', message: 'Error al actualizar registro de uso' });
+    return res.status(err.status || 500).json({ error: 'editUsageError', message: err.message });
   }
 };
 
@@ -506,51 +436,15 @@ const editUsage = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────────
 const disableUsage = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
-
-    // 1) Leer registro (solo si esta habilitado)
-    const { data: usage, error: fErr } = await supabase
-      .from('usage_records')
-      .select('id, product_id, amount_used, enabled, source_planning_id')
-      .eq('id', id)
-      .eq('company_id', company_id)
-      .eq('enabled', true)
-      .maybeSingle();
-
-    if (fErr) throw fErr;
-    if (!usage) return res.status(404).json({ error: 'NotFound', message: 'Registro no encontrado o ya deshabilitado' });
-    if (usage.source_planning_id) {
-      return res.status(409).json({
-        error: 'AutomaticUsage',
-        message: 'Este uso fue generado al completar una planificación y no puede deshabilitarse de forma independiente.',
-      });
-    }
-
-    const qty = toNum(usage.amount_used, 0);
-
-    // 2) Reintegrar stock
-    await adjustStock(usage.product_id, +qty, company_id);
-
-    // 3) Marcar disabled
-    const { data, error: dErr } = await supabase
-      .from('usage_records')
-      .update({ enabled: false })
-      .eq('id', id)
-      .eq('company_id', company_id)
-      .select('id, enabled')
-      .maybeSingle();
-
-    if (dErr) throw dErr;
-    if (!data) return res.status(404).json({ error: 'NotFound', message: 'No se pudo deshabilitar (no encontrado)' });
-
-    return res.json({ ok: true, id: data.id });
+    if (stock.isEnabled(req.user?.company_id)) return res.json(await stockUsage.disableManualUsage(pool, {companyId:req.user.company_id, actorId:req.user.id, usageId:req.params.id}));
+    const { stockChanges, ...result } = await legacyUsage.mutate(pool, {
+      companyId: req.user?.company_id, usageId: req.params.id, enabled: false,
+    });
+    // External notifications happen only after COMMIT and cannot fail the mutation.
+    await notifyLegacyStockChanges(stockChanges, req.user.company_id);
+    return res.json(result);
   } catch (err) {
-    console.error('Error al deshabilitar registro de uso:', err);
-    const status = err.status || 500;
-    return res.status(status).json({ error: 'DisableUsageError', message: err.message || 'Error al deshabilitar registro de uso' });
+    return res.status(err.status || 500).json({ error: 'disableUsageError', message: err.message });
   }
 };
 
@@ -570,7 +464,7 @@ const listDisabledUsages = async (req, res) => {
     const selectCols = `
       id, date, product_id, amount_used, unit, total_area,
       previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
-      products:product_id ( id, name, unit ),
+      products:product_id ( id, name, unit, company_id ),
       crop:crops!usage_records_crop_id_fkey ( id, name ),
       planning:source_planning_id ( id, activity_type ),
       user:users!usage_records_user_id_fkey ( id, full_name, email ),
@@ -620,51 +514,15 @@ const listDisabledUsages = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────────
 const enableUsage = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const { company_id } = req.user;
-    if (!company_id) return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
-
-    // 1) Leer registro (solo si esta deshabilitado)
-    const { data: usage, error: fErr } = await supabase
-      .from('usage_records')
-      .select('id, product_id, amount_used, enabled, source_planning_id')
-      .eq('id', id)
-      .eq('company_id', company_id)
-      .eq('enabled', false)
-      .maybeSingle();
-
-    if (fErr) throw fErr;
-    if (!usage) return res.status(404).json({ error: 'NotFound', message: 'Registro no encontrado o ya habilitado' });
-    if (usage.source_planning_id) {
-      return res.status(409).json({
-        error: 'AutomaticUsage',
-        message: 'Este uso fue generado al completar una planificación y no puede habilitarse de forma independiente.',
-      });
-    }
-
-    const qty = toNum(usage.amount_used, 0);
-
-    // 2) Descontar stock nuevamente
-    await adjustStock(usage.product_id, -qty, company_id);
-
-    // 3) Marcar enabled
-    const { data, error: uErr } = await supabase
-      .from('usage_records')
-      .update({ enabled: true })
-      .eq('id', id)
-      .eq('company_id', company_id)
-      .select('id, enabled')
-      .maybeSingle();
-
-    if (uErr) throw uErr;
-    if (!data) return res.status(404).json({ error: 'NotFound', message: 'No se pudo habilitar (no encontrado)' });
-
-    return res.json({ ok: true, id: data.id });
+    if (stock.isEnabled(req.user?.company_id)) throw stock.fail('Con partidas, registrá un nuevo uso en lugar de reactivar.');
+    const { stockChanges, ...result } = await legacyUsage.mutate(pool, {
+      companyId: req.user?.company_id, usageId: req.params.id, enabled: true,
+    });
+    // External notifications happen only after COMMIT and cannot fail the mutation.
+    await notifyLegacyStockChanges(stockChanges, req.user.company_id);
+    return res.json(result);
   } catch (err) {
-    console.error('Error al habilitar registro de uso:', err);
-    const status = err.status || 500;
-    return res.status(status).json({ error: 'EnableUsageError', message: err.message || 'Error al habilitar registro de uso' });
+    return res.status(err.status || 500).json({ error: 'enableUsageError', message: err.message });
   }
 };
 
@@ -676,3 +534,41 @@ module.exports = {
   listDisabledUsages,
   enableUsage
 };
+
+async function validateUsageReferences({companyId,productId,unit,lotIds,userId}) {
+  let baseUnit;
+  if (productId) {
+    const {data,error}=await supabase.from('products').select('id,unit,enabled').eq('company_id',companyId).eq('id',productId).maybeSingle();
+    if(error) throw error;
+    if(!data?.enabled) throw stock.fail('Producto no disponible en esta empresa.',404);
+    baseUnit=assertSameUnit(data.unit,unit);
+  }
+  if (lotIds!==undefined) {
+    const ids=[...new Set(asIdArray(lotIds))];
+    const {data,error}=await supabase.from('lots').select('id').eq('company_id',companyId).in('id',ids);
+    if(error) throw error;
+    if((data||[]).length!==ids.length) throw stock.fail('Lotes no disponibles en esta empresa.',400);
+  }
+  if(userId){
+    const {data,error}=await supabase.from('users').select('id').eq('company_id',companyId).eq('id',userId).maybeSingle();
+    if(error) throw error;
+    if(!data) throw stock.fail('Responsable no disponible en esta empresa.',400);
+  }
+  return baseUnit;
+}
+
+async function notifyLegacyStockChanges(changes, companyId) {
+  try {
+    for (const {product, before, after} of changes) {
+      if (stock.decimal(after) >= stock.decimal(before)
+        || stock.isLowStock({...product, available_quantity:before})
+        || !stock.isLowStock({...product, available_quantity:after})) continue;
+      const {data: recipients, error} = await supabase.from('users').select('id')
+        .eq('company_id', companyId).in('role', [1,2,3]).eq('enabled', true);
+      if (error) throw error;
+      await Promise.all((recipients || []).map(user => createNotification(user.id, 'low_stock', 'high',
+        'Stock bajo', `${product.name || 'Producto'} quedó con bajo stock: ${after} ${product.unit || 'unidades'}.`,
+        {product_id:product.id, current_stock:Number(after)}, companyId)));
+    }
+  } catch (error) { console.error('Error enviando notificación posterior al commit:', error); }
+}

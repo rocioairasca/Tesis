@@ -1,8 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
-import { Button, Col, Drawer, Dropdown, Row, Space, notification } from "antd";
+import { calendarDateKey } from '../../utils/calendarDate';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { notification } from "antd";
+import { PageHeader, FormDrawer } from "../../components/ui";
+import "./harvest.css";
 import dayjs from "dayjs";
-import { MoreOutlined, PlusOutlined } from "../../components/AppIcons";
-import { useNavigate } from "react-router-dom";
+import { PlusOutlined } from "../../components/AppIcons";
+
 
 import useIsMobile from "../../hooks/useIsMobile";
 import HarvestTable from "./HarvestTable";
@@ -14,12 +17,11 @@ import { hasPermission } from "../../utils/permissions";
 
 const Harvest = () => {
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.HARVEST_CREATE);
-  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.HARVEST_VIEW_DISABLED);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [registrationMode, setRegistrationMode] = useState("current");
   const [editingRecord, setEditingRecord] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -29,9 +31,11 @@ const Harvest = () => {
   const [productiveStates, setProductiveStates] = useState([]);
   const [loadingProductiveStates, setLoadingProductiveStates] = useState(false);
   const [productiveStateDate, setProductiveStateDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const productiveStatesRequestId = useRef(0);
 
-  const openDrawer = (record = null) => {
-    setProductiveStateDate(record?.harvest_date ? dayjs(record.harvest_date).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"));
+  const openDrawer = (record = null, mode = "current") => {
+    setRegistrationMode(mode);
+    setProductiveStateDate(record?.harvest_date ? calendarDateKey(record.harvest_date) : dayjs().format("YYYY-MM-DD"));
     setEditingRecord(record);
     setIsDrawerOpen(true);
   };
@@ -88,6 +92,7 @@ const Harvest = () => {
   }, []);
 
   const fetchProductiveStates = useCallback(async (date) => {
+    const requestId = ++productiveStatesRequestId.current;
     setLoadingProductiveStates(true);
     setProductiveStates([]);
 
@@ -95,20 +100,24 @@ const Harvest = () => {
       const { data } = await api.get("/lots/productive-states", {
         params: { date },
       });
+      if (requestId !== productiveStatesRequestId.current) return;
       setProductiveStates(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
+      if (requestId !== productiveStatesRequestId.current) return;
       console.error("→ productive states error:", error);
       setProductiveStates([]);
       notification.error({
         message: "No se pudo cargar el estado productivo",
       });
     } finally {
-      setLoadingProductiveStates(false);
+      if (requestId === productiveStatesRequestId.current) {
+        setLoadingProductiveStates(false);
+      }
     }
   }, []);
 
   const handleHarvestDateChange = useCallback((date) => {
-    setProductiveStateDate(date ? date.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"));
+    setProductiveStateDate(date ? calendarDateKey(date) : dayjs().format("YYYY-MM-DD"));
   }, []);
 
   useEffect(() => {
@@ -120,90 +129,26 @@ const Harvest = () => {
     fetchProductiveStates(productiveStateDate);
   }, [fetchProductiveStates, productiveStateDate]);
 
-  const disabledMenu = [
-    canViewDisabled && {
-      key: "disabled",
-      label: (
-        <span onClick={() => navigate("/harvest-deshabilitadas")}>
-          Ver cosechas deshabilitadas
-        </span>
-      ),
-    },
-  ].filter(Boolean);
-
   return (
-    <div style={{ padding: 12 }}>
-      <Row
-        justify="space-between"
-        align="middle"
-        style={{ marginBottom: 12, marginTop: isMobile ? 8 : 24 }}
-      >
-        <Col>
-          <h2>Gestión de Cosecha</h2>
-        </Col>
-
-        <Col>
-          {isMobile ? (
-            disabledMenu.length > 0 ? (
-              <Dropdown menu={{ items: disabledMenu }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
-            ) : null
-          ) : (
-            <Space>
-              {canViewDisabled && (
-                <Button onClick={() => navigate("/harvest-deshabilitadas")}>
-                  Ver cosechas deshabilitadas
-                </Button>
-              )}
-              {canCreate && (
-                <Button type="primary" onClick={() => openDrawer()}>
-                  Agregar Cosecha
-                </Button>
-              )}
-            </Space>
-          )}
-        </Col>
-      </Row>
-
-      <HarvestTable refreshKey={refreshKey} isMobile={isMobile} onEdit={openDrawer} />
-
-      <Drawer
-        title={editingRecord ? "Editar registro de cosecha" : "Nuevo registro de cosecha"}
-        placement={isMobile ? "bottom" : "right"}
-        onClose={closeDrawer}
-        open={isDrawerOpen}
-        height={isMobile ? "90vh" : undefined}
-        width={isMobile ? "100%" : 760}
-        styles={{
-          header: { borderBottom: "1px solid #f0f0f0" },
-          body: { paddingBottom: 80, background: "#fafafa" },
-        }}
-        destroyOnHidden
-      >
+    <div className="gs-harvest">
+      <PageHeader title="Cosechas" description="Registrá y analizá el rendimiento de tus lotes por campaña."
+        primaryAction={{label:'Registrar cosecha',icon:<PlusOutlined/>,onClick:()=>openDrawer(),hidden:!canCreate}}
+        secondaryActions={[{key:'historical',label:'Registrar cosecha histórica',onClick:()=>openDrawer(null,'historical'),hidden:!canCreate}]}/>
+      <HarvestTable refreshKey={refreshKey} isMobile={isMobile} onEdit={openDrawer} lots={lots}/>
+      <FormDrawer title={editingRecord ? 'Editar registro de cosecha' : 'Nuevo registro de cosecha'} open={isDrawerOpen} onClose={closeDrawer} wide destroyOnHidden>
         <HarvestForm
           lots={lots}
           loadingLots={loadingLots}
           crops={crops}
           productiveStates={productiveStates}
           loadingProductiveStates={loadingProductiveStates}
+          registrationMode={registrationMode}
           initialRecord={editingRecord}
           onHarvestDateChange={handleHarvestDateChange}
           onSuccess={handleSuccess}
           onCancel={closeDrawer}
         />
-      </Drawer>
-
-      {isMobile && !isDrawerOpen && canCreate && (
-        <button
-          type="button"
-          className="fab-button"
-          aria-label="Agregar registro de cosecha"
-          onClick={() => openDrawer()}
-        >
-          <PlusOutlined />
-        </button>
-      )}
+      </FormDrawer>
     </div>
   );
 };

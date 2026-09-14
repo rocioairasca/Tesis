@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Badge, Dropdown, Button, Empty } from 'antd';
-import { BellOutlined } from './AppIcons';
+import { AppIcons } from './AppIcons';
+const BellOutlined = AppIcons.notifications;
 import { useNotifications } from '../context/NotificationsContext';
 import { sanitizeNotification } from '../utils/userFriendlyErrors';
 import dayjs from 'dayjs';

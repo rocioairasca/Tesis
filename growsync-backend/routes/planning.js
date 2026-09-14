@@ -10,21 +10,11 @@ const ctrl = require('../controllers/planning');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
 const requirePermission = require('../middleware/requirePermission');
+const requireDisabledRead = require('../middleware/requireDisabledRead');
 const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/planning.schema');
 
-/**
- * Roles (referencia):
- *  0 = Empleado (logueado)
- *  1 = Supervisor
- *  2 = Dueño
- *  3 = Admin
- *
- * Notas:
- * - List/Detail requieren estar logueado (checkRole(0)).
- * - Crear/Editar requieren Supervisor+ (checkRole(1)).
- * - "Eliminar" NO borra: hace soft delete (enabled=false) y/o status='cancelado' en el controller.
- */
+// Functional permissions follow the shared catalog; custom permissions override role defaults.
 
 // ----------------------------------------------------------------------------
 // RUTAS ESPECÍFICAS (Deshabilitados)
@@ -33,7 +23,7 @@ const schema = require('../validations/planning.schema');
 // Listado de planificaciones DESHABILITADAS (enabled=false)
 router.get('/disabled',
   validate(schema.listQuery),
-  checkRole(0),
+  requirePermission(PERMISSIONS.PLANNING_VIEW_DISABLED),
   ctrl.listDisabled
 );
 
@@ -52,7 +42,8 @@ router.put('/enable/:id',
 // Listar planificaciones (filtros y paginado)
 router.get('/',
   validate(schema.listQuery),
-  checkRole(0),
+  requirePermission(PERMISSIONS.PLANNING_VIEW),
+  requireDisabledRead(PERMISSIONS.PLANNING_VIEW_DISABLED, q => Boolean(q.includeDisabled)),
   ctrl.list
 );
 
@@ -81,7 +72,7 @@ router.post('/:id/complete-work',
 // OBTENER una planificacion por ID
 router.get('/:id',
   validate(schema.idParam),
-  checkRole(0),
+  requirePermission(PERMISSIONS.PLANNING_VIEW),
   ctrl.getOne
 );
 

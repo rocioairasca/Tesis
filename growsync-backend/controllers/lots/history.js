@@ -351,7 +351,7 @@ const fetchHarvestEvents = async (client, companyId, lotId, subLotId = null) => 
       hr.production_kg,
       hr.harvested_area_ha,
       hr.yield_kg_ha,
-      hr.notes,
+      hr.notes, hr.registered_retroactively, hr.retroactive_reason, hr.retroactive_notes, hr.created_by,
       hr.created_at
     FROM harvest_records hr
     JOIN lots l
@@ -398,7 +398,8 @@ const fetchHarvestEvents = async (client, companyId, lotId, subLotId = null) => 
       yield_kg_ha: row.yield_kg_ha,
       notes: row.notes || null,
     },
-    registered_retroactively: false,
+    registered_retroactively: row.registered_retroactively,
+    retroactive_reason: row.retroactive_reason, retroactive_notes: row.retroactive_notes, created_by: row.created_by,
     created_at: row.created_at,
   }));
 };
@@ -420,12 +421,27 @@ exports.getLotHistory = async (req, res, next) => {
     const manualUsageEvents = await fetchManualUsageEvents(client, company_id, lotId, subLotId);
     const cropCycleEvents = await fetchManualCropAssignmentEvents(client, company_id, lotId, subLotId);
     const harvestEvents = await fetchHarvestEvents(client, company_id, lotId, subLotId);
+    const { rows: closures } = await client.query(`SELECT hc.*, ca.lot_id, ca.sub_lot_id,
+      c.name AS crop, sl.name AS sub_lot_name
+      FROM harvest_cycle_closures hc JOIN crop_assignments ca ON ca.id = hc.crop_assignment_id AND ca.company_id = hc.company_id
+      JOIN crops c ON c.id = ca.crop_id LEFT JOIN sub_lots sl ON sl.id = ca.sub_lot_id
+      WHERE hc.company_id = $1 AND ca.lot_id = $2
+        AND ($3::uuid IS NULL OR ca.sub_lot_id = $3 OR ca.sub_lot_id IS NULL)`, [company_id, lotId, subLotId]);
+    const closureEvents = closures.map((row) => ({
+      id: `harvest_closure:${row.id}`, source_id: row.id, type: 'harvest_closure',
+      title: 'Finalización con superficie pendiente', event_date: toDateKey(row.finalized_date),
+      lot_id: row.lot_id, sub_lot_id: row.sub_lot_id, sub_lot_name: row.sub_lot_name,
+      crop: row.crop, area_ha: row.total_area_ha, created_at: row.created_at,
+      details: { reason: row.reason, notes: row.notes, created_by: row.created_by,
+        total_area_ha: row.total_area_ha, harvested_area_ha: row.harvested_area_ha, remaining_area_ha: row.remaining_area_ha },
+    }));
 
     const events = [
       ...planningEvents,
       ...manualUsageEvents,
       ...cropCycleEvents,
       ...harvestEvents,
+      ...closureEvents,
     ].sort((a, b) => {
       const dateDiff = String(b.event_date || '').localeCompare(String(a.event_date || ''));
       if (dateDiff) return dateDiff;

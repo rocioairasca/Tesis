@@ -1,3 +1,6 @@
+import { campaignLabel, campaignPeriod, sortCampaigns } from '../../utils/campaigns.mjs';
+import {quantityLabel,unitLabel} from '../../utils/inventoryUnits';
+import { parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
 /**
  * Componente: Planning
  * Ubicación: src/features/planning/Planning.jsx
@@ -93,41 +96,41 @@ const parseDecimalInput = (value) => {
 };
 const formatDate = (value) => {
   if (!value) return "—";
-  return dayjs(value).format("DD/MM/YYYY");
+  return formatCalendarDate(value, "—");
 };
 const formatQuantity = (value) => (
-  Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })
+  Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 6 })
 );
 const getProductId = (product) => product?.id ?? product?._id;
 const getCampaignWorkStartValue = (campaign) => campaign?.work_start_date ?? campaign?.start_date;
 const formatCampaignWorkStart = (campaign) => formatDate(getCampaignWorkStartValue(campaign));
 const getCampaignWorkStartDate = (campaign) => (
   getCampaignWorkStartValue(campaign)
-    ? dayjs(getCampaignWorkStartValue(campaign)).startOf("day")
+    ? parseCalendarDate(getCampaignWorkStartValue(campaign)).startOf("day")
     : null
 );
 const getCampaignStartDate = (campaign) => (
-  campaign?.start_date ? dayjs(campaign.start_date).startOf("day") : null
+  campaign?.start_date ? parseCalendarDate(campaign.start_date).startOf("day") : null
 );
 const getCampaignEndDate = (campaign) => (
-  campaign?.end_date ? dayjs(campaign.end_date).endOf("day") : null
+  campaign?.end_date ? parseCalendarDate(campaign.end_date).endOf("day") : null
 );
 const formatCampaignOptionMeta = (campaign) => (
   `Trabajos desde ${formatCampaignWorkStart(campaign)} · Inicio ${formatDate(campaign?.start_date)} · Fin ${campaign?.end_date ? formatDate(campaign.end_date) : "En curso"}`
 );
 const renderCampaignOptionLabel = (campaign, suffix = null) => (
   <div>
-    <div>{campaign.name}{suffix ? ` ${suffix}` : ""}</div>
+    <div>{campaignLabel(campaign)}{suffix ? ` ${suffix}` : ""}</div>
     <div style={{ fontSize: 12, color: "#6b7280", whiteSpace: "normal" }}>
-      {formatCampaignOptionMeta(campaign)}
+      {campaignPeriod(campaign)}
     </div>
   </div>
 );
 const renderCampaignDropdownOption = (campaign, suffix = null) => (
   <div style={{ padding: "4px 0", lineHeight: 1.35 }}>
-    <div>{campaign.name}{suffix ? ` ${suffix}` : ""}</div>
+    <div>{campaignLabel(campaign)}{suffix ? ` ${suffix}` : ""}</div>
     <div style={{ fontSize: 12, color: "#6b7280", whiteSpace: "normal" }}>
-      {formatCampaignOptionMeta(campaign)}
+      {campaignPeriod(campaign)}
     </div>
   </div>
 );
@@ -207,7 +210,7 @@ const formatPeriod = (row) => {
 const getCampaignDisplayStatus = (campaign) => {
   if (!campaign) return "—";
   if (campaign.status === "active") return "Activa";
-  if (campaign.start_date && dayjs(campaign.start_date).isAfter(dayjs(), "day")) return "Próxima";
+  if (campaign.start_date && parseCalendarDate(campaign.start_date).isAfter(dayjs(), "day")) return "Próxima";
   return "Cerrada";
 };
 const getMonthTitle = (date) => {
@@ -439,12 +442,12 @@ const Planning = () => {
                 <Col xs={24} md={10}>
                   <strong>{title}</strong>
                   <div style={{ color: "#6b7280", fontSize: 12 }}>
-                    Planificado: {plannedAmount.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {unit || ""}
+                    Planificado: {quantityLabel(plannedAmount,unit)}
                   </div>
                 </Col>
                 <Col xs={24} md={7}>
                   <div style={{ color: "#6b7280", fontSize: 12 }}>Stock disponible</div>
-                  <strong>{available.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {unit || ""}</strong>
+                  <strong>{quantityLabel(available,unit)}</strong>
                 </Col>
                 <Col xs={24} md={7}>
                   <Form.Item
@@ -469,9 +472,10 @@ const Planning = () => {
                   >
                     <InputNumber
                       min={0}
+                      precision={6}
                       decimalSeparator=","
                       style={{ width: "100%" }}
-                      addonAfter={unit || undefined}
+                      addonAfter={unit ? unitLabel(unit) : undefined}
                     />
                   </Form.Item>
                 </Col>
@@ -618,7 +622,7 @@ const Planning = () => {
       ...campaigns.map((campaign) => ({
         value: campaign.id ?? campaign._id,
         label: renderCampaignOptionLabel(campaign, `- ${getCampaignDisplayStatus(campaign)}`),
-        searchLabel: `${campaign.name} ${formatCampaignOptionMeta(campaign)} ${getCampaignDisplayStatus(campaign)}`,
+        searchLabel: `${campaign.name} ${campaignPeriod(campaign)} ${getCampaignDisplayStatus(campaign)}`,
       })),
     ];
   }, [campaigns, editing]);
@@ -642,9 +646,9 @@ const Planning = () => {
       }] : []),
       ...compatibleCampaigns.map((campaign) => ({
         value: campaign.id ?? campaign._id,
-        label: campaign.name,
+        label: campaignLabel(campaign),
         campaign,
-        searchLabel: `${campaign.name} ${formatCampaignOptionMeta(campaign)}`,
+        searchLabel: `${campaign.name} ${campaignPeriod(campaign)}`,
       })),
     ];
   }, [campaignCompatibilityRange, campaigns, getCompatiblePlanningCampaigns, selectedCampaignId]);
@@ -1009,7 +1013,7 @@ const Planning = () => {
   const fetchCampaigns = useCallback(async () => {
     try {
       const { data } = await api.get("/campaigns", { params: { includeClosed: true } });
-      setCampaigns(Array.isArray(data) ? data : data?.items || data?.data || []);
+      setCampaigns(sortCampaigns(Array.isArray(data) ? data : data?.items || data?.data || [], "desc"));
     } catch {
       setCampaigns([]);
       notification.error({ message: "No se pudieron cargar las campañas." });
@@ -1069,7 +1073,7 @@ const Planning = () => {
         })) : [],
         status: row.status || "planificado",
         register_completed: false,
-        effective_date: row.effective_date ? dayjs(row.effective_date) : undefined,
+        effective_date: row.effective_date ? parseCalendarDate(row.effective_date) : undefined,
       });
     } else {
       form.resetFields();
@@ -1241,9 +1245,9 @@ const Planning = () => {
     setEditingCampaign(campaign);
     editCampaignForm.setFieldsValue({
       name: campaign.name,
-      work_start_date: campaign.work_start_date ? dayjs(campaign.work_start_date) : null,
-      start_date: campaign.start_date ? dayjs(campaign.start_date) : null,
-      end_date: campaign.end_date ? dayjs(campaign.end_date) : null,
+      work_start_date: campaign.work_start_date ? parseCalendarDate(campaign.work_start_date) : null,
+      start_date: campaign.start_date ? parseCalendarDate(campaign.start_date) : null,
+      end_date: campaign.end_date ? parseCalendarDate(campaign.end_date) : null,
     });
     setIsEditCampaignModalOpen(true);
   };
@@ -2090,7 +2094,7 @@ const Planning = () => {
                           const productId = getFieldValue(["products", name, "product_id"]);
                           const unit = getCatalogProductById(productId)?.unit || getFieldValue(["products", name, "unit"]) || "";
                           const available = Number(getCatalogProductById(productId)?.available_quantity || 0);
-                          const stockLabel = `Disponible: ${formatQuantity(available)}${unit ? ` ${unit}` : ""}`;
+                          const stockLabel = `Disponible: ${quantityLabel(available,unit)}`;
                           return (
                             <Form.Item
                               {...rest}
@@ -2116,7 +2120,7 @@ const Planning = () => {
                                 min={0}
                                 placeholder={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
                                 style={{ width: "100%" }}
-                                addonAfter={unit || undefined}
+                                addonAfter={unit ? unitLabel(unit) : undefined}
                               />
                             </Form.Item>
                           );
@@ -2190,7 +2194,7 @@ const Planning = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
               <Descriptions.Item label="Campaña">
-                {viewing.campaign_name || "—"}
+                {campaignLabel(viewing)}
               </Descriptions.Item>
               {viewing.title && !viewing.crop_id && !viewing.crop_name && (
                 <Descriptions.Item label="Título histórico">{viewing.title}</Descriptions.Item>
@@ -2258,7 +2262,7 @@ const Planning = () => {
                 bordered
                 dataSource={viewing.products || []}
                 renderItem={(product) => {
-                  const details = [product.amount, product.unit].filter(Boolean).join(" ");
+                  const details = quantityLabel(product.amount,product.unit);
                   return (
                     <List.Item>
                       {product.name || prodIx[product.product_id] || "Producto"}
@@ -2322,7 +2326,7 @@ const Planning = () => {
                 {getCropDisplayName(sowingCompletion.planning, cropIx)}
               </Descriptions.Item>
               <Descriptions.Item label="Campaña">
-                {sowingCompletion.planning.campaign_name || "—"}
+                {campaignLabel(sowingCompletion.planning)}
               </Descriptions.Item>
               <Descriptions.Item label="Superficie total">
                 {formatHa(getPlanningArea(sowingCompletion.planning))}
@@ -2396,7 +2400,7 @@ const Planning = () => {
                 {getPlanningDisplayName(workCompletion.planning, cropIx)}
               </Descriptions.Item>
               <Descriptions.Item label="Campaña">
-                {workCompletion.planning.campaign_name || "—"}
+                {campaignLabel(workCompletion.planning)}
               </Descriptions.Item>
               <Descriptions.Item label="Superficie total">
                 {formatHa(getPlanningArea(workCompletion.planning))}
@@ -2525,7 +2529,7 @@ const Planning = () => {
             rowKey={(campaign) => campaign.id ?? campaign._id}
             locale={{ emptyText: "No hay campañas cargadas" }}
             columns={[
-              { title: "Campaña", dataIndex: "name" },
+              { title: "Campaña", dataIndex: "name", render: (_, campaign) => campaignLabel(campaign) },
               {
                 title: "Trabajos desde",
                 dataIndex: "work_start_date",
@@ -2534,12 +2538,12 @@ const Planning = () => {
               {
                 title: "Inicio",
                 dataIndex: "start_date",
-                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "—",
+                render: (value) => value ? formatCalendarDate(value, "—") : "—",
               },
               {
                 title: "Fin",
                 dataIndex: "end_date",
-                render: (value) => value ? dayjs(value).format("DD/MM/YYYY") : "En curso",
+                render: (value) => value ? formatCalendarDate(value) : "En curso",
               },
               {
                 title: "Estado",

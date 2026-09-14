@@ -16,6 +16,8 @@ const {
 const validate  = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
 const schema    = require('../validations/products.schema');
+const stock = require('../controllers/products/stock');
+
 
 const requirePermission = require("../middleware/requirePermission");
 const { PERMISSIONS } = require("../constants/permissions");
@@ -87,7 +89,7 @@ router.patch('/:id/add-stock',
 router.put('/:id',
   validate(schema.updateBody),
   checkRole(2),
-  requirePermission(PERMISSIONS.INVENTORY_UPDATE),
+  requirePermission(PERMISSIONS.INVENTORY_EDIT),
   editProduct
 );
 
@@ -100,5 +102,10 @@ router.delete('/:id',
   requirePermission(PERMISSIONS.INVENTORY_DISABLE),
   disableProduct
 );
+
+router.get('/:id/batches',checkRole(0),requirePermission(PERMISSIONS.INVENTORY_VIEW),stock.listBatches);
+router.get('/:id/movements',checkRole(0),requirePermission(PERMISSIONS.INVENTORY_VIEW),stock.listMovements);
+router.post('/:id/receipts',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerReceipt);
+router.post('/:id/adjustments',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerAdjustment);
 
 module.exports = router;

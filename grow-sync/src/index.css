@@ -1,16 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Red+Hat+Text&display=swap');
-
-* {
-  font-family: "Red Hat Text", sans-serif;
-  font-optical-sizing: auto;
-  font-weight: 400;
-  font-style: normal;
-}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 body {
   margin: 0;
+  font-family: var(--gs-font-family, sans-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gs-text-primary);
+  background: var(--gs-background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea { font: inherit; }
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--gs-info);
+  outline-offset: 3px;
 }
 
 .lot-map-label-icon {

@@ -1,628 +1,138 @@
-/**
- * Feature: Gestión de Inventario (Productos)
- * Ubicación: src/features/inventory/Inventory.jsx
- * Descripción:
- *  Contenedor principal para la gestión de productos/insumos.
- *  Maneja el estado (lista, loading, alertas de vencimiento) y la lógica CRUD.
- * 
- * Refactorización:
- *  - Extracción de vistas de tabla (Desktop) y lista (Mobile) a componentes.
- *  - Lógica de alertas de vencimiento centralizada en el fetch.
- */
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import {
-  Button, Drawer, Form, Input, InputNumber, Select, Space,
-  notification, Row, Col, Dropdown, Modal, Typography
-} from "antd";
-import {
-  PlusOutlined, MoreOutlined
-} from '../../components/AppIcons';
-import api from "../../services/apiClient";
-import useIsMobile from "../../hooks/useIsMobile";
-import ProductTable from "./components/ProductTable";
-import ProductListMobile from "./components/ProductListMobile";
+import {normalizeUnit} from '../../utils/inventoryUnits';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Button, Card, Col, Drawer, Dropdown, Empty, Form, Input, Modal, Row, Select, Space, Statistic, Table, Tag, notification } from 'antd';
+import { MoreOutlined, PlusOutlined } from '../../components/AppIcons';
+import api from '../../services/apiClient';
+import useIsMobile from '../../hooks/useIsMobile';
+import { PERMISSIONS } from '../../constants/permissions';
+import { hasPermission } from '../../utils/permissions';
+import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
+import ProductIdentityForm from './components/ProductIdentityForm';
+import ReceiptModal from './components/ReceiptModal';
+import ProductDetailDrawer from './components/ProductDetailDrawer';
+import AdjustmentModal from './components/AdjustmentModal';
+import { categories, categoryLabel, expiration, expirationLabel, identityPayload, lowStock, productState, quantityLabel, soon, stockQuantity } from './inventoryModel.mjs';
 
-import { PERMISSIONS } from "../../constants/permissions";
-import { hasPermission } from "../../utils/permissions";
-import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
-
-const CATEGORY_OPTIONS = [
-  { value: "semillas", label: "Semillas" },
-  { value: "agroquimicos", label: "Agroquímicos" },
-  { value: "fertilizantes", label: "Fertilizantes" },
-  { value: "combustible", label: "Combustible" },
-];
-
-const UNIT_OPTIONS_BY_CATEGORY = {
-  semillas: [
-    { value: "bolsas", label: "Bolsas" },
-    { value: "kg", label: "kg" },
-  ],
-  agroquimicos: [
-    { value: "litros", label: "Litros" },
-    { value: "kg", label: "kg" },
-  ],
-  fertilizantes: [
-    { value: "kg", label: "kg" },
-    { value: "litros", label: "Litros" },
-  ],
-  combustible: [
-    { value: "litros", label: "Litros" },
-  ],
-};
-
-const defaultUnitForCategory = (category) => UNIT_OPTIONS_BY_CATEGORY[category]?.[0]?.value || "kg";
-
-// ---- helpers de formato ----
-const UNIT_DISPLAY = {
-  litros: "L", litro: "L", lt: "L", l: "L", L: "L",
-  kg: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
-};
-const formatUnit = (u) => UNIT_DISPLAY[String(u || "").toLowerCase()] || (u || "-");
-
-const pad2 = (n) => String(n).padStart(2, "0");
-const formatDateDDMMYYYY = (d) => {
-  if (!d) return "—";
-  const dt = new Date(d);
-  if (isNaN(dt)) return "—";
-  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
-};
-
-const daysTo = (d) => {
-  if (!d) return null;
-  const dt = new Date(d);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  return Math.ceil((dt - today) / (1000 * 60 * 60 * 24));
-};
-const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
-const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
-
-const normalizeText = (value) => String(value || "").trim().toLowerCase();
-
-const isLowStock = (product) => {
-  const available = Number(product.available_quantity || 0);
-  const total = Number(product.total_quantity || 0);
-  return total > 0 && available > 0 && available <= total * 0.1;
-};
-
-const currentUser = JSON.parse(localStorage.getItem("user") || "null");
-
-const canCreate = hasPermission(currentUser, PERMISSIONS.INVENTORY_CREATE);
-const canViewDisabled = hasPermission(currentUser, PERMISSIONS.INVENTORY_VIEW_DISABLED);
-
-const Inventory = () => {
-  // ------------------------- STATE -------------------------
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const notifiedRef = useRef(false);
-  const [searchText, setSearchText] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [stockFilter, setStockFilter] = useState("all");
-  const [tablePagination, setTablePagination] = useState({ current: 1, pageSize: 10 });
-
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [stockProduct, setStockProduct] = useState(null);
-  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
-  const [addStockLoading, setAddStockLoading] = useState(false);
+export default function Inventory() {
+  const [products, setProducts] = useState([]), [enabled, setEnabled] = useState(false), [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true), [error, setError] = useState(null), [revision, setRevision] = useState(0);
+  const [search, setSearch] = useState(''), [category, setCategory] = useState('all'), [state, setState] = useState('all');
+  const [identity, setIdentity] = useState(null), [receipt, setReceipt] = useState(null), [detailId, setDetailId] = useState(null);
+  const [saving, setSaving] = useState(false), [created, setCreated] = useState(null);
+  const [adjustment,setAdjustment]=useState(null),[similarDetail,setSimilarDetail]=useState(null);
+  const [page, setPage] = useState(1);
   const [form] = Form.useForm();
-  const [stockForm] = Form.useForm();
-  const selectedCategory = Form.useWatch("category", form);
-  const unitOptions = UNIT_OPTIONS_BY_CATEGORY[selectedCategory] || [];
-
-  const isMobile = useIsMobile();
-
-  const getId = (r) => r?.id ?? r?._id;
-  const rowKey = (r) => getId(r) ?? r?.name;
-  const expirationValue = (product) => product?.expiration_date || product?.acquisition_date || null;
-
-  const categoryOptions = useMemo(() => {
-    const categories = [...new Set(products.map((product) => product.category).filter(Boolean))]
-      .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
-    return [
-      { value: "all", label: "Todas las categorías" },
-      ...categories.map((category) => ({
-        value: category,
-        label: CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category,
-      })),
-    ];
-  }, [products]);
-
-  const filteredProducts = useMemo(() => {
-    const search = normalizeText(searchText);
-    const withIndex = products.map((product, index) => ({ product, index }));
-
-    return withIndex
-      .filter(({ product }) => {
-        const matchesSearch = !search
-          || normalizeText(product.name).includes(search)
-          || normalizeText(product.category).includes(search);
-        const matchesCategory = categoryFilter === "all" || product.category === categoryFilter;
-        const available = Number(product.available_quantity || 0);
-        const matchesStock =
-          stockFilter === "all"
-          || (stockFilter === "in_stock" && available > 0)
-          || (stockFilter === "out_of_stock" && available <= 0)
-          || (stockFilter === "low_stock" && isLowStock(product));
-
-        return matchesSearch && matchesCategory && matchesStock;
-      })
-      .sort((a, b) => {
-        const nameCompare = String(a.product.name || "").localeCompare(
-          String(b.product.name || ""),
-          "es",
-          { sensitivity: "base" }
-        );
-        return nameCompare || a.index - b.index;
-      })
-      .map(({ product }) => product);
-  }, [categoryFilter, products, searchText, stockFilter]);
-
-  const resetTablePage = () => {
-    setTablePagination((current) => ({ ...current, current: 1 }));
-  };
-
-  // ------------------------- API -------------------------
+  const busy = useRef(false), fetchVersion = useRef(0);
+  const mobile = useIsMobile();
+  const user = useMemo(() => JSON.parse(localStorage.getItem('user') || 'null'), []);
+  const canView = hasPermission(user, PERMISSIONS.INVENTORY_VIEW);
+  // Match existing backend role floor as well as custom permissions.
+  const canCreate = Number(user?.role) >= 2 && hasPermission(user, PERMISSIONS.INVENTORY_CREATE);
+  const canEdit = Number(user?.role) >= 2 && hasPermission(user, PERMISSIONS.INVENTORY_EDIT);
+  const canDisable = Number(user?.role) >= 2 && hasPermission(user, PERMISSIONS.INVENTORY_DISABLE);
+  const canViewDisabled = hasPermission(user, PERMISSIONS.INVENTORY_VIEW_DISABLED);
   const fetchProducts = useCallback(async () => {
-    setLoading(true);
+    const version = ++fetchVersion.current;
+    setLoading(true); setError(null);
     try {
-      const { data } = await api.get("/products");
-      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
-      setProducts(list);
-
-      // Notificar solo una vez por montaje
-      if (!notifiedRef.current) {
-        const expired = list.filter(p => isExpired(expirationValue(p)));
-        const soon = list.filter(p => isExpiringSoon(expirationValue(p)));
-
-        if (expired.length) {
-          notification.error({
-            message: "Productos vencidos",
-            description:
-              expired.slice(0, 5).map(p => p.name).join(", ") +
-              (expired.length > 5 ? ` y ${expired.length - 5} más` : ""),
-            duration: 6,
-          });
-        }
-        if (soon.length) {
-          notification.warning({
-            message: "Vencen pronto (≤15 días)",
-            description:
-              soon.slice(0, 5).map(p => p.name).join(", ") +
-              (soon.length > 5 ? ` y ${soon.length - 5} más` : ""),
-            duration: 6,
-          });
-        }
-        notifiedRef.current = true;
+      const all = []; let currentPage = 1; let mode = false;
+      // Load every page so search, selectors and metrics include the whole inventory.
+      while (true) {
+        const { data } = await api.get('/products', { params: { page: currentPage, pageSize: 1000 } });
+        if (version !== fetchVersion.current) return;
+        mode = data.inventory_v1_enabled === true;
+        all.push(...data.data);
+        if (all.length >= data.total || !data.data.length) break;
+        currentPage++;
       }
-    } catch (error) {
-      console.error("→ products list error:", error);
-      notification.error({ message: getUserFriendlyError(error, "No se pudieron cargar los productos.") });
-    } finally {
-      setLoading(false);
-    }
+      setProducts(all); setEnabled(mode); setReady(true); setRevision(r => r + 1);
+    } catch (e) { if (version === fetchVersion.current) { setReady(false); setError(getUserFriendlyError(e, 'No se pudo cargar el inventario.')); } }
+    finally { if (version === fetchVersion.current) setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-
-  // ------------------------- HANDLERS -------------------------
-  const openDrawer = (product = null) => {
-    if (!product) {
-      setEditingProduct(null);
-      form.resetFields();
-      form.setFieldsValue({
-        category: undefined,
-        unit: "",
-        acquisition_date: null,
-        total_quantity: undefined,
-        name: "",
-      });
-    } else {
-      setEditingProduct(product);
-      const productExpiration = expirationValue(product);
-      const acquisitionDate = productExpiration
-        ? new Date(productExpiration).toISOString().split("T")[0]
-        : null;
-
-      form.setFieldsValue({
-        name: product.name ?? "",
-        category: product.category,
-        unit: product.unit ?? "kg",
-        total_quantity: product.total_quantity ?? undefined,
-        acquisition_date: acquisitionDate,
-      });
-    }
-    setIsDrawerOpen(true);
+  useEffect(() => { if (canView) fetchProducts(); return () => { fetchVersion.current++; }; }, [fetchProducts, canView]);
+  const openIdentity = product => {
+    form.resetFields(); form.setFieldsValue(product ? {...identityPayload(product),unit:normalizeUnit(product.unit)} : {});
+    setIdentity({ product });
   };
-
-  const closeDrawer = () => {
-    setIsDrawerOpen(false);
-    setEditingProduct(null);
-    form.resetFields();
-  };
-
-  const openAddStockModal = (product) => {
-    setStockProduct(product);
-    stockForm.resetFields();
-    setIsStockModalOpen(true);
-  };
-
-  const closeAddStockModal = () => {
-    if (addStockLoading) return;
-    setIsStockModalOpen(false);
-    setStockProduct(null);
-    stockForm.resetFields();
-  };
-
-  const handleSubmit = async (values) => {
+  const saveIdentity = async values => {
+    if (busy.current || !(identity.product ? canEdit : canCreate)) return;
+    busy.current = true; setSaving(true);
     try {
-      const expirationDate = values.acquisition_date || null;
-      const payload = {
-        ...values,
-        unit: values.unit || "kg",
-        acquisition_date: expirationDate,
-        expiration_date: expirationDate,
-        // si es creación, la disponible = total; si es edición, se conserva
-        available_quantity: editingProduct
-          ? editingProduct.available_quantity
-          : values.total_quantity,
-      };
-
-      const id = getId(editingProduct);
-
-      if (editingProduct && id) {
-        await api.put(`/products/${id}`, payload);
-        notification.success({ message: "Producto actualizado exitosamente" });
-      } else {
-        await api.post("/products", payload);
-        notification.success({ message: "Producto creado exitosamente" });
-      }
-
-      fetchProducts();
-      closeDrawer();
-    } catch (error) {
-      console.error("→ save product error:", error);
-      notification.error({
-        message: getUserFriendlyError(error, "No se pudo guardar el producto."),
-      });
-    }
+      const payload = identityPayload(values);
+      const { data } = identity.product ? await api.put(`/products/${identity.product.id}`, payload) : await api.post('/products', payload);
+      if (!identity.product) setCreated(data.product);
+      notification.success({ message: identity.product ? 'Producto actualizado' : 'Producto creado' });
+      setIdentity(null); await fetchProducts();
+    } catch (e) { notification.error({ message: getUserFriendlyError(e, 'No se pudo guardar el producto.') }); }
+    finally { busy.current = false; setSaving(false); }
   };
-
-  const handleDelete = async (id) => {
-    try {
-      await api.delete(`/products/${id}`);
-      notification.success({ message: "Producto deshabilitado exitosamente" });
-      fetchProducts();
-    } catch (error) {
-      console.error("→ disable product error:", error);
-      notification.error({
-        message: getUserFriendlyError(error, "No se pudo deshabilitar el producto."),
-      });
+  const disable = product => {
+    if(enabled&&stockQuantity(product,true)>0){
+      Modal.warning({title:`Este producto todavía tiene ${quantityLabel(stockQuantity(product,true),product.unit)} disponibles.`,content:'Para deshabilitar este producto, primero ajustá su stock o resolvé las existencias pendientes.'});return;
     }
-  };
-
-  const handleAddStock = async (values) => {
-    if (addStockLoading || !stockProduct) return;
-
-    try {
-      setAddStockLoading(true);
-      await api.patch(`/products/${getId(stockProduct)}/add-stock`, {
-        quantity: values.quantity,
-      });
-      notification.success({ message: "Stock agregado exitosamente" });
-      await fetchProducts();
-      setIsStockModalOpen(false);
-      setStockProduct(null);
-      stockForm.resetFields();
-    } catch (error) {
-      console.error("→ add stock error:", error);
-      notification.error({
-        message: getUserFriendlyError(error, "No se pudo agregar stock."),
-      });
-    } finally {
-      setAddStockLoading(false);
-    }
-  };
-
-  const menuItems = [
-    canViewDisabled && {
-      key: "1",
-      label: (
-        <span onClick={() => (window.location.href = "/productos-deshabilitados")}>
-          Ver productos deshabilitados
-        </span>
-      ),
-    },
-  ].filter(Boolean);
-
-  // ------------------------- RENDER -------------------------
-  return (
-    <div style={{ padding: 12 }}>
-      <Row
-        justify="space-between"
-        align="middle"
-        style={{ marginBottom: 12, marginTop: isMobile ? 8 : 24 }}
-      >
-        <Col>
-          <h2>Gestión de Inventario</h2>
-        </Col>
-        <Col>
-          <Space>
-            {isMobile && menuItems.length > 0 && (
-              <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-                <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-              </Dropdown>
-            )}
-          </Space>
-        </Col>
-      </Row>
-
-      <Row
-        gutter={[12, 12]}
-        align="middle"
-        justify="space-between"
-        style={{ marginBottom: 16 }}
-      >
-        <Col xs={24} lg={14}>
-          <Row gutter={[8, 8]}>
-            <Col xs={24} md={10}>
-              <Input.Search
-                allowClear
-                placeholder="Buscar producto..."
-                value={searchText}
-                onChange={(event) => {
-                  setSearchText(event.target.value);
-                  resetTablePage();
-                }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={7}>
-              <Select
-                value={categoryFilter}
-                options={categoryOptions}
-                onChange={(value) => {
-                  setCategoryFilter(value);
-                  resetTablePage();
-                }}
-                style={{ width: "100%" }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={7}>
-              <Select
-                value={stockFilter}
-                options={[
-                  { value: "all", label: "Todos" },
-                  { value: "in_stock", label: "Con stock" },
-                  { value: "out_of_stock", label: "Sin stock" },
-                  { value: "low_stock", label: "Stock bajo" },
-                ]}
-                onChange={(value) => {
-                  setStockFilter(value);
-                  resetTablePage();
-                }}
-                style={{ width: "100%" }}
-              />
-            </Col>
-          </Row>
-        </Col>
-        {!isMobile && (
-          <Col>
-            <Space wrap>
-              {canViewDisabled && (
-                <Button onClick={() => (window.location.href = "/productos-deshabilitados")}>
-                  Ver Productos Deshabilitados
-                </Button>
-              )}
-              {canCreate && (
-                <Button type="primary" onClick={() => openDrawer(null)}>
-                  Agregar Producto
-                </Button>
-              )}
-            </Space>
-          </Col>
-        )}
-      </Row>
-
-      {/* Tabla solo en desktop */}
-      {!isMobile && (
-        <ProductTable
-          products={filteredProducts}
-          loading={loading}
-          onEdit={openDrawer}
-          onAddStock={openAddStockModal}
-          onDelete={handleDelete}
-          rowKey={rowKey}
-          getId={getId}
-          formatUnit={formatUnit}
-          formatDateDDMMYYYY={formatDateDDMMYYYY}
-          isExpired={isExpired}
-          isExpiringSoon={isExpiringSoon}
-          expirationValue={expirationValue}
-          pagination={tablePagination}
-          onPaginationChange={(pagination) => {
-            setTablePagination({
-              current: pagination.current,
-              pageSize: 10,
-            });
-          }}
-        />
-      )}
-
-      {/* Cards solo en mobile */}
-      {isMobile && (
-        <ProductListMobile
-          products={filteredProducts}
-          onEdit={openDrawer}
-          onAddStock={openAddStockModal}
-          onDelete={handleDelete}
-          rowKey={rowKey}
-          getId={getId}
-          formatUnit={formatUnit}
-          formatDateDDMMYYYY={formatDateDDMMYYYY}
-          isExpired={isExpired}
-          isExpiringSoon={isExpiringSoon}
-          expirationValue={expirationValue}
-        />
-      )}
-
-      <Drawer
-        title={editingProduct ? "Editar Producto" : "Agregar Producto"}
-        placement={isMobile ? "bottom" : "right"}
-        onClose={closeDrawer}
-        open={isDrawerOpen}
-        height={isMobile ? "90vh" : undefined}
-        width={isMobile ? "100%" : 400}
-        styles={{ body: { paddingBottom: 80 } }}
-        destroyOnHidden
-      >
-        <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          <Form.Item
-            name="name"
-            label="Nombre"
-            rules={[{ required: true, message: "Por favor ingresá el nombre del producto." }]}
-          >
-            <Input placeholder="Por favor ingresá el nombre del producto." />
-          </Form.Item>
-
-          <Form.Item
-            name="category"
-            label="Categoría"
-            rules={[{ required: true, message: "Por favor seleccioná la categoría." }]}
-          >
-            <Select
-              allowClear
-              placeholder="Seleccioná la categoría"
-              options={CATEGORY_OPTIONS}
-              onChange={(value) => {
-                form.setFieldsValue({ unit: defaultUnitForCategory(value) });
-              }}
-            />
-          </Form.Item>
-          <Form.Item
-            name="total_quantity"
-            label="Cantidad Total"
-            rules={[{ required: true, message: "Por favor ingresá la cantidad total." }]}
-          >
-            <InputNumber
-              min={0}
-              style={{ width: "100%" }}
-              placeholder="Ingresá la cantidad total."
-              disabled={!!editingProduct}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="unit"
-            label="Unidad"
-            rules={[{ required: true, message: "Por favor seleccionÃ¡ la unidad." }]}
-          >
-            <Select
-              placeholder="SeleccionÃ¡ la unidad"
-              disabled={!selectedCategory}
-              options={unitOptions}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="acquisition_date"
-            label="Fecha de Vencimiento"
-            rules={[
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve();
-                  const currentExpiration = expirationValue(editingProduct);
-                  if (currentExpiration) {
-                    const currentValue = new Date(currentExpiration).toISOString().split("T")[0];
-                    if (value === currentValue) return Promise.resolve();
-                  }
-                  const inputTs = new Date(value).getTime();
-                  const todayMidnight = new Date().setHours(0, 0, 0, 0);
-                  return inputTs >= todayMidnight
-                    ? Promise.resolve()
-                    : Promise.reject(new Error("La fecha de vencimiento no puede ser anterior a la fecha actual."));
-                },
-              },
-            ]}
-          >
-            <Input type="date" placeholder="dd/mm/aaaa" />
-          </Form.Item>
-
-          <Form.Item>
-            <Button type="primary" htmlType="submit" block>
-              {editingProduct ? "Actualizar Producto" : "Guardar Producto"}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Drawer>
-
-      <Modal
-        title="Agregar stock"
-        open={isStockModalOpen}
-        onCancel={closeAddStockModal}
-        footer={null}
-        destroyOnHidden
-      >
-        <Form layout="vertical" form={stockForm} onFinish={handleAddStock}>
-          <Space direction="vertical" size={4} style={{ width: "100%", marginBottom: 16 }}>
-            <Typography.Text strong>{stockProduct?.name || "Producto"}</Typography.Text>
-            <Typography.Text type="secondary">
-              Stock disponible actual: {stockProduct?.available_quantity ?? 0} {formatUnit(stockProduct?.unit)}
-            </Typography.Text>
-          </Space>
-
-          <Form.Item
-            name="quantity"
-            label="Cantidad a agregar"
-            rules={[
-              { required: true, message: "Ingresá la cantidad a agregar." },
-              {
-                validator: (_, value) => (
-                  Number(value) > 0
-                    ? Promise.resolve()
-                    : Promise.reject(new Error("La cantidad debe ser mayor a 0."))
-                ),
-              },
-            ]}
-          >
-            <InputNumber
-              min={0}
-              addonAfter={formatUnit(stockProduct?.unit)}
-              style={{ width: "100%" }}
-              disabled={addStockLoading}
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              block
-              loading={addStockLoading}
-              disabled={addStockLoading}
-            >
-              Confirmar
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {isMobile && !isDrawerOpen && !isStockModalOpen && canCreate && (
-        <button
-          type="button"
-          className="fab-button"
-          aria-label="Agregar producto"
-          onClick={() => openDrawer(null)}
-        >
-          <PlusOutlined />
-        </button>
-      )}
-    </div>
-  );
-};
-
-export default Inventory;
-
-
+    Modal.confirm({ title: `¿Deshabilitar ${product.name}?`, content: 'El producto conservará su historial y dejará de aparecer en el inventario activo.', okText: 'Deshabilitar', cancelText: 'Cancelar', onOk: async () => {
+    try { await api.delete(`/products/${product.id}`); if (detailId === product.id) setDetailId(null); await fetchProducts(); }
+    catch (e) { notification.error({ message: getUserFriendlyError(e, 'No se pudo deshabilitar el producto.') }); throw e; }
+  } });};
+  const actions = p => <Dropdown trigger={['click']} menu={{ items: [
+    { key: 'detail', label: 'Ver detalle', onClick: () => setDetailId(p.id) },
+    ...(canEdit ? [{ key: 'receipt', label: 'Registrar ingreso', disabled: !ready, onClick: () => setReceipt({ product: p }) },
+      { key: 'edit', label: 'Editar producto', disabled: !ready, onClick: () => openIdentity(p) },
+      { key: 'adjust', label: 'Ajustar stock', disabled: !enabled||!ready, onClick:()=>setAdjustment(p) }] : []),
+    ...(canDisable ? [{ key: 'disable', label: 'Deshabilitar', disabled: !ready, onClick: () => disable(p) }] : []),
+  ] }}><Button aria-label={`Acciones de ${p.name}`} icon={<MoreOutlined />} /></Dropdown>;
+  const filtered = products.filter(p => (!search || p.name.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
+    && (category === 'all' || p.category === category)
+    && (state === 'all' || (state === 'Disponible' && stockQuantity(p, enabled) > 0)
+      || (state === 'Sin stock' && stockQuantity(p, enabled) <= 0)
+      || (state === 'Stock bajo' && lowStock(p, enabled))
+      || (state === 'Próximo a vencer' && soon(expiration(p, enabled)))))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const detail = products.find(p => p.id === detailId)|| (similarDetail?.id===detailId?similarDetail:null);
+  const name = p => <Button type="link" style={{ padding: 0, height: 'auto', whiteSpace: 'normal', textAlign: 'left' }} onClick={() => setDetailId(p.id)}>{p.name}</Button>;
+  if (!canView) return <Alert type="warning" message="No tenés permiso para ver el inventario." />;
+  return <div style={{ padding: mobile ? 12 : 24 }}>
+    <Row justify="space-between" align="middle" gutter={[12, 12]} style={{ marginBottom: 20 }}>
+      <Col><h2 style={{ margin: 0 }}>Inventario</h2></Col>
+      <Col><Space wrap>
+        {canEdit && <Button type="primary" icon={<PlusOutlined />} disabled={!ready} onClick={() => setReceipt({ product: null })}>Registrar ingreso</Button>}
+        {canCreate && <Button icon={<PlusOutlined />} disabled={!ready} onClick={() => openIdentity(null)}>Nuevo producto</Button>}
+        {canViewDisabled && <Button onClick={() => { window.location.href = '/productos-deshabilitados'; }}>Ver deshabilitados</Button>}
+      </Space></Col>
+    </Row>
+    {error && <Alert type="error" message={error} action={<Button onClick={fetchProducts}>Reintentar</Button>} style={{ marginBottom: 16 }} />}
+    {created && <Alert type="success" message={`${created.name}: producto creado sin stock`} closable onClose={() => setCreated(null)} style={{ marginBottom: 16 }} action={canEdit && <Button disabled={!ready} onClick={() => setReceipt({ product: created })}>Registrar primer ingreso</Button>} />}
+    <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+      {[
+        ['Productos', products.length], ['Stock bajo', products.filter(p => lowStock(p, enabled)).length],
+        ['Próximos a vencer', products.filter(p => soon(expiration(p, enabled))).length], ['Sin stock', products.filter(p => stockQuantity(p, enabled) <= 0).length],
+      ].map(([title, value]) => <Col xs={12} lg={6} key={title}><Card size="small"><Statistic title={title} value={value} loading={loading} /></Card></Col>)}
+    </Row>
+    <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+      <Col xs={24} md={12}><Input.Search placeholder="Buscar productos..." aria-label="Buscar productos" allowClear value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></Col>
+      <Col xs={12} md={6}><Select aria-label="Categoría" style={{ width: '100%' }} value={category} onChange={v => { setCategory(v); setPage(1); }} options={[{ value: 'all', label: 'Todas las categorías' }, ...categories]} /></Col>
+      <Col xs={12} md={6}><Select aria-label="Estado" style={{ width: '100%' }} value={state} onChange={v => { setState(v); setPage(1); }} options={[{ value: 'all', label: 'Todos los estados' }, ...['Disponible', 'Stock bajo', 'Sin stock', 'Próximo a vencer'].map(value => ({ value, label: value }))]} /></Col>
+    </Row>
+    {mobile ? <Space direction="vertical" style={{ width: '100%' }}>
+      {!filtered.length && <Empty description={loading ? 'Cargando productos...' : 'No hay productos para estos filtros.'} />}
+      {filtered.map(p => <Card size="small" key={p.id} title={name(p)} extra={actions(p)}>
+        <p><strong>Stock disponible: {quantityLabel(stockQuantity(p, enabled), p.unit)}</strong></p>
+        <Tag>{productState(p, enabled)}</Tag><p>Próximo vencimiento: {expirationLabel(expiration(p, enabled))}</p>
+      </Card>)}
+    </Space> : <Table rowKey="id" loading={loading} dataSource={filtered} pagination={{ current: page, pageSize: 10, showSizeChanger: false, onChange: setPage }} columns={[
+      { title: 'Producto', key: 'name', render: (_, p) => name(p) }, { title: 'Categoría', dataIndex: 'category', render: categoryLabel },
+      { title: 'Stock disponible', key: 'stock', render: (_, p) => quantityLabel(stockQuantity(p, enabled), p.unit) },
+      { title: 'Estado', key: 'state', render: (_, p) => <Tag>{productState(p, enabled)}</Tag> },
+      { title: 'Próximo vencimiento', key: 'expiration', render: (_, p) => expirationLabel(expiration(p, enabled)) },
+      { title: 'Acciones', key: 'actions', render: (_, p) => actions(p) },
+    ]} />}
+    <Drawer open={!!identity} title={identity?.product ? 'Editar producto' : 'Nuevo producto'} width={mobile ? '100%' : 460} onClose={() => !saving && setIdentity(null)} closable={!saving} maskClosable={!saving}>
+      {identity && <ProductIdentityForm form={form} editing={identity.product} enabled={enabled} saving={saving} onFinish={saveIdentity} canEdit={canEdit} canViewDisabled={canViewDisabled}
+        onUse={p=>{setIdentity(null);setSimilarDetail(p);setDetailId(p.id);}}
+        onReceipt={p=>{setIdentity(null);setProducts(list=>list.some(x=>x.id===p.id)?list:[...list,p]);setReceipt({product:p});}} />}
+    </Drawer>
+    {receipt && <ReceiptModal products={products} product={receipt.product} enabled={enabled} canEdit={canEdit && ready} canCreate={canCreate} onCreate={() => { setReceipt(null); openIdentity(null); }} onClose={() => setReceipt(null)} onSaved={fetchProducts} />}
+    {detail && <ProductDetailDrawer product={detail} enabled={enabled} canEdit={canEdit && ready&&detail.enabled!==false} mobile={mobile} onClose={() => setDetailId(null)} onReceipt={p => setReceipt({ product: p })} onAdjust={setAdjustment} revision={revision} />}
+    {adjustment&&<AdjustmentModal product={adjustment} enabled={enabled} canEdit={canEdit&&ready} onClose={()=>setAdjustment(null)} onSaved={p=>{setProducts(list=>list.map(x=>x.id===p.id?p:x));fetchProducts();}}/>}
+  </div>;
+}

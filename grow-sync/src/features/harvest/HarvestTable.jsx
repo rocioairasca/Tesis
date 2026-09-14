@@ -1,449 +1,102 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
-import {
-  Button,
-  Card,
-  Col,
-  Empty,
-  Popconfirm,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tooltip,
-  notification,
-} from "antd";
-import {
-  CalendarOutlined,
-  CheckCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  HarvestOutlined,
-  MapPin,
-  Package,
-  Ruler,
-} from '../../components/AppIcons';
+import { campaignOptions, campaignValue } from '../../utils/campaigns.mjs';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Select } from 'antd';
+import { AppIcons } from '../../components/AppIcons';
+import { FilterBar, Metric, ViewSwitcher, DataTable, EntityLink, ConfirmDialog, LoadingState, ErrorState } from '../../components/ui';
+import { getHarvestRecords, getHarvestFilters, disableHarvestRecord, enableHarvestRecord } from '../../services/harvestService';
+import { dashboardSource } from '../dashboard/dashboardSource';
+import { readAllPages } from '../dashboard/dashboardModel.mjs';
+import api from '../../services/apiClient';
+import { formatCalendarDate } from '../../utils/calendarDate';
+import { formatNumber } from '../../utils/numberFormat';
+import { formatHectares } from '../../utils/harvestUtils';
+import { PERMISSIONS } from '../../constants/permissions';
+import { hasPermission } from '../../utils/permissions';
+import { cropLabel, campaignLabel, surfaceLabel, authorLabel, filterHarvestRows, readHarvestPages } from './harvestPresentation.mjs';
+import HarvestCharts from './HarvestCharts';
+import HarvestDetail from './HarvestDetail';
 
-import dayjs from "dayjs";
-
-import {
-  disableHarvestRecord,
-  enableHarvestRecord,
-  getHarvestFilters,
-  getHarvestRecords,
-} from "../../services/harvestService";
-
-import { formatCropLabel, formatNumber } from "../../utils/harvestUtils";
-import { PERMISSIONS } from "../../constants/permissions";
-import { hasPermission } from "../../utils/permissions";
-import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
-
-const formatDateDDMMYYYY = (date) => {
-  if (!date) return "-";
-  return dayjs(date).format("DD/MM/YYYY");
-};
-
-const getCropDisplay = (record) => record?.crop_name || record?.crop;
-const getCampaignDisplay = (record) => record?.campaign_name || record?.campaign;
-const getSurfaceDisplay = (record) => (
-  record?.sub_lot_name ? `${record.lot_name || "-"} / ${record.sub_lot_name}` : record?.lot_name || "-"
-);
-
-const HarvestTable = ({ refreshKey = 0, isMobile = false, onEdit }) => {
-  const [loading, setLoading] = useState(false);
-  const [records, setRecords] = useState([]);
-
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    pageSize: 10,
-    totalPages: 0,
-  });
-
-  const [filters, setFilters] = useState({
-    campaign: null,
-    crop: null,
-    includeDisabled: false,
-  });
-  const [filterOptions, setFilterOptions] = useState({ campaigns: [], crops: [] });
-  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
-  const canEdit = hasPermission(currentUser, PERMISSIONS.HARVEST_EDIT);
-  const canDisable = hasPermission(currentUser, PERMISSIONS.HARVEST_DISABLE);
-  const canEnable = hasPermission(currentUser, PERMISSIONS.HARVEST_ENABLE);
-
-  const fetchRecords = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const response = await getHarvestRecords({
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        campaign: filters.campaign || undefined,
-        crop: filters.crop || undefined,
-        includeDisabled: filters.includeDisabled ? "true" : "false",
-      });
-
-      setRecords(response?.data || []);
-      setPagination((prev) => ({
-        ...prev,
-        ...(response?.pagination || {}),
-      }));
-    } catch (error) {
-      console.error("Error al cargar cosechas:", error);
-      notification.error({
-        message: "Error al cargar los registros de cosecha",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    pagination.page,
-    pagination.pageSize,
-    filters.campaign,
-    filters.crop,
-    filters.includeDisabled,
-  ]);
-
-  useEffect(() => {
-    fetchRecords();
-  }, [fetchRecords, refreshKey]);
-
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        const data = await getHarvestFilters();
-        setFilterOptions({
-          campaigns: data?.campaigns || [],
-          crops: data?.crops || [],
-        });
-      } catch (error) {
-        console.error("Error al cargar filtros de cosecha:", error);
-      }
-    };
-
-    fetchFilterOptions();
-  }, [refreshKey]);
-
-  const handleDisable = useCallback(async (id) => {
-    try {
-      await disableHarvestRecord(id);
-      notification.success({
-        message: "Registro deshabilitado",
-      });
-      fetchRecords();
-    } catch (error) {
-      console.error(error);
-      notification.error({
-        message: getUserFriendlyError(error, "No se pudo deshabilitar el registro."),
-      });
-    }
-  }, [fetchRecords]);
-
-  const handleEnable = useCallback(async (id) => {
-    try {
-      await enableHarvestRecord(id);
-      notification.success({
-        message: "Registro habilitado",
-      });
-      fetchRecords();
-    } catch (error) {
-      console.error(error);
-      notification.error({
-        message: getUserFriendlyError(error, "No se pudo habilitar el registro."),
-      });
-    }
-  }, [fetchRecords]);
-
-  const renderHarvestAction = useCallback((record, block = false) => {
-    if (record.enabled && canDisable) {
-      return (
-        <Popconfirm
-          title="Deshabilitar registro"
-          description="¿Querés deshabilitar este registro de cosecha?"
-          onConfirm={() => handleDisable(record.id)}
-          okText="Sí"
-          cancelText="No"
-        >
-          <Tooltip title="Deshabilitar">
-            <Button
-              danger
-              type={block ? "default" : "text"}
-              shape={block ? undefined : "circle"}
-              icon={<DeleteOutlined />}
-              block={block}
-              aria-label="Deshabilitar"
-            >
-              {block ? "Deshabilitar" : null}
-            </Button>
-          </Tooltip>
-        </Popconfirm>
-      );
-    }
-
-    if (!record.enabled && canEnable) {
-      return (
-        <Popconfirm
-          title="Habilitar registro"
-          description="¿Querés volver a habilitar este registro de cosecha?"
-          onConfirm={() => handleEnable(record.id)}
-          okText="Sí"
-          cancelText="No"
-        >
-          <Tooltip title="Habilitar">
-            <Button
-              type={block ? "default" : "text"}
-              shape={block ? undefined : "circle"}
-              icon={<CheckCircleOutlined />}
-              block={block}
-              aria-label="Habilitar"
-            >
-              {block ? "Habilitar" : null}
-            </Button>
-          </Tooltip>
-        </Popconfirm>
-      );
-    }
-
-    return null;
-  }, [canDisable, canEnable, handleDisable, handleEnable]);
-
-  const columns = useMemo(() => {
-    return [
-      {
-        title: "Fecha",
-        dataIndex: "harvest_date",
-        key: "harvest_date",
-        render: (value) => formatDateDDMMYYYY(value),
-      },
-      {
-        title: "Lote",
-        key: "lot_name",
-        render: (_, record) => getSurfaceDisplay(record),
-      },
-      {
-        title: "Cultivo",
-        key: "crop",
-        render: (_, record) => formatCropLabel(getCropDisplay(record)),
-      },
-      {
-        title: "Campaña",
-        key: "campaign",
-        render: (_, record) => getCampaignDisplay(record) || "-",
-      },
-      {
-        title: "Producción",
-        dataIndex: "production_kg",
-        key: "production_kg",
-        render: (value) => `${formatNumber(value, 0)} kg`,
-      },
-      {
-        title: "Superficie",
-        dataIndex: "harvested_area_ha",
-        key: "harvested_area_ha",
-        render: (value) => `${formatNumber(value)} ha`,
-      },
-      {
-        title: "Rendimiento",
-        dataIndex: "yield_kg_ha",
-        key: "yield_kg_ha",
-        render: (value) => `${formatNumber(value)} kg/ha`,
-      },
-      (canEdit || canDisable || canEnable) && {
-        title: "Acciones",
-        key: "actions",
-        width: 96,
-        render: (_, record) => (
-          <Space size="small">
-            {record.enabled && canEdit && (
-              <Tooltip title="Editar">
-                <Button
-                  type="text"
-                  shape="circle"
-                  icon={<EditOutlined />}
-                  onClick={() => onEdit?.(record)}
-                  aria-label={`Editar cosecha ${getCropDisplay(record) || ""}`}
-                />
-              </Tooltip>
-            )}
-            {renderHarvestAction(record)}
-          </Space>
-        ),
-      },
-    ].filter(Boolean);
-  }, [canDisable, canEnable, canEdit, onEdit, renderHarvestAction]);
-
-  const renderMobileCards = () => {
-    if (!records.length) {
-      return <Empty description="No hay registros de cosecha" />;
-    }
-
-    return (
-      <div className="inventory-cards-container">
-        {records.map((record) => (
-          <div className="inventory-card" key={record.id}>
-            <div className="card-header">
-              <h3>{formatCropLabel(getCropDisplay(record))} - {getCampaignDisplay(record) || "-"}</h3>
-              <div className="card-icons">
-                {record.enabled && canEdit && (
-                  <Tooltip title="Editar">
-                    <Button
-                      type="text"
-                      shape="circle"
-                      icon={<EditOutlined />}
-                      onClick={() => onEdit?.(record)}
-                      aria-label={`Editar cosecha ${getCropDisplay(record) || ""}`}
-                    />
-                  </Tooltip>
-                )}
-                {renderHarvestAction(record)}
-              </div>
-            </div>
-
-            <p className="flex-row">
-              <CalendarOutlined size={18} /> <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
-            </p>
-            <p className="flex-row">
-              <MapPin size={18} /> <strong>Lote:</strong> {getSurfaceDisplay(record)}
-            </p>
-            <p className="flex-row">
-              <Package size={18} /> <strong>Produccion:</strong> {formatNumber(record.production_kg, 0)} kg
-            </p>
-            <p className="flex-row">
-              <Ruler size={18} /> <strong>Superficie:</strong> {formatNumber(record.harvested_area_ha)} ha
-            </p>
-            <p className="flex-row">
-              <HarvestOutlined size={18} /> <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha
-            </p>
-            {record.notes ? (
-              <p>
-                <strong>Notas:</strong> {record.notes}
-              </p>
-            ) : null}
-
-          </div>
-        ))}
-      </div>
-    );
-
-  };
-
-  return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Card>
-        <Row justify="space-between" align="middle" gutter={[12, 12]}>
-          <Col xs={24} md={16}>
-            <Space wrap size={12}>
-              <Select
-                style={{ width: 180 }}
-                placeholder="Filtrar por campaña"
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                value={filters.campaign || undefined}
-                onChange={(value) => {
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                  setFilters((prev) => ({
-                    ...prev,
-                    campaign: value || null,
-                  }));
-                }}
-                options={filterOptions.campaigns.map((campaign) => ({
-                  value: campaign,
-                  label: campaign,
-                }))}
-              />
-
-              <Select
-                style={{ width: 180 }}
-                placeholder="Filtrar por cultivo"
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                value={filters.crop || undefined}
-                onChange={(value) => {
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                  setFilters((prev) => ({
-                    ...prev,
-                    crop: value || null,
-                  }));
-                }}
-                options={filterOptions.crops.map((crop) => ({
-                  value: crop,
-                  label: formatCropLabel(crop),
-                }))}
-              />
-            </Space>
-          </Col>
-
-          <Col xs={24} md={8} />
-        </Row>
-      </Card>
-
-      {isMobile ? (
-        <>
-          {renderMobileCards()}
-          <Card>
-            <Row justify="space-between" align="middle">
-              <Col>
-                <Text>
-                  Página {pagination.page} de {pagination.totalPages || 1}
-                </Text>
-              </Col>
-
-              <Col>
-                <Space>
-                  <Button
-                    disabled={pagination.page <= 1}
-                    onClick={() =>
-                      setPagination((prev) => ({
-                        ...prev,
-                        page: prev.page - 1,
-                      }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-
-                  <Button
-                    disabled={pagination.page >= (pagination.totalPages || 1)}
-                    onClick={() =>
-                      setPagination((prev) => ({
-                        ...prev,
-                        page: prev.page + 1,
-                      }))
-                    }
-                  >
-                    Siguiente
-                  </Button>
-                </Space>
-              </Col>
-            </Row>
-          </Card>
-        </>
-      ) : (
-        <Table
-          rowKey="id"
-          loading={loading}
-          columns={columns}
-          dataSource={records}
-          pagination={{
-            current: pagination.page,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            position: ["bottomCenter"],
-            showSizeChanger: false,
-            onChange: (page, pageSize) => {
-              setPagination((prev) => ({
-                ...prev,
-                page,
-                pageSize,
-              }));
-            },
-          }}
-          locale={{ emptyText: "No hay registros de cosecha" }}
-        />
-      )}
-    </Space>
-  );
-};
-
-export default HarvestTable;
+const defaults = { campaign:undefined, crop:undefined, surface:undefined, search:'', state:'active', origin:undefined };
+export default function HarvestTable({ refreshKey = 0, onEdit, lots = [], isMobile = false }) {
+  const [user] = useState(()=>JSON.parse(localStorage.getItem('user') || 'null'));
+  const canStats = Number(user?.role) >= 1;
+  const canDisabled = hasPermission(user,PERMISSIONS.HARVEST_VIEW_DISABLED);
+  const canEdit = hasPermission(user,PERMISSIONS.HARVEST_EDIT);
+  const [filters,setFilters] = useState(defaults), [view,setView] = useState('table');
+  const [records,setRecords] = useState([]), [loading,setLoading] = useState(true), [error,setError] = useState(null);
+  const [analytics,setAnalytics] = useState(null), [statsLoading,setStatsLoading] = useState(false), [statsError,setStatsError] = useState(null);
+  const [options,setOptions] = useState({campaigns:[],crops:[]}), [users,setUsers] = useState([user]);
+  const [selected,setSelected] = useState(null), [confirmation,setConfirmation] = useState(null), [revision,setRevision] = useState(0), [page,setPage] = useState(1);
+  const change = (key,value) => {setFilters(previous=>({...previous,[key]:value}));setPage(1);};
+  useEffect(()=>{
+    let cancelled = false;
+    setLoading(true);setError(null);
+    readHarvestPages(getHarvestRecords,{campaign:filters.campaign,crop:filters.crop,onlyDisabled:canDisabled&&filters.state==='disabled'?'true':'false',includeDisabled:canDisabled&&filters.state==='all'?'true':'false'},()=>cancelled)
+      .then(rows=>{if(!cancelled)setRecords(rows);}).catch(reason=>{if(!cancelled)setError(reason);}).finally(()=>{if(!cancelled)setLoading(false);});
+    return ()=>{cancelled=true;};
+  },[filters.campaign,filters.crop,filters.state,canDisabled,refreshKey,revision]);
+  useEffect(()=>{
+    if(!canStats)return;
+    let cancelled=false;setStatsLoading(true);setStatsError(null);setAnalytics(null);
+    dashboardSource.production({filters:{campaign:filters.campaign,crop:filters.crop,unit:'kg'}})
+      .then(data=>{if(!cancelled)setAnalytics(data);}).catch(reason=>{if(!cancelled)setStatsError(reason);}).finally(()=>{if(!cancelled)setStatsLoading(false);});
+    return ()=>{cancelled=true;};
+  },[canStats,filters.campaign,filters.crop,refreshKey,revision]);
+  useEffect(()=>{
+    if(!canStats)return;
+    let cancelled=false;
+    getHarvestFilters().then(data=>{if(!cancelled)setOptions({...data,campaigns:data.campaigns||[],crops:data.crops||[]});}).catch(()=>{});
+    return ()=>{cancelled=true;};
+  },[canStats,refreshKey,revision]);
+  useEffect(()=>{
+    // Existing users endpoint requires administrator role, independently of UI permissions.
+    if(!(Number(user?.role)>=3) || !hasPermission(user,PERMISSIONS.USERS_VIEW))return;
+    let cancelled=false;
+    readAllPages(async params=>(await api.get('/users',{params})).data,{includeDisabled:true})
+      .then(data=>{if(!cancelled)setUsers([user,...data.data]);}).catch(()=>{});
+    return ()=>{cancelled=true;};
+  },[user]);
+  const visible = useMemo(()=>filterHarvestRows(records,filters),[records,filters]);
+  const selectOptions = (values,extra) => [...new Set([...values,...extra])].filter(Boolean).map(value=>({value,label:value}));
+  const surfaceOptions = [...new Map(records.map(row=>[row.sub_lot_id?`sub:${row.sub_lot_id}`:`lot:${row.lot_id}`,surfaceLabel(row)])).entries()].map(([value,label])=>({value,label}));
+  const actions = row => [
+    {key:'detail',label:'Ver detalle',onClick:()=>setSelected(row)},
+    {key:'edit',label:'Editar',hidden:!row.enabled||!canEdit,onClick:()=>onEdit(row)},
+    {key:'disable',label:'Deshabilitar',danger:true,hidden:!row.enabled||!hasPermission(user,PERMISSIONS.HARVEST_DISABLE),onClick:()=>setConfirmation(row)},
+    {key:'enable',label:'Habilitar',hidden:row.enabled||!hasPermission(user,PERMISSIONS.HARVEST_ENABLE),onClick:()=>setConfirmation(row)},
+  ];
+  const clipped = value => <span className="gs-harvest-ellipsis" title={value}>{value}</span>;
+  const columns = [
+    {title:'Fecha',dataIndex:'harvest_date',width:110,render:value=>formatCalendarDate(value)},
+    {title:'Cultivo',key:'crop',render:(_,row)=><span className="gs-harvest-crop"><AppIcons.crop/>{clipped(cropLabel(row))}</span>},
+    {title:'Lote / Sublote',key:'surface',render:(_,row)=><><EntityLink onClick={()=>setSelected(row)}>{clipped(surfaceLabel(row))}</EntityLink>{row.sub_lot_name&&<small className="gs-harvest-ellipsis" title={row.lot_name}>{row.lot_name}</small>}</>},
+    {title:'Superficie',dataIndex:'harvested_area_ha',width:110,render:formatHectares},
+    {title:'Producción',dataIndex:'production_kg',width:125,render:value=>`${formatNumber(value)} kg`},
+    {title:'Rendimiento',dataIndex:'yield_kg_ha',width:130,render:value=>`${formatNumber(value)} kg/ha`},
+    {title:'Campaña',key:'campaign',render:(_,row)=>clipped(campaignLabel(row))},
+    {title:'Registrado por',key:'author',render:(_,row)=>clipped(authorLabel(row,users))},
+  ];
+  const activeFilters = Object.entries(filters).filter(([key,value])=>value && !(key==='state'&&value==='active')).map(([key,value])=>({key,label:key==='state'?(value==='disabled'?'Deshabilitadas':'Todos los estados'):key==='surface'?surfaceOptions.find(item=>item.value===value)?.label||'Superficie seleccionada':key==='origin'?({historical:'Histórica',current:'Actual',unknown:'Sin procedencia documentada'}[value]):value,onRemove:()=>change(key,defaults[key])}));
+  return <>
+    {canStats && <>{statsLoading?<LoadingState label="Cargando resumen productivo…" rows={1}/>:statsError?<ErrorState error={statsError} onRetry={()=>setRevision(value=>value+1)}/>:analytics&&<div className="gs-harvest-metrics">
+      <Metric compact icon={<AppIcons.area/>} label="Superficie cosechada" value={formatHectares(analytics.summary.total_area_ha)}/>
+      <Metric compact icon={<AppIcons.inventory/>} label="Producción total" value={`${formatNumber(analytics.summary.total_production_kg)} kg`}/>
+      <Metric compact icon={<AppIcons.harvest/>} label="Rendimiento promedio" value={`${formatNumber(Number(analytics.summary.total_area_ha)>0?analytics.summary.avg_yield_kg_ha:null)} kg/ha`}/>
+    </div>}<p className="gs-ui-helper gs-harvest-scope">Resumen y gráficos: cosechas activas de la campaña y cultivo seleccionados. Los demás filtros se aplican al listado.</p></>}
+    <FilterBar search={{value:filters.search,onChange:value=>change('search',value),placeholder:'Buscar cosechas…'}} filters={<>
+      <Select aria-label="Campaña" placeholder="Todas las campañas" allowClear showSearch optionFilterProp="label" value={filters.campaign} onChange={value=>change('campaign',value)} options={campaignOptions([...new Map([...records.filter(row=>row.campaign_id || row.campaign_name || row.campaign),...(options.campaign_details ?? options.campaigns)].map(row=>[campaignValue(row),row])).values()])}/>
+      <Select aria-label="Cultivo" placeholder="Todos los cultivos" allowClear showSearch optionFilterProp="label" value={filters.crop} onChange={value=>change('crop',value)} options={selectOptions(options.crops,records.map(row=>row.crop_name||row.crop))}/>
+      <Select aria-label="Lote o sublote" placeholder="Lotes y sublotes" allowClear showSearch optionFilterProp="label" value={filters.surface} onChange={value=>change('surface',value)} options={surfaceOptions}/>
+    </>} moreFilters={<>
+      {canDisabled&&<label className="gs-harvest-filter-field">Estado<Select aria-label="Estado" value={filters.state} onChange={value=>change('state',value)} options={[{value:'active',label:'Activas'},{value:'disabled',label:'Deshabilitadas'},{value:'all',label:'Todos'}]}/></label>}
+      <label className="gs-harvest-filter-field">Procedencia<Select aria-label="Procedencia" placeholder="Todas" allowClear value={filters.origin} onChange={value=>change('origin',value)} options={[{value:'current',label:'Actual'},{value:'historical',label:'Histórica'},{value:'unknown',label:'No documentada'}]}/></label>
+    </>} activeFilters={activeFilters} onClear={()=>{setFilters(defaults);setPage(1);}}/>
+    <div className="gs-harvest-view"><ViewSwitcher value={view} onChange={setView} options={[{value:'table',label:'Tabla'},{value:'charts',label:'Gráficos',disabled:!canStats}]}/></div>
+    <div className={`gs-harvest-workspace ${view==='charts'?'gs-harvest-workspace--charts':''}`}>
+      {view==='table'&&<div className="gs-harvest-table"><DataTable title="Registros de cosecha" columns={columns} dataSource={visible} loading={loading} error={error} onRetry={()=>setRevision(value=>value+1)} actions={actions} rowLabel={row=>`${cropLabel(row)} · ${formatCalendarDate(row.harvest_date)}`} pagination={{current:page,pageSize:10,onChange:setPage}} renderMobile={row=><div className="gs-harvest-mobile"><EntityLink onClick={()=>setSelected(row)}><AppIcons.crop/> {surfaceLabel(row)}</EntityLink>{row.sub_lot_name&&<small>{row.lot_name}</small>}<span>{formatHectares(row.harvested_area_ha)} · {formatNumber(row.yield_kg_ha)} kg/ha</span><span>{formatNumber(row.production_kg)} kg · {campaignLabel(row)}</span></div>}/></div>}
+      {(!isMobile||view==='charts')&&canStats&&!statsLoading&&!statsError&&analytics&&<aside aria-label="Analítica de cosechas"><HarvestCharts data={analytics}/></aside>}
+    </div>
+    <HarvestDetail record={selected} lots={lots} users={users} onClose={()=>setSelected(null)} onEdit={canEdit?row=>{setSelected(null);onEdit(row);}:undefined}/>
+    <ConfirmDialog open={!!confirmation} title={confirmation?.enabled?'Deshabilitar cosecha':'Habilitar cosecha'} description="¿Querés cambiar el estado de este registro?" consequences="El registro conserva su historial." destructive={!!confirmation?.enabled} confirmLabel={confirmation?.enabled?'Deshabilitar':'Habilitar'} onCancel={()=>setConfirmation(null)} onConfirm={()=>confirmation.enabled?disableHarvestRecord(confirmation.id):enableHarvestRecord(confirmation.id)} onSuccess={()=>{setConfirmation(null);setSelected(null);setRevision(value=>value+1);}}/>
+  </>;
+}

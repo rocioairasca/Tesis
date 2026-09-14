@@ -1,5 +1,10 @@
 import api from '../services/apiClient';
 
+export const getHarvestContext = async (params) => (await api.get('/harvest-records/context', { params })).data;
+export const finalizeHarvestCycle = async (assignmentId, payload) => (
+  await api.post(`/harvest-records/cycles/${assignmentId}/finalize`, payload)
+).data;
+
 export const getHarvestFilters = async () => {
     const res = await api.get('/harvest-records/stats/filters');
     return res.data;

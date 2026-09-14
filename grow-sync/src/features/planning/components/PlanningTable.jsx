@@ -1,3 +1,4 @@
+import { campaignLabel } from '../../../utils/campaigns.mjs';
 /**
  * Componente: PlanningTable
  * Ubicación: src/features/planning/components/PlanningTable.jsx
@@ -187,7 +188,7 @@ const PlanningTable = ({
         {
             title: "Campaña",
             dataIndex: "campaign_name",
-            render: (value) => value || "—",
+            render: (_, row) => campaignLabel(row),
             responsive: ["lg"],
             width: 95,
         },

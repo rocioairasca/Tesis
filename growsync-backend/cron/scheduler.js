@@ -1,3 +1,4 @@
+const stock = require('../services/stock');
 const cron = require('node-cron');
 const { pool } = require('../db/supabaseClient');
 const supabase = require('../db/supabaseClient');
@@ -64,8 +65,7 @@ const initCronJobs = () => {
             // Umbral genérico: < 10 unidades disponibles
             const { data: products, error } = await supabase
                 .from('products')
-                .select('id, name, available_quantity, unit')
-                .lt('available_quantity', 10)
+                .select('*')
                 .eq('enabled', true);
 
             if (error) throw error;
@@ -74,19 +74,24 @@ const initCronJobs = () => {
                 // Notificar a admins
                 const { data: admins } = await supabase
                     .from('users')
-                    .select('id')
+                    .select('id,company_id')
+                    .eq('enabled', true)
                     .in('role', [1, 2, 3]);
 
                 if (admins && admins.length) {
-                    for (const prod of products) {
-                        for (const admin of admins) {
+                    for (const row of products) {
+                        if (!row.company_id) continue;
+                        const [prod] = await stock.decorate(pool, row.company_id, [row]);
+                        if (!stock.isLowStock(prod)) continue;
+                        for (const admin of admins.filter(a => a.company_id === prod.company_id)) {
                             await createNotification(
                                 admin.id,
                                 'low_stock',
                                 'medium',
                                 'Stock bajo',
                                 `${prod.name} tiene bajo stock: ${prod.available_quantity} ${prod.unit}.`,
-                                { product_id: prod.id, available: prod.available_quantity }
+                                { product_id: prod.id, available: prod.available_quantity },
+                                prod.company_id
                             );
                         }
                     }

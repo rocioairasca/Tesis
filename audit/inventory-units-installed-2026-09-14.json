@@ -1,0 +1,1012 @@
+{
+  "checked_at": "2026-09-14T15:14:27.470Z",
+  "read_only": true,
+  "columns": [
+    {
+      "table_name": "planning_product_completions",
+      "column_name": "planning_product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_product_completions",
+      "column_name": "planning_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_product_completions",
+      "column_name": "usage_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_product_completions",
+      "column_name": "actual_amount",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 12,
+      "numeric_scale": 4
+    },
+    {
+      "table_name": "planning_product_completions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_products",
+      "column_name": "planning_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_products",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_products",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_products",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "planning_products",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "category",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "expiration_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "cost",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "created_at",
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "enabled",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "total_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "available_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "acquisition_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "active_ingredient",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "formulation",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "minimum_stock",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "products",
+      "column_name": "notes",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "initial_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "available_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "received_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "expiration_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "currency",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "exchange_rate",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "total_original",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "total_ars",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "supplier",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "reference",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "notes",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "origin",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_batches",
+      "column_name": "enabled",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "batch_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "movement_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": 20,
+      "numeric_scale": 6
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "usage_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "operation_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "reversed_movement_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "request_hash",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "occurred_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "notes",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "date",
+      "data_type": "date",
+      "udt_name": "date",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "created_at",
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "enabled",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "amount_used",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "total_area",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "previous_crop",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "current_crop",
+      "data_type": "text",
+      "udt_name": "text",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "source_planning_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "source_planning_product_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    },
+    {
+      "table_name": "usage_records",
+      "column_name": "crop_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "numeric_precision": null,
+      "numeric_scale": null
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "planning_product_completions",
+      "conname": "planning_product_completions_actual_amount_check",
+      "contype": "c",
+      "definition": "CHECK ((actual_amount >= (0)::numeric))"
+    },
+    {
+      "table_name": "planning_product_completions",
+      "conname": "planning_product_completions_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (planning_product_id)"
+    },
+    {
+      "table_name": "planning_product_completions",
+      "conname": "planning_product_completions_planning_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (planning_id) REFERENCES planning(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "planning_product_completions",
+      "conname": "planning_product_completions_planning_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (planning_product_id) REFERENCES planning_products(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "planning_product_completions",
+      "conname": "planning_product_completions_usage_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (usage_id) REFERENCES usage_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "planning_products",
+      "conname": "planning_products_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (planning_id, product_id)"
+    },
+    {
+      "table_name": "planning_products",
+      "conname": "planning_products_planning_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (planning_id) REFERENCES planning(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "planning_products",
+      "conname": "planning_products_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id)"
+    },
+    {
+      "table_name": "products",
+      "conname": "products_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "products",
+      "conname": "products_minimum_stock_check",
+      "contype": "c",
+      "definition": "CHECK (((minimum_stock >= (0)::numeric) AND (minimum_stock <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "products",
+      "conname": "stock_categoria_check",
+      "contype": "c",
+      "definition": "CHECK ((category = ANY (ARRAY['semillas'::text, 'agroquimicos'::text, 'fertilizantes'::text, 'combustible'::text])))"
+    },
+    {
+      "table_name": "products",
+      "conname": "stock_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_check",
+      "contype": "c",
+      "definition": "CHECK (((available_quantity >= (0)::numeric) AND (available_quantity <= initial_quantity) AND (available_quantity <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_check1",
+      "contype": "c",
+      "definition": "CHECK (((currency IS NOT NULL) OR ((unit_price IS NULL) AND (total_original IS NULL) AND (total_ars IS NULL))))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_check2",
+      "contype": "c",
+      "definition": "CHECK (((currency IS DISTINCT FROM 'USD'::text) OR (exchange_rate IS NOT NULL)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_company_id_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, created_by) REFERENCES users(company_id, id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_company_id_product_id_id_unit_key",
+      "contype": "u",
+      "definition": "UNIQUE (company_id, product_id, id, unit)"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_company_id_product_id_unit_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, product_id, unit) REFERENCES products(company_id, id, unit) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_currency_check",
+      "contype": "c",
+      "definition": "CHECK ((currency = ANY (ARRAY['ARS'::text, 'USD'::text])))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_exchange_rate_check",
+      "contype": "c",
+      "definition": "CHECK (((exchange_rate > (0)::numeric) AND (exchange_rate <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_initial_quantity_check",
+      "contype": "c",
+      "definition": "CHECK (((initial_quantity > (0)::numeric) AND (initial_quantity <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_origin_check",
+      "contype": "c",
+      "definition": "CHECK ((origin = ANY (ARRAY['legacy'::text, 'purchase'::text, 'adjustment'::text, 'return'::text])))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_received_date_required",
+      "contype": "c",
+      "definition": "CHECK (((origin <> ALL (ARRAY['purchase'::text, 'return'::text])) OR (received_date IS NOT NULL)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_total_ars_check",
+      "contype": "c",
+      "definition": "CHECK (((total_ars >= (0)::numeric) AND (total_ars <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_total_original_check",
+      "contype": "c",
+      "definition": "CHECK (((total_original >= (0)::numeric) AND (total_original <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_unit_check",
+      "contype": "c",
+      "definition": "CHECK ((unit = ANY (ARRAY['kg'::text, 'litros'::text])))"
+    },
+    {
+      "table_name": "stock_batches",
+      "conname": "stock_batches_unit_price_check",
+      "contype": "c",
+      "definition": "CHECK (((unit_price >= (0)::numeric) AND (unit_price <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_check",
+      "contype": "c",
+      "definition": "CHECK ((((movement_type = ANY (ARRAY['opening'::text, 'receipt'::text, 'adjustment_in'::text, 'reversal'::text])) AND (quantity > (0)::numeric)) OR ((movement_type = ANY (ARRAY['consumption'::text, 'adjustment_out'::text])) AND (quantity < (0)::numeric))))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_check1",
+      "contype": "c",
+      "definition": "CHECK (((movement_type = 'reversal'::text) = (reversed_movement_id IS NOT NULL)))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_check2",
+      "contype": "c",
+      "definition": "CHECK (((movement_type <> 'consumption'::text) OR (usage_id IS NOT NULL)))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, created_by) REFERENCES users(company_id, id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_product_id_batch_id_unit_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, product_id, batch_id, unit) REFERENCES stock_batches(company_id, product_id, id, unit) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_product_id_id_unit_key",
+      "contype": "u",
+      "definition": "UNIQUE (company_id, product_id, id, unit)"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_product_id_reversed_movement_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, product_id, reversed_movement_id, unit) REFERENCES stock_movements(company_id, product_id, id, unit) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_company_id_product_id_usage_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id, product_id, usage_id) REFERENCES usage_records(company_id, product_id, id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_idempotency_key_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(idempotency_key)) >= 1) AND (length(btrim(idempotency_key)) <= 200)))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_movement_type_check",
+      "contype": "c",
+      "definition": "CHECK ((movement_type = ANY (ARRAY['opening'::text, 'receipt'::text, 'consumption'::text, 'adjustment_in'::text, 'adjustment_out'::text, 'reversal'::text])))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_quantity_check",
+      "contype": "c",
+      "definition": "CHECK (((quantity <> (0)::numeric) AND (quantity <> 'NaN'::numeric)))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_request_hash_check",
+      "contype": "c",
+      "definition": "CHECK ((length(request_hash) = 64))"
+    },
+    {
+      "table_name": "stock_movements",
+      "conname": "stock_movements_unit_check",
+      "contype": "c",
+      "definition": "CHECK ((unit = ANY (ARRAY['kg'::text, 'litros'::text])))"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "actividades_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "activities_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_crop_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_source_planning_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_planning_id) REFERENCES planning(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_source_planning_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_planning_product_id) REFERENCES planning_products(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "usage_records",
+      "conname": "usage_records_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "products",
+      "tgname": "inventory_product_updated",
+      "definition": "CREATE TRIGGER inventory_product_updated BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION inventory_stamp_updated_at()"
+    },
+    {
+      "table_name": "stock_batches",
+      "tgname": "inventory_batch_updated",
+      "definition": "CREATE TRIGGER inventory_batch_updated BEFORE UPDATE ON public.stock_batches FOR EACH ROW EXECUTE FUNCTION inventory_stamp_updated_at()"
+    },
+    {
+      "table_name": "stock_movements",
+      "tgname": "inventory_movement_guard",
+      "definition": "CREATE TRIGGER inventory_movement_guard BEFORE INSERT OR DELETE OR UPDATE ON public.stock_movements FOR EACH ROW EXECUTE FUNCTION inventory_guard_movement()"
+    },
+    {
+      "table_name": "stock_movements",
+      "tgname": "inventory_movement_no_truncate",
+      "definition": "CREATE TRIGGER inventory_movement_no_truncate BEFORE TRUNCATE ON public.stock_movements FOR EACH STATEMENT EXECUTE FUNCTION inventory_guard_movement()"
+    }
+  ],
+  "units": [
+    {
+      "unit": "bolsas",
+      "count": 2
+    },
+    {
+      "unit": "kg",
+      "count": 8
+    },
+    {
+      "unit": "litros",
+      "count": 51
+    }
+  ]
+}

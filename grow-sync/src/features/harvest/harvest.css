@@ -1,0 +1,76 @@
+.gs-harvest { display:grid; gap:var(--gs-space-16); min-width:0; }
+.gs-workspace-surface:has(> .gs-harvest) { background:transparent; border:0; }
+.gs-harvest .gs-ui-page-actions > .ant-space-item:has(.ant-btn-primary) { order:2; }
+.gs-harvest .gs-ui-page-header, .gs-harvest .gs-ui-filter-bar { margin-bottom:0; }
+.gs-harvest-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--gs-space-12); }
+.gs-harvest-metrics > .gs-ui-metric { background:var(--gs-surface); border:1px solid var(--gs-border); border-radius:12px; padding:var(--gs-space-16); min-width:0; }
+.gs-harvest-metrics .gs-ui-metric-value { font-size:20px; overflow-wrap:anywhere; }
+.gs-harvest-scope { margin:calc(-1 * var(--gs-space-8)) 0 0; }
+.gs-harvest .gs-ui-inline-filters { flex-wrap:wrap; }
+.gs-harvest .gs-ui-inline-filters .ant-select { width:180px; }
+.gs-harvest-filter-field > .ant-select { display:block; width:100%; margin-top:var(--gs-space-8); }
+.gs-harvest-view { display:flex; justify-content:flex-end; }
+.gs-harvest-workspace { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:var(--gs-space-16); align-items:start; }
+.gs-harvest-workspace > :only-child { grid-column:1 / -1; }
+.gs-harvest-table { min-width:0; overflow:auto; border:1px solid var(--gs-border); border-radius:12px; background:var(--gs-surface); }
+.gs-harvest-table .ant-table { min-width:1020px; }
+.gs-harvest-table .gs-ui-table-header { padding:var(--gs-space-16); margin-bottom:0; }
+.gs-harvest-table .ant-table-pagination { padding:0 var(--gs-space-16); }
+.gs-harvest-ellipsis { display:block; min-width:0; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gs-harvest-crop { display:flex; align-items:center; gap:var(--gs-space-8); }
+.gs-harvest-crop svg { color:var(--gs-brand-primary); flex-shrink:0; }
+.gs-harvest-table small { color:var(--gs-text-secondary); font-size:12px; }
+.gs-harvest-table .gs-ui-entity { max-width:100%; }
+.gs-harvest-charts { display:grid; gap:var(--gs-space-12); min-width:0; }
+.gs-harvest-panel { background:var(--gs-surface); padding:var(--gs-space-16); border:1px solid var(--gs-border); border-radius:12px; min-width:0; }
+.gs-harvest-panel h2 { font-size:16px; margin:0 0 var(--gs-space-8); }
+.gs-harvest-chart { height:210px; min-width:0; }
+.gs-harvest-legend { list-style:none; padding:0; margin:var(--gs-space-8) 0 0; display:grid; gap:var(--gs-space-8); font-size:12px; }
+.gs-harvest-legend li { display:flex; align-items:center; gap:var(--gs-space-8); min-width:0; }
+.gs-harvest-legend i { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.gs-harvest-legend span { flex:1; min-width:0; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
+.gs-harvest-legend strong { font-weight:500; white-space:nowrap; }
+.gs-harvest-workspace--charts { display:block; }
+.gs-harvest-workspace--charts .gs-harvest-charts { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.gs-harvest-mobile { display:grid; gap:var(--gs-space-8); overflow-wrap:anywhere; }
+.gs-harvest-detail { display:grid; gap:var(--gs-space-24); }
+.gs-harvest-detail h2 { font-size:20px; overflow-wrap:anywhere; }
+.gs-harvest-detail h3 { font-size:16px; margin:0 0 var(--gs-space-12); }
+.gs-harvest-detail dl { margin:0; }
+.gs-harvest-detail dl > div { display:flex; justify-content:space-between; gap:var(--gs-space-16); padding:var(--gs-space-8) 0; border-bottom:1px solid var(--gs-border); }
+.gs-harvest-detail dt { color:var(--gs-text-secondary); }
+.gs-harvest-detail dd { margin:0; text-align:right; overflow-wrap:anywhere; min-width:0; }
+.gs-harvest-detail .gs-harvest-metrics { gap:var(--gs-space-8); }
+.gs-harvest-detail .gs-ui-metric { padding:var(--gs-space-12); }
+.gs-harvest-notes { white-space:pre-wrap; overflow-wrap:anywhere; }
+.gs-harvest-map { margin:var(--gs-space-16) 0 0; background:var(--gs-surface-selected); border-radius:12px; border:1px solid var(--gs-border); padding:var(--gs-space-12); }
+.gs-harvest-map svg { width:100%; height:220px; }
+.gs-harvest-map path { fill:var(--gs-brand-lime); stroke:var(--gs-brand-primary); stroke-width:2; }
+.gs-harvest-map figcaption { font-size:12px; color:var(--gs-text-secondary); }
+.gs-harvest-form h2 { font-size:20px; margin:var(--gs-space-24) 0 var(--gs-space-16); }
+.gs-harvest-form:not(.gs-harvest-step-0) .gs-harvest-general,
+.gs-harvest-form:not(.gs-harvest-step-1) .gs-harvest-surface-fields,
+.gs-harvest-form:not(.gs-harvest-step-2) .gs-harvest-production-fields,
+.gs-harvest-form:not(.gs-harvest-step-1) .gs-harvest-add,
+.gs-harvest-step-0 .gs-harvest-item,
+.gs-harvest-step-3 .gs-harvest-item { display:none; }
+.gs-harvest-confirmation { display:grid; gap:var(--gs-space-12); overflow-wrap:anywhere; }
+.gs-harvest-form-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:var(--gs-space-12); margin-top:var(--gs-space-24); }
+@media (max-width:1699px) { .gs-harvest-workspace { grid-template-columns:minmax(0,1fr); } .gs-harvest-workspace .gs-harvest-charts { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:900px) { .gs-harvest-workspace .gs-harvest-charts { grid-template-columns:1fr; } }
+@media (max-width:767px) {
+  .gs-harvest-metrics { gap:var(--gs-space-8); }
+  .gs-harvest-metrics > .gs-ui-metric { padding:var(--gs-space-8); }
+  .gs-harvest-metrics .gs-ui-metric-label { font-size:12px; flex-direction:column; align-items:flex-start; overflow-wrap:anywhere; }
+  .gs-harvest-metrics .gs-ui-metric-value { font-size:16px; }
+  .gs-harvest-workspace:not(.gs-harvest-workspace--charts) > aside { display:none; }
+  .gs-harvest-table { overflow:visible; }
+  .gs-harvest-table .gs-ui-record-heading > strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gs-harvest-detail .gs-harvest-metrics { grid-template-columns:1fr; }
+  .gs-harvest-form .ant-steps { display:none; }
+  .gs-harvest-form h2::before { display:block; font-size:12px; color:var(--gs-text-secondary); margin-bottom:var(--gs-space-8); }
+  .gs-harvest-step-0 h2::before { content:'Paso 1 de 4'; }
+  .gs-harvest-step-1 h2::before { content:'Paso 2 de 4'; }
+  .gs-harvest-step-2 h2::before { content:'Paso 3 de 4'; }
+  .gs-harvest-step-3 h2::before { content:'Paso 4 de 4'; }
+}

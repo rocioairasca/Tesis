@@ -1,0 +1,349 @@
+TAP version 13
+# Subtest: calendar selection / service / PostgreSQL parser / JSON / UI (America/Argentina/Buenos_Aires)
+ok 1 - calendar selection / service / PostgreSQL parser / JSON / UI (America/Argentina/Buenos_Aires)
+  ---
+  duration_ms: 394.1422
+  ...
+# Subtest: calendar selection / service / PostgreSQL parser / JSON / UI (Etc/GMT-2)
+ok 2 - calendar selection / service / PostgreSQL parser / JSON / UI (Etc/GMT-2)
+  ---
+  duration_ms: 381.0418
+  ...
+# Subtest: nombre real prevalece; solo el nombre ausente usa fechas
+ok 3 - nombre real prevalece; solo el nombre ausente usa fechas
+  ---
+  duration_ms: 8.4905
+  ...
+# Subtest: selects conservan ID; empates estables y fechas ausentes al final sin ordenar nombres
+ok 4 - selects conservan ID; empates estables y fechas ausentes al final sin ordenar nombres
+  ---
+  duration_ms: 33.9147
+  ...
+# (node:14788) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Dashboard: números argentinos y datos ausentes no se convierten en cero
+ok 5 - Dashboard: números argentinos y datos ausentes no se convierten en cero
+  ---
+  duration_ms: 59.3762
+  ...
+# Subtest: Dashboard: días de planificación, orden y estados efectivos del servidor
+ok 6 - Dashboard: días de planificación, orden y estados efectivos del servidor
+  ---
+  duration_ms: 11.2376
+  ...
+# Subtest: Dashboard: alertas legacy/V1, umbral existente y vencimientos sin inventar fechas
+ok 7 - Dashboard: alertas legacy/V1, umbral existente y vencimientos sin inventar fechas
+  ---
+  duration_ms: 3.4272
+  ...
+# Subtest: Dashboard: ambos gráficos respetan ambos filtros sin reconvertir ni promediar
+ok 8 - Dashboard: ambos gráficos respetan ambos filtros sin reconvertir ni promediar
+  ---
+  duration_ms: 0.8716
+  ...
+# Subtest: Dashboard: listados paginados completos, cancelación y errores parciales
+ok 9 - Dashboard: listados paginados completos, cancelación y errores parciales
+  ---
+  duration_ms: 5.2359
+  ...
+# Subtest: Dashboard: adaptadores existentes, clima simulado, permisos y estados renderizados
+ok 10 - Dashboard: adaptadores existentes, clima simulado, permisos y estados renderizados
+  ---
+  duration_ms: 35061.3253
+  ...
+# (node:18784) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Charts: rendimiento del servidor sin reconversión ni promedio; ausencia de área no es cero
+ok 11 - Charts: rendimiento del servidor sin reconversión ni promedio; ausencia de área no es cero
+  ---
+  duration_ms: 8.3485
+  ...
+# Subtest: Charts: orden temporal por fechas; nombres libres y valores intactos
+ok 12 - Charts: orden temporal por fechas; nombres libres y valores intactos
+  ---
+  duration_ms: 35.455
+  ...
+# (node:16040) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MiniFieldMap: activos, áreas de padres sin doble conteo, divisiones vigentes y geometrías faltantes
+ok 13 - MiniFieldMap: activos, áreas de padres sin doble conteo, divisiones vigentes y geometrías faltantes
+  ---
+  duration_ms: 7.9785
+  ...
+# Subtest: comma and dot inputs produce numeric values and two-decimal Spanish output
+ok 14 - comma and dot inputs produce numeric values and two-decimal Spanish output
+  ---
+  duration_ms: 56.1182
+  ...
+# Subtest: extra decimal places round rather than truncate, including half-cent values
+ok 15 - extra decimal places round rather than truncate, including half-cent values
+  ---
+  duration_ms: 4.9474
+  ...
+# Subtest: display always includes two decimals and hectares
+ok 16 - display always includes two decimals and hectares
+  ---
+  duration_ms: 3.6967
+  ...
+# Subtest: unfinished typing survives until blur; empty/invalid input does not become zero
+ok 17 - unfinished typing survives until blur; empty/invalid input does not become zero
+  ---
+  duration_ms: 1.0038
+  ...
+# (node:24008) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: autor: nombre, email y fallback; nunca UUID
+ok 18 - autor: nombre, email y fallback; nunca UUID
+  ---
+  duration_ms: 3.5363
+  ...
+# Subtest: unidad efectiva primero, campaña real sin inventar año
+ok 19 - unidad efectiva primero, campaña real sin inventar año
+  ---
+  duration_ms: 1.1715
+  ...
+# Subtest: búsqueda integral, acentos y cosechas parciales repetidas conservadas
+ok 20 - búsqueda integral, acentos y cosechas parciales repetidas conservadas
+  ---
+  duration_ms: 3.2442
+  ...
+# Subtest: búsqueda incluye otras páginas y falla ante respuesta truncada
+ok 21 - búsqueda incluye otras páginas y falla ante respuesta truncada
+  ---
+  duration_ms: 2.0308
+  ...
+# Subtest: geometría exacta: sublote faltante no usa lote padre
+ok 22 - geometría exacta: sublote faltante no usa lote padre
+  ---
+  duration_ms: 0.9325
+  ...
+# (node:9640) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/calendarDate.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: identidad excluye saldo, precio y fechas incluso si llegan al formulario
+ok 23 - identidad excluye saldo, precio y fechas incluso si llegan al formulario
+  ---
+  duration_ms: 5.017
+  ...
+# Subtest: compra requiere cantidad positiva y fecha; vencimiento opcional
+ok 24 - compra requiere cantidad positiva y fecha; vencimiento opcional
+  ---
+  duration_ms: 9.9207
+  ...
+# Subtest: USD requiere cambio positivo, ARS no lo requiere
+ok 25 - USD requiere cambio positivo, ARS no lo requiere
+  ---
+  duration_ms: 2.6058
+  ...
+# Subtest: preview calcula saldo, total original y ARS con decimales exactos
+ok 26 - preview calcula saldo, total original y ARS con decimales exactos
+  ---
+  duration_ms: 0.6644
+  ...
+# Subtest: fechas calendario y fechas no registradas
+ok 27 - fechas calendario y fechas no registradas
+  ---
+  duration_ms: 0.6501
+  ...
+# Subtest: receipt requiere activación explícita y permiso
+ok 28 - receipt requiere activación explícita y permiso
+  ---
+  duration_ms: 0.3826
+  ...
+# Subtest: modo compatible conserva saldo y umbral; partidas usan saldo físico sin mezclar consumible
+ok 29 - modo compatible conserva saldo y umbral; partidas usan saldo físico sin mezclar consumible
+  ---
+  duration_ms: 0.5394
+  ...
+# Subtest: ajustes requieren activación y permiso; preview exacto y validaciones
+ok 30 - ajustes requieren activación y permiso; preview exacto y validaciones
+  ---
+  duration_ms: 1.4483
+  ...
+# Subtest: similares normalizan espacios y mayúsculas, contienen en ambos sentidos y limitan a cinco
+ok 31 - similares normalizan espacios y mayúsculas, contienen en ambos sentidos y limitan a cinco
+  ---
+  duration_ms: 1.6202
+  ...
+# WebSocket server error: Port 24678 is already in use
+# Warning: [antd: InputNumber] `addonAfter` is deprecated. Please use `Space.Compact` instead.
+# Subtest: formulario renderizado contiene sólo identidad en ambos modos; permisos efectivos
+ok 32 - formulario renderizado contiene sólo identidad en ambos modos; permisos efectivos
+  ---
+  duration_ms: 11277.0306
+  ...
+# (node:10492) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/inventoryUnits.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: catálogo controlado y aliases legacy sin conversión
+ok 33 - catálogo controlado y aliases legacy sin conversión
+  ---
+  duration_ms: 5.1727
+  ...
+# Subtest: formato argentino conserva cantidades pequeñas y su magnitud
+ok 34 - formato argentino conserva cantidades pequeñas y su magnitud
+  ---
+  duration_ms: 60.1223
+  ...
+# (node:16684) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: encuadre inicial prioriza mayoría cercana sin eliminar el lote distante
+ok 35 - encuadre inicial prioriza mayoría cercana sin eliminar el lote distante
+  ---
+  duration_ms: 11.0112
+  ...
+# Subtest: un filtro por lote distante lo encuadra; vacío no inventa región
+ok 36 - un filtro por lote distante lo encuadra; vacío no inventa región
+  ---
+  duration_ms: 2.1786
+  ...
+# Subtest: sin mayoría clara no excluye lotes arbitrariamente y divisiones no sesgan conteo
+ok 37 - sin mayoría clara no excluye lotes arbitrariamente y divisiones no sesgan conteo
+  ---
+  duration_ms: 3.4577
+  ...
+# (node:19552) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Lotes: jerarquía vigente preserva padre, sublotes e identidades
+ok 38 - Lotes: jerarquía vigente preserva padre, sublotes e identidades
+  ---
+  duration_ms: 8.7137
+  ...
+# Subtest: Lotes: filtros coherentes y selección invisible descartada; cultivo/campaña en la misma unidad
+ok 39 - Lotes: filtros coherentes y selección invisible descartada; cultivo/campaña en la misma unidad
+  ---
+  duration_ms: 2.6869
+  ...
+# Subtest: Lotes: superficies existentes sin doble conteo, ausencia y contexto no disponible
+ok 40 - Lotes: superficies existentes sin doble conteo, ausencia y contexto no disponible
+  ---
+  duration_ms: 65.6069
+  ...
+# Subtest: Lotes: geometrías de consulta no reparan ni redondean ni descartan huecos
+ok 41 - Lotes: geometrías de consulta no reparan ni redondean ni descartan huecos
+  ---
+  duration_ms: 1.632
+  ...
+# Subtest: Lotes: acciones respetan permisos y estado, sin mutaciones de sublotes
+ok 42 - Lotes: acciones respetan permisos y estado, sin mutaciones de sublotes
+  ---
+  duration_ms: 3.2757
+  ...
+# WebSocket server error: Port 24678 is already in use
+# Subtest: Lotes: lectura paginada, permisos efectivos, árbol y contexto accesibles
+ok 43 - Lotes: lectura paginada, permisos efectivos, árbol y contexto accesibles
+  ---
+  duration_ms: 33088.9728
+  ...
+# (node:23860) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: compatibilidad legacy: triángulos abiertos y números en texto sin mutar el origen
+ok 44 - compatibilidad legacy: triángulos abiertos y números en texto sin mutar el origen
+  ---
+  duration_ms: 8.8863
+  ...
+# Subtest: inválidos/vacíos no arrojan excepciones ni inventan bounds
+ok 45 - inválidos/vacíos no arrojan excepciones ni inventan bounds
+  ---
+  duration_ms: 1.4427
+  ...
+# Subtest: Polygon/MultiPolygon/Feature conservan huecos y orden lng-lat
+ok 46 - Polygon/MultiPolygon/Feature conservan huecos y orden lng-lat
+  ---
+  duration_ms: 0.9779
+  ...
+# Subtest: bounds combinan todos los lotes y sublotes vigentes, filtros y selección coherentes
+ok 47 - bounds combinan todos los lotes y sublotes vigentes, filtros y selección coherentes
+  ---
+  duration_ms: 11.9293
+  ...
+# Subtest: sublotes válidos conservan bounds si el padre no tiene ubicación
+ok 48 - sublotes válidos conservan bounds si el padre no tiene ubicación
+  ---
+  duration_ms: 0.884
+  ...
+# Subtest: Dashboard y Lotes comparten interpretación, incluso si geom inválido tiene location válida
+ok 49 - Dashboard y Lotes comparten interpretación, incluso si geom inválido tiene location válida
+  ---
+  duration_ms: 1.494
+  ...
+# (node:19700) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/utils/numberFormat.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: resumen utiliza acumulados completos y separa años
+ok 50 - resumen utiliza acumulados completos y separa años
+  ---
+  duration_ms: 53.9123
+  ...
+# Subtest: períodos cruzan años, completan meses y distinguen ausencia de registro
+ok 51 - períodos cruzan años, completan meses y distinguen ausencia de registro
+  ---
+  duration_ms: 23.182
+  ...
+# Subtest: vacío y formato argentino sin ceros artificiales
+ok 52 - vacío y formato argentino sin ceros artificiales
+  ---
+  duration_ms: 13.4616
+  ...
+# (node:21484) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Proyectos/Tesis/grow-sync/src/theme/tokens.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Proyectos\\Tesis\\grow-sync\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: tokens conservan identidad, separan estados y definen espaciado
+ok 53 - tokens conservan identidad, separan estados y definen espaciado
+  ---
+  duration_ms: 13.3618
+  ...
+# WebSocket server error: Port 24678 is already in use
+# Subtest: navegación renderizada conserva rutas y aplica permisos en ambos tamaños
+ok 54 - navegación renderizada conserva rutas y aplica permisos en ambos tamaños
+  ---
+  duration_ms: 31270.9157
+  ...
+# Subtest: Field SVG: bounds combinados, norte arriba, proporciones y sin mutar coordenadas
+ok 55 - Field SVG: bounds combinados, norte arriba, proporciones y sin mutar coordenadas
+  ---
+  duration_ms: 12.8663
+  ...
+# Subtest: Field SVG: preserva huecos y piezas de MultiPolygon
+ok 56 - Field SVG: preserva huecos y piezas de MultiPolygon
+  ---
+  duration_ms: 0.8798
+  ...
+# Subtest: Field SVG: geometrías ausentes, inválidas o degeneradas no generan vista regional por defecto
+ok 57 - Field SVG: geometrías ausentes, inválidas o degeneradas no generan vista regional por defecto
+  ---
+  duration_ms: 2.0357
+  ...
+# WebSocket server error: Port 24678 is already in use
+# Subtest: patrones compartidos: semántica, callbacks, mobile, paginación y errores
+ok 58 - patrones compartidos: semántica, callbacks, mobile, paginación y errores
+  ---
+  duration_ms: 31611.7314
+  ...
+1..58
+# tests 58
+# suites 0
+# pass 58
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 35671.2253

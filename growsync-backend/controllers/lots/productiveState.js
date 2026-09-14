@@ -88,6 +88,8 @@ const productiveStateSql = (lotFilterSql = '') => `
       'crop_name', current_assignment.crop_name,
       'campaign_id', current_assignment.campaign_id,
       'campaign_name', current_assignment.campaign_name,
+      'campaign_start_date', current_assignment.campaign_start_date,
+      'campaign_end_date', current_assignment.campaign_end_date,
       'campaign_status', current_assignment.campaign_status,
       'start_date', current_assignment.start_date,
       'end_date', current_assignment.end_date
@@ -103,6 +105,7 @@ const productiveStateSql = (lotFilterSql = '') => `
       cr.name AS crop_name,
       ca.campaign_id,
       cp.name AS campaign_name,
+      cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date,
       cp.status AS campaign_status,
       ca.start_date,
       ca.end_date

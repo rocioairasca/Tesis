@@ -1,0 +1,6 @@
+.ui-preview { max-width: 1440px; margin: 0 auto; padding: 32px; }
+.ui-preview-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.ui-preview-section { background: var(--gs-surface); border: 1px solid var(--gs-border); border-radius: 12px; padding: 24px; margin-block: 24px; }
+.ui-preview-section h2 { font-size: 20px; font-weight: 600; margin: 0 0 16px; }
+.ui-preview-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+@media(max-width:767px) { .ui-preview { padding: 16px; } .ui-preview-metrics { grid-template-columns: 1fr; } .ui-preview-section { padding: 16px; } }

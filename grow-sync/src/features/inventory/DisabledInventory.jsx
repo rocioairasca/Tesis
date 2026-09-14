@@ -1,3 +1,5 @@
+import {unitLabel} from '../../utils/inventoryUnits';
+import { calendarDateKey, formatCalendarDate, parseCalendarDate } from '../../utils/calendarDate';
 import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, notification, Row, Col, Tag, Tooltip } from "antd";
 import {
@@ -16,11 +18,7 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 
 // ---- helpers de formato (mismos criterios que Inventory) ----
-const UNIT_DISPLAY = {
-  litros: "L", litro: "L", lt: "L", l: "L", L: "L",
-  kg: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
-};
-const formatUnit = (u) => UNIT_DISPLAY[String(u || "").toLowerCase()] || (u || "-");
+const formatUnit = unitLabel;
 
 const formatCurrency = (v) => {
   const n = Number(v);
@@ -28,21 +26,12 @@ const formatCurrency = (v) => {
   return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
 };
 
-const pad2 = (n) => String(n).padStart(2, "0");
-const formatDateDDMMYYYY = (d) => {
-  if (!d) return "-";
-  const dt = new Date(d);
-  if (isNaN(dt)) return "-";
-  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+const formatDateDDMMYYYY = value => formatCalendarDate(value, '—');
+const daysTo = value => {
+  const date = parseCalendarDate(value);
+  return date ? date.diff(new Date(new Date().setHours(0,0,0,0)), 'day') : null;
 };
-
-const daysTo = (d) => {
-  if (!d) return null;
-  const dt = new Date(d);
-  const today = new Date(); today.setHours(0,0,0,0);
-  return Math.ceil((dt - today) / (1000 * 60 * 60 * 24));
-};
-const isExpired = (d) => { const x = daysTo(d); return x !== null && x <= 0; };
+const isExpired = (d) => { const x = daysTo(d); return x !== null && x < 0; };
 const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
 
 const getId = (r) => r?.id ?? r?._id;

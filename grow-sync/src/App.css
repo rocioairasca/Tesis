@@ -47,55 +47,6 @@ html {
   }
 }
 
-/* Sidebar */
-.ant-layout-sider {
-  background-color: #1D2A62;
-  /* Fondo de la sidebar */
-}
-
-.grow-sidebar {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  height: 100vh;
-  overflow: auto;
-  z-index: 1000;
-}
-
-.ant-menu-item-selected {
-  background-color: #87AECE !important;
-  /* Color de los ítems seleccionados */
-}
-
-/* Botones Primarios */
-.ant-btn-primary {
-  background-color: #437118;
-  border-color: #437118;
-}
-
-/* Botones Primarios Hover */
-.ant-btn-primary:hover,
-.ant-btn-primary:focus {
-  background-color: #36590f !important;
-  border-color: #36590f !important;
-}
-
-/* Botones Secundarios */
-.ant-btn-default:not(.ant-btn-dangerous) {
-  background-color: #fff;
-  border-color: #437118;
-  color: #437118 !important;
-}
-
-/* Botones Secundarios Hover */
-.ant-btn-default:not(.ant-btn-dangerous):hover,
-.ant-btn-default:not(.ant-btn-dangerous):focus {
-  background-color: #edf4e4 !important;
-  border-color: #36590f !important;
-  color: #36590f !important;
-}
-
 .danger-button {
   background-color: #d32f2f;
   /* rojo fuerte */

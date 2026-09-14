@@ -1,0 +1,89 @@
+
+> grow-sync@0.1.0 build
+> vite build --outDir node_modules/.cache/qa-e2e-build
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vite.config.js:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 8789 modules transformed.
+rendering chunks...
+computing gzip size...
+node_modules/.cache/qa-e2e-build/version.json                                0.03 kB │ gzip:   0.05 kB
+node_modules/.cache/qa-e2e-build/index.html                                  1.12 kB │ gzip:   0.45 kB
+node_modules/.cache/qa-e2e-build/assets/sidebar-field-q8JzAXqz.png         390.99 kB
+node_modules/.cache/qa-e2e-build/assets/RainRecords-CbtHxZlK.css             3.07 kB │ gzip:   0.96 kB
+node_modules/.cache/qa-e2e-build/assets/ui-CCanXdRY.css                      5.38 kB │ gzip:   1.37 kB
+node_modules/.cache/qa-e2e-build/assets/Harvest-6OjlBY9_.css                 5.68 kB │ gzip:   1.35 kB
+node_modules/.cache/qa-e2e-build/assets/Lotes-DijvwMbA.css                   6.55 kB │ gzip:   1.71 kB
+node_modules/.cache/qa-e2e-build/assets/Dashboard-C2PKVffO.css              14.51 kB │ gzip:   2.54 kB
+node_modules/.cache/qa-e2e-build/assets/leaflet-vh-t_kPv.css                15.09 kB │ gzip:   6.36 kB
+node_modules/.cache/qa-e2e-build/assets/index-w87p3bWz.css                  38.98 kB │ gzip:  10.02 kB
+node_modules/.cache/qa-e2e-build/assets/numberFormat-xqvwnz17.js             0.18 kB │ gzip:   0.16 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledLotes-B1ABmKMc.js            0.21 kB │ gzip:   0.18 kB
+node_modules/.cache/qa-e2e-build/assets/inventoryUnits-B6Twv6zf.js           0.55 kB │ gzip:   0.32 kB
+node_modules/.cache/qa-e2e-build/assets/calendarDate-BxkJLsgA.js             0.59 kB │ gzip:   0.39 kB
+node_modules/.cache/qa-e2e-build/assets/harvestUtils-Csp_cVsK.js             0.72 kB │ gzip:   0.39 kB
+node_modules/.cache/qa-e2e-build/assets/rolldown-runtime-B0Z9INg1.js         0.90 kB │ gzip:   0.51 kB
+node_modules/.cache/qa-e2e-build/assets/harvestService-Ber_FY6F.js           0.96 kB │ gzip:   0.31 kB
+node_modules/.cache/qa-e2e-build/assets/asyncToGenerator-DcLt58t7.js         1.03 kB │ gzip:   0.54 kB
+node_modules/.cache/qa-e2e-build/assets/campaigns-DDOc0GNu.js                1.19 kB │ gzip:   0.58 kB
+node_modules/.cache/qa-e2e-build/assets/preload-helper-Czpn1I53.js           1.19 kB │ gzip:   0.67 kB
+node_modules/.cache/qa-e2e-build/assets/useClosable-BwMDTeDC.js              1.22 kB │ gzip:   0.61 kB
+node_modules/.cache/qa-e2e-build/assets/Plus.es-CWKsugqk.js                  1.61 kB │ gzip:   0.60 kB
+node_modules/.cache/qa-e2e-build/assets/mapGeometry-CAbOXdB3.js              1.67 kB │ gzip:   0.77 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledPlanning-7fAL8Ghy.js         2.28 kB │ gzip:   1.17 kB
+node_modules/.cache/qa-e2e-build/assets/HarvestTrace-CqBo93d-.js             2.41 kB │ gzip:   1.17 kB
+node_modules/.cache/qa-e2e-build/assets/planningDisplay-BVYYIlYt.js          2.68 kB │ gzip:   1.07 kB
+node_modules/.cache/qa-e2e-build/assets/lotsOverviewModel-DRZ1ZzlK.js        3.22 kB │ gzip:   1.50 kB
+node_modules/.cache/qa-e2e-build/assets/inventoryModel-CWqOREm9.js           3.57 kB │ gzip:   1.70 kB
+node_modules/.cache/qa-e2e-build/assets/LotMapPreview-D7c2eD8Q.js            3.78 kB │ gzip:   1.46 kB
+node_modules/.cache/qa-e2e-build/assets/customParseFormat-55QeNu4N.js        3.86 kB │ gzip:   1.88 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledVehicles-BWVL1Wkr.js         3.86 kB │ gzip:   1.61 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledInventory-C-bk4wWR.js        4.24 kB │ gzip:   1.78 kB
+node_modules/.cache/qa-e2e-build/assets/popconfirm-BTmcrLDN.js               4.25 kB │ gzip:   1.73 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledHarvest-DGFeGzPj.js          4.29 kB │ gzip:   1.75 kB
+node_modules/.cache/qa-e2e-build/assets/divider-CUC3Do0D.js                  4.42 kB │ gzip:   1.69 kB
+node_modules/.cache/qa-e2e-build/assets/DisabledUsages-BI6mWgZ1.js           4.54 kB │ gzip:   1.81 kB
+node_modules/.cache/qa-e2e-build/assets/LotsOverviewMap-CNRR-9ts.js          5.31 kB │ gzip:   2.52 kB
+node_modules/.cache/qa-e2e-build/assets/Users-DibogZ0d.js                    7.48 kB │ gzip:   2.71 kB
+node_modules/.cache/qa-e2e-build/assets/staticFieldGeometry-CQD6w1LR.js     10.50 kB │ gzip:   4.09 kB
+node_modules/.cache/qa-e2e-build/assets/row-BWLokayN.js                     10.90 kB │ gzip:   4.40 kB
+node_modules/.cache/qa-e2e-build/assets/useLeafletGeoman-DTCd1ciz.js        11.33 kB │ gzip:   4.04 kB
+node_modules/.cache/qa-e2e-build/assets/Usage-RUjcvqQU.js                   13.32 kB │ gzip:   4.31 kB
+node_modules/.cache/qa-e2e-build/assets/RainRecords-CGFa-y1G.js             13.76 kB │ gzip:   5.28 kB
+node_modules/.cache/qa-e2e-build/assets/Vehicles-BOpT9QJk.js                14.60 kB │ gzip:   4.65 kB
+node_modules/.cache/qa-e2e-build/assets/ui-CcvERYAA.js                      16.58 kB │ gzip:   5.65 kB
+node_modules/.cache/qa-e2e-build/assets/input-number-DhJwbZ-x.js            23.74 kB │ gzip:   8.22 kB
+node_modules/.cache/qa-e2e-build/assets/purify.es-ChwZkWde.js               26.81 kB │ gzip:  10.65 kB
+node_modules/.cache/qa-e2e-build/assets/Lotes-CYStOYFc.js                   29.72 kB │ gzip:  10.48 kB
+node_modules/.cache/qa-e2e-build/assets/input-DLjriXpy.js                   32.84 kB │ gzip:  11.25 kB
+node_modules/.cache/qa-e2e-build/assets/Dashboard-DjBBK1NO.js               36.49 kB │ gzip:  12.56 kB
+node_modules/.cache/qa-e2e-build/assets/Inventory-BsYLovXB.js               38.90 kB │ gzip:  12.80 kB
+node_modules/.cache/qa-e2e-build/assets/Planning-ClqKpkOW.js                74.82 kB │ gzip:  20.39 kB
+node_modules/.cache/qa-e2e-build/assets/date-picker-fPAsNv3h.js            100.39 kB │ gzip:  31.49 kB
+node_modules/.cache/qa-e2e-build/assets/Harvest-B08bCzGJ.js                100.67 kB │ gzip:  29.43 kB
+node_modules/.cache/qa-e2e-build/assets/LotDivisions-BLuO_roh.js           104.90 kB │ gzip:  35.93 kB
+node_modules/.cache/qa-e2e-build/assets/jsx-runtime-9THWZoN6.js            134.07 kB │ gzip:  46.12 kB
+node_modules/.cache/qa-e2e-build/assets/index.es-CgDR2WPX.js               150.65 kB │ gzip:  48.63 kB
+node_modules/.cache/qa-e2e-build/assets/table-C7lY-zZw.js                  150.93 kB │ gzip:  48.23 kB
+node_modules/.cache/qa-e2e-build/assets/leaflet-B67P8zhW.js                154.40 kB │ gzip:  45.36 kB
+node_modules/.cache/qa-e2e-build/assets/html2canvas-BGQDebPx.js            199.49 kB │ gzip:  46.77 kB
+node_modules/.cache/qa-e2e-build/assets/leaflet-geoman-BGyKDbZz.js         273.91 kB │ gzip:  72.51 kB
+node_modules/.cache/qa-e2e-build/assets/BarChart-BzfgFNaQ.js               358.36 kB │ gzip: 103.65 kB
+node_modules/.cache/qa-e2e-build/assets/apiClient-DLg3v1YN.js              521.30 kB │ gzip: 157.86 kB
+node_modules/.cache/qa-e2e-build/assets/index-Ck-kAu51.js                1,050.31 kB │ gzip: 330.11 kB
+
+✓ built in 51.28s
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[PLUGIN_TIMINGS] Plugin hooks ran for 2.3s of this 51.2s build (4%).
+2 hooks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
+  - vite:css-post renderChunk (54 calls)
+  - vite:css transform (11 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+

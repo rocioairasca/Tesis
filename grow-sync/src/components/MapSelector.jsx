@@ -1,5 +1,5 @@
 import * as turf from '@turf/turf';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -9,32 +9,21 @@ import {
   Tooltip,
   LayersControl,
 } from 'react-leaflet';
-import { Button } from 'antd';
+import { Button, Empty } from 'antd';
+import MapViewport from './MapViewport';
+import { displayGeometry, geometryBounds, leafletBounds } from '../utils/mapGeometry.mjs';
 import { AimOutlined } from './AppIcons';
 import L from '../utils/leafletGeoman';
 import { useLeafletGeoman } from '../hooks/useLeafletGeoman';
 import 'leaflet/dist/leaflet.css';
 
-const FALLBACK_POSITION = [-32.4082, -63.2402];
+
 const SUB_LOT_PATTERNS = ['sub-lot-hatch-a', 'sub-lot-hatch-b', 'sub-lot-hatch-c'];
 
-const parseLocation = (location) => {
-  if (!location) return null;
-  if (typeof location === "object") return location;
-  try {
-    return JSON.parse(location);
-  } catch {
-    return null;
-  }
-};
-
 const getLocationRing = (location) => {
-  const parsed = parseLocation(location);
-  return Array.isArray(parsed) && Array.isArray(parsed[0]) && parsed[0].length
-    ? parsed[0]
-    : null;
+  const geometry = displayGeometry(location);
+  return geometry?.type === 'Polygon' ? geometry.coordinates[0].map(([lng,lat]) => ({lat,lng})) : null;
 };
-
 const geoJsonToPositions = (geometry) => {
   const rawGeometry = geometry?.type === 'Feature' ? geometry.geometry : geometry;
   const ring = rawGeometry?.coordinates?.[0];
@@ -131,7 +120,7 @@ const MapSelector = ({
   const geomanReady = useLeafletGeoman(Boolean(onSelect));
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!onSelect || !navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -153,14 +142,6 @@ const MapSelector = ({
       }
     );
   }, []);
-
-  useEffect(() => {
-    if ((modalOpen || insideDrawer) && mapRef.current) {
-      setTimeout(() => {
-        mapRef.current.invalidateSize();
-      }, 350);
-    }
-  }, [modalOpen, insideDrawer, mapRef]);
 
   const roundCoord = useCallback((coord) => ({
     lat: parseFloat(coord.lat.toFixed(6)),
@@ -207,55 +188,14 @@ const MapSelector = ({
     }
   }, [normalizePolygon, onSelect]);
 
-  const initialCenter = useMemo(() => {
-    if (activeLocation?.[0]?.[0]) {
-      return [activeLocation[0][0].lat, activeLocation[0][0].lng];
-    }
-
-    const firstLotWithCoords = lots.find((lot) => {
-      const ring = getLocationRing(lot.location);
-      return ring?.[0];
-    });
-
-    if (firstLotWithCoords) {
-      const ring = getLocationRing(firstLotWithCoords.location);
-      return [ring[0].lat, ring[0].lng];
-    }
-
-    if (userPosition) {
-      return [userPosition.lat, userPosition.lng];
-    }
-
-    return FALLBACK_POSITION;
-  }, [activeLocation, lots, userPosition]);
-
+  const selectedGeometry = displayGeometry(activeLocation);
+  const viewBounds = geometryBounds(selectedGeometry ? [selectedGeometry] : lots.map(lot => displayGeometry(lot.geom) || displayGeometry(lot.location)))
+    || geometryBounds(userPosition ? [{type:'Point',coordinates:[userPosition.lng,userPosition.lat]}] : []);
+  const initialCenter = viewBounds ? [(viewBounds.south+viewBounds.north)/2,(viewBounds.west+viewBounds.east)/2] : null;
   const handleRecenter = () => {
-    if (!mapRef.current) return;
-
-    if (activeLocation?.[0]?.length) {
-      const bounds = activeLocation[0].map(({ lat, lng }) => [lat, lng]);
-      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
-      return;
-    }
-
-    if (userPosition) {
-      mapRef.current.setView([userPosition.lat, userPosition.lng], 15);
-      return;
-    }
-
-    const allCoordinates = lots.flatMap((lot) => {
-      const ring = getLocationRing(lot.location);
-      return ring?.map(({ lat, lng }) => [lat, lng]) || [];
-    });
-
-    if (allCoordinates.length > 0) {
-      mapRef.current.fitBounds(allCoordinates, { padding: [50, 50] });
-      return;
-    }
-
-    mapRef.current.setView(FALLBACK_POSITION, 13);
+    if (mapRef.current && viewBounds) mapRef.current.fitBounds(leafletBounds(viewBounds), {padding:[40,40],maxZoom:16});
   };
-
+  if (!initialCenter) return <Empty description={onSelect ? 'Sin ubicación disponible. Para dibujar el primer lote, permití el acceso a tu ubicación y volvé a abrir el mapa.' : 'No hay geometrías válidas para mostrar.'} />;
   return (
     <div style={{ height: '500px', width: '100%', position: 'relative' }}>
       <Button
@@ -276,13 +216,6 @@ const MapSelector = ({
         center={initialCenter}
         zoom={13}
         style={{ height: '100%', width: '100%' }}
-        whenReady={() => {
-          if (mapRef.current) {
-            setTimeout(() => {
-              mapRef.current.invalidateSize();
-            }, 250);
-          }
-        }}
       >
         <GeomanControls
           enabled={Boolean(onSelect) && geomanReady}
@@ -491,31 +424,9 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
 };
 
 const AutoFitMap = ({ selectedLocation, lots, userPosition }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (selectedLocation?.[0]?.length) {
-      const bounds = selectedLocation[0].map(({ lat, lng }) => [lat, lng]);
-      map.fitBounds(bounds, { padding: [40, 40] });
-      return;
-    }
-
-    if (userPosition) {
-      map.setView([userPosition.lat, userPosition.lng], 15);
-      return;
-    }
-
-    const allCoordinates = lots.flatMap((lot) => {
-      const ring = getLocationRing(lot.location);
-      return ring?.map(({ lat, lng }) => [lat, lng]) || [];
-    });
-
-    if (allCoordinates.length > 0) {
-      map.fitBounds(allCoordinates, { padding: [50, 50] });
-    }
-  }, [map, selectedLocation, lots, userPosition]);
-
-  return null;
+  const selected = displayGeometry(selectedLocation);
+  const bounds = geometryBounds(selected ? [selected] : lots.map(lot => displayGeometry(lot.geom) || displayGeometry(lot.location)))
+    || geometryBounds(userPosition ? [{type:'Point',coordinates:[userPosition.lng,userPosition.lat]}] : []);
+  return <MapViewport bounds={leafletBounds(bounds)} />;
 };
-
 export default MapSelector;

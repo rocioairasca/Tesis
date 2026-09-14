@@ -27,6 +27,8 @@ import {
 import L from '../../../utils/leafletGeoman';
 import { ensureLeafletGeoman } from '../../../utils/leafletGeoman';
 import { useLeafletGeoman } from '../../../hooks/useLeafletGeoman';
+import MapViewport from '../../../components/MapViewport';
+import { geometryBounds, leafletBounds } from '../../../utils/mapGeometry.mjs';
 import 'leaflet/dist/leaflet.css';
 
 import {
@@ -1347,12 +1349,13 @@ const SubLotEditor = ({
     >
       <div style={{ minWidth: 0 }}>
         <div style={{ height: isMobile ? 420 : 580, width: '100%', border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden' }}>
-          <MapContainer
-            center={geoJsonToPositions(parentGeometry)?.[0] || [-32.4082, -63.2402]}
+          {geometryBounds([parentGeometry]) ? <MapContainer
+            bounds={leafletBounds(geometryBounds([parentGeometry]))}
             zoom={14}
             style={{ height: '100%', width: '100%' }}
           >
             <MapRefBinder mapRef={mapRef} />
+            <MapViewport bounds={editable ? null : leafletBounds(geometryBounds([parentGeometry]))} />
             <MapGeomanInitializer
               enabled={editable && packageGeomanReady}
               onReadyChange={setMapGeomanReady}
@@ -1408,8 +1411,8 @@ const SubLotEditor = ({
                 pathOptions={{ color: '#1677ff', weight: 2, dashArray: '6 6' }}
               />
             ) : null}
-            <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />
-          </MapContainer>
+            {editable && <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />}
+          </MapContainer> : <Empty description="No hay una geometría válida del lote para mostrar las divisiones." />}
         </div>
       </div>
 

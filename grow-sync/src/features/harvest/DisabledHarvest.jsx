@@ -1,7 +1,9 @@
+import { campaignLabel } from '../../utils/campaigns.mjs';
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Col, Empty, Row, Table, Tag, Tooltip, notification } from "antd";
 import { useNavigate } from "react-router-dom";
-import dayjs from "dayjs";
+import HarvestTrace from './HarvestTrace';
+import { formatCalendarDate } from "../../utils/calendarDate";
 
 import {
   ArrowLeftOutlined,
@@ -17,7 +19,7 @@ import {
   enableHarvestRecord,
   getDisabledHarvestRecords,
 } from "../../services/harvestService";
-import { formatCropLabel, formatNumber } from "../../utils/harvestUtils";
+import { formatCropLabel, formatNumber, formatHectares } from "../../utils/harvestUtils";
 import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
@@ -27,11 +29,11 @@ const rowKey = (record) => getId(record) ?? `${record?.lot_id}-${record?.harvest
 
 const formatDateDDMMYYYY = (date) => {
   if (!date) return "-";
-  return dayjs(date).format("DD/MM/YYYY");
+  return formatCalendarDate(date);
 };
 
 const getCropDisplay = (record) => record?.crop_name || record?.crop;
-const getCampaignDisplay = (record) => record?.campaign_name || record?.campaign;
+const getCampaignDisplay = campaignLabel;
 const getSurfaceDisplay = (record) => (
   record?.sub_lot_name ? `${record.lot_name || "-"} / ${record.sub_lot_name}` : record?.lot_name || "-"
 );
@@ -79,7 +81,7 @@ const DisabledHarvest = () => {
     {
       title: "Fecha",
       dataIndex: "harvest_date",
-      render: (value) => formatDateDDMMYYYY(value),
+      render: (value, record) => <><div>{formatDateDDMMYYYY(value)}</div><HarvestTrace record={record} /></>,
     },
     { title: "Lote", key: "lot_name", render: (_, record) => getSurfaceDisplay(record) },
     { title: "Cultivo", key: "crop", render: (_, record) => formatCropLabel(getCropDisplay(record)) },
@@ -92,7 +94,7 @@ const DisabledHarvest = () => {
     {
       title: "Superficie",
       dataIndex: "harvested_area_ha",
-      render: (value) => `${formatNumber(value)} ha`,
+      render: (value) => formatHectares(value),
     },
     {
       title: "Rendimiento",
@@ -166,6 +168,7 @@ const DisabledHarvest = () => {
                 <p className="flex-row">
                   <CalendarOutlined size={18} /> <strong>Fecha:</strong> {formatDateDDMMYYYY(record.harvest_date)}
                 </p>
+            <HarvestTrace record={record} />
                 <p className="flex-row">
                   <MapPin size={18} /> <strong>Lote:</strong> {getSurfaceDisplay(record)}
                 </p>
@@ -173,7 +176,7 @@ const DisabledHarvest = () => {
                   <Package size={18} /> <strong>Produccion:</strong> {formatNumber(record.production_kg, 0)} kg
                 </p>
                 <p className="flex-row">
-                  <Ruler size={18} /> <strong>Superficie:</strong> {formatNumber(record.harvested_area_ha)} ha
+                  <Ruler size={18} /> <strong>Superficie:</strong> {formatHectares(record.harvested_area_ha)}
                 </p>
                 <p className="flex-row">
                   <HarvestOutlined size={18} /> <strong>Rendimiento:</strong> {formatNumber(record.yield_kg_ha)} kg/ha

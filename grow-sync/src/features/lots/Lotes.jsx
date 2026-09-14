@@ -1,33 +1,14 @@
-/**
- * Feature: Gestión de Lotes
- * Ubicación: src/features/lots/Lotes.jsx
- * Descripción:
- *  Contenedor principal para la gestión de lotes.
- *  Maneja el estado de la aplicación (lista de lotes, loading, modales) y la lógica de negocio (CRUD).
- * 
- * Refactorización (Mejoras de Código):
- *  - Se han extraído las vistas de tabla (Desktop) y lista (Mobile) a componentes separados:
- *    1. <LotTable /> -> Para vista de escritorio.
- *    2. <LotListMobile /> -> Para vista móvil.
- *  - Esto reduce la complejidad del renderizado y mejora la legibilidad del archivo principal.
- *  - Se mantiene la lógica de estado y llamadas a API centralizadas aquí.
- */
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Dropdown, Button, Drawer, Form, Input, InputNumber, Space, notification, Row, Col } from "antd";
-import { MoreOutlined, PlusOutlined } from '../../components/AppIcons';
-import api from "../../services/apiClient";
-import useIsMobile from "../../hooks/useIsMobile";
+import React, { useState, useRef } from 'react';
+import { Button, Drawer, Form, Input, InputNumber, notification } from 'antd';
+import api from '../../services/apiClient';
+import useIsMobile from '../../hooks/useIsMobile';
 import MapSelector from '../../components/MapSelector';
-import LotTable from "./components/LotTable";
-import LotListMobile from "./components/LotListMobile";
-import { PERMISSIONS } from "../../constants/permissions";
-import { hasPermission } from "../../utils/permissions";
-import { useNavigate } from "react-router-dom";
-import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
+import { PERMISSIONS } from '../../constants/permissions';
+import { hasPermission } from '../../utils/permissions';
+import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
+import LotsOverview from './LotsOverview';
 
-// -------- helpers --------
 const getId = (r) => r?.id ?? r?._id;
-const rowKey = (r) => getId(r) ?? r?.name ?? String(Math.random());
 
 const safeParse = (value) => {
   if (!value) return null;
@@ -40,60 +21,21 @@ const ensureString = (value) => {
   try { return JSON.stringify(value); } catch { return ""; }
 };
 
-const Lotes = () => {
+export default function Lotes({ initialState = 'enabled' }) {
   const [lots, setLots] = useState([]);
-  const [productiveStates, setProductiveStates] = useState({});
-  const [productiveStatesAvailable, setProductiveStatesAvailable] = useState(true);
-  const [loading, setLoading] = useState(false);
-
+  const [refresh, setRefresh] = useState(0);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingLot, setEditingLot] = useState(null);
   const [form] = Form.useForm();
-
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState(null);
   const mapRef = useRef();
-
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
-  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
   const canCreate = hasPermission(currentUser, PERMISSIONS.LOTS_CREATE);
-  const canViewDisabled = hasPermission(currentUser, PERMISSIONS.LOTS_VIEW_DISABLED);
-
-  // cargamos los lotes desde el back
-  const fetchLots = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get("/lots", {
-        params: { includeActiveLayout: true },
-      });
-      const list = Array.isArray(data) ? data : data?.items || data?.data || [];
-      setLots(list);
-
-      try {
-        const statesResponse = await api.get("/lots/productive-states");
-        const states = Array.isArray(statesResponse.data?.data) ? statesResponse.data.data : [];
-        setProductiveStates(Object.fromEntries(states.map((state) => [state.lot_id, state])));
-        setProductiveStatesAvailable(true);
-      } catch (stateError) {
-        console.error("→ productive states list error:", stateError);
-        setProductiveStates({});
-        setProductiveStatesAvailable(false);
-      }
-    } catch (error) {
-      console.error("→ lots list error:", error);
-      notification.error({ message: getUserFriendlyError(error, "No se pudieron cargar los lotes.") });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchLots();
-  }, [fetchLots]);
-
+  const canEdit = hasPermission(currentUser, PERMISSIONS.LOTS_EDIT);
   // Drawer handlers ---
   const openDrawer = (lot = null) => {
+    if (lot ? !canEdit : !canCreate) return;
     setEditingLot(lot);
     if (lot) {
       form.setFieldsValue({
@@ -154,7 +96,7 @@ const Lotes = () => {
         await api.post("/lots", payload);
         notification.success({ message: "Lote creado exitosamente" });
       }
-      fetchLots();
+      setRefresh(value => value + 1);
       closeDrawer();
     } catch (error) {
       console.error("→ save lot error:", error);
@@ -162,101 +104,17 @@ const Lotes = () => {
     }
   };
 
-  // Eliminar (Deshabilitar) Lote
-  const handleDelete = async (id) => {
-    try {
-      await api.delete(`/lots/${id}`);
-      notification.success({ message: "Lote deshabilitado exitosamente" });
-      fetchLots();
-    } catch (error) {
-      console.error("→ disable lot error:", error);
-      notification.error({ message: getUserFriendlyError(error, "No se pudo deshabilitar el lote.") });
-    }
+
+  const changeEnabled = async (lot, enabled) => {
+    const permission = enabled ? PERMISSIONS.LOTS_ENABLE : PERMISSIONS.LOTS_DISABLE;
+    if (!hasPermission(currentUser, permission)) return;
+    if (enabled) await api.put('/lots/enable/' + getId(lot));
+    else await api.delete('/lots/' + getId(lot));
+    notification.success({ message: enabled ? 'Lote habilitado exitosamente' : 'Lote deshabilitado exitosamente' });
+    setRefresh(value => value + 1);
   };
-
-  const menuItems = [
-    canViewDisabled && {
-      key: "1",
-      label: (
-        <span onClick={() => (window.location.href = "/lotes-deshabilitados")}>
-          Ver Lotes Deshabilitados
-        </span>
-      ),
-    },
-  ].filter(Boolean);
-
-  return (
-    <div style={{ padding: 24 }}>
-      {/* Título y botones */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <h2>Gestión de Lotes</h2>
-        </Col>
-        <Col>
-          <Space>
-            {isMobile ? (
-              menuItems.length > 0 ? (
-                <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-                  <MoreOutlined style={{ fontSize: 24, cursor: "pointer" }} />
-                </Dropdown>
-              ) : null
-            ) : (
-              <Space>
-                {canViewDisabled && <Button onClick={() => window.location.href = "/lotes-deshabilitados"}>
-                  Ver Lotes Deshabilitados
-                </Button>}
-                {canCreate && <Button type="primary" onClick={() => openDrawer()}>
-                  Agregar Lote
-                </Button>}
-              </Space>
-            )}
-          </Space>
-        </Col>
-      </Row>
-
-      {!isMobile ? (
-        <Row gutter={24}>
-          <Col span={12}>
-            {/* Mapa a la izquierda */}
-            <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
-          </Col>
-          <Col span={12}>
-            {/* Tabla de lotes a la derecha */}
-            <LotTable
-              lots={lots}
-              loading={loading}
-              onEdit={openDrawer}
-              onDelete={handleDelete}
-              onViewLocation={setSelectedLocation}
-              onManageDivisions={(lot) => navigate(`/lotes/${getId(lot)}/divisiones`)}
-              rowKey={rowKey}
-              getId={getId}
-              safeParse={safeParse}
-              productiveStates={productiveStates}
-              productiveStatesAvailable={productiveStatesAvailable}
-            />
-          </Col>
-        </Row>
-      ) : (
-        <>
-          <div style={{ marginBottom: 24 }}>
-            <MapSelector lots={lots} selectedLocation={selectedLocation} modalOpen={false} />
-          </div>
-          <LotListMobile
-            lots={lots}
-            onEdit={openDrawer}
-            onDelete={handleDelete}
-            onViewLocation={setSelectedLocation}
-            onManageDivisions={(lot) => navigate(`/lotes/${getId(lot)}/divisiones`)}
-            rowKey={rowKey}
-            getId={getId}
-            safeParse={safeParse}
-            productiveStates={productiveStates}
-            productiveStatesAvailable={productiveStatesAvailable}
-          />
-        </>
-      )}
-
+  return <>
+    <LotsOverview user={currentUser} initialState={initialState} refresh={refresh} onLotsLoaded={setLots} onCreate={() => openDrawer()} onEdit={openDrawer} onDisable={lot => changeEnabled(lot, false)} onEnable={lot => changeEnabled(lot, true)} />
       {/* Drawer para agregar/editar */}
       <Drawer
         title={editingLot ? "Editar Lote" : "Agregar Nuevo Lote"}
@@ -311,12 +169,9 @@ const Lotes = () => {
           open={isMapModalOpen}
           onClose={() => setIsMapModalOpen(false)}
           width={800}
-          afterOpenChange={(open) => {
-            if (open && mapRef.current) mapRef.current.invalidateSize?.();
-          }}
         >
           <MapSelector
-            lots={lots}
+            lots={lots.filter(lot => lot.enabled !== false)}
             initialLocation={editingLot?.location ? safeParse(editingLot.location) : null}
             onSelect={(data) => {
               // data: { location: obj|str, calculatedArea: number }
@@ -333,20 +188,6 @@ const Lotes = () => {
         </Drawer>
       </Drawer>
 
-      {isMobile && !isDrawerOpen && canCreate && (
-        <button
-          type="button"
-          className="fab-button"
-          aria-label="Agregar lote"
-          onClick={() => openDrawer()}
-        >
-          <PlusOutlined />
-        </button>
-      )}
-    </div>
-  );
-};
-
-export default Lotes;
-
+  </>;
+}
 
