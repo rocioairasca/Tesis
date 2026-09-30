@@ -26,7 +26,7 @@ test('preview calcula saldo, total original y ARS con decimales exactos', () => 
 test('fechas calendario y fechas no registradas', () => {
   assert.equal(receivedLabel('2026-09-13'), '13/09/2026');
   assert.equal(receivedLabel(null), 'Fecha no registrada');
-  assert.equal(expirationLabel(null), 'Sin vencimiento registrado');
+  assert.equal(expirationLabel(null), 'Sin vencimiento');
 });
 test('receipt requiere activación explícita y permiso', () => {
   assert.equal(canReceipt(true, true), true);

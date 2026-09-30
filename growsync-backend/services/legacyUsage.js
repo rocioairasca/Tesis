@@ -1,4 +1,5 @@
 const stock = require('./stock');
+const impact = require('./inventoryImpact');
 const { assertSameUnit } = require('./inventoryUnits');
 
 // One SQL client for the entire mutation. Never fall back to REST compensation.
@@ -9,6 +10,8 @@ async function mutate(pool, { companyId, usageId, body = {}, enabled }) {
       'SELECT * FROM usage_records WHERE company_id=$1 AND id=$2 FOR UPDATE', [companyId, usageId]);
     const current = usages[0];
     if (!current) throw stock.fail('Registro de uso no encontrado', 404);
+    impact.assertModeUnchanged(current,body);
+    if (impact.isHistorical(current)) throw stock.fail('Usá el servicio de corrección histórica, sin stock.');
     if (current.source_planning_id) throw stock.fail('Este uso fue generado al completar una planificación y no puede modificarse de forma independiente.');
     const toggling = typeof enabled === 'boolean';
     if (toggling && current.enabled === enabled) return { ok: true, id: usageId, replayed: true, stockChanges: [] };

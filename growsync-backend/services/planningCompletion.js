@@ -1,5 +1,7 @@
 const {sameUnit} = require('./inventoryUnits');
+const {normalizeQuantity,decimalText} = require('./inventoryConversion');
 const stock = require('./stock');
+const impact = require('./inventoryImpact');
 const PRODUCT_CONSUMING_ACTIVITIES = new Set(['fumigacion', 'fertilizacion', 'siembra']);
 
 const toNum = (value, fallback = 0) => {
@@ -82,6 +84,8 @@ const getPlanningForCompletion = async (client, planningId, companyId) => {
     SELECT
       p.id,
       p.activity_type,
+      p.inventory_impact_mode,
+      p.historical_import_id,
       p.status,
       p.enabled,
       p.campaign_id,
@@ -166,7 +170,7 @@ const getPlanningProductsForUsage = async (client, planningId, companyId) => {
   return rows;
 };
 
-const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
+const normalizeActualProducts = (plannedProducts, actualProducts = [], convertUnits = false) => {
   const plannedIds = new Set(plannedProducts.map(planned => String(planned.id)));
   const byId = new Map();
   for (const item of actualProducts || []) {
@@ -186,11 +190,11 @@ const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
 
   return plannedProducts.map((planned) => {
     const provided = byId.get(String(planned.id));
-    const actualAmount = provided
+    const actualAmount = convertUnits ? decimalText(provided ? provided.actual_amount : planned.amount ?? 0) : provided
       ? toNum(provided.actual_amount, NaN)
       : toNum(planned.amount, 0);
 
-    if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+    if ((!convertUnits && !Number.isFinite(actualAmount)) || actualAmount < 0) {
       const err = new Error(`La cantidad utilizada de ${planned.product_name || 'producto'} no es válida.`);
       err.status = 400;
       throw err;
@@ -200,6 +204,7 @@ const normalizeActualProducts = (plannedProducts, actualProducts = []) => {
     return {
       ...planned,
       actual_amount: actualAmount,
+      actual_unit: provided?.unit ?? planned.unit,
     };
   });
 };
@@ -238,7 +243,9 @@ const applyPlanningProductUsage = async (
     return { usage_count: 0, consumed_products: 0 };
   }
 
-  const normalizedProducts = normalizeActualProducts(plannedProducts, actualProducts);
+  const noStock = impact.isHistorical(planning);
+  const convertUnits = stock.isEnabled(companyId) && !noStock;
+  const normalizedProducts = normalizeActualProducts(plannedProducts, actualProducts, convertUnits);
   const productIds = [...new Set(normalizedProducts.map((item) => item.product_id))];
 
   const { rows: lockedProducts } = await client.query(
@@ -252,18 +259,22 @@ const applyPlanningProductUsage = async (
     `,
     [companyId, productIds]
   );
-  const currentProducts = await stock.decorate(client, companyId, lockedProducts);
+  const currentProducts = noStock ? lockedProducts : await stock.decorate(client, companyId, lockedProducts);
   const productsById = new Map(currentProducts.map((product) => [String(product.id), product]));
   const requestedByProduct = new Map();
 
   for (const planned of normalizedProducts) {
     const product = productsById.get(String(planned.product_id));
-    if (!product || product.enabled === false) {
+    if (!product || (!noStock && product.enabled === false)) {
       const err = new Error(`${planned.product_name || 'Producto'} no está disponible.`);
       err.status = 409;
       throw err;
     }
-    if (!sameUnit(planned.unit || product.unit,product.unit)) {
+    if (convertUnits) {
+      const conversion=normalizeQuantity({quantity:planned.actual_amount,inputUnit:planned.actual_unit??product.unit,productUnit:product.unit,allowZero:true});
+      planned.actual_amount=conversion.normalized_quantity;
+      planned.unit=product.unit;
+    } else if (!sameUnit(planned.unit || product.unit,product.unit) || !sameUnit(planned.actual_unit || product.unit,product.unit)) {
       const err = new Error(`La unidad de ${product.name} no coincide con su stock.`);
       err.status = 400;
       throw err;
@@ -276,7 +287,7 @@ const applyPlanningProductUsage = async (
 
   for (const [productId, requestedAmount] of requestedByProduct.entries()) {
     const product = productsById.get(productId);
-    if (requestedAmount > stock.decimal(product.available_quantity || 0)) {
+    if (!noStock && requestedAmount > stock.decimal(product.available_quantity || 0)) {
       const err = new Error(historicalStockConsumption
         ? `No hay stock actual suficiente de ${product.name} para registrar este consumo histórico. Disponible: ${product.available_quantity} ${product.unit}.`
         : `No hay stock suficiente de ${product.name}. Disponible: ${product.available_quantity} ${product.unit}.`);
@@ -308,9 +319,9 @@ const applyPlanningProductUsage = async (
           user_id,
           company_id,
           source_planning_id,
-          source_planning_product_id
+          source_planning_product_id${noStock ? ', inventory_impact_mode, historical_import_id, created_by' : ''}
         )
-        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11${noStock ? ", 'HISTORICAL_NO_STOCK', $12, $13" : ''})
         RETURNING id;
         `,
         [
@@ -325,12 +336,13 @@ const applyPlanningProductUsage = async (
           companyId,
           planning.id,
           planned.id,
+          ...(noStock ? [planning.historical_import_id || null, actorId] : []),
         ]
       );
 
       usageId = usageRows[0].id;
       usageCount += 1;
-      consumedProducts += 1;
+      if (!noStock) consumedProducts += 1;
 
       const usageLotValues = selections.map((_, index) => {
         const base = index * 2 + 2;
@@ -351,7 +363,9 @@ const applyPlanningProductUsage = async (
         );
       }
 
-      if (stock.isEnabled(companyId)) {
+      if (noStock) {
+        // Informational Usage: deliberately no inventory write or zero movement.
+      } else if (stock.isEnabled(companyId)) {
         await stock.consumeStock(client, { companyId, productId: planned.product_id,
           actorId, usageId, quantity: planned.actual_amount, unit: productsById.get(String(planned.product_id)).unit,
           key: 'planning-product:' + planned.id });

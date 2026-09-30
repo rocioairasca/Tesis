@@ -4,15 +4,34 @@ export const categories = ['semillas', 'agroquimicos', 'fertilizantes', 'combust
 export const categoryLabel = value => categories.find(c => c.value === value)?.label || value;
 export {quantityLabel} from '../../utils/inventoryUnits.js';
 export const receivedLabel = value => formatCalendarDate(value, 'Fecha no registrada');
-export const expirationLabel = value => formatCalendarDate(value, 'Sin vencimiento registrado');
+const monthlyExpiration = value => value?.expiration_year != null && value?.expiration_month != null;
+export const expirationLabel = value => monthlyExpiration(value)
+  ? `${String(value.expiration_month).padStart(2, '0')}/${value.expiration_year}`
+  : formatCalendarDate(value && typeof value === 'object' ? value.expiration_date : value, 'Sin vencimiento');
+export function receiptExpirationPayload(value) {
+  if (value == null) return { expiration_year: null, expiration_month: null };
+  if (!value.isValid?.() || value.year() < 2000 || value.year() > 2100) throw new Error('Seleccioná un vencimiento entre 2000 y 2100.');
+  return { expiration_year: value.year(), expiration_month: value.month() + 1 };
+}
+// Effective dates are used only for comparisons, never for labels or receipt payloads.
+export const expirationForComparison = value => {
+  if (!value || typeof value !== 'object') return parseCalendarDate(value);
+  if (value.effective_expiration_date) return parseCalendarDate(value.effective_expiration_date);
+  if (monthlyExpiration(value)) return parseCalendarDate(`${value.expiration_year}-${String(value.expiration_month).padStart(2, '0')}-01`)?.endOf('month');
+  return parseCalendarDate(value.expiration_date);
+};
+export const isExpired = (value, today = new Date()) => expirationForComparison(value)?.isBefore(today, 'day') ?? false;
 export const stockQuantity = (p, enabled) => Number((enabled ? p.on_hand_quantity : p.available_quantity) || 0);
-export const expiration = (p, enabled) => enabled ? p.next_expiration_date : p.expiration_date || p.acquisition_date;
+export const expiration = (p, enabled) => enabled ? {
+  expiration_date: p.next_expiration_date, expiration_year: p.next_expiration_year,
+  expiration_month: p.next_expiration_month, effective_expiration_date: p.next_effective_expiration_date,
+} : p;
 export const lowStock = (p, enabled) => stockQuantity(p, enabled) <= Number(p.minimum_stock ?? 5);
-export const soon = value => { const d = parseCalendarDate(value); const days = d?.diff(new Date(new Date().setHours(0, 0, 0, 0)), 'day'); return days >= 0 && days <= 15; };
+export const soon = value => { const d = expirationForComparison(value); const days = d?.startOf('day').diff(new Date(new Date().setHours(0, 0, 0, 0)), 'day'); return days >= 0 && days <= 15; };
 export const productState = (p, enabled) => stockQuantity(p, enabled) <= 0 ? 'Sin stock' : soon(expiration(p, enabled)) ? 'Próximo a vencer' : lowStock(p, enabled) ? 'Stock bajo' : 'Disponible';
-export const origins = { legacy: 'Stock inicial', purchase: 'Compra', adjustment: 'Ajuste', return: 'Devolución' };
-export const movementTypes = { opening: 'Stock inicial', receipt: 'Ingreso', consumption: 'Consumo', adjustment_in: 'Ajuste positivo', adjustment_out: 'Ajuste negativo', reversal: 'Reversión' };
-export const batchState = b => !b.enabled ? 'Deshabilitada' : Number(b.available_quantity) <= 0 ? 'Agotada' : calendarDateKey(b.expiration_date) && parseCalendarDate(b.expiration_date).isBefore(new Date(), 'day') ? 'Vencida' : 'Disponible';
+export const origins = { legacy: 'Apertura legacy', stock_initial: 'Existencia física inicial', purchase: 'Compra', adjustment: 'Ajuste', return: 'Devolución' };
+export const movementTypes = { opening: 'Apertura legacy', stock_initial: 'Existencia física inicial', receipt: 'Ingreso', consumption: 'Consumo', adjustment_in: 'Ajuste positivo', adjustment_out: 'Ajuste negativo', reversal: 'Reversión' };
+export const batchState = (b, today = new Date()) => !b.enabled ? 'Deshabilitada' : Number(b.available_quantity) <= 0 ? 'Agotada' : isExpired(b, today) ? 'Vencida' : 'Disponible';
 export const identityFields = ['name', 'category', 'unit', 'active_ingredient', 'formulation', 'manufacturer', 'minimum_stock', 'notes'];
 export const identityPayload = values => Object.fromEntries(identityFields.filter(k => values[k] !== undefined).map(k => [k, values[k]]));
 export const canReceipt = (enabled, canEdit) => enabled === true && canEdit === true;

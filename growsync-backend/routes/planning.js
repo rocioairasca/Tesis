@@ -6,6 +6,8 @@
  *  Utiliza el controlador `controllers/planning.js`.
  */
 const router = require('express').Router();
+const {rejectModeInput,historical,blockHistorical}=require('../middleware/historicalOperations');
+router.use(rejectModeInput);
 const ctrl = require('../controllers/planning');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
@@ -32,6 +34,7 @@ router.put('/enable/:id',
   validate(schema.idParam),
   requirePermission(PERMISSIONS.PLANNING_EDIT),
   requirePermission(PERMISSIONS.PLANNING_ENABLE),
+  historical('planning',true),
   ctrl.enable
 );
 
@@ -59,6 +62,7 @@ router.post('/register-completed',
 router.post('/:id/complete-sowing',
   validate(schema.completeSowingSchema),
   requirePermission(PERMISSIONS.PLANNING_EDIT),
+  blockHistorical('planning'),
   ctrl.completeSowing
 );
 
@@ -66,6 +70,7 @@ router.post('/:id/complete-sowing',
 router.post('/:id/complete-work',
   validate(schema.completeWorkSchema),
   requirePermission(PERMISSIONS.PLANNING_EDIT),
+  blockHistorical('planning'),
   ctrl.completeWork
 );
 
@@ -85,8 +90,9 @@ router.post('/',
 
 // EDITAR planificacion (parcial)
 router.patch('/:id',
-  validate(schema.updateSchema),
   requirePermission(PERMISSIONS.PLANNING_EDIT),
+  historical('planning'),
+  validate(schema.updateSchema),
   ctrl.update
 );
 
@@ -96,6 +102,7 @@ router.delete('/:id',
   validate(schema.idParam),
   requirePermission(PERMISSIONS.PLANNING_EDIT),
   requirePermission(PERMISSIONS.PLANNING_DISABLE),
+  historical('planning',false),
   ctrl.remove
 );
 

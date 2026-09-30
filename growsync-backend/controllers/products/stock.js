@@ -4,8 +4,11 @@ const stock=require('../../services/stock');
 const {getEffectivePermissions,PERMISSIONS}=require('../../constants/permissions');
 const uuid=z.string().uuid();
 const money=z.coerce.number().finite().nonnegative().nullable().optional();
-const receipt=z.object({quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').unitSchema.optional(),
+const receipt=z.object({quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').inputUnitSchema.optional(),
+  unit_price_unit:require('../../services/inventoryUnits').unitSchema.optional(),
   received_date:z.string().nullable().optional(),expiration_date:z.string().nullable().optional(),
+  expiration_year:z.number().int().min(2000).max(2100).nullable().optional(),
+  expiration_month:z.number().int().min(1).max(12).nullable().optional(),
   origin:z.enum(['purchase','adjustment','return']),unit_price:money,currency:z.enum(['ARS','USD']).nullable().optional(),
   exchange_rate:z.coerce.number().finite().positive().nullable().optional(),total_original:money,total_ars:money,
   supplier:z.string().max(500).nullable().optional(),reference:z.string().max(500).nullable().optional(),notes:z.string().max(2000).nullable().optional()}).strict()
@@ -40,7 +43,7 @@ const list=table=>handle(async(req,res)=>{
   const {rows}=await pool.query(query,[ctx.companyId,ctx.productId,size,(page-1)*size]);
   res.json({data:rows,page,pageSize:size});
 });
-const adjustment=z.object({direction:z.enum(['in','out']),quantity:z.union([z.string(),z.number()]),reason:z.string().trim().min(1).max(500),notes:z.string().max(2000).nullable().optional()}).strict();
+const adjustment=z.object({direction:z.enum(['in','out']),quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').inputUnitSchema.optional(),reason:z.string().trim().min(1).max(500),notes:z.string().max(2000).nullable().optional()}).strict();
 const registerAdjustment=handle(async(req,res)=>{
   const ctx=guard(req),body=adjustment.parse(req.body);
   const result=await stock.transaction(pool,async c=>{

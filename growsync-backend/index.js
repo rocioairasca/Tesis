@@ -40,6 +40,7 @@ app.use(cors({
   credentials: true,
 }));
 
+app.use('/api/history', express.json({ limit: '5mb' }));
 app.use(express.json());
 
 // ---------------------------------------------------
@@ -115,6 +116,7 @@ app.use('/api/products', ...privateMiddlewares, productRoutes);
 app.use('/api/usages', ...privateMiddlewares, usageRoutes);
 app.use('/api/stats', ...privateMiddlewares, statsRoutes);
 app.use('/api/weather', ...privateMiddlewares, weatherRoutes);
+app.use('/api/history', ...privateMiddlewares, require('./routes/history'));
 app.use('/api/planning', ...privateMiddlewares, planningRoutes);
 app.use('/api/vehicles', ...privateMiddlewares, vehicleRoutes);
 app.use('/api/notifications', ...privateMiddlewares, notificationsRoutes);

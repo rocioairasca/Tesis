@@ -1,4 +1,6 @@
-import {quantityLabel as formatQuantity,unitLabel,normalizeUnit} from '../../utils/inventoryUnits';
+import {quantityLabel as formatQuantity,normalizeUnit} from '../../utils/inventoryUnits';
+import QuantityUnitFields from '../../components/QuantityUnitFields';
+import {usageQuantityPayload} from '../../utils/inventoryConversion';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Table, Button, Drawer, Form, Input, InputNumber, Select, DatePicker,
@@ -22,6 +24,7 @@ import { formatActivity } from "../planning/planningDisplay";
 const Usage = () => {
   const [usages, setUsages] = useState([]);
   const [products, setProducts] = useState([]);
+  const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [lots, setLots] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -124,6 +127,7 @@ const Usage = () => {
   const fetchProducts = useCallback(async () => {
     try {
       const { data } = await api.get("/products");
+      setInventoryEnabled(data?.inventory_v1_enabled === true);
       setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
     } catch (error) {
       console.error("→ products list error:", error);
@@ -205,8 +209,7 @@ const Usage = () => {
     try {
       const payload = {
         product_id: values.product_id,
-        amount_used: Number(values.amount_used),
-        unit: values.unit,
+        ...usageQuantityPayload(values,selectedProduct),
         lot_ids: values.lot_ids,
         total_area: Number(values.total_area ?? 0),
         previous_crop: values.previous_crop || null,
@@ -268,7 +271,7 @@ const Usage = () => {
       title: "Producto",
       dataIndex: "product_id",
       key: "product_id",
-      render: (_, record) => productName(record),
+      render: (_, record) => <>{productName(record)}{record.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario</p>}</>,
     },
     {
       title: "Cantidad",
@@ -478,40 +481,10 @@ const Usage = () => {
             />
           </Form.Item>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontWeight: 500 }}>Cantidad Usada</label>
-            {selectedProduct && (
-              <div style={{ fontSize: 13, color: "#888" }}>
-                Disponible: <strong>{formatQuantity(selectedProduct.available_quantity,selectedProduct.unit)}</strong>
-              </div>
-            )}
-          </div>
-
-          <Form.Item
-            name="amount_used"
-            rules={[
-              { required: true, message: "Ingresá la cantidad usada" },
-              {
-                validator: (_, value) => {
-                  if (selectedProduct && Number(value) > Number(selectedProduct.available_quantity)) {
-                    return Promise.reject(`Solo hay ${selectedProduct.available_quantity} disponibles`);
-                  }
-                  return Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <InputNumber min={0} precision={6} decimalSeparator="," style={{ width: "100%" }} />
-          </Form.Item>
-
-          <Form.Item label="Unidad base"><Input readOnly value={unitLabel(selectedProduct?.unit)} /></Form.Item>
-          <Form.Item
-            name="unit"
-            hidden
-            rules={[{ required: true, message: "Ingresá la unidad" }]}
-          >
-            <Input />
-          </Form.Item>
+          <QuantityUnitFields quantityName="amount_used" unitName="unit" label="Cantidad usada"
+            baseUnit={selectedProduct?.unit} available={selectedProduct?.available_quantity}
+            extra={selectedProduct ? `Disponible: ${formatQuantity(selectedProduct.available_quantity,selectedProduct.unit)}` : null}
+            allowConversion={inventoryEnabled && !editingUsage} />
 
           <Form.Item
             name="lot_ids"

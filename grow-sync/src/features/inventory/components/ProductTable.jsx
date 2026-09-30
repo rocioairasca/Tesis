@@ -6,6 +6,7 @@
  *  Maneja la visualización de columnas, formateo de datos (fechas, monedas) y acciones.
  */
 import React from 'react';
+import { expirationLabel, expirationForComparison, isExpired, soon as isExpiringSoon } from '../inventoryModel.mjs';
 import { Table, Button, Space, Tooltip, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined, PlusOutlined } from '../../../components/AppIcons';
 
@@ -33,10 +34,6 @@ const ProductTable = ({
     rowKey,
     getId,
     formatUnit,
-    formatDateDDMMYYYY,
-    isExpired,
-    isExpiringSoon,
-    expirationValue,
     pagination,
     onPaginationChange,
 }) => {
@@ -69,23 +66,23 @@ const ProductTable = ({
         },
         {
             title: "Fecha de Vencimiento",
-            dataIndex: "acquisition_date",
-            key: "acquisition_date",
+            dataIndex: "expiration_date",
+            key: "expiration_date",
             sorter: (a, b) => {
-                const dateA = expirationValue(a);
-                const dateB = expirationValue(b);
+                const dateA = expirationForComparison(a);
+                const dateB = expirationForComparison(b);
                 if (!dateA && !dateB) return 0;
                 if (!dateA) return 1;
                 if (!dateB) return -1;
-                return new Date(dateA).getTime() - new Date(dateB).getTime();
+                return dateA.valueOf() - dateB.valueOf();
             },
             render: (_, record) => {
-                const d = expirationValue(record);
+                const d = record;
                 const expired = isExpired(d);
                 const soon = isExpiringSoon(d);
                 return (
                     <Space size={6}>
-                        <span>{formatDateDDMMYYYY(d)}</span>
+                        <span>{expirationLabel(d)}</span>
                         {expired && (
                             <Tooltip title="Vencido">
                                 <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />

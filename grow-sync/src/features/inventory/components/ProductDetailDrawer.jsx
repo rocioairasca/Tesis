@@ -26,12 +26,13 @@ function History({ product, tab, mobile }) {
           <Space wrap><Typography.Text strong>Partida {r.id.slice(0, 8)}</Typography.Text><Tag>{batchState(r)}</Tag></Space>
           <p>{receivedLabel(r.received_date)}</p>
           <p>Inicial: {quantityLabel(r.initial_quantity, r.unit)} · Disponible: {quantityLabel(r.available_quantity, r.unit)}</p>
-          <p>{expirationLabel(r.expiration_date)} · {r.supplier || 'Proveedor no registrado'}</p>
+          <p>{expirationLabel(r)} · {r.supplier || 'Proveedor no registrado'}</p>
           <Button size="small" onClick={() => setDetail(r)}>Ver partida</Button>
         </> : <>
           <Space wrap><Typography.Text strong>{movementTypes[r.movement_type] || 'Movimiento'}</Typography.Text>
             <Tag color={Number(r.quantity) > 0 ? 'green' : 'orange'}>{Number(r.quantity) > 0 ? '+' : ''}{quantityLabel(r.quantity, r.unit)}</Tag></Space>
-          <p>{new Date(r.occurred_at).toLocaleString('es-AR')}</p>
+          {r.movement_type === 'stock_initial' && <p>Fecha de apertura: {receivedLabel(r.effective_date)}</p>}
+          <p>{r.movement_type === 'stock_initial' ? 'Registrado: ' : ''}{new Date(r.occurred_at).toLocaleString('es-AR')}</p>
           <p>Partida {r.batch_id.slice(0, 8)} · {r.batch_reference || 'Sin referencia'} · {receivedLabel(r.batch_received_date)}</p>
           <p>{(r.usage_id || r.usage_record_id) ? 'Registro de uso' : origins[r.batch_origin] || 'Inventario'}{r.batch_supplier ? ` · ${r.batch_supplier}` : ''}</p>
           <Typography.Text type="secondary">{r.notes || 'Sin observaciones'}</Typography.Text>
@@ -42,7 +43,7 @@ function History({ product, tab, mobile }) {
     <Drawer open={!!detail} onClose={() => setDetail(null)} title="Detalle de partida" width={mobile ? '100%' : 460}>
       {detail && <Descriptions column={1} items={[
         ['Cantidad inicial', quantityLabel(detail.initial_quantity, detail.unit)], ['Disponible', quantityLabel(detail.available_quantity, detail.unit)],
-        ['Fecha de ingreso', receivedLabel(detail.received_date)], ['Vencimiento', expirationLabel(detail.expiration_date)],
+        [detail.origin === 'stock_initial' ? 'Fecha de apertura' : 'Fecha de ingreso', receivedLabel(detail.received_date)], ['Vencimiento', expirationLabel(detail)],
         ['Precio unitario', detail.unit_price], ['Moneda', detail.currency], ['Tipo de cambio', detail.exchange_rate],
         ['Total original', detail.total_original], ['Total ARS', detail.total_ars], ['Proveedor', detail.supplier],
         ['Comprobante / referencia', detail.reference], ['Observaciones', detail.notes], ['Origen', origins[detail.origin]],

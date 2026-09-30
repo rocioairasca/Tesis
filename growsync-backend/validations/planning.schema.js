@@ -46,13 +46,14 @@ const requireLotSelection = (val, ctx) => {
 // Products item
 const ProductItem = z.object({
   product_id: z.string().uuid(),
-  amount: require('../services/inventoryQuantity').quantitySchema.positive().optional().nullable(),
-  unit: require('../services/inventoryUnits').unitSchema.optional().nullable(),
+  amount: require('../services/inventoryQuantity').inputQuantitySchema.optional().nullable(),
+  unit: require('../services/inventoryUnits').inputUnitSchema.optional().nullable(),
 });
 
 const ActualProductItem = z.object({
   planning_product_id: z.string().uuid(),
   actual_amount: z.union([z.number(), z.string()]),
+  unit: require('../services/inventoryUnits').inputUnitSchema.optional(),
 });
 
 // Body base (CREATE)

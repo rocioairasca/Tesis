@@ -49,6 +49,8 @@ async function setup() {
     CREATE FUNCTION st_difference(numeric,numeric) RETURNS numeric LANGUAGE sql IMMUTABLE AS 'SELECT 0';
     CREATE FUNCTION st_area(numeric) RETURNS numeric LANGUAGE sql IMMUTABLE AS 'SELECT $1';`);
   await db.exec(fs.readFileSync(path.join(__dirname, '../migrations/20260909_harvest_registration_trace.sql'), 'utf8'));
+  // Read fields added by the historical inventory migration (ordinary harvest fixture).
+  await db.exec("ALTER TABLE harvest_records ADD COLUMN inventory_impact_mode text NOT NULL DEFAULT 'NORMAL', ADD COLUMN historical_import_id uuid;");
   const pool = { query: (sql, args = []) => db.query(sql, args), connect: async () => ({ query: (sql, args = []) => db.query(sql, args), release() {} }) };
   const filename = path.join(__dirname, '../controllers/harvestRecords.js');
   const realRequire = createRequire(filename);

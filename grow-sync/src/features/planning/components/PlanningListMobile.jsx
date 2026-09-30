@@ -25,6 +25,7 @@ const getPlanningArea = (row) => {
 };
 const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
     const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
+    if (record?.inventory_impact_mode === "HISTORICAL_NO_STOCK") return [];
     const status = record?.status;
     const items = [];
 
@@ -113,6 +114,7 @@ const PlanningListMobile = ({
                     >
                         <div className="card-header">
                             <h3>{getPlanningDisplayName(r, cropIx)}</h3>
+                            {r.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario</p>}
                             <div className="card-icons" onClick={(event) => event.stopPropagation()}>
                                 <Tooltip title="Ver detalle">
                                     <Button

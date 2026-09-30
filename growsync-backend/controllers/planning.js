@@ -1,4 +1,5 @@
 const {assertSameUnit} = require('../services/inventoryUnits');
+const {normalizeQuantity} = require('../services/inventoryConversion');
 const inventoryStock = require('../services/stock');
 const { pool } = require('../db/supabaseClient');
 const { parsePage, parsePageSize } = require('../utils/pagination');
@@ -1634,5 +1635,12 @@ async function assertProductTenancy(client, products, companyId) {
   const ids = [...new Set(products.map(p=>p.product_id))];
   const {rows} = await client.query('SELECT id,unit FROM products WHERE company_id=$1 AND id=ANY($2::uuid[]) AND enabled=true ORDER BY id FOR UPDATE', [companyId,ids]);
   if (rows.length !== ids.length) throw inventoryStock.fail('Productos no disponibles en esta empresa.',400);
-  for(const item of products) item.unit=assertSameUnit(rows.find(row=>row.id===item.product_id).unit,item.unit);
+  for(const item of products) {
+    const product=rows.find(row=>row.id===item.product_id);
+    if(inventoryStock.isEnabled(companyId)) {
+      const conversion=normalizeQuantity({quantity:item.amount??'0',inputUnit:item.unit,productUnit:product.unit,allowZero:item.amount==null});
+      if(item.amount!=null) item.amount=conversion.normalized_quantity;
+      item.unit=product.unit;
+    } else item.unit=assertSameUnit(product.unit,item.unit);
+  }
 }

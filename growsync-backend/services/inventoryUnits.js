@@ -4,6 +4,8 @@ const normalizeUnit = value => typeof value === 'string' ? (catalog.legacyAliase
 const validUnit = value => codes.includes(normalizeUnit(value));
 const sameUnit = (left, right) => validUnit(left) && normalizeUnit(left) === normalizeUnit(right);
 const unitSchema = require('zod').z.string().trim().refine(validUnit, 'Seleccioná una unidad base válida.').transform(normalizeUnit);
+// cc is an input alias, never a product base unit.
+const inputUnitSchema = require('zod').z.string().trim().transform(value => value === 'cc' ? 'mL' : value).pipe(unitSchema);
 const UNIT_LOCK_MESSAGE = 'La unidad base no puede modificarse porque el producto ya posee movimientos o registros asociados.';
 function assertSameUnit(productUnit, suppliedUnit) {
   if (!validUnit(productUnit) || (suppliedUnit != null && !sameUnit(productUnit, suppliedUnit))) {
@@ -13,4 +15,4 @@ function assertSameUnit(productUnit, suppliedUnit) {
   // movements must remain intact. New products use canonical codes.
   return productUnit;
 }
-module.exports={codes,normalizeUnit,validUnit,sameUnit,unitSchema,assertSameUnit,UNIT_LOCK_MESSAGE};
+module.exports={codes,normalizeUnit,validUnit,sameUnit,unitSchema,inputUnitSchema,assertSameUnit,UNIT_LOCK_MESSAGE};

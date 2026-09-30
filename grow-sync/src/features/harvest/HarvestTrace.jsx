@@ -9,7 +9,8 @@ export const retroactiveReasons = [
 export default function HarvestTrace({ record, showAuthor = true }) {
   const historical = record.registered_retroactively;
   return <div>
-    <p className="gs-ui-helper">{historical === true ? 'Registro histórico' : historical === false ? 'Registro actual' : 'Procedencia no documentada'}</p>
+    {record.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario</p>}
+    <p className="gs-ui-helper">{historical === true ? 'Registro retroactivo' : historical === false ? 'Registro actual' : 'Procedencia no documentada'}</p>
       {historical === true && <>
         <div>Motivo: {retroactiveReasons.find(r => r.value === record.retroactive_reason)?.label || 'No informado'}</div>
         {record.retroactive_notes && <div>Observación: {record.retroactive_notes}</div>}

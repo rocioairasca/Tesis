@@ -1,4 +1,5 @@
 const { areaCents, areaValue, fail, dateKey, cycleBalance } = require('./harvestAreas');
+const { isHistorical } = require('./inventoryImpact');
 
 async function lockAssignments(client, companyId, ids) {
   const unique = [...new Set(ids)].sort();
@@ -7,6 +8,7 @@ async function lockAssignments(client, companyId, ids) {
   const { rows } = await client.query(`SELECT * FROM crop_assignments
     WHERE company_id = $1 AND id = ANY($2::uuid[]) ORDER BY id FOR UPDATE`, [companyId, unique]);
   if (!unique.length || rows.length !== unique.length) throw fail('Ciclo productivo no encontrado.', 404);
+  if (rows.some(isHistorical)) throw fail('Los ciclos históricos requieren una corrección histórica explícita.',409);
   return rows;
 }
 
@@ -79,6 +81,7 @@ async function recalculate(client, companyId, assignments) {
   await client.query("SELECT set_config('growsync.harvest_cycle_write', 'on', true)");
   for (const assignment of assignments) {
     // Historical and explicit closures are not inferred from current totals.
+    if (isHistorical(assignment)) continue;
     if (assignment.harvest_closure_source === 'legacy') continue;
     const balance = cycleBalance(assignment.area_ha, await ledger(client, companyId, assignment.id));
     if (balance.remaining < 0) throw fail('La superficie acumulada supera la superficie del ciclo.', 409);

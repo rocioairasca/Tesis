@@ -48,7 +48,7 @@ async function fixture(unit='g'){
 for(const unit of units.codes)test(`producto e ingreso ${unit}`,async()=>{
  assert.equal(schema.createBody.parse({body:{name:'Prueba',category:'agroquimicos',unit}}).body.unit,unit);
  const x=await fixture(unit);const result=await x.receive('0.125');assert.equal(result[0].unit,unit);assert.equal(result[0].quantity,'0.125000');
- await assert.rejects(stock.transaction(pool,c=>stock.receiveStock(c,{...x,unit:unit==='L'?'mL':'L',quantity:1,origin:'purchase',received_date:'2026-01-01',key:randomUUID()})),/unidad/i);
+ await assert.rejects(stock.transaction(pool,c=>stock.receiveStock(c,{...x,unit:['L','mL'].includes(unit)?'kg':'L',quantity:1,origin:'purchase',received_date:'2026-01-01',key:randomUUID()})),/unidad/i);
 });
 for(const [unit,total,take,expected] of [['g','130','20','110.000000'],['L','50','12.5','37.500000'],['kg','1','0.005','0.995000'],['bag','10','1.25','8.750000']])test(`FEFO, ajuste +/− y Usage ${unit}`,async()=>{
  const x=await fixture(unit);await x.receive(total);
@@ -104,5 +104,130 @@ test('migración rechaza checks desconocidos y revierte sin tocar datos',async()
   await assert.rejects(db.exec(migration),/Unexpected unit constraint/);
  } finally {await db.exec('ROLLBACK');}
  await db.exec('BEGIN;'+migration+'COMMIT;');
+});
+
+const conversion=require('../services/inventoryConversion');
+const usageSchema=require('../validations/usage.schema');
+const planningSchema=require('../validations/planning.schema');
+// Exercise the actual controller's product validation under an isolated SQL client.
+// Supabase and notifications are replaced before loading, so no .env or network is used.
+function planningProductValidator(){
+ const file=require.resolve('../controllers/planning');
+ const realRequire=require('node:module').createRequire(file),mod={exports:{}};
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports.validateProducts=assertProductTenancy;',{
+  module:mod,exports:mod.exports,console,require:id=>id.includes('supabaseClient')?{pool}:id==='./notifications'?{createNotification:async()=>{}}:realRequire(id)
+ });
+ return mod.exports.validateProducts;
+}
+
+test('conversión exacta mL/cc/L y g/kg; aliases históricos; familias incompatibles',()=>{
+ for(const [quantity,inputUnit,productUnit,expected] of [
+  ['250','mL','L','0.250000'],['250','cc','L','0.250000'],['250','cc','mL','250.000000'],
+  ['15','g','kg','0.015000'],['0.25','L','mL','250.000000'],['0.015','kg','g','15.000000'],
+  ['250','cc','litros','0.250000'],['1','litros','L','1.000000'],['2','bolsas','bag','2.000000']
+ ])assert.equal(conversion.normalizeQuantity({quantity,inputUnit,productUnit}).normalized_quantity,expected);
+ for(const [inputUnit,productUnit] of [['L','kg'],['kg','L']])assert.throws(()=>conversion.normalizeQuantity({quantity:'1',inputUnit,productUnit}),/compatible/);
+ assert.equal(units.inputUnitSchema.parse('cc'),'mL');
+ assert(!schema.createBody.safeParse({body:{name:'Prueba',category:'agroquimicos',unit:'cc'}}).success);
+});
+
+test('precisión: no redondear antes/después de convertir ni perder dígitos en validación',()=>{
+ assert.equal(conversion.normalizeQuantity({quantity:'0.001',inputUnit:'cc',productUnit:'L'}).normalized_quantity,'0.000001');
+ assert.throws(()=>conversion.normalizeQuantity({quantity:'0.000001',inputUnit:'mL',productUnit:'L'}),/seis decimales/);
+ assert.throws(()=>conversion.normalizeQuantity({quantity:'0.0000001',inputUnit:'L',productUnit:'L'}),/seis decimales/);
+ const input=require('../services/inventoryQuantity').inputQuantitySchema;
+ assert.equal(input.parse('99999999999999.123456'),'99999999999999.123456');
+ assert.equal(input.parse('0,001'),'0.001');
+ assert.equal(input.safeParse('bad').success,false);
+ assert.equal(input.safeParse('0').success,false);
+ assert.throws(()=>conversion.normalizeQuantity({quantity:'99999999999999',inputUnit:'L',productUnit:'mL'}),/máximo/);
+});
+
+for(const [base,unit,amount,expected] of [['L','mL','250','0.250000'],['L','cc','250','0.250000'],['kg','g','15','0.015000']]){
+ test(`Usage ${amount} ${unit}: normaliza, consume y reintenta sin duplicar`,async()=>{
+  const x=await fixture(base);await x.receive('1');
+  const body=usageSchema.createBody.parse({body:{product_id:x.productId,amount_used:amount,unit,date:'2026-01-01',lot_ids:[x.lotId]}}).body;
+  const args={companyId:x.companyId,actorId:x.actorId,key:randomUUID(),body};
+  const result=await usage.createManualUsage(pool,args);
+  assert.equal((await usage.createManualUsage(pool,args)).replayed,true);
+  const record=(await db.query('SELECT amount_used,unit FROM usage_records WHERE id=$1',[result.id])).rows[0];
+  assert.equal(stock.amount(stock.decimal(record.amount_used)),expected);assert.equal(record.unit,base);
+  const moves=(await db.query('SELECT quantity,unit FROM stock_movements WHERE usage_id=$1',[result.id])).rows;
+  assert.deepEqual(moves,[{quantity:'-'+expected,unit:base}]);
+  assert.equal(await x.balance(),stock.amount(stock.decimal('1')-stock.decimal(expected)));
+  assert.equal((await db.query('SELECT unit FROM stock_batches WHERE product_id=$1',[x.productId])).rows[0].unit,base);
+ });
+}
+
+test('Usage rechaza stock insuficiente normalizado, familia incompatible y pérdida de precisión sin escrituras parciales',async()=>{
+ const x=await fixture('L');await x.receive('0.2');
+ for(const [amount_used,unit,error] of [['250','cc',/insuficiente/],['15','g',/compatible/],['0.000001','mL',/seis decimales/]]){
+  await assert.rejects(usage.createManualUsage(pool,{companyId:x.companyId,actorId:x.actorId,key:randomUUID(),body:{product_id:x.productId,amount_used,unit,date:'2026-01-01',lot_ids:[x.lotId]}}),error);
+ }
+ assert.equal(await x.balance(),'0.200000');
+ assert.equal((await db.query('SELECT * FROM usage_records WHERE product_id=$1',[x.productId])).rows.length,0);
+});
+
+async function planningLine(x,amount,unit){
+ const planId=randomUUID(),lineId=randomUUID();
+ const items=planningSchema.updateSchema.parse({params:{id:planId},body:{products:[{product_id:x.productId,amount,unit}]}}).body.products;
+ await stock.transaction(pool,async c=>{
+  await planningProductValidator()(c,items,x.companyId);
+  await c.query('INSERT INTO planning_products(id,planning_id,product_id,amount,unit) VALUES($1,$2,$3,$4,$5)',[lineId,planId,x.productId,items[0].amount,items[0].unit]);
+ });
+ return (await db.query('SELECT * FROM planning_products WHERE id=$1',[lineId])).rows[0];
+}
+const completeLine=(x,line,actualProducts)=>stock.transaction(pool,c=>planning.applyPlanningProductUsage(c,{
+ companyId:x.companyId,actorId:x.actorId,effectiveDate:'2026-01-01',planning:{id:line.planning_id,responsible_user:x.actorId},
+ selections:[{lot_id:x.lotId,area_ha:1}],plannedProducts:[line],actualProducts
+}));
+
+for(const [base,unit,amount,expected] of [['L','mL','250','0.250000'],['L','cc','250','0.250000'],['kg','g','15','0.015000']]){
+ test(`Planning ${amount} ${unit}: persiste en ${base} y completa sin doble conversión`,async()=>{
+  const x=await fixture(base);await x.receive('1');
+  const line=await planningLine(x,amount,unit);
+  assert.equal(line.unit,base);assert.equal(stock.amount(stock.decimal(line.amount)),expected);
+  await completeLine(x,line,[]);
+  const completion=(await db.query('SELECT * FROM planning_product_completions WHERE planning_product_id=$1',[line.id])).rows[0];
+  assert.equal(completion.actual_amount,expected);
+  assert.deepEqual((await db.query('SELECT quantity,unit FROM stock_movements WHERE usage_id=$1',[completion.usage_id])).rows,[{quantity:'-'+expected,unit:base}]);
+ });
+}
+
+test('Planning completion acepta unidad real alternativa; omitir unidad sigue usando la planificada',async()=>{
+ const x=await fixture('L');await x.receive('1');
+ const line=await planningLine(x,'0.5','L');
+ const body=planningSchema.completeWorkSchema.parse({params:{id:line.planning_id},body:{effective_date:'2026-01-01',actual_products:[{planning_product_id:line.id,actual_amount:'250',unit:'cc'}]}}).body;
+ await completeLine(x,line,body.actual_products);
+ assert.equal((await db.query('SELECT actual_amount FROM planning_product_completions WHERE planning_product_id=$1',[line.id])).rows[0].actual_amount,'0.250000');
+ assert.equal(await x.balance(),'0.750000');
+ const next=await planningLine(x,'0.5','L');
+ await completeLine(x,next,[{planning_product_id:next.id,actual_amount:'0.001001'}]);
+ assert.equal(await x.balance(),'0.748999');
+});
+
+test('Planning valida familia y stock después de normalizar; rollback y precisión al completar',async()=>{
+ const x=await fixture('L');await x.receive('0.2');
+ await assert.rejects(planningLine(x,'15','g'),/compatible/);
+ const line=await planningLine(x,'250','cc');
+ await assert.rejects(completeLine(x,line,[]),/stock suficiente/);
+ await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'250',unit:'mL'}]),/stock suficiente/);
+ await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'1',unit:'kg'}]),/compatible/);
+ await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'0.000001',unit:'cc'}]),/seis decimales/);
+ assert.equal(await x.balance(),'0.200000');
+ assert.equal((await db.query('SELECT * FROM planning_product_completions WHERE planning_product_id=$1',[line.id])).rows.length,0);
+ assert.equal((await db.query('SELECT * FROM usage_records WHERE product_id=$1',[x.productId])).rows.length,0);
+ await completeLine(x,line,[{planning_product_id:line.id,actual_amount:'0.001',unit:'cc'}]);
+ assert.equal(await x.balance(),'0.199999');
+});
+
+test('ingresos cc: precio siempre por unidad base y denominación explícita si hay conversión',async()=>{
+ const x=await fixture('L');
+ const receipt={...x,quantity:'250',unit:'cc',origin:'purchase',received_date:'2026-01-01',unit_price:'100',currency:'ARS',key:randomUUID()};
+ await assert.rejects(stock.transaction(pool,c=>stock.receiveStock(c,receipt)),/unit_price_unit/);
+ await assert.rejects(stock.transaction(pool,c=>stock.receiveStock(c,{...receipt,unit_price_unit:'mL'})),/unidad base/);
+ const result=await stock.transaction(pool,c=>stock.receiveStock(c,{...receipt,unit_price_unit:'L'}));
+ const batch=(await db.query('SELECT initial_quantity,unit,unit_price FROM stock_batches WHERE id=$1',[result[0].batch_id])).rows[0];
+ assert.deepEqual(batch,{initial_quantity:'0.250000',unit:'L',unit_price:'100.000000'});
 });
 

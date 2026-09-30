@@ -1,4 +1,5 @@
 const PERMISSIONS = {
+  HISTORY_IMPORT: "history.import",
     // Planificaciones
   PLANNING_VIEW: "planning.view",
   PLANNING_CREATE: "planning.create",

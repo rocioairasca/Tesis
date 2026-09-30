@@ -33,6 +33,7 @@ const getPlanningArea = (row) => {
 };
 const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
     const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;
+    if (record?.inventory_impact_mode === "HISTORICAL_NO_STOCK") return [];
     const status = record?.status;
     const items = [];
 
@@ -145,7 +146,7 @@ const PlanningTable = ({
         {
             title: "Actividad",
             dataIndex: "activity_type",
-            render: (t) => <Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>,
+            render: (t, row) => <><Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>{row.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <Tag color="blue">Histórico · Sin impacto en inventario</Tag>}</>,
             width: 125,
         },
         {

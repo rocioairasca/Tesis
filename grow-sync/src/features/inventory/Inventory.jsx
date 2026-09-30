@@ -11,6 +11,7 @@ import ProductIdentityForm from './components/ProductIdentityForm';
 import ReceiptModal from './components/ReceiptModal';
 import ProductDetailDrawer from './components/ProductDetailDrawer';
 import AdjustmentModal from './components/AdjustmentModal';
+import StockInitial from './components/StockInitial';
 import { categories, categoryLabel, expiration, expirationLabel, identityPayload, lowStock, productState, quantityLabel, soon, stockQuantity } from './inventoryModel.mjs';
 
 export default function Inventory() {
@@ -95,6 +96,7 @@ export default function Inventory() {
     <Row justify="space-between" align="middle" gutter={[12, 12]} style={{ marginBottom: 20 }}>
       <Col><h2 style={{ margin: 0 }}>Inventario</h2></Col>
       <Col><Space wrap>
+        <StockInitial user={user} products={products} ready={ready} onSaved={fetchProducts} />
         {canEdit && <Button type="primary" icon={<PlusOutlined />} disabled={!ready} onClick={() => setReceipt({ product: null })}>Registrar ingreso</Button>}
         {canCreate && <Button icon={<PlusOutlined />} disabled={!ready} onClick={() => openIdentity(null)}>Nuevo producto</Button>}
         {canViewDisabled && <Button onClick={() => { window.location.href = '/productos-deshabilitados'; }}>Ver deshabilitados</Button>}

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import inventoryConversionPlugin from './vite/inventoryConversionPlugin.mjs';
 
 const getAppVersion = (command) => {
     const commitSha = process.env.VERCEL_GIT_COMMIT_SHA;
@@ -34,7 +35,7 @@ export default defineConfig(({ command }) => {
     const appVersion = getAppVersion(command);
 
     return {
-        plugins: [react(), appVersionPlugin(appVersion)],
+        plugins: [react(), inventoryConversionPlugin(), appVersionPlugin(appVersion)],
         define: {
             __APP_VERSION__: JSON.stringify(appVersion),
         },

@@ -263,7 +263,7 @@ const listUsages = async (req, res) => {
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     const selectCols = `
-      id, date, product_id, amount_used, unit, total_area,
+      id, inventory_impact_mode, historical_import_id, date, product_id, amount_used, unit, total_area,
       previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
       products:product_id ( id, name, unit, company_id ),
       crop:crops!usage_records_crop_id_fkey ( id, name ),
@@ -462,7 +462,7 @@ const listDisabledUsages = async (req, res) => {
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     const selectCols = `
-      id, date, product_id, amount_used, unit, total_area,
+      id, inventory_impact_mode, historical_import_id, date, product_id, amount_used, unit, total_area,
       previous_crop, current_crop, crop_id, user_id, enabled, created_at, source_planning_id, source_planning_product_id,
       products:product_id ( id, name, unit, company_id ),
       crop:crops!usage_records_crop_id_fkey ( id, name ),

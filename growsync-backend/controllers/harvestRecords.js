@@ -101,6 +101,7 @@ const harvestSelect = `
   hr.yield_kg_ha,
   hr.notes,
   hr.created_by,
+  hr.inventory_impact_mode, hr.historical_import_id,
   hr.registered_retroactively, hr.retroactive_reason, hr.retroactive_notes, hr.registration_timezone,
   hr.enabled,
   hr.created_at,

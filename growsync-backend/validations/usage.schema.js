@@ -2,7 +2,7 @@ const { z } = require('zod');
 
 // Helpers
 const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD');
-const Qty = require('../services/inventoryQuantity').quantitySchema.positive('La cantidad debe ser > 0');
+const Qty = require('../services/inventoryQuantity').inputQuantitySchema;
 const Area = z.coerce.number().positive('El área total debe ser > 0').optional().nullable();
 const Text = z.string().trim();
 
@@ -18,7 +18,7 @@ exports.createBody = z.object({
     date: YMD,                              // usage_records.date
     product_id: z.string().uuid(),          // FK a products
     amount_used: Qty,                       // cantidad usada
-    unit: require('../services/inventoryUnits').unitSchema,  // ej: kg, L
+    unit: require('../services/inventoryUnits').inputUnitSchema,  // compatible input; V1 stores the base unit
     total_area: Area,                       // ha/ha_equiv
     previous_crop: Text.optional().nullable(),
     current_crop: Text.optional().nullable(),
@@ -37,7 +37,7 @@ exports.updateBody = z.object({
     date: YMD.optional(),
     product_id: z.string().uuid().optional(),
     amount_used: Qty.optional(),
-    unit: require('../services/inventoryUnits').unitSchema.optional(),
+    unit: require('../services/inventoryUnits').inputUnitSchema.optional(),
     total_area: z.coerce.number().positive().optional().nullable(),
     previous_crop: Text.optional().nullable(),
     current_crop: Text.optional().nullable(),

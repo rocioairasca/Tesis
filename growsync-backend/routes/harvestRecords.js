@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const {rejectModeInput,historical,blockHistorical}=require('../middleware/historicalOperations');
+router.use(rejectModeInput);
 
 const harvestRecordsController = require('../controllers/harvestRecords');
 const checkJwt = require('../middleware/checkJwt');
@@ -14,6 +16,7 @@ router.get('/context', checkJwt, userData,
   harvestRecordsController.getHarvestContext);
 router.post('/cycles/:assignmentId/finalize', checkJwt, userData,
   requireAnyPermission(PERMISSIONS.HARVEST_EDIT),
+  blockHistorical('crop_assignments','assignmentId'),
   harvestRecordsController.finalizeHarvestCycle);
 
 router.get(
@@ -90,6 +93,7 @@ router.put(
   checkJwt,
   userData,
   requirePermission(PERMISSIONS.HARVEST_EDIT),
+  historical('harvest_records'),
   harvestRecordsController.updateHarvestRecord
 );
 
@@ -98,6 +102,7 @@ router.patch(
   checkJwt,
   userData,
   requirePermission(PERMISSIONS.HARVEST_DISABLE),
+  historical('harvest_records',false),
   harvestRecordsController.disableHarvestRecord
 );
 
@@ -106,6 +111,7 @@ router.patch(
   checkJwt,
   userData,
   requirePermission(PERMISSIONS.HARVEST_ENABLE),
+  historical('harvest_records',true),
   harvestRecordsController.enableHarvestRecord
 );
 

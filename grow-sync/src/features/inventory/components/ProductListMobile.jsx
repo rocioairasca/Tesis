@@ -6,6 +6,7 @@
  *  Utiliza tarjetas (cards) para mostrar la información de manera responsive.
  */
 import React from 'react';
+import { expirationLabel, isExpired, soon as isExpiringSoon } from '../inventoryModel.mjs';
 import { Button, Popconfirm, Tag, Tooltip } from 'antd';
 import {
     EditOutlined, DeleteOutlined, AppstoreOutlined, InboxOutlined,
@@ -26,10 +27,6 @@ const ProductListMobile = ({
     rowKey,
     getId,
     formatUnit,
-    formatDateDDMMYYYY,
-    isExpired,
-    isExpiringSoon,
-    expirationValue,
 }) => {
     return (
         <div className="inventory-cards-container">
@@ -98,12 +95,12 @@ const ProductListMobile = ({
 
                         <p>
                             <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                            {formatDateDDMMYYYY(expirationValue(product))}{" "}
+                            {expirationLabel(product)}{" "}
                             {/* ícono de alerta en mobile */}
-                            {isExpired(expirationValue(product)) && (
+                            {isExpired(product) && (
                                 <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
                             )}
-                            {!isExpired(expirationValue(product)) && isExpiringSoon(expirationValue(product)) && (
+                            {!isExpired(product) && isExpiringSoon(product) && (
                                 <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
                             )}
                         </p>

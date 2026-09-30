@@ -1,0 +1,60 @@
+.stock-initial-modal .ant-modal { top: 7vh; max-width: calc(100vw - 24px); padding-bottom: 0; }
+.stock-initial-modal .ant-modal-content { display: flex; flex-direction: column; max-height: 85vh; }
+.stock-initial-modal .ant-modal-header, .stock-initial-modal .ant-modal-footer { flex-shrink: 0; }
+.stock-initial-modal .ant-modal-body { overflow-y: auto; min-height: 0; }
+.stock-initial-search { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; padding: 8px 0; margin-bottom: 12px; border-bottom: 1px solid; }
+.stock-initial-search .ant-select { flex: 1; min-width: 0; }
+.stock-initial-columns, .stock-initial-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(220px, 1fr) 155px 80px; gap: 12px; align-items: center; }
+.stock-initial-columns { font-weight: 600; padding: 8px 0; }
+.stock-initial-row { min-height: 60px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.stock-initial-row .ant-form-item { margin-bottom: 0; }
+.stock-initial-row .ant-form-item-label { display: none; }
+.stock-initial-quantity .ant-form-item-extra { min-height: 0; font-size: 12px; }
+ .stock-initial-quantity-head { display: grid; grid-template-columns: 1fr 100px; gap: 8px; }
+.stock-initial-product { overflow-wrap: anywhere; color: #1D2A62; font-weight: 500; }
+.stock-initial-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.stock-initial-expiry-pill.ant-btn { border-radius: 16px; background: rgba(135, 174, 206, 0.16); color: #1D2A62; white-space: nowrap; }
+.stock-initial-expiry-pill.ant-btn:hover { background: rgba(135, 174, 206, 0.28) !important; color: #1D2A62 !important; }
+.stock-initial-total { font-variant-numeric: tabular-nums; }
+.stock-expiration-modal .ant-modal-title, .stock-expiration-product { color: #1D2A62; }
+.stock-expiration-product { margin: 0 0 12px; font-size: 16px; }
+.stock-expiration-summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px; margin-bottom: 16px; border-radius: 8px; background: #F5F3D8; }
+.stock-expiration-summary strong { color: #437118; font-variant-numeric: tabular-nums; }
+.stock-expiration-save.ant-btn-primary { background: #437118; }
+.stock-expiration-save.ant-btn-primary:hover { background: #365b13 !important; }
+.stock-expiration-add.ant-btn { color: #437118; margin-top: 8px; }
+.stock-expiration-add.ant-btn:hover { color: #437118 !important; background: rgba(175, 208, 110, 0.16) !important; }
+.stock-expiration-table-scroll { overflow-x: auto; }
+.stock-expiration-table { width: 100%; border-collapse: collapse; background: #fff; }
+.stock-expiration-table th { text-align: left; font-weight: 500; padding: 8px 4px; }
+.stock-expiration-table td { padding: 10px 4px; vertical-align: top; border-top: 1px solid #f0f0f0; }
+.stock-expiration-table .ant-form-item { margin-bottom: 0; }
+.stock-expiration-table .ant-form-item-label { display: none; }
+.stock-expiration-table .ant-form-item-extra { min-height: 0; font-size: 12px; }
+.stock-expiration-table .ant-btn { min-width: 36px; min-height: 36px; }
+.stock-expiration-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.stock-expiration-modal .ant-modal { max-width: calc(100vw - 24px); }
+.stock-expiration-modal .ant-modal-content { max-height: 85vh; display: flex; flex-direction: column; }
+.stock-expiration-modal .ant-modal-body { min-height: 0; overflow-y: auto; }
+.stock-initial-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .stock-initial-columns { display: none; }
+  .stock-initial-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px 0; }
+  .stock-initial-product { grid-column: 1; grid-row: 1; }
+  .stock-initial-actions { grid-column: 2; grid-row: 1; }
+  .stock-initial-quantity { grid-column: 1 / -1; }
+  .stock-initial-expiry { grid-column: 1 / -1; }
+  .stock-initial-expiry .ant-form-item-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+  .stock-initial-expiry .ant-form-item-label { display: block; padding: 0; flex: none; }
+  .stock-initial-expiry .ant-form-item-control { flex: 1; min-width: 0; }
+  .stock-expiration-modal .ant-modal-content { padding: 16px 12px; }
+  .stock-expiration-table { table-layout: fixed; }
+  .stock-expiration-table col:nth-child(2) { width: 70px !important; }
+  .stock-expiration-table col:nth-child(3) { width: 116px !important; }
+  .stock-expiration-table col:nth-child(4) { width: 36px !important; }
+  .stock-expiration-table th, .stock-expiration-table td { padding-inline: 2px; }
+  .stock-expiration-table th { font-size: 12px; }
+  .stock-expiration-table td[colspan="2"] .ant-form-item-control-input-content > div > .ant-form-item:last-child { width: 66px !important; }
+  .stock-expiration-table .ant-picker { padding-inline: 6px; }
+  .stock-expiration-table .ant-picker-input > input { font-size: 12px; }
+}

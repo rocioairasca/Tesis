@@ -1,5 +1,5 @@
 import {unitLabel} from '../../utils/inventoryUnits';
-import { calendarDateKey, formatCalendarDate, parseCalendarDate } from '../../utils/calendarDate';
+import { expirationLabel, isExpired, soon as isExpiringSoon } from './inventoryModel.mjs';
 import React, { useState, useEffect, useCallback } from "react";
 import { Table, Button, notification, Row, Col, Tag, Tooltip } from "antd";
 import {
@@ -25,14 +25,6 @@ const formatCurrency = (v) => {
   if (!Number.isFinite(n)) return "-";
   return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
 };
-
-const formatDateDDMMYYYY = value => formatCalendarDate(value, '—');
-const daysTo = value => {
-  const date = parseCalendarDate(value);
-  return date ? date.diff(new Date(new Date().setHours(0,0,0,0)), 'day') : null;
-};
-const isExpired = (d) => { const x = daysTo(d); return x !== null && x < 0; };
-const isExpiringSoon = (d, win = 15) => { const x = daysTo(d); return x !== null && x > 0 && x <= win; };
 
 const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.name;
@@ -104,14 +96,14 @@ const DisabledInventory = () => {
     },
     {
       title: "Fecha de Vencimiento",
-      dataIndex: "acquisition_date",
-      key: "acquisition_date",
-      render: (d) => {
+      dataIndex: "expiration_date",
+      key: "expiration_date",
+      render: (_, d) => {
         const expired = isExpired(d);
         const soon = isExpiringSoon(d);
         return (
           <span>
-            {formatDateDDMMYYYY(d)}{" "}
+            {expirationLabel(d)}{" "}
             {expired && <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />}
             {!expired && soon && <ExclamationCircleOutlined style={{ color: "#faad14" }} />}
           </span>
@@ -196,11 +188,11 @@ const DisabledInventory = () => {
 
               <p>
                 <CalendarOutlined /> <strong>Vence:</strong>{" "}
-                {formatDateDDMMYYYY(product.acquisition_date)}{" "}
-                {isExpired(product.acquisition_date) && (
+                {expirationLabel(product)}{" "}
+                {isExpired(product) && (
                   <ExclamationCircleOutlined style={{ color: "#ff4d4f", marginLeft: 6 }} />
                 )}
-                {!isExpired(product.acquisition_date) && isExpiringSoon(product.acquisition_date) && (
+                {!isExpired(product) && isExpiringSoon(product) && (
                   <ExclamationCircleOutlined style={{ color: "#faad14", marginLeft: 6 }} />
                 )}
               </p>

@@ -1,5 +1,7 @@
 import { campaignLabel, campaignPeriod, sortCampaigns } from '../../utils/campaigns.mjs';
-import {quantityLabel,unitLabel} from '../../utils/inventoryUnits';
+import {quantityLabel,normalizeUnit} from '../../utils/inventoryUnits';
+import QuantityUnitFields from '../../components/QuantityUnitFields';
+import {exceedsAvailable,planningProductPayload,actualProductPayload} from '../../utils/inventoryConversion';
 import { parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
 /**
  * Componente: Planning
@@ -17,7 +19,7 @@ import { parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Alert,
-  Button, Card, Drawer, Form, Input, InputNumber, Select, DatePicker,
+  Button, Card, Drawer, Form, Input, Select, DatePicker,
   Dropdown, Space, Row, Col, Tag, notification, Switch,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
@@ -89,10 +91,6 @@ const getEffectiveWorkDate = getEffectiveSowingDate;
 const getPlanningDayjs = (value) => {
   const datePart = getPlanningDatePart(value);
   return datePart ? dayjs(datePart) : null;
-};
-const parseDecimalInput = (value) => {
-  if (typeof value === "string") return Number(value.replace(",", "."));
-  return Number(value);
 };
 const formatDate = (value) => {
   if (!value) return "—";
@@ -246,6 +244,7 @@ const Planning = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [crops, setCrops] = useState([]);
   const [products, setProducts] = useState([]);
+  const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [vehicles, setVehicles] = useState([]);
 
   // índices id -> nombre
@@ -339,8 +338,8 @@ const Planning = () => {
 
   const getPlanningProductAvailable = useCallback((planningProduct) => {
     const directValue = planningProduct?.available_quantity;
-    if (directValue !== undefined && directValue !== null) return Number(directValue || 0);
-    return Number(getCatalogProduct(planningProduct)?.available_quantity || 0);
+    if (directValue !== undefined && directValue !== null) return directValue;
+    return getCatalogProduct(planningProduct)?.available_quantity ?? 0;
   }, [getCatalogProduct]);
 
   const productOptions = useMemo(() => (
@@ -361,10 +360,10 @@ const Planning = () => {
     Array.isArray(selectedFormProducts)
     && selectedFormProducts.some((item) => {
       if (!item?.product_id) return false;
-      const amount = parseDecimalInput(item.amount);
-      if (!Number.isFinite(amount)) return false;
-      const available = Number(getCatalogProductById(item.product_id)?.available_quantity || 0);
-      return amount > available;
+      const product = getCatalogProductById(item.product_id);
+      if (!product || item.amount == null || item.amount === '') return false;
+      try { return exceedsAvailable(item.amount,item.unit,product.unit,product.available_quantity); }
+      catch { return false; } // Field validation reports invalid precision or units.
     })
   ), [getCatalogProductById, isEditingCompleted, selectedFormProducts]);
 
@@ -391,21 +390,16 @@ const Planning = () => {
     const values = {};
     (planning?.products || []).forEach((product) => {
       if (!product.id) return;
-      values[product.id] = { actual_amount: Number(product.amount || 0) };
+      values[product.id] = { actual_amount: String(product.amount ?? 0), unit:normalizeUnit(getPlanningProductUnit(product)) };
     });
     return values;
-  }, []);
+  }, [getPlanningProductUnit]);
 
   const buildActualProductsPayload = useCallback((planning, values) => (
     (planning?.products || [])
       .filter(product => product.id)
-      .map(product => ({
-        planning_product_id: product.id,
-        actual_amount: parseDecimalInput(
-          values?.actual_products?.[product.id]?.actual_amount ?? product.amount ?? 0
-        ),
-      }))
-  ), []);
+      .map(product => actualProductPayload(product,values?.actual_products?.[product.id],getCatalogProduct(product)?.unit || getPlanningProductUnit(product)))
+  ), [getCatalogProduct,getPlanningProductUnit]);
 
   const renderActualProductsForm = useCallback((planning) => {
     const plannedProducts = (planning?.products || []).filter(product => product.id);
@@ -425,6 +419,7 @@ const Planning = () => {
           const productId = product.id;
           const plannedAmount = Number(product.amount || 0);
           const unit = getPlanningProductUnit(product);
+          const baseUnit = getCatalogProduct(product)?.unit || unit;
           const available = getPlanningProductAvailable(product);
           const title = product.name || prodIx[product.product_id] || "Producto";
 
@@ -447,37 +442,12 @@ const Planning = () => {
                 </Col>
                 <Col xs={24} md={7}>
                   <div style={{ color: "#6b7280", fontSize: 12 }}>Stock disponible</div>
-                  <strong>{quantityLabel(available,unit)}</strong>
+                  <strong>{quantityLabel(available,baseUnit)}</strong>
                 </Col>
                 <Col xs={24} md={7}>
-                  <Form.Item
-                    name={["actual_products", productId, "actual_amount"]}
-                    label="Cantidad real"
-                    style={{ marginBottom: 0 }}
-                    rules={[
-                      { required: true, message: "Ingresá la cantidad real." },
-                      {
-                        validator: (_, value) => {
-                          const amount = parseDecimalInput(value);
-                          if (!Number.isFinite(amount) || amount < 0) {
-                            return Promise.reject(new Error("Ingresá una cantidad válida."));
-                          }
-                          if (amount > available) {
-                            return Promise.reject(new Error("No hay stock suficiente."));
-                          }
-                          return Promise.resolve();
-                        },
-                      },
-                    ]}
-                  >
-                    <InputNumber
-                      min={0}
-                      precision={6}
-                      decimalSeparator=","
-                      style={{ width: "100%" }}
-                      addonAfter={unit ? unitLabel(unit) : undefined}
-                    />
-                  </Form.Item>
+                  <QuantityUnitFields quantityName={["actual_products",productId,"actual_amount"]}
+                    unitName={["actual_products",productId,"unit"]} label="Cantidad real" baseUnit={baseUnit}
+                    available={available} allowZero allowConversion={inventoryEnabled} />
                 </Col>
               </Row>
             </div>
@@ -485,7 +455,7 @@ const Planning = () => {
         })}
       </Space>
     );
-  }, [getPlanningProductAvailable, getPlanningProductUnit, prodIx]);
+  }, [getPlanningProductAvailable, getPlanningProductUnit, getCatalogProduct, inventoryEnabled, prodIx]);
 
   const lotSelectionOptions = useMemo(() => {
     const selectedByLot = selectedLotKeys.reduce((acc, key) => {
@@ -1031,6 +1001,7 @@ const Planning = () => {
   const fetchProducts = useCallback(async () => {
     try {
       const { data } = await api.get("/products");
+      setInventoryEnabled(data?.inventory_v1_enabled === true);
       setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
     } catch { }
   }, []);
@@ -1069,7 +1040,7 @@ const Planning = () => {
         products: Array.isArray(row.products) ? row.products.map(p => ({
           product_id: p.product_id,
           amount: p.amount,
-          unit: p.unit,
+          unit: normalizeUnit(p.unit),
         })) : [],
         status: row.status || "planificado",
         register_completed: false,
@@ -1142,12 +1113,8 @@ const Planning = () => {
         payload.vehicle_id = values.vehicle_id;
       }
 
-      if (values.products && values.products.length > 0) {
-        payload.products = values.products.map(p => ({
-          product_id: p.product_id,
-          amount: Number(p.amount ?? 0),
-          unit: getCatalogProductById(p.product_id)?.unit || p.unit || "",
-        }));
+      if (!isEditingCompleted && values.products && values.products.length > 0) {
+        payload.products = values.products.map(p => planningProductPayload(p,getCatalogProductById(p.product_id) || {unit:p.unit}));
       }
 
       if (shouldRegisterCompleted) {
@@ -1476,6 +1443,7 @@ const Planning = () => {
   };
 
   const getPrimaryStatusAction = (item) => {
+    if (item?.inventory_impact_mode === 'HISTORICAL_NO_STOCK') return null;
     const status = item?.status;
     if (!canEdit) return null;
     if (status === "planificado" || status === "pendiente") {
@@ -2070,7 +2038,7 @@ const Planning = () => {
                               .includes(input.toLowerCase())
                           )}
                           onChange={(productId) => {
-                            const unit = getCatalogProductById(productId)?.unit || "";
+                            const unit = normalizeUnit(getCatalogProductById(productId)?.unit) || "";
                             const current = form.getFieldValue("products") || [];
                             current[name] = { ...(current[name] || {}), unit };
                             form.setFieldsValue({ products: current });
@@ -2093,36 +2061,13 @@ const Planning = () => {
                         {({ getFieldValue }) => {
                           const productId = getFieldValue(["products", name, "product_id"]);
                           const unit = getCatalogProductById(productId)?.unit || getFieldValue(["products", name, "unit"]) || "";
-                          const available = Number(getCatalogProductById(productId)?.available_quantity || 0);
+                          const available = getCatalogProductById(productId)?.available_quantity ?? 0;
                           const stockLabel = `Disponible: ${quantityLabel(available,unit)}`;
                           return (
-                            <Form.Item
-                              {...rest}
-                              name={[name, "amount"]}
+                            <QuantityUnitFields key={name} quantityName={[name,"amount"]} unitName={[name,"unit"]} watchPrefix={["products"]}
                               label={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
-                              extra={productId ? stockLabel : null}
-                              rules={isEditingCompleted ? [] : [
-                                { required: true, message: "Cantidad" },
-                                {
-                                  validator: (_, value) => {
-                                    if (!productId) return Promise.resolve();
-                                    const amount = parseDecimalInput(value);
-                                    if (!Number.isFinite(amount) || amount <= available) {
-                                      return Promise.resolve();
-                                    }
-                                    return Promise.reject(new Error("La cantidad supera el stock disponible."));
-                                  },
-                                },
-                              ]}
-                            >
-                              <InputNumber
-                                disabled={isEditingCompleted}
-                                min={0}
-                                placeholder={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
-                                style={{ width: "100%" }}
-                                addonAfter={unit ? unitLabel(unit) : undefined}
-                              />
-                            </Form.Item>
+                              baseUnit={unit} available={available} extra={productId ? stockLabel : null}
+                              disabled={isEditingCompleted} allowConversion={inventoryEnabled && !isEditingCompleted} />
                           );
                         }}
                       </Form.Item>
@@ -2191,6 +2136,7 @@ const Planning = () => {
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="Planificación">
                 <strong>{getPlanningDisplayName(viewing, cropIx)}</strong>
+                {viewing.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario. Los productos y cantidades son informativos y no modificaron el stock.</p>}
               </Descriptions.Item>
               <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
               <Descriptions.Item label="Campaña">

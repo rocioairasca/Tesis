@@ -1,6 +1,9 @@
 const {randomUUID}=require('node:crypto');
 const stock=require('./stock');
+const impact=require('./inventoryImpact');
+const {normalizeQuantity}=require('./inventoryConversion');
 async function createManualUsage(pool,{companyId,actorId,key,body}){
+  impact.assertModeUnchanged({},body);
   const requestData={type:'manual-usage',actorId,body};
   return stock.transaction(pool,async client=>{
     const existing=await stock.replay(client,companyId,key,stock.fingerprint(requestData));
@@ -15,8 +18,9 @@ async function createManualUsage(pool,{companyId,actorId,key,body}){
     stock.calendarDate(body.date);
     const {rows:crops}=await client.query(`SELECT DISTINCT crop_id FROM crop_assignments WHERE company_id=$1 AND lot_id=ANY($2::uuid[])
       AND sub_lot_id IS NULL AND start_date<=$3::date AND (end_date IS NULL OR end_date>=$3::date)`,[companyId,lots,body.date]);
-    const product=await stock.lockProduct(client,companyId,body.product_id,body.unit);
-    body={...body,unit:product.unit};
+    const product=await stock.lockProduct(client,companyId,body.product_id);
+    const conversion=normalizeQuantity({quantity:body.amount_used,inputUnit:body.unit,productUnit:product.unit});
+    body={...body,amount_used:conversion.normalized_quantity,unit:product.unit};
     const id=randomUUID();
     await client.query(`INSERT INTO usage_records
       (id,company_id,product_id,amount_used,unit,date,total_area,previous_crop,current_crop,user_id,created_by,crop_id)
@@ -32,6 +36,7 @@ async function disableManualUsage(pool,{companyId,actorId,usageId}){
     const {rows}=await client.query('SELECT * FROM usage_records WHERE company_id=$1 AND id=$2 FOR UPDATE',[companyId,usageId]);
     const usage=rows[0];
     if(!usage) throw stock.fail('Uso no encontrado.',404);
+    if(impact.isHistorical(usage)) throw stock.fail('Usá el servicio de corrección histórica, sin stock.');
     if(usage.source_planning_id) throw stock.fail('El uso automático requiere reversión integral de Planning.');
     if(!usage.enabled) return {ok:true,id:usageId,replayed:true};
     const {rows:operations}=await client.query(`SELECT DISTINCT operation_id FROM stock_movements

@@ -1,2 +1,3 @@
 .codex/
 dist-codex-check/
+.local-postgis/

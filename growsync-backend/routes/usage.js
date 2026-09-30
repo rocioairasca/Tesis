@@ -1,4 +1,6 @@
 const router = require('express').Router();
+const {rejectModeInput,historical,blockHistorical}=require('../middleware/historicalOperations');
+router.use(rejectModeInput);
 
 const {
   listUsages,
@@ -28,6 +30,7 @@ router.get('/disabled',
 router.put('/enable/:id',
   validate(schema.idParam),
   requirePermission(PERMISSIONS.USAGE_ENABLE),
+  historical('usage_records',true),
   enableUsage
 );
 
@@ -49,8 +52,9 @@ router.post('/',
 
 // Editar RDU
 router.put('/:id',
-  validate(schema.updateBody),
   requirePermission(PERMISSIONS.USAGE_EDIT),
+  historical('usage_records'),
+  validate(schema.updateBody),
   editUsage
 );
 
@@ -58,6 +62,7 @@ router.put('/:id',
 router.delete('/:id',
   validate(schema.idParam),
   requirePermission(PERMISSIONS.USAGE_DISABLE),
+  historical('usage_records',false),
   disableUsage
 );
 
