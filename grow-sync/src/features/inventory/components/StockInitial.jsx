@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { readInitialDraft, saveInitialDraft, clearInitialDrafts } from '../stockInitialDraft.mjs';
+import dayjs from 'dayjs';
+import { readInitialDraft, saveInitialDraft, clearInitialDrafts, changeInitialDraftDate } from '../stockInitialDraft.mjs';
 import StockExpirationEditor, { InitialExpirationField, InitialStockTotal } from './StockExpirationEditor';
 import { initialProductGroups, replaceInitialProductEntries } from '../stockInitialGroups.mjs';
 import { Alert, Button, Card, DatePicker, Dropdown, Empty, Form, Input, Select, Space, Tooltip, notification, theme } from 'antd';
@@ -168,6 +169,7 @@ function StockInitialSession({ user, products, ready, onSaved }) {
   const [status, setStatus] = useState(null), [error, setError] = useState(null);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [dialog, setDialog] = useState(false);
   const [date, setDate] = useState(null), [review, setReview] = useState(null);
+  const [editingDate, setEditingDate] = useState(false), [dateDialog, setDateDialog] = useState(false);
   const [form] = Form.useForm();
   // Subscribe only to list structure; typing is handled by each field.
   const rowIds = Form.useWatch(values => JSON.stringify((values.entries || []).map(row => row?.product_id)), { form, preserve: true });
@@ -222,6 +224,31 @@ function StockInitialSession({ user, products, ready, onSaved }) {
     const preview = await service.prepare(manifest);
     setReview({ manifest, preview }); attempt.current = null;
   });
+  const dateStep = editingDate || !status?.inventory_control_start_date;
+  const canEditDate = !status?.opening?.exists && !status?.stock?.batches && !status?.stock?.movements && !attempt.current;
+  const backToDate = () => {
+    setDate(status?.inventory_control_start_date ? dayjs(status.inventory_control_start_date) : null);
+    setEditingDate(true);
+  };
+  const saveDate = async () => {
+    if (!date || !canEditDate) return;
+    setBusy(true);
+    try {
+      const nextDate = date.format('YYYY-MM-DD');
+      await changeInitialDraftDate({ company: companyId, previousDate: status.inventory_control_start_date,
+        date: nextDate, rows: form.getFieldValue('entries') || [], setDate: value => service.setDate(value) });
+      if (!(form.getFieldValue('entries') || []).length) form.setFieldsValue({ entries: readInitialDraft(companyId, nextDate) || [] });
+      // Preserve form values and switch scope before status effects can restore it.
+      scope.current = { company: companyId, date: nextDate };
+      setStatus(previous => ({ ...previous, inventory_control_start_date: nextDate }));
+      setReview(null); setEditingDate(false); setDateDialog(false);
+      await refresh();
+    } finally { setBusy(false); }
+  };
+  const continueDate = () => {
+    if (rows.length && status.inventory_control_start_date && date?.format('YYYY-MM-DD') !== status.inventory_control_start_date) setDateDialog(true);
+    else run(saveDate);
+  };
   const confirm = async () => {
     if (!canConfirmInitial(status, review?.preview)) throw new Error('Todavía no se puede confirmar el inventario inicial.');
     if (!attempt.current) attempt.current = confirmationAttempt(review.manifest, review.preview);
@@ -240,12 +267,16 @@ function StockInitialSession({ user, products, ready, onSaved }) {
       throw new Error(initialErrorMessage(e, 'No se pudo registrar el inventario inicial. Podés volver a intentarlo sin cambiar los datos.'));
     } finally { setBusy(false); }
   };
-  const footer = review ? <Space wrap>
+  const footer = dateStep ? <Space>
+    {status?.inventory_control_start_date && <Button disabled={busy} onClick={() => setEditingDate(false)}>Volver a la carga</Button>}
+    <Button type="primary" loading={busy} disabled={!date || busy || !canEditDate} onClick={continueDate}>Continuar</Button>
+  </Space> : review ? <Space wrap>
     <Button disabled={busy || !!attempt.current} onClick={() => setReview(null)}>Volver</Button>
     <Button disabled={busy} onClick={() => run(refresh)}>Actualizar estado</Button>
     <Button type="primary" disabled={busy || !canConfirmInitial(status, review.preview)} onClick={() => setDialog(true)}>Confirmar inventario inicial</Button>
   </Space> : <div className="stock-initial-footer">
     <span>{initialSummary(rows)}</span><Space wrap>
+      <Button disabled={busy || !canEditDate} onClick={backToDate}>Volver a Fecha</Button>
       <Button disabled={busy || !rows.length} onClick={() => { clearInitialDrafts(companyId, status?.inventory_control_start_date); form.setFieldsValue({ entries: [] }); setRecovered(false); }}>Descartar carga</Button>
       <Button disabled={busy} onClick={() => setOpen(false)}>Cerrar</Button>
       {status?.inventory_control_start_date && <Button type="primary" loading={busy} disabled={busy || !status.can_prepare || !rows.length} onClick={prepare}>Revisar inventario inicial</Button>}
@@ -255,26 +286,28 @@ function StockInitialSession({ user, products, ready, onSaved }) {
   return <>
     {canOpenInitial(allowed, status) && <Button disabled={!ready || busy} onClick={start}>Configurar inventario inicial</Button>}
     {error && !open && <Alert type="error" message={initialErrorMessage(error, 'No se pudo consultar el inventario inicial.')} action={<Button onClick={() => run(refresh)}>Reintentar</Button>} />}
-    <FocusModal open={open} title="Configurar inventario inicial" width={1160} rootClassName="stock-initial-modal" footer={footer} busy={busy || dialog} onCancel={() => setOpen(false)}>
+    <FocusModal open={open} title="Configurar inventario inicial" width={1160} rootClassName="stock-initial-modal" footer={footer} busy={busy || dialog || dateDialog} onCancel={() => setOpen(false)}>
       {error && <Alert type="error" message={initialErrorMessage(error, 'No se pudo completar la operación.')} />}
       {(status?.blockers || []).map(code => <Alert key={code} type="warning" showIcon message={initialBlockers[code] || 'No se puede cargar el inventario inicial.'} style={{ marginBottom: 12 }} />)}
-      {status?.opening.exists ? null : !status?.inventory_control_start_date ? <Space direction="vertical">
+      {status?.opening.exists ? null : dateStep ? <Space direction="vertical">
         <label>Fecha de inicio del control de inventario</label>
-        <DatePicker aria-label="Fecha de inicio del control de inventario" format="DD/MM/YYYY" value={date} onChange={setDate} />
-        <Button loading={busy} disabled={!date || busy} onClick={() => run(async () => { await service.setDate(date.format('YYYY-MM-DD')); await refresh(); })}>Continuar</Button>
+        <p>Indicá desde qué fecha GrowSync empezará a controlar el inventario.</p>
+        <DatePicker aria-label="Fecha de inicio del control de inventario" placeholder="Seleccioná una fecha" format="DD/MM/YYYY" value={date} onChange={setDate} disabled={busy} />
       </Space> : review ? <>
         <InitialPreview {...review} products={catalog} />
         {attempt.current && <Alert type="info" message="Hay un intento de confirmación pendiente. Reintentá sin cambiar los datos." />}
       </> : <>
         {recovered && <Alert type="info" showIcon message="Recuperamos la carga de inventario inicial que estabas completando." />}
         {draftError && <Alert type="warning" message="No pudimos guardar la carga en este dispositivo. Mantené esta ventana abierta para conservarla." />}
-        <p>Fecha de inicio: {receivedLabel(status.inventory_control_start_date)}</p>
+        <p>Fecha de inicio: {receivedLabel(status.inventory_control_start_date)} <Button type="text" size="small" disabled={busy || !canEditDate} onClick={backToDate}>Cambiar</Button></p>
         <p>Cargá las existencias que había al {receivedLabel(status.inventory_control_start_date)}. Agregá únicamente los productos que tenían stock en esa fecha.</p>
         <Form form={form} layout="vertical" disabled={busy} onValuesChange={persistDraft} onSubmitCapture={event => event.preventDefault()}>
           <InitialEntries products={catalog} rows={rows} onChanged={persistDraft} />
         </Form>
       </>}
     </FocusModal>
+    {dateDialog && <ConfirmDialog open title="Cambiar fecha de inicio" confirmLabel="Cambiar fecha" onCancel={() => setDateDialog(false)} onConfirm={saveDate}
+      description="Ya cargaste productos para el inventario inicial. Si cambiás la fecha, revisá que esas cantidades correspondan a la nueva fecha." />}
     {dialog && <ConfirmDialog open title="Confirmar inventario inicial" confirmLabel="Confirmar inventario inicial" onCancel={() => setDialog(false)} onConfirm={confirm}
       description="Después de registrar el inventario inicial, cualquier diferencia deberá corregirse mediante un ingreso o un ajuste de stock." />}
   </>;

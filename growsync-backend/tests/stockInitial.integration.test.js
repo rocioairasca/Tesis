@@ -138,3 +138,42 @@ test('O: movements, opening metadata, original batch and effective date cannot b
   await assert.rejects(stock.transaction(x.pool,c=>c.query('INSERT INTO stock_initial_openings(company_id,effective_date,actor_id,idempotency_key,request_hash,payload) VALUES($1,$2,$3,$4,$5,$6)',[other,'2020-01-01',actor,'key','a'.repeat(64),JSON.stringify({entries:[{product_id:x.productId,quantity:1,unit:'kg',expiration_date:null}]})])),/Incomplete/);
   assert.equal(await x.count('stock_initial_openings'),1);
 });
+
+
+test('fecha: elección explícita, corrección, auditoría, históricos y preview anterior invalidado', async t => {
+  const x = await fixture(t);
+  const setDate = date => require('../services/inventoryControlStart')(x.pool, { companyId: x.companyId, actorId: x.actorId, date });
+  await x.db.query('UPDATE companies SET inventory_control_start_date=NULL WHERE id=$1', [x.companyId]);
+  for (const date of [null, undefined, '', '2026-02-30']) await assert.rejects(setDate(date), { status: 400 });
+  assert.equal((await x.db.query('SELECT inventory_control_start_date FROM companies WHERE id=$1', [x.companyId])).rows[0].inventory_control_start_date, null);
+  await setDate(x.args.date);
+  const oldPreview = await x.prepare();
+  // Explicit historical operations are independent of the control date.
+  await history.importHistory(x.pool, { companyId:x.companyId, actorId:x.actorId, key:randomUUID(), source:'synthetic', confirmedNoStock:true,
+    records:{ usage_records:[{id:randomUUID(),product_id:x.productId,user_id:x.actorId,amount_used:2,unit:'kg',date:'2019-01-01'}] } });
+  const before = (await x.db.query('SELECT * FROM usage_records')).rows;
+  await setDate('2020-02-01');
+  assert.deepEqual((await x.db.query('SELECT * FROM usage_records')).rows, before);
+  assert.equal(await x.count('stock_movements'), 0);
+  assert.equal(await x.count('historical_events'), 2);
+  await setDate('2020-02-01'); // retry is a no-op, including audit
+  assert.equal(await x.count('historical_events'), 2);
+  await assert.rejects(initial.confirm(x.pool, {...x.args,previewHash:oldPreview.preview_hash}), /fecha/i);
+  const next = {...x.args,date:'2020-02-01'};
+  await x.confirm(next);
+  await assert.rejects(setDate('2020-03-01'), /confirmado/);
+  assert.equal((await x.db.query('SELECT inventory_control_start_date::text FROM companies WHERE id=$1',[x.companyId])).rows[0].inventory_control_start_date,'2020-02-01');
+});
+
+test('fecha: partidas incluso agotadas bloquean; permisos y tenant siguen vigentes', async t => {
+  const x = await fixture(t);
+  const change = require('../services/inventoryControlStart');
+  const args = {companyId:x.companyId,actorId:x.actorId,date:'2020-02-01'};
+  await assert.rejects(change(x.pool,{...args,companyId:randomUUID()}),{status:403});
+  await x.db.query("UPDATE users SET custom_permissions='[]' WHERE id=$1",[x.actorId]);
+  await assert.rejects(change(x.pool,args),{status:403});
+  await x.db.query(`UPDATE users SET custom_permissions='["history.import"]' WHERE id=$1`,[x.actorId]);
+  await x.db.query("INSERT INTO stock_batches(company_id,product_id,initial_quantity,available_quantity,unit,received_date,origin,created_by) VALUES($1,$2,1,0,'kg','2020-01-01','purchase',$3)",[x.companyId,x.productId,x.actorId]);
+  await assert.rejects(change(x.pool,args), /existencias o movimientos/);
+  assert.equal(await x.count('historical_events'),0);
+});

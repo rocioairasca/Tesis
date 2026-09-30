@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import dayjs from 'dayjs';
-import { saveInitialDraft, readInitialDraft, clearInitialDrafts } from '../src/features/inventory/stockInitialDraft.mjs';
+import { saveInitialDraft, readInitialDraft, clearInitialDrafts, changeInitialDraftDate } from '../src/features/inventory/stockInitialDraft.mjs';
 
 const storage = () => {
   const result = {};
@@ -77,4 +77,44 @@ test('borrador: aceptar null no admite cantidades con estructuras inválidas', (
     saveInitialDraft('a', '2026-09-24', [{ product_id: 'p', unit: 'L', quantity }], device);
     assert.equal(readInitialDraft('a', '2026-09-24', device), null);
   }
+});
+
+
+test('cambiar fecha migra 40 filas completas y elimina solo la clave anterior tras éxito', async () => {
+  const device = storage();
+  const rows = Array.from({length:40}, (_,i) => ({product_id:String(i),quantity:i===17?null:String(i+1),unit:'kg',expiration_period:dayjs('2027-08-01')}));
+  saveInitialDraft('a','2026-01-01',rows,device);
+  saveInitialDraft('b','2026-01-01',rows,device);
+  await changeInitialDraftDate({company:'a',previousDate:'2026-01-01',date:'2026-02-01',rows,storage:device,setDate:async date => {
+    assert.equal(date,'2026-02-01');
+    assert.equal(readInitialDraft('a',date,device).length,40);
+    assert.equal(readInitialDraft('a','2026-01-01',device).length,40);
+  }});
+  assert.equal(readInitialDraft('a','2026-01-01',device),null);
+  assert.deepEqual(readInitialDraft('a','2026-02-01',device),rows);
+  assert.equal(readInitialDraft('b','2026-01-01',device).length,40);
+});
+
+test('cambio de fecha: fallo de almacenamiento no llama API; rechazo y timeout conservan carga y permiten reintentar', async () => {
+  const device=storage(), rows=[{product_id:'p',quantity:'',unit:'L',expiration_period:null}];
+  saveInitialDraft('a','old',rows,device);
+  const args={company:'a',previousDate:'old',date:'new',rows,storage:device};
+  let calls=0;
+  await assert.rejects(changeInitialDraftDate({...args,storage:null,setDate:async()=>{calls++;}}), /guardar/);
+  assert.equal(calls,0);
+  await assert.rejects(changeInitialDraftDate({...args,setDate:async()=>{throw Object.assign(new Error('blocked'),{response:{status:409}});}}),/blocked/);
+  assert.deepEqual(readInitialDraft('a','old',device),rows);
+  assert.equal(readInitialDraft('a','new',device),null);
+  await assert.rejects(changeInitialDraftDate({...args,setDate:async()=>{throw new Error('timeout');}}),/timeout/);
+  assert.deepEqual(readInitialDraft('a','old',device),rows);
+  assert.deepEqual(readInitialDraft('a','new',device),rows);
+  await changeInitialDraftDate({...args,setDate:async()=>{}});
+  assert.equal(readInitialDraft('a','old',device),null);
+});
+
+test('cambio de fecha no sobrescribe otro borrador distinto',async()=>{
+  const device=storage(),rows=[{product_id:'p',quantity:'1',unit:'L'}];
+  saveInitialDraft('a','new',[{...rows[0],quantity:'9'}],device);
+  await assert.rejects(changeInitialDraftDate({company:'a',previousDate:'old',date:'new',rows,storage:device,setDate:async()=>assert.fail('No debe llamar API')}),/Ya existe/);
+  assert.equal(readInitialDraft('a','new',device)[0].quantity,'9');
 });

@@ -2,13 +2,32 @@ import dayjs from 'dayjs';
 
 const prefix = company => `growsync:stock-initial:v1:${encodeURIComponent(company)}:`;
 const key = (company, date) => `${prefix(company)}${date}`;
+const serializeEntries = rows => rows.map(row => ({ product_id: row.product_id, quantity: row.quantity, unit: row.unit,
+      expiration_month: row.expiration_period?.isValid?.() ? row.expiration_period.month() + 1 : null,
+      expiration_year: row.expiration_period?.isValid?.() ? row.expiration_period.year() : null }));
+
+export async function changeInitialDraftDate({ company, previousDate, date, rows, setDate, storage = globalThis.localStorage }) {
+  if (previousDate === date) return;
+  // Stage a recoverable copy before changing the server. On a network failure,
+  // retain both copies: the server may already have accepted the new date.
+  if (rows.length) {
+    const existing = storage?.getItem(key(company, date));
+    if (existing && existing !== JSON.stringify({ version: 1, entries: serializeEntries(rows) })) throw new Error('Ya existe una carga guardada para esa fecha. Recuperala antes de reemplazarla.');
+    if (!saveInitialDraft(company, date, rows, storage)) throw new Error('No pudimos guardar la carga con la nueva fecha. La fecha no se cambió.');
+  }
+  try { await setDate(date); }
+  catch (error) {
+    // A definite rejection did not change the date. Network/5xx failures are
+    // uncertain and retain the staged copy for recovery or an identical retry.
+    if (rows.length && error.response?.status >= 400 && error.response.status < 500) clearInitialDrafts(company, date, storage);
+    throw error;
+  }
+  if (previousDate) clearInitialDrafts(company, previousDate, storage);
+}
 export function saveInitialDraft(company, date, rows, storage = globalThis.localStorage) {
   if (!company || !date) return false;
   try {
-    const entries = rows.map(row => ({ product_id: row.product_id, quantity: row.quantity, unit: row.unit,
-      expiration_month: row.expiration_period?.isValid?.() ? row.expiration_period.month() + 1 : null,
-      expiration_year: row.expiration_period?.isValid?.() ? row.expiration_period.year() : null }));
-    storage.setItem(key(company, date), JSON.stringify({ version: 1, entries }));
+    storage.setItem(key(company, date), JSON.stringify({ version: 1, entries: serializeEntries(rows) }));
     return true;
   } catch { return false; }
 }
