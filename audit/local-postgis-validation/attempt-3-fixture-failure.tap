@@ -1,0 +1,91 @@
+TAP version 13
+# Subtest: clean database: repository migrations expose missing historical baseline (not silently repaired)
+ok 1 - clean database: repository migrations expose missing historical baseline (not silently repaired)
+  ---
+  duration_ms: 138.4064
+  type: 'test'
+  ...
+# Clean install blocked: base users/products/lots/planning/usage/inventory schema is not created by the repository migration chain.
+# Subtest: legacy migration and historical spatial chain preserve quantities, mode defaults, EWKB, SRID and layout identity
+not ok 2 - legacy migration and historical spatial chain preserve quantities, mode defaults, EWKB, SRID and layout identity
+  ---
+  duration_ms: 1095.0385
+  type: 'test'
+  location: 'D:\\Proyectos\\Tesis\\growsync-backend\\tests\\preResetPostgis.integration.test.js:50:1'
+  failureType: 'testCodeFailure'
+  error: 'new row for relation "harvest_records" violates check constraint "chk_harvest_records_campaign_format"'
+  code: '23514'
+  name: 'error'
+  stack: |-
+    D:\Proyectos\Tesis\growsync-backend\node_modules\pg\lib\client.js:545:17
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async TestContext.<anonymous> (D:\Proyectos\Tesis\growsync-backend\tests\preResetPostgis.integration.test.js:56:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: real concurrent sessions: retry, different-key opening and receipt race never produce duplicate or partial opening
+ok 3 - real concurrent sessions: retry, different-key opening and receipt race never produce duplicate or partial opening
+  ---
+  duration_ms: 1554.0792
+  type: 'test'
+  ...
+# {"scenario":"same-key","results":["ok","ok"],"openings":1,"balance":"10.000000"}
+# {"scenario":"different-key","results":["ok",409],"openings":1,"balance":"10.000000"}
+# {"scenario":"receipt","results":["ok","ok"],"openings":1,"balance":"15.000000"}
+# Subtest: A/B/C: configured date, exact positive quantities, explicit compatible units and full/null expiry
+ok 4 - A/B/C: configured date, exact positive quantities, explicit compatible units and full/null expiry
+  ---
+  duration_ms: 1252.127
+  type: 'test'
+  ...
+# Subtest: D/E/J: preview writes nothing; two products, exact quantity/date/actor, NULL expiry and no legacy double count
+ok 5 - D/E/J: preview writes nothing; two products, exact quantity/date/actor, NULL expiry and no legacy double count
+  ---
+  duration_ms: 1231.8078
+  type: 'test'
+  ...
+# Subtest: F: injected failure during second batch INSERT rolls back opening, first batch and first movement
+ok 6 - F: injected failure during second batch INSERT rolls back opening, first batch and first movement
+  ---
+  duration_ms: 847.2028
+  type: 'test'
+  ...
+# Subtest: G/H/I: retry returns recorded result; changed payload conflicts; other key cannot open twice
+ok 7 - G/H/I: retry returns recorded result; changed payload conflicts; other key cannot open twice
+  ---
+  duration_ms: 1026.4648
+  type: 'test'
+  ...
+# Subtest: confirmation, preview freshness, V1 opt-in, effective permissions and tenant catalog are enforced
+ok 8 - confirmation, preview freshness, V1 opt-in, effective permissions and tenant catalog are enforced
+  ---
+  duration_ms: 764.1936
+  type: 'test'
+  ...
+# Subtest: existing receipts prevent initial opening; duplicate lines rejected; separate known expiries allowed
+ok 9 - existing receipts prevent initial opening; duplicate lines rejected; separate known expiries allowed
+  ---
+  duration_ms: 827.7336
+  type: 'test'
+  ...
+# Subtest: K/L/M/N/P: opening → historical import without alerts → purchase → NORMAL Planning → audited adjustment
+ok 10 - K/L/M/N/P: opening → historical import without alerts → purchase → NORMAL Planning → audited adjustment
+  ---
+  duration_ms: 837.0909
+  type: 'test'
+  ...
+# Subtest: O: movements, opening metadata, original batch and effective date cannot be rewritten; incomplete SQL opening rolls back
+ok 11 - O: movements, opening metadata, original batch and effective date cannot be rewritten; incomplete SQL opening rolls back
+  ---
+  duration_ms: 930.8904
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 10
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7917.3947

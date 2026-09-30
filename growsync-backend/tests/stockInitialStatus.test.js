@@ -39,20 +39,35 @@ test('stock initial status: flags, counts, opening, isolation and authorization 
     });
   });
   await db.exec("UPDATE companies SET inventory_control_start_date='2026-09-24' WHERE id='a'");
-  await t.test('fecha configurada y V1 desactivado permite preparar', async () => {
+  await t.test('empresa fuera de la antigua allowlist puede preparar y confirmar', async () => {
     process.env.INVENTORY_V1_COMPANY_IDS = 'b';
     const result = await get();
     assert.equal(result.inventory_control_start_date, '2026-09-24');
-    assert.equal(result.inventory_v1_enabled, false);
+    assert.equal(result.inventory_v1_enabled, true);
     assert.equal(result.can_prepare, true);
-    assert.equal(result.can_confirm, false);
-    assert.deepEqual(result.blockers, ['INVENTORY_V1_DISABLED']);
+    assert.equal(result.can_confirm, true);
+    assert.deepEqual(result.blockers, []);
   });
   await t.test('V1 activo y vacío permite confirmar', async () => {
     process.env.INVENTORY_V1_COMPANY_IDS = ' b, a ';
     const result = await get();
     assert.equal(result.can_prepare, true); assert.equal(result.can_confirm, true);
     assert.deepEqual(result.blockers, []);
+  });
+  await t.test('la antigua variable no afecta ninguna empresa autenticada', async () => {
+    const stock = require('../services/stock');
+    for (const flag of [undefined, '', 'otra-empresa', '*']) {
+      if (flag === undefined) delete process.env.INVENTORY_V1_COMPANY_IDS;
+      else process.env.INVENTORY_V1_COMPANY_IDS = flag;
+      for (const [companyId, actorId] of [['a', 'actor'], ['b', 'other']]) {
+        assert.equal(stock.isEnabled(companyId), true);
+        const result = await status(pool, { companyId, actorId });
+        assert.equal(result.inventory_v1_enabled, true);
+        assert.equal(result.can_confirm, true);
+        assert.deepEqual(result.blockers, []);
+      }
+    }
+    assert.equal(stock.isEnabled(null), false);
   });
   await t.test('datos de otra empresa no afectan conteos ni apertura', async () => {
     await db.exec(`INSERT INTO stock_batches VALUES ('b',0,false);
@@ -87,7 +102,7 @@ test('stock initial status: flags, counts, opening, isolation and authorization 
       exists: true, id: '00000000-0000-0000-0000-000000000002', effective_date: '2026-09-24', created_at: '2026-09-24T12:00:00.000Z',
     });
     assert.equal(result.can_prepare, false); assert.equal(result.can_confirm, false);
-    assert.deepEqual(result.blockers, ['CONTROL_DATE_MISSING','INVENTORY_V1_DISABLED','OPENING_ALREADY_EXISTS','INVENTORY_NOT_EMPTY']);
+    assert.deepEqual(result.blockers, ['CONTROL_DATE_MISSING','OPENING_ALREADY_EXISTS','INVENTORY_NOT_EMPTY']);
     await db.exec("UPDATE companies SET inventory_control_start_date='2026-09-24' WHERE id='a'");
     assert.equal((await get()).can_prepare, false);
   });

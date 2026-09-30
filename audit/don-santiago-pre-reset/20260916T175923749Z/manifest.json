@@ -1,0 +1,535 @@
+{
+  "format_version": 1,
+  "backup_timestamp": "2026-09-16 18:01:40.932802+00",
+  "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+  "company_name": "Don Santiago SRL",
+  "environment": {
+    "source": "Configured GrowSync backend .env; credentials excluded",
+    "host": "aws-1-us-east-1.pooler.supabase.com",
+    "port": "6543",
+    "database": "postgres",
+    "db_user": "postgres",
+    "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "extensions": [
+      {
+        "extname": "btree_gist",
+        "extversion": "1.7"
+      },
+      {
+        "extname": "pg_stat_statements",
+        "extversion": "1.11"
+      },
+      {
+        "extname": "pgcrypto",
+        "extversion": "1.3"
+      },
+      {
+        "extname": "plpgsql",
+        "extversion": "1.0"
+      },
+      {
+        "extname": "postgis",
+        "extversion": "3.3.7"
+      },
+      {
+        "extname": "supabase_vault",
+        "extversion": "0.3.1"
+      },
+      {
+        "extname": "uuid-ossp",
+        "extversion": "1.1"
+      }
+    ]
+  },
+  "transaction": {
+    "read_only": "on",
+    "isolation": "repeatable read",
+    "captured_at": "2026-09-16 18:01:40.932802+00",
+    "database": "postgres",
+    "db_user": "postgres",
+    "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "snapshot": "3477:3477:"
+  },
+  "verification_transaction": {
+    "read_only": "on",
+    "isolation": "repeatable read",
+    "captured_at": "2026-09-16 18:01:49.598711+00",
+    "database": "postgres",
+    "db_user": "postgres",
+    "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "snapshot": "3477:3477:"
+  },
+  "inventory_start_date": "2026-08-31",
+  "tables": {
+    "campaigns": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 3,
+      "file": "data/campaigns.json",
+      "geometry_columns": []
+    },
+    "companies": {
+      "predicate": "t.id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 1,
+      "file": "data/companies.json",
+      "geometry_columns": []
+    },
+    "crop_assignments": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 13,
+      "file": "data/crop_assignments.json",
+      "geometry_columns": []
+    },
+    "crops": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 6,
+      "file": "data/crops.json",
+      "geometry_columns": []
+    },
+    "fuel": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/fuel.json",
+      "geometry_columns": []
+    },
+    "harvest_crop_assignments": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"crop_assignments\" p1_0 WHERE t.\"crop_assignment_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"harvest_records\" p1_1 WHERE t.\"harvest_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 11,
+      "file": "data/harvest_crop_assignments.json",
+      "geometry_columns": []
+    },
+    "harvest_cycle_closures": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/harvest_cycle_closures.json",
+      "geometry_columns": []
+    },
+    "harvest_records": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 11,
+      "file": "data/harvest_records.json",
+      "geometry_columns": []
+    },
+    "invitations": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 2,
+      "file": "data/invitations.json",
+      "geometry_columns": []
+    },
+    "lot_layouts": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 21,
+      "file": "data/lot_layouts.json",
+      "geometry_columns": [
+        "parent_geom_snapshot"
+      ],
+      "geometry_files": [
+        "geometries/lot_layouts.parent_geom_snapshot.json"
+      ]
+    },
+    "lots": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 18,
+      "file": "data/lots.json",
+      "geometry_columns": [
+        "geom"
+      ],
+      "geometry_files": [
+        "geometries/lots.geom.json"
+      ]
+    },
+    "notifications": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 82,
+      "file": "data/notifications.json",
+      "geometry_columns": []
+    },
+    "planning": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 25,
+      "file": "data/planning.json",
+      "geometry_columns": []
+    },
+    "planning_lots": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"planning\" p1_1 WHERE t.\"planning_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"sub_lots\" p1_2 WHERE t.\"sub_lot_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 25,
+      "file": "data/planning_lots.json",
+      "geometry_columns": []
+    },
+    "planning_product_completions": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"planning\" p1_0 WHERE t.\"planning_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"planning_products\" p1_1 WHERE t.\"planning_product_id\"=p1_1.\"id\" AND (EXISTS (SELECT 1 FROM public.\"planning\" p2_0 WHERE p1_1.\"planning_id\"=p2_0.\"id\" AND (p2_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"products\" p2_1 WHERE p1_1.\"product_id\"=p2_1.\"id\" AND (p2_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)))) OR EXISTS (SELECT 1 FROM public.\"usage_records\" p1_2 WHERE t.\"usage_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 24,
+      "file": "data/planning_product_completions.json",
+      "geometry_columns": []
+    },
+    "planning_products": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"planning\" p1_0 WHERE t.\"planning_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"products\" p1_1 WHERE t.\"product_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 25,
+      "file": "data/planning_products.json",
+      "geometry_columns": []
+    },
+    "plans": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"users\" p1_1 WHERE t.\"responsible\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 0,
+      "file": "data/plans.json",
+      "geometry_columns": []
+    },
+    "products": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 55,
+      "file": "data/products.json",
+      "geometry_columns": []
+    },
+    "rain_records": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 24,
+      "file": "data/rain_records.json",
+      "geometry_columns": []
+    },
+    "stock_batches": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/stock_batches.json",
+      "geometry_columns": []
+    },
+    "stock_movements": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/stock_movements.json",
+      "geometry_columns": []
+    },
+    "sub_lots": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 8,
+      "file": "data/sub_lots.json",
+      "geometry_columns": [
+        "geom"
+      ],
+      "geometry_files": [
+        "geometries/sub_lots.geom.json"
+      ]
+    },
+    "usage_lots": {
+      "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"sub_lots\" p1_1 WHERE t.\"sub_lot_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"usage_records\" p1_2 WHERE t.\"usage_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+      "rows": 14,
+      "file": "data/usage_lots.json",
+      "geometry_columns": []
+    },
+    "usage_records": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 24,
+      "file": "data/usage_records.json",
+      "geometry_columns": []
+    },
+    "users": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 2,
+      "file": "data/users.json",
+      "geometry_columns": []
+    },
+    "vehicle_fuel_records": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/vehicle_fuel_records.json",
+      "geometry_columns": []
+    },
+    "vehicles": {
+      "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+      "rows": 0,
+      "file": "data/vehicles.json",
+      "geometry_columns": []
+    }
+  },
+  "files": [
+    {
+      "file": "data/campaigns.json",
+      "bytes": 975,
+      "sha256": "ec7f8990c8dd11596ee6bb0b864e6d00b6ddd0592af44f8709585747b090a9a8"
+    },
+    {
+      "file": "data/companies.json",
+      "bytes": 294,
+      "sha256": "04b1d686b32c587aa6af0930611b74b76653db568ccd74c50e154c646216d682"
+    },
+    {
+      "file": "data/crop_assignments.json",
+      "bytes": 6859,
+      "sha256": "920cab1ab77758e7f43d42068b4a66a1b07cd2c8018f61e32364e6900f3983d5"
+    },
+    {
+      "file": "data/crops.json",
+      "bytes": 1355,
+      "sha256": "b42b7d7d8318e03edaf1d60a905ae434c7878b1036f3b57ea1e1ff8c3e386bb2"
+    },
+    {
+      "file": "data/fuel.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/harvest_crop_assignments.json",
+      "bytes": 2083,
+      "sha256": "39262d8d6f52fdd8296ca61590db907782210b9e0a97eeab66d7bdcb25a98e72"
+    },
+    {
+      "file": "data/harvest_cycle_closures.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/harvest_records.json",
+      "bytes": 7763,
+      "sha256": "5b3262858c1c4c51d9857a2de366abce17ff32ab4582332f9453017b6e2c247c"
+    },
+    {
+      "file": "data/invitations.json",
+      "bytes": 650,
+      "sha256": "5f04600535ae265c4f7a70b5ae9b35f4f2fa446ba5647fbce49395387d1aaed4"
+    },
+    {
+      "file": "data/lot_layouts.json",
+      "bytes": 25927,
+      "sha256": "575a28be3750d4fb9452f567bdbb902d351257959c9c9aff6e7c75cf709a9bda"
+    },
+    {
+      "file": "data/lots.json",
+      "bytes": 31185,
+      "sha256": "ca8e9419b43e8ae305c6bd5dd4284fcab0afe160a90b86510495cee1290df02b"
+    },
+    {
+      "file": "data/notifications.json",
+      "bytes": 35650,
+      "sha256": "f1cdf1e84d181970215092a9fce337be74a503cc232c7a136c34d02b59b11687"
+    },
+    {
+      "file": "data/planning_lots.json",
+      "bytes": 3641,
+      "sha256": "cc649a98f7b95cf44ba48b2e45a4df3f25326e3e39a458d921545a63ffde0e30"
+    },
+    {
+      "file": "data/planning_product_completions.json",
+      "bytes": 5758,
+      "sha256": "169d149934ce80c0bfabcaf6fc311bad4f36bc982f0b5ca25c423b57fd742829"
+    },
+    {
+      "file": "data/planning_products.json",
+      "bytes": 4484,
+      "sha256": "61df6aba7398906f0eb212524e6710b7d63126972d4baaa72f119b492b57ee8d"
+    },
+    {
+      "file": "data/planning.json",
+      "bytes": 20016,
+      "sha256": "ccb85da16da8d7fe70b6862ca79fa144fcc7e854cd4589b00221b899641c0bfc"
+    },
+    {
+      "file": "data/plans.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/products.json",
+      "bytes": 25628,
+      "sha256": "38af3f1d44f67b13dd2638e0e9d2b5fe68428af142730e6b5df024e3504b062a"
+    },
+    {
+      "file": "data/rain_records.json",
+      "bytes": 7885,
+      "sha256": "3aec3f46e8b43d2c27693f7e3d8ad5c815cd48b80cc058c2dc3438ea9f793736"
+    },
+    {
+      "file": "data/stock_batches.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/stock_movements.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/sub_lots.json",
+      "bytes": 9696,
+      "sha256": "335f975254c6e7548e7055bffeb5398b637611b92b22ee464225516ba98186be"
+    },
+    {
+      "file": "data/usage_lots.json",
+      "bytes": 1805,
+      "sha256": "8d131564ba9d8e5112f6e15b555bdf9208dff44be3d2dc3caf08606ce401508b"
+    },
+    {
+      "file": "data/usage_records.json",
+      "bytes": 12927,
+      "sha256": "077fa1720b6b30911484606159ab4fc1d46108d91cd96118ecb82be2cd7ad1a7"
+    },
+    {
+      "file": "data/users.json",
+      "bytes": 1049,
+      "sha256": "944e9877fd82db4b102f44ca3f54546de2fac8f19b51883c76b1eded00aa07d9"
+    },
+    {
+      "file": "data/vehicle_fuel_records.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "data/vehicles.json",
+      "bytes": 5,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "file": "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-before.json",
+      "bytes": 3449,
+      "sha256": "acdf04af01a32873c3b0adaa64baca25b720f066f14d7ade93bb5a86280fcdc8"
+    },
+    {
+      "file": "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-result.json",
+      "bytes": 4354,
+      "sha256": "be80fc8c98b3caf0e08bc0172a281a275300ce1c93804db21b508e484f635578"
+    },
+    {
+      "file": "evidence/audit/inventory-audit-2026-09-13.md",
+      "bytes": 131527,
+      "sha256": "9ad01b71dc27e05bbbcbd11d014c92e02243256f926ca3afc5aac56dedd0c446"
+    },
+    {
+      "file": "evidence/audit/inventory-data-2026-09-13.json",
+      "bytes": 106767,
+      "sha256": "84f9478ad465d2a1b2c593e5658e9a12cf0ca2bfc16b25edecbe5ba16a80b4b1"
+    },
+    {
+      "file": "evidence/audit/inventory-schema-2026-09-13.json",
+      "bytes": 130176,
+      "sha256": "ca8516b7871c222328ec98de5c1eae5d9ef5bcc643e63de25ba09d16d4241e6c"
+    },
+    {
+      "file": "export-readonly.cjs",
+      "bytes": 21812,
+      "sha256": "d048fa392987bf0fa7ffa38a903ccfad542918d7a432fe2c3e50941a7c0c606f"
+    },
+    {
+      "file": "geometries/lot_layouts.parent_geom_snapshot.json",
+      "bytes": 42905,
+      "sha256": "b5ffa91c1a9755f63e48b04f100a99c5de543d91d0d5d468aaca08930c6b90ef"
+    },
+    {
+      "file": "geometries/lots.geom.json",
+      "bytes": 32389,
+      "sha256": "8f4ba3d42cdece75e85e23a3d43e1ee9626315168cac25f233df1b138559f82e"
+    },
+    {
+      "file": "geometries/sub_lots.geom.json",
+      "bytes": 17939,
+      "sha256": "c182365a0ba52ed4d06bf35ef5f93cec2e2e525e81c39701c4870c76146b1481"
+    },
+    {
+      "file": "README.md",
+      "bytes": 5770,
+      "sha256": "7d73cab5af8a51af94529a7eb08d847427789aa418613547e5c775928d3fb50e"
+    },
+    {
+      "file": "schema/schema.json",
+      "bytes": 274017,
+      "sha256": "1212b351e749530a04375bd92e86481d31856f07f4a41df26c7381d6f5d9c442"
+    },
+    {
+      "file": "schema/selections.json",
+      "bytes": 7448,
+      "sha256": "c551ddfade96622d731db6de6bfb87496313d418130c4856b310a3f3950c569f"
+    },
+    {
+      "file": "schema/spatial_ref_sys.json",
+      "bytes": 403,
+      "sha256": "540bc9a2ed886cb4135543ee90ff835d0e90e90fe25af78e9e419ee4b50c2350"
+    },
+    {
+      "file": "verification.json",
+      "bytes": 13770,
+      "sha256": "f916f2971ee0685be6b260d7c5350b9e3575552ab8bec3a7bb187f3d91377c16"
+    }
+  ],
+  "evidence": [
+    {
+      "source": "D:\\Proyectos\\Tesis\\audit\\inventory-data-2026-09-13.json",
+      "file": "evidence/audit/inventory-data-2026-09-13.json",
+      "sha256": "84f9478ad465d2a1b2c593e5658e9a12cf0ca2bfc16b25edecbe5ba16a80b4b1",
+      "bytes": 106767,
+      "identical_to_source": true
+    },
+    {
+      "source": "D:\\Proyectos\\Tesis\\audit\\inventory-schema-2026-09-13.json",
+      "file": "evidence/audit/inventory-schema-2026-09-13.json",
+      "sha256": "ca8516b7871c222328ec98de5c1eae5d9ef5bcc643e63de25ba09d16d4241e6c",
+      "bytes": 130176,
+      "identical_to_source": true
+    },
+    {
+      "source": "D:\\Proyectos\\Tesis\\audit\\inventory-audit-2026-09-13.md",
+      "file": "evidence/audit/inventory-audit-2026-09-13.md",
+      "sha256": "9ad01b71dc27e05bbbcbd11d014c92e02243256f926ca3afc5aac56dedd0c446",
+      "bytes": 131527,
+      "identical_to_source": true
+    },
+    {
+      "source": "D:\\Proyectos\\Tesis\\audit\\harvest-reconciliation\\2026-09-09T01-19-54-058Z-before.json",
+      "file": "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-before.json",
+      "sha256": "acdf04af01a32873c3b0adaa64baca25b720f066f14d7ade93bb5a86280fcdc8",
+      "bytes": 3449,
+      "identical_to_source": true
+    },
+    {
+      "source": "D:\\Proyectos\\Tesis\\audit\\harvest-reconciliation\\2026-09-09T01-19-54-058Z-result.json",
+      "file": "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-result.json",
+      "sha256": "be80fc8c98b3caf0e08bc0172a281a275300ce1c93804db21b508e484f635578",
+      "bytes": 4354,
+      "identical_to_source": true
+    }
+  ],
+  "expected_count_differences": [],
+  "excluded_tables": [
+    {
+      "table": "payments",
+      "reason": "No company_id or declared FK path to selected company records; not presumed tenant-owned.",
+      "columns": [
+        "id",
+        "plan",
+        "amount",
+        "payment_method",
+        "transaction_number",
+        "status",
+        "created_at"
+      ]
+    },
+    {
+      "table": "spatial_ref_sys",
+      "reason": "Global CRS catalog: referenced SRIDs exported separately.",
+      "columns": [
+        "srid",
+        "auth_name",
+        "auth_srid",
+        "srtext",
+        "proj4text"
+      ]
+    },
+    {
+      "table": "weather",
+      "reason": "No company_id or declared FK path to selected company records; not presumed tenant-owned.",
+      "columns": [
+        "id",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "wind_direction",
+        "rainfall",
+        "date"
+      ]
+    }
+  ],
+  "verification_passed": true,
+  "observations": [
+    "Database read-only; no reset or migrations.",
+    "Original data; no normalization.",
+    "Geometry is exact EWKB hex in data and companion geometry files.",
+    "Original decimal JSON tokens and microsecond timestamps preserved.",
+    "Public schema company backup; not a full infrastructure/Auth backup.",
+    "Manifest is hashed in SHA256SUMS.txt; checksum index intentionally has no self-hash."
+  ]
+}

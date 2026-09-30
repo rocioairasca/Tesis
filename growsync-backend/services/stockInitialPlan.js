@@ -58,7 +58,6 @@ async function confirm(pool,x){
       if(previous[0].request_hash!==hash) throw stock.fail('Idempotency-Key utilizado con otro contenido.');
       return {...previous[0].result,replayed:true};
     }
-    if(!stock.isEnabled(x.companyId)) throw stock.fail('Activar INVENTORY_V1 bajo mantenimiento antes de confirmar la apertura.');
     await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[x.companyId]);
     const {rows:occupied}=await client.query(`SELECT EXISTS(SELECT 1 FROM stock_batches WHERE company_id=$1)
       OR EXISTS(SELECT 1 FROM stock_movements WHERE company_id=$1) AS occupied`,[x.companyId]);

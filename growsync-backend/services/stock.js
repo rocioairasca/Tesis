@@ -4,10 +4,10 @@ const { localToday } = require('./harvestRegistration');
 const {normalizeQuantity}=require('./inventoryConversion');
 const {expirationFields,effectiveExpirationSql}=require('./inventoryExpiration');
 
-// Explicit opt-in after schema installation and opening review, never autodetect.
-// Keep the company under maintenance until its transactional opening is confirmed.
-const isEnabled = companyId => Boolean(companyId) && (process.env.INVENTORY_V1_COMPANY_IDS || '')
-  .split(',').map(x => x.trim()).filter(Boolean).includes(companyId);
+// Inventory V1 is standard for every authenticated company. Keep this adapter
+// while legacy callers are retired; authorization and SQL tenant guards remain
+// the responsibility of their existing middleware/services.
+const isEnabled = companyId => Boolean(companyId);
 const fail = (message, status = 409) => Object.assign(new Error(message), { status });
 const SCALE = 1000000n;
 function decimal(value) {

@@ -1,0 +1,3069 @@
+{
+  "captured_at": "2026-09-13T23:33:07.119Z",
+  "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+  "readonly": [
+    {
+      "transaction_read_only": "on"
+    }
+  ],
+  "products": [
+    {
+      "id": "5aa5242a-657d-4f8c-b180-fca4327297b7",
+      "cost": null,
+      "name": "2,4 D EHE",
+      "unit": "litros",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:27:15.031479",
+      "total_quantity": 20,
+      "expiration_date": "2026-11-01",
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 20
+    },
+    {
+      "id": "141400ee-27d4-4c86-a75c-7dc785e2fe9d",
+      "cost": null,
+      "name": "2,4D EHE",
+      "unit": "litros",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:09:33.016967",
+      "total_quantity": 446,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 446
+    },
+    {
+      "id": "b2f84fc3-ee5c-4884-b152-3dd715148680",
+      "cost": null,
+      "name": "2,4D EHE",
+      "unit": "litros",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-03T16:16:32.778291",
+      "total_quantity": 20,
+      "expiration_date": "2028-06-03",
+      "acquisition_date": "2028-06-03",
+      "available_quantity": 20
+    },
+    {
+      "id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "cost": null,
+      "name": "2,4D Me",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:08:13.745971",
+      "total_quantity": 510,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 420
+    },
+    {
+      "id": "d5c44c66-8467-42aa-89db-aa852e5c5bd9",
+      "cost": null,
+      "name": "Apron Max fludioxonil",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:32:52.005336",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2027-03-31",
+      "available_quantity": 3
+    },
+    {
+      "id": "2018927c-bfe0-4a92-9100-d6521ab2d3cb",
+      "cost": null,
+      "name": "Arsenal",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:35:21.66897",
+      "total_quantity": 4,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 4
+    },
+    {
+      "id": "38d6d18f-b765-4971-adfa-b791e75188a8",
+      "cost": null,
+      "name": "Atrazina 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:15:49.99083",
+      "total_quantity": 112.35,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 112.35
+    },
+    {
+      "id": "f687a8f4-17eb-4269-a870-138335468a8b",
+      "cost": null,
+      "name": "Atrazina 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:15:49.145372",
+      "total_quantity": 112.35,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 97.35
+    },
+    {
+      "id": "a96833ed-d1de-49fb-9291-9ee7da771eda",
+      "cost": null,
+      "name": "Bifentrin 25",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:26:31.969814",
+      "total_quantity": 4,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 4
+    },
+    {
+      "id": "ad7587d1-dd7b-40bc-832f-b476d12af505",
+      "cost": null,
+      "name": "Boronia",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:29:20.178914",
+      "total_quantity": 20,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 20
+    },
+    {
+      "id": "42791e07-1482-453c-931e-05e075e653c1",
+      "cost": null,
+      "name": "Carbendazim 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:21:06.887241",
+      "total_quantity": 20,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 20
+    },
+    {
+      "id": "eab8a627-9dfe-4d32-a1d9-2ccf999a3674",
+      "cost": null,
+      "name": "Carbendazim Thiram",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:21:33.661918",
+      "total_quantity": 15,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 15
+    },
+    {
+      "id": "639a6717-d8ec-4e87-8968-9fb8c690eefe",
+      "cost": null,
+      "name": "Cletodim",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:20:41.703628",
+      "total_quantity": 10,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 10
+    },
+    {
+      "id": "c7996694-f147-4eec-ac94-8462b0090051",
+      "cost": null,
+      "name": "Cripton Xpro (bixafen)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:38:58.644822",
+      "total_quantity": 30,
+      "expiration_date": null,
+      "acquisition_date": "2026-12-01",
+      "available_quantity": 3
+    },
+    {
+      "id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1",
+      "cost": null,
+      "name": "Dasen (benazolin-etil)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:29:54.801872",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 3
+    },
+    {
+      "id": "6695bf73-00d4-4144-a4f5-8668204c3755",
+      "cost": null,
+      "name": "Dicamba",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:30:27.916227",
+      "total_quantity": 19,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 19
+    },
+    {
+      "id": "589e5362-c45d-43a2-8f33-d12825843f9b",
+      "cost": null,
+      "name": "Difimet",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:31:25.168042",
+      "total_quantity": 625,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 625
+    },
+    {
+      "id": "4a4031c9-e364-411e-8cf0-674ca7ea5180",
+      "cost": null,
+      "name": "Diflufenicam",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:29:02.130126",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 3
+    },
+    {
+      "id": "886effe4-4981-471d-9a50-9103c8f72127",
+      "cost": null,
+      "name": "Efimax (inoculante para soja)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:35:02.61972",
+      "total_quantity": 18,
+      "expiration_date": null,
+      "acquisition_date": "2027-01-31",
+      "available_quantity": 18
+    },
+    {
+      "id": "9f5c2d5d-1f01-4197-b48e-96e19422a450",
+      "cost": null,
+      "name": "Esteres metálicos de ácidos grasos coadyuvante",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:36:43.701816",
+      "total_quantity": 14,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 14
+    },
+    {
+      "id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "cost": null,
+      "name": "Fertilizante siembra trigo",
+      "unit": "kg",
+      "price": 1,
+      "enabled": true,
+      "category": "fertilizantes",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:36:34.895101",
+      "total_quantity": 17282,
+      "expiration_date": null,
+      "acquisition_date": "2026-12-01",
+      "available_quantity": 805
+    },
+    {
+      "id": "30f4c9d7-6245-4bf0-aa65-0a4b9e829fe8",
+      "cost": null,
+      "name": "Finesse",
+      "unit": "kg",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:12:18.251684",
+      "total_quantity": 6.145,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-21",
+      "available_quantity": 6.145
+    },
+    {
+      "id": "e3714cf2-bba8-4257-afd4-58c0c9d2c63d",
+      "cost": null,
+      "name": "Finesse",
+      "unit": "kg",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-03T16:15:08.760704",
+      "total_quantity": 2.7,
+      "expiration_date": "2027-06-01",
+      "acquisition_date": "2027-06-01",
+      "available_quantity": 2.7
+    },
+    {
+      "id": "efff7e45-bedd-4d86-a8c2-82cc7ed5f2df",
+      "cost": null,
+      "name": "Finesse",
+      "unit": "kg",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:28:23.653175",
+      "total_quantity": 1875,
+      "expiration_date": "2026-11-01",
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 1874.25
+    },
+    {
+      "id": "f5630e98-473e-4d41-8788-27421b0ea07d",
+      "cost": null,
+      "name": "Gesagard 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:30:54.410853",
+      "total_quantity": 30,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 30
+    },
+    {
+      "id": "05aae3f4-6070-4626-83fb-03a531574864",
+      "cost": null,
+      "name": "Glifosato 66,2",
+      "unit": "litros",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T15:59:55.183296",
+      "total_quantity": 15178,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 15178
+    },
+    {
+      "id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "cost": null,
+      "name": "Glifosato 66,2",
+      "unit": "litros",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:24:42.682599",
+      "total_quantity": 872,
+      "expiration_date": "2026-12-01",
+      "acquisition_date": "2026-12-01",
+      "available_quantity": 752
+    },
+    {
+      "id": "e129ad1a-c0c6-4ffe-af8b-4f8f747c21f3",
+      "cost": null,
+      "name": "Glifosato 66,2",
+      "unit": "litros",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:01:15.200794",
+      "total_quantity": 1517.8,
+      "expiration_date": null,
+      "acquisition_date": "2026-12-01",
+      "available_quantity": 1517.8
+    },
+    {
+      "id": "499b1970-a5d1-441c-a30f-f34e984b8140",
+      "cost": null,
+      "name": "Glufosinato de Amonio 20",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:19:48.615138",
+      "total_quantity": 340,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 340
+    },
+    {
+      "id": "79066ca8-104b-4eb9-a98e-8a2513670011",
+      "cost": null,
+      "name": "Haloxifop 54",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:23:40.104991",
+      "total_quantity": 1,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 1
+    },
+    {
+      "id": "b290f29a-075e-4724-a024-f26f0c781915",
+      "cost": null,
+      "name": "Imatron",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:28:16.056742",
+      "total_quantity": 10,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 10
+    },
+    {
+      "id": "47f82237-28b6-4a52-92d5-dd5efa774090",
+      "cost": null,
+      "name": "Imazapic",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:37:10.036731",
+      "total_quantity": 1,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 1
+    },
+    {
+      "id": "0afa8fa1-19d8-44d4-988d-e436db81872c",
+      "cost": null,
+      "name": "Imazetapir 10",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:24:36.588485",
+      "total_quantity": 150,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 150
+    },
+    {
+      "id": "966aa280-2007-45c4-b51e-322a39e9c9c7",
+      "cost": null,
+      "name": "Imida lambda",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:25:34.628743",
+      "total_quantity": 5,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 5
+    },
+    {
+      "id": "814b5587-0173-454d-87a8-5775ba479b34",
+      "cost": null,
+      "name": "Imida Tebuco",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:27:53.345101",
+      "total_quantity": 2,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 2
+    },
+    {
+      "id": "5a62bc07-6092-4ad7-bf1f-c7ee5ac0fbb4",
+      "cost": null,
+      "name": "Imidacloprid 35",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:27:24.152806",
+      "total_quantity": 5,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 5
+    },
+    {
+      "id": "28576c18-e0ca-41b2-9ae1-396e1d69efd7",
+      "cost": null,
+      "name": "Lambdacialotrina",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:25:08.395423",
+      "total_quantity": 5.5,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 5.5
+    },
+    {
+      "id": "ed325b03-d07b-481f-8ee0-ad6435c92e32",
+      "cost": null,
+      "name": "Maxim Evolution tiabendazol",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:33:31.226312",
+      "total_quantity": 5,
+      "expiration_date": null,
+      "acquisition_date": "2026-12-31",
+      "available_quantity": 5
+    },
+    {
+      "id": "5867871c-4304-40ca-90f2-ba003ccc2216",
+      "cost": null,
+      "name": "Mercantor (herbicida)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:23:11.674649",
+      "total_quantity": 5,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 5
+    },
+    {
+      "id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "cost": null,
+      "name": "MSO siliconado",
+      "unit": "litros",
+      "price": null,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:30:26.977389",
+      "total_quantity": 101,
+      "expiration_date": "2026-11-01",
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 76.5
+    },
+    {
+      "id": "a5eab2cd-7559-4aa1-af5c-7d46d0e3ead9",
+      "cost": null,
+      "name": "MSO siliconado",
+      "unit": "litros",
+      "price": 1,
+      "enabled": false,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:14:41.741058",
+      "total_quantity": 185.91,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 185.91
+    },
+    {
+      "id": "53db9f53-3ed5-4c24-82e0-c9d42c781843",
+      "cost": null,
+      "name": "Nicosulfuron 4%",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:34:28.798988",
+      "total_quantity": 1,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 1
+    },
+    {
+      "id": "84252f92-6e0f-408c-9cf6-d6ed73e55871",
+      "cost": null,
+      "name": "Nicosulfuron granulado",
+      "unit": "kg",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:36:05.758464",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 3
+    },
+    {
+      "id": "4348c8fb-7eb6-4a05-94a3-5bf53f5e2376",
+      "cost": null,
+      "name": "Parakin (herbicida desecante defoliante)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:17:58.43029",
+      "total_quantity": 80,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 80
+    },
+    {
+      "id": "3f42b2e6-a1ed-437c-9313-67e7a84b9144",
+      "cost": null,
+      "name": "Paraquat 5 (herbicida desecante)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:18:37.480081",
+      "total_quantity": 60,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 60
+    },
+    {
+      "id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe",
+      "cost": null,
+      "name": "Pericon",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:31:57.453093",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 3
+    },
+    {
+      "id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "cost": null,
+      "name": "Phoebus NITROX (fertilizante biologico)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "fertilizantes",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:40:17.656618",
+      "total_quantity": 352.7,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 0
+    },
+    {
+      "id": "e7d84062-ca5f-461a-ba89-7b7a4dfeedeb",
+      "cost": null,
+      "name": "Picloram 24 Rainbow",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:22:05.891614",
+      "total_quantity": 10,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 10
+    },
+    {
+      "id": "cbcac137-3e87-4360-97f8-4f52a17263a6",
+      "cost": null,
+      "name": "Preside (flumetsulam)",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:26:07.257939",
+      "total_quantity": 4,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 4
+    },
+    {
+      "id": "73c326f7-afea-485f-a0ae-cc4d2e336bf4",
+      "cost": null,
+      "name": "Semilla Soja para sembrar",
+      "unit": "kg",
+      "price": null,
+      "enabled": true,
+      "category": "semillas",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-13T22:32:54.270392",
+      "total_quantity": 33570,
+      "expiration_date": null,
+      "acquisition_date": null,
+      "available_quantity": 33570
+    },
+    {
+      "id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "cost": null,
+      "name": "Semilla Trigo",
+      "unit": "kg",
+      "price": 1,
+      "enabled": true,
+      "category": "semillas",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:39:17.454914",
+      "total_quantity": 42250,
+      "expiration_date": null,
+      "acquisition_date": "2026-12-01",
+      "available_quantity": 1417
+    },
+    {
+      "id": "16e33e56-e2d3-4092-ab95-a94037addbb3",
+      "cost": null,
+      "name": "Sulfato de Amonio",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:19:02.115143",
+      "total_quantity": 60,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 60
+    },
+    {
+      "id": "d6b52d1e-47a3-4edd-a4b1-6c88d45422f5",
+      "cost": null,
+      "name": "Sulfentrazone 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:20:15.932866",
+      "total_quantity": 10,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 10
+    },
+    {
+      "id": "afd6d354-f859-4e34-99bb-bb0e5ba785f2",
+      "cost": null,
+      "name": "Terbutilazina 50",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:22:45.734481",
+      "total_quantity": 20,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 20
+    },
+    {
+      "id": "235e4a51-5ca8-4806-875b-27694e8f0a0d",
+      "cost": null,
+      "name": "Thiencarbazonemetil",
+      "unit": "litros",
+      "price": 1,
+      "enabled": true,
+      "category": "agroquimicos",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T16:28:43.142244",
+      "total_quantity": 3,
+      "expiration_date": null,
+      "acquisition_date": "2026-11-01",
+      "available_quantity": 3
+    }
+  ],
+  "usages": [
+    {
+      "id": "d59cda57-f4a3-468a-98bc-79c69458b013",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "fb5158a3-7c70-4f56-bf31-8de684037e45",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:36:23.613277",
+      "created_by": null,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "total_area": 46.0932,
+      "amount_used": 9,
+      "current_crop": "Cebada",
+      "previous_crop": null,
+      "source_planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "source_planning_product_id": "811b5001-484e-42a2-8437-66bed6a46e42"
+    },
+    {
+      "id": "3d5ceac4-5ee0-49bb-8c2c-d05f5ae7caa5",
+      "date": "2026-05-23",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "total_area": null,
+      "amount_used": 4894,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "source_planning_product_id": "3378791c-4e26-4805-b6c4-2a28dfed9cd5"
+    },
+    {
+      "id": "cf8c4b58-55ae-4eb7-8bd4-4d6bcf5fbff4",
+      "date": "2026-05-23",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "total_area": null,
+      "amount_used": 11973,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "source_planning_product_id": "b520ea4c-eb5c-4c7b-9b35-3bab1b9548a2"
+    },
+    {
+      "id": "c91f98bf-db54-46c9-aad4-fe39547ef145",
+      "date": "2026-05-25",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "total_area": null,
+      "amount_used": 2184,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "source_planning_product_id": "60ce22ba-34d4-45b3-a38c-22bc514fe8c9"
+    },
+    {
+      "id": "f694c8b5-6258-4809-a447-ee5b32c36f13",
+      "date": "2026-05-25",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "total_area": null,
+      "amount_used": 5343,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "source_planning_product_id": "ec554cae-a9fd-49c3-9c60-f2100470b380"
+    },
+    {
+      "id": "9bc1242d-dbd6-45e0-8788-ce7a27b5d975",
+      "date": "2026-05-26",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "total_area": null,
+      "amount_used": 3661,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "source_planning_product_id": "074e0a66-fe31-4f54-988d-abab31ea3356"
+    },
+    {
+      "id": "2c26fbda-90c1-4836-8057-0cac6c51e5d5",
+      "date": "2026-05-26",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "total_area": null,
+      "amount_used": 8957,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "source_planning_product_id": "fc2a24dd-0bfd-433e-bcca-71b91f01ecce"
+    },
+    {
+      "id": "49432bad-c989-4ee1-801d-41298d73d007",
+      "date": "2026-05-29",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "total_area": null,
+      "amount_used": 2338,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "source_planning_product_id": "d616659e-f594-43b3-8da4-87038cde79bd"
+    },
+    {
+      "id": "95be4436-1c49-4a1b-87cf-3c304f71d42c",
+      "date": "2026-05-29",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "total_area": null,
+      "amount_used": 5720,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "source_planning_product_id": "e4f65af4-2e01-4116-80ce-e6faa2788912"
+    },
+    {
+      "id": "f7a315d3-3ba6-4a96-993f-18ffdb3adf67",
+      "date": "2026-06-01",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "total_area": null,
+      "amount_used": 3400,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "b71d0fad-659e-493b-8127-104b93844983",
+      "source_planning_product_id": "3f674018-dd83-45cb-a2b0-cf764764f94c"
+    },
+    {
+      "id": "d332a876-5750-4e1f-a99a-b9b97b35119b",
+      "date": "2026-06-01",
+      "unit": "kg",
+      "crop_id": null,
+      "enabled": true,
+      "user_id": null,
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T21:12:16.969252",
+      "created_by": null,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "total_area": null,
+      "amount_used": 8840,
+      "current_crop": null,
+      "previous_crop": null,
+      "source_planning_id": "b71d0fad-659e-493b-8127-104b93844983",
+      "source_planning_product_id": "9200b656-1792-4b15-a9bd-c8b47b25e118"
+    },
+    {
+      "id": "524d1552-09c4-4570-9388-a3dfce85805a",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:38:47.146485",
+      "created_by": null,
+      "product_id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "total_area": 49.9421,
+      "amount_used": 75,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "source_planning_product_id": "1a55481f-1497-4f69-b82f-2cdd6599a227"
+    },
+    {
+      "id": "de385af3-b2f3-410a-9d54-9b695e74ebf2",
+      "date": "2026-07-30",
+      "unit": "kg",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:38:47.146485",
+      "created_by": null,
+      "product_id": "efff7e45-bedd-4d86-a8c2-82cc7ed5f2df",
+      "total_area": 49.9421,
+      "amount_used": 0.75,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "source_planning_product_id": "55918967-3236-4138-bd94-f104e686e256"
+    },
+    {
+      "id": "1ee73a0c-0c3a-4dbd-9798-da4e6e42f119",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:38:47.146485",
+      "created_by": null,
+      "product_id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "total_area": 49.9421,
+      "amount_used": 100,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "source_planning_product_id": "03df81e0-072b-47dd-a640-972e6064e5b7"
+    },
+    {
+      "id": "922f4216-12ea-4fcf-ba67-1c19ecafed5b",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:38:47.146485",
+      "created_by": null,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "total_area": 49.9421,
+      "amount_used": 12.5,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "source_planning_product_id": "81b8c710-97c0-4796-9783-d958d92ba661"
+    },
+    {
+      "id": "79d371f4-6542-4445-9e39-2e87ae83484c",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:43:53.878375",
+      "created_by": null,
+      "product_id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "total_area": 10.5351,
+      "amount_used": 15,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "source_planning_product_id": "191ddbe2-7fbe-429c-bcb8-fa9a7954132a"
+    },
+    {
+      "id": "b8483615-1fb2-45d4-94d9-203aec27cd9f",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:43:53.878375",
+      "created_by": null,
+      "product_id": "f687a8f4-17eb-4269-a870-138335468a8b",
+      "total_area": 10.5351,
+      "amount_used": 15,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "source_planning_product_id": "462e1cb4-a1e6-4e11-91cb-673ed25f5680"
+    },
+    {
+      "id": "7cef0918-828a-4482-b4c9-4580055bb58d",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:43:53.878375",
+      "created_by": null,
+      "product_id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "total_area": 10.5351,
+      "amount_used": 20,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "source_planning_product_id": "70745334-487f-4eb7-8491-97c15fd43599"
+    },
+    {
+      "id": "6bab479b-bdd1-4cc7-a651-f8895be101a7",
+      "date": "2026-07-30",
+      "unit": "litros",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:43:53.878375",
+      "created_by": null,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "total_area": 10.5351,
+      "amount_used": 3,
+      "current_crop": "Sorgo",
+      "previous_crop": null,
+      "source_planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "source_planning_product_id": "b67c55e4-e1a7-4644-bb88-9da32d8a5a97"
+    },
+    {
+      "id": "abcb7fe6-1cc6-4913-b5fe-936f2abd6abd",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:25:47.97519",
+      "created_by": null,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "total_area": 92.6495,
+      "amount_used": 144,
+      "current_crop": "Trigo",
+      "previous_crop": null,
+      "source_planning_id": "a13d71b2-740e-4516-aa55-470e14708e5f",
+      "source_planning_product_id": "a420147b-8f4f-46ed-8657-6c8ff52ddf20"
+    },
+    {
+      "id": "8365cd6d-f0de-4a65-a50d-2e2a963a68fc",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:28:56.394385",
+      "created_by": null,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "total_area": 44.0532,
+      "amount_used": 66,
+      "current_crop": "Trigo",
+      "previous_crop": null,
+      "source_planning_id": "73b9ddd6-cde0-471a-897b-61a66f000836",
+      "source_planning_product_id": "92870ca9-77bf-4946-92b3-bea2bc65baa4"
+    },
+    {
+      "id": "19c37850-fc7a-4344-892a-81d57264ca1d",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:30:52.580081",
+      "created_by": null,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "total_area": 64.3593,
+      "amount_used": 96,
+      "current_crop": "Trigo",
+      "previous_crop": null,
+      "source_planning_id": "f27f0960-f83a-473e-85ad-afdd35d2e580",
+      "source_planning_product_id": "c913dc26-6feb-4f7d-8365-b4cba5a7c4db"
+    },
+    {
+      "id": "328b1f6b-512e-4739-984a-06499c17f7d5",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:33:16.494603",
+      "created_by": null,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "total_area": 68.8447,
+      "amount_used": 46.7,
+      "current_crop": "Trigo",
+      "previous_crop": null,
+      "source_planning_id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa",
+      "source_planning_product_id": "82c22a01-06fa-4c12-8892-c7fe6a7a5da0"
+    },
+    {
+      "id": "0f42556f-d53d-4307-a716-51a27c0b18f0",
+      "date": "2026-08-28",
+      "unit": "litros",
+      "crop_id": "fb5158a3-7c70-4f56-bf31-8de684037e45",
+      "enabled": true,
+      "user_id": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:36:23.613277",
+      "created_by": null,
+      "product_id": "c7996694-f147-4eec-ac94-8462b0090051",
+      "total_area": 46.0932,
+      "amount_used": 27,
+      "current_crop": "Cebada",
+      "previous_crop": null,
+      "source_planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "source_planning_product_id": "5d5685b7-81ec-4435-b21c-341c6274f1c1"
+    }
+  ],
+  "planning_products": [
+    {
+      "id": "60ce22ba-34d4-45b3-a38c-22bc514fe8c9",
+      "unit": "kg",
+      "amount": 2184,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837"
+    },
+    {
+      "id": "ec554cae-a9fd-49c3-9c60-f2100470b380",
+      "unit": "kg",
+      "amount": 5343,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837"
+    },
+    {
+      "id": "3378791c-4e26-4805-b6c4-2a28dfed9cd5",
+      "unit": "kg",
+      "amount": 4894,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1"
+    },
+    {
+      "id": "b520ea4c-eb5c-4c7b-9b35-3bab1b9548a2",
+      "unit": "kg",
+      "amount": 11973,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1"
+    },
+    {
+      "id": "fc2a24dd-0bfd-433e-bcca-71b91f01ecce",
+      "unit": "kg",
+      "amount": 8957,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255"
+    },
+    {
+      "id": "074e0a66-fe31-4f54-988d-abab31ea3356",
+      "unit": "kg",
+      "amount": 3661,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255"
+    },
+    {
+      "id": "d616659e-f594-43b3-8da4-87038cde79bd",
+      "unit": "kg",
+      "amount": 2338,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec"
+    },
+    {
+      "id": "e4f65af4-2e01-4116-80ce-e6faa2788912",
+      "unit": "kg",
+      "amount": 5720,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec"
+    },
+    {
+      "id": "3f674018-dd83-45cb-a2b0-cf764764f94c",
+      "unit": "kg",
+      "amount": 3400,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "b71d0fad-659e-493b-8127-104b93844983"
+    },
+    {
+      "id": "9200b656-1792-4b15-a9bd-c8b47b25e118",
+      "unit": "kg",
+      "amount": 8840,
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "planning_id": "b71d0fad-659e-493b-8127-104b93844983"
+    },
+    {
+      "id": "44dc1aa7-28bd-41d7-92e5-c72f5e4c6c91",
+      "unit": "kg",
+      "amount": 2391,
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "planning_id": "c843269e-50a5-4ea5-b63d-4c5587e5b48d"
+    },
+    {
+      "id": "81b8c710-97c0-4796-9783-d958d92ba661",
+      "unit": "litros",
+      "amount": 12.5,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1"
+    },
+    {
+      "id": "55918967-3236-4138-bd94-f104e686e256",
+      "unit": "kg",
+      "amount": 0.75,
+      "product_id": "efff7e45-bedd-4d86-a8c2-82cc7ed5f2df",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1"
+    },
+    {
+      "id": "1a55481f-1497-4f69-b82f-2cdd6599a227",
+      "unit": "litros",
+      "amount": 75,
+      "product_id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1"
+    },
+    {
+      "id": "03df81e0-072b-47dd-a640-972e6064e5b7",
+      "unit": "litros",
+      "amount": 100,
+      "product_id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1"
+    },
+    {
+      "id": "b67c55e4-e1a7-4644-bb88-9da32d8a5a97",
+      "unit": "litros",
+      "amount": 3,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53"
+    },
+    {
+      "id": "462e1cb4-a1e6-4e11-91cb-673ed25f5680",
+      "unit": "litros",
+      "amount": 15,
+      "product_id": "f687a8f4-17eb-4269-a870-138335468a8b",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53"
+    },
+    {
+      "id": "191ddbe2-7fbe-429c-bcb8-fa9a7954132a",
+      "unit": "litros",
+      "amount": 15,
+      "product_id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53"
+    },
+    {
+      "id": "70745334-487f-4eb7-8491-97c15fd43599",
+      "unit": "litros",
+      "amount": 20,
+      "product_id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53"
+    },
+    {
+      "id": "a420147b-8f4f-46ed-8657-6c8ff52ddf20",
+      "unit": "litros",
+      "amount": 144,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "planning_id": "a13d71b2-740e-4516-aa55-470e14708e5f"
+    },
+    {
+      "id": "92870ca9-77bf-4946-92b3-bea2bc65baa4",
+      "unit": "litros",
+      "amount": 66,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "planning_id": "73b9ddd6-cde0-471a-897b-61a66f000836"
+    },
+    {
+      "id": "c913dc26-6feb-4f7d-8365-b4cba5a7c4db",
+      "unit": "litros",
+      "amount": 96,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "planning_id": "f27f0960-f83a-473e-85ad-afdd35d2e580"
+    },
+    {
+      "id": "82c22a01-06fa-4c12-8892-c7fe6a7a5da0",
+      "unit": "litros",
+      "amount": 46.7,
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "planning_id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa"
+    },
+    {
+      "id": "811b5001-484e-42a2-8437-66bed6a46e42",
+      "unit": "litros",
+      "amount": 9,
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb"
+    },
+    {
+      "id": "5d5685b7-81ec-4435-b21c-341c6274f1c1",
+      "unit": "litros",
+      "amount": 27,
+      "product_id": "c7996694-f147-4eec-ac94-8462b0090051",
+      "planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb"
+    }
+  ],
+  "planning": [
+    {
+      "id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "title": "Siembra Trigo",
+      "end_at": "2026-05-26T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-05-25T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:41:18.983516+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-05-25 03:00:00+00\",\"2026-05-26 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "title": "Siembra Trigo",
+      "end_at": "2026-05-25T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-05-23T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:31:48.407254+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-05-23 03:00:00+00\",\"2026-05-25 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "La siembra comenzó desde el alambre que conlinda con Santi",
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "title": "Siembra Trigo",
+      "end_at": "2026-05-29T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-05-26T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:52:24.995878+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-05-26 03:00:00+00\",\"2026-05-29 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "La siembra comenzó por el rastrojo de soja",
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "title": "Siembra Trigo",
+      "end_at": "2026-05-30T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-05-29T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:55:53.498107+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-05-29 03:00:00+00\",\"2026-05-30 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "b71d0fad-659e-493b-8127-104b93844983",
+      "title": "Siembra Trigo",
+      "end_at": "2026-06-02T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-06-01T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T12:57:50.70247+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-06-01 03:00:00+00\",\"2026-06-02 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "c843269e-50a5-4ea5-b63d-4c5587e5b48d",
+      "title": "Siembra Cebada",
+      "end_at": "2026-06-06T03:00:00+00:00",
+      "status": "completado",
+      "crop_id": null,
+      "enabled": true,
+      "start_at": "2026-06-04T03:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-30T13:02:11.574703+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-06-04 03:00:00+00\",\"2026-06-06 03:00:00+00\"]",
+      "updated_at": "2026-08-31T20:30:22.275648+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": null,
+      "activity_type": "siembra",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "title": null,
+      "end_at": "2026-07-31T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "start_at": "2026-07-31T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:36:32.338458+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2026-07-31 00:00:00+00\",\"2026-07-31 00:00:00+00\"]",
+      "updated_at": "2026-09-01T17:38:47.146485+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Fumigación post cosecha",
+      "completed_at": null,
+      "activity_type": "fumigacion",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "title": null,
+      "end_at": "2026-07-31T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "start_at": "2026-07-31T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T17:43:30.078511+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2026-07-31 00:00:00+00\",\"2026-07-31 00:00:00+00\"]",
+      "updated_at": "2026-09-01T17:43:53.878375+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "fumigación post cosecha",
+      "completed_at": null,
+      "activity_type": "fumigacion",
+      "effective_date": null,
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "075de7e9-855b-4147-8c70-4f227a7b971b",
+      "title": null,
+      "end_at": "2025-12-17T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "start_at": "2025-12-17T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:11:34.180732+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-17 00:00:00+00\",\"2025-12-17 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:11:34.180732+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla de Sorgo 9kg/ha\nFertilizante 50kg/ha",
+      "completed_at": "2026-09-01T23:11:34.180732+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-17",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "8286a037-ec63-460d-abd3-b20f79c822f9",
+      "title": null,
+      "end_at": "2025-12-19T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "start_at": "2025-12-19T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:12:26.49813+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-19 00:00:00+00\",\"2025-12-19 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:12:26.49813+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla 9kg/ha\nFertilizante 50kg/ha",
+      "completed_at": "2026-09-01T23:12:26.49813+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-19",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "6fd39ecc-6436-410a-b967-cf4b6f3c96e3",
+      "title": null,
+      "end_at": "2025-12-19T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "enabled": true,
+      "start_at": "2025-12-19T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:14:01.164828+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-19 00:00:00+00\",\"2025-12-19 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:14:01.164828+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla 9kg/ha\nFertilizante 50kg/ha",
+      "completed_at": "2026-09-01T23:14:01.164828+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-19",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "a13d71b2-740e-4516-aa55-470e14708e5f",
+      "title": null,
+      "end_at": "2026-08-28T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "start_at": "2026-08-28T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:25:47.97519+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-08-28 00:00:00+00\",\"2026-08-28 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:25:47.97519+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": "2026-09-01T23:25:47.97519+00:00",
+      "activity_type": "fertilizacion",
+      "effective_date": "2026-08-28",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "c63f3573-7f63-4285-84bf-b077d8e52bc6",
+      "title": null,
+      "end_at": "2025-12-24T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "8c8e7d51-218b-4d9e-95d4-c4b1170dcccb",
+      "enabled": true,
+      "start_at": "2025-12-24T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T12:51:39.538396+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2025-12-24 00:00:00+00\",\"2025-12-24 00:00:00+00\"]",
+      "updated_at": "2026-09-02T12:51:39.538396+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "Maiz Nidera 7921\nDensidad: 3,2 sem|metro\nVástago: 0,75\nFertilizante: 70kg|HA",
+      "completed_at": "2026-09-02T12:51:39.538396+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-24",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "73b9ddd6-cde0-471a-897b-61a66f000836",
+      "title": null,
+      "end_at": "2026-08-28T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "start_at": "2026-08-28T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:28:56.394385+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-08-28 00:00:00+00\",\"2026-08-28 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:28:56.394385+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "1,5 litros/ha",
+      "completed_at": "2026-09-01T23:28:56.394385+00:00",
+      "activity_type": "fertilizacion",
+      "effective_date": "2026-08-28",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "f27f0960-f83a-473e-85ad-afdd35d2e580",
+      "title": null,
+      "end_at": "2026-08-28T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "start_at": "2026-08-28T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:30:52.580081+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-08-28 00:00:00+00\",\"2026-08-28 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:30:52.580081+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "1,5L/ha",
+      "completed_at": "2026-09-01T23:30:52.580081+00:00",
+      "activity_type": "fertilizacion",
+      "effective_date": "2026-08-28",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "e1181e12-a449-4f23-b016-327333a7ce0c",
+      "title": null,
+      "end_at": "2025-12-31T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "8c8e7d51-218b-4d9e-95d4-c4b1170dcccb",
+      "enabled": true,
+      "start_at": "2025-12-31T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T12:53:48.187147+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2025-12-31 00:00:00+00\",\"2025-12-31 00:00:00+00\"]",
+      "updated_at": "2026-09-02T12:53:48.187147+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Maiz Nidera 7921\ndensidad:3,3 sem|metro\ndensidad bajo:2,9sem|metro\nFertilizante:70 kg|HA",
+      "completed_at": "2026-09-02T12:53:48.187147+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-31",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa",
+      "title": null,
+      "end_at": "2026-08-28T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f",
+      "enabled": true,
+      "start_at": "2026-08-28T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:33:16.494603+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-08-28 00:00:00+00\",\"2026-08-28 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:33:16.494603+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": "1,5L/ha",
+      "completed_at": "2026-09-01T23:33:16.494603+00:00",
+      "activity_type": "fertilizacion",
+      "effective_date": "2026-08-28",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "title": null,
+      "end_at": "2026-08-28T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "fb5158a3-7c70-4f56-bf31-8de684037e45",
+      "enabled": true,
+      "start_at": "2026-08-28T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:36:23.613277+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2026-08-28 00:00:00+00\",\"2026-08-28 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:36:23.613277+00:00",
+      "vehicle_id": null,
+      "campaign_id": "42894d7b-337a-4833-8995-f35a36b42104",
+      "description": null,
+      "completed_at": "2026-09-01T23:36:23.613277+00:00",
+      "activity_type": "fumigacion",
+      "effective_date": "2026-08-28",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "d5a86347-958e-4422-91d2-001211aecb24",
+      "title": null,
+      "end_at": "2026-01-03T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "8c8e7d51-218b-4d9e-95d4-c4b1170dcccb",
+      "enabled": true,
+      "start_at": "2026-01-03T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T12:55:36.008729+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2026-01-03 00:00:00+00\",\"2026-01-03 00:00:00+00\"]",
+      "updated_at": "2026-09-02T12:55:36.008729+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Maiz Nidera 7921\nDensidad: 3,4 sem|metro",
+      "completed_at": "2026-09-02T12:55:36.008729+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2026-01-03",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "fe4b75d4-84eb-4f4b-814e-3d06653e572e",
+      "title": null,
+      "end_at": "2025-12-05T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "enabled": true,
+      "start_at": "2025-12-04T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-08-31T15:47:32.02781+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-04 00:00:00+00\",\"2025-12-05 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:41:17.031613+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Se curó la semilla con 5 vejigas + 6L de cura semilla\nVariedad: Soja AFA 5365STS\n65kg/ha",
+      "completed_at": "2026-09-01T23:41:17.031613+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-05",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": false
+    },
+    {
+      "id": "4f2b53bf-4e7e-4113-9f88-95c4eec4410c",
+      "title": null,
+      "end_at": "2026-01-05T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "8c8e7d51-218b-4d9e-95d4-c4b1170dcccb",
+      "enabled": true,
+      "start_at": "2026-01-05T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T12:56:50.757057+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2026-01-05 00:00:00+00\",\"2026-01-05 00:00:00+00\"]",
+      "updated_at": "2026-09-02T12:56:50.757057+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Maiz Nidera 7921\nDensidad 3,5 sem|metro\nCabecera realizada con la ultima variedad",
+      "completed_at": "2026-09-02T12:56:50.757057+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2026-01-05",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "446de46f-9204-43ea-a8b9-ffbb9f1b01ba",
+      "title": null,
+      "end_at": "2025-12-08T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "enabled": true,
+      "start_at": "2025-12-08T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:49:50.986898+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-08 00:00:00+00\",\"2025-12-08 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:49:50.986898+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla de AFA 5365STS\n65kg/ha\nSe curó con 5 vejigas + 6L de cura semilla",
+      "completed_at": "2026-09-01T23:49:50.986898+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-08",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "8beb0869-876f-4dd8-8b0b-c54851b9867c",
+      "title": null,
+      "end_at": "2025-12-09T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "enabled": true,
+      "start_at": "2025-12-09T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-01T23:51:28.074237+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-09 00:00:00+00\",\"2025-12-09 00:00:00+00\"]",
+      "updated_at": "2026-09-01T23:51:28.074237+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla de AFA 5365STS\n65kg/ha\nSe curó la semilla con 5 vegijas + 6L de cura semilla",
+      "completed_at": "2026-09-01T23:51:28.074237+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-09",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "e9a5fbee-e1c9-47ea-ab9c-b0f76a4afb7b",
+      "title": null,
+      "end_at": "2025-12-09T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "enabled": true,
+      "start_at": "2025-12-09T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T00:03:12.150991+00:00",
+      "created_by": "95362622-aef0-4294-8b64-5710a256e91c",
+      "date_range": "[\"2025-12-09 00:00:00+00\",\"2025-12-09 00:00:00+00\"]",
+      "updated_at": "2026-09-02T00:03:12.150991+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Semilla de AFA 5365STS\n65kg/ha\nSe curó la semilla con 5 vegijas + 6L de cura semilla",
+      "completed_at": "2026-09-02T00:03:12.150991+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-09",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    },
+    {
+      "id": "5ed6a57d-ab27-4f46-9137-fe874d6dc752",
+      "title": null,
+      "end_at": "2025-12-29T00:00:00+00:00",
+      "status": "completado",
+      "crop_id": "8c8e7d51-218b-4d9e-95d4-c4b1170dcccb",
+      "enabled": true,
+      "start_at": "2025-12-29T00:00:00+00:00",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "created_at": "2026-09-02T12:38:54.487121+00:00",
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "date_range": "[\"2025-12-29 00:00:00+00\",\"2025-12-29 00:00:00+00\"]",
+      "updated_at": "2026-09-02T12:38:54.487121+00:00",
+      "vehicle_id": null,
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73",
+      "description": "Maiz Nidera 7921. Densidad 3,0\nFertilizante 70 kg|HA",
+      "completed_at": "2026-09-02T12:38:54.487121+00:00",
+      "activity_type": "siembra",
+      "effective_date": "2025-12-29",
+      "responsible_user": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "registered_retroactively": true
+    }
+  ],
+  "completions": [
+    {
+      "usage_id": "c91f98bf-db54-46c9-aad4-fe39547ef145",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "actual_amount": 2184,
+      "planning_product_id": "60ce22ba-34d4-45b3-a38c-22bc514fe8c9"
+    },
+    {
+      "usage_id": "f694c8b5-6258-4809-a447-ee5b32c36f13",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "actual_amount": 5343,
+      "planning_product_id": "ec554cae-a9fd-49c3-9c60-f2100470b380"
+    },
+    {
+      "usage_id": "3d5ceac4-5ee0-49bb-8c2c-d05f5ae7caa5",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "actual_amount": 4894,
+      "planning_product_id": "3378791c-4e26-4805-b6c4-2a28dfed9cd5"
+    },
+    {
+      "usage_id": "cf8c4b58-55ae-4eb7-8bd4-4d6bcf5fbff4",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "actual_amount": 11973,
+      "planning_product_id": "b520ea4c-eb5c-4c7b-9b35-3bab1b9548a2"
+    },
+    {
+      "usage_id": "9bc1242d-dbd6-45e0-8788-ce7a27b5d975",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "actual_amount": 3661,
+      "planning_product_id": "074e0a66-fe31-4f54-988d-abab31ea3356"
+    },
+    {
+      "usage_id": "2c26fbda-90c1-4836-8057-0cac6c51e5d5",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "actual_amount": 8957,
+      "planning_product_id": "fc2a24dd-0bfd-433e-bcca-71b91f01ecce"
+    },
+    {
+      "usage_id": "49432bad-c989-4ee1-801d-41298d73d007",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "actual_amount": 2338,
+      "planning_product_id": "d616659e-f594-43b3-8da4-87038cde79bd"
+    },
+    {
+      "usage_id": "95be4436-1c49-4a1b-87cf-3c304f71d42c",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "actual_amount": 5720,
+      "planning_product_id": "e4f65af4-2e01-4116-80ce-e6faa2788912"
+    },
+    {
+      "usage_id": "f7a315d3-3ba6-4a96-993f-18ffdb3adf67",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "b71d0fad-659e-493b-8127-104b93844983",
+      "actual_amount": 3400,
+      "planning_product_id": "3f674018-dd83-45cb-a2b0-cf764764f94c"
+    },
+    {
+      "usage_id": "d332a876-5750-4e1f-a99a-b9b97b35119b",
+      "created_at": "2026-08-31T21:12:16.969252+00:00",
+      "planning_id": "b71d0fad-659e-493b-8127-104b93844983",
+      "actual_amount": 8840,
+      "planning_product_id": "9200b656-1792-4b15-a9bd-c8b47b25e118"
+    },
+    {
+      "usage_id": "524d1552-09c4-4570-9388-a3dfce85805a",
+      "created_at": "2026-09-01T17:38:47.146485+00:00",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "actual_amount": 75,
+      "planning_product_id": "1a55481f-1497-4f69-b82f-2cdd6599a227"
+    },
+    {
+      "usage_id": "de385af3-b2f3-410a-9d54-9b695e74ebf2",
+      "created_at": "2026-09-01T17:38:47.146485+00:00",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "actual_amount": 0.75,
+      "planning_product_id": "55918967-3236-4138-bd94-f104e686e256"
+    },
+    {
+      "usage_id": "1ee73a0c-0c3a-4dbd-9798-da4e6e42f119",
+      "created_at": "2026-09-01T17:38:47.146485+00:00",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "actual_amount": 100,
+      "planning_product_id": "03df81e0-072b-47dd-a640-972e6064e5b7"
+    },
+    {
+      "usage_id": "922f4216-12ea-4fcf-ba67-1c19ecafed5b",
+      "created_at": "2026-09-01T17:38:47.146485+00:00",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "actual_amount": 12.5,
+      "planning_product_id": "81b8c710-97c0-4796-9783-d958d92ba661"
+    },
+    {
+      "usage_id": "79d371f4-6542-4445-9e39-2e87ae83484c",
+      "created_at": "2026-09-01T17:43:53.878375+00:00",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "actual_amount": 15,
+      "planning_product_id": "191ddbe2-7fbe-429c-bcb8-fa9a7954132a"
+    },
+    {
+      "usage_id": "b8483615-1fb2-45d4-94d9-203aec27cd9f",
+      "created_at": "2026-09-01T17:43:53.878375+00:00",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "actual_amount": 15,
+      "planning_product_id": "462e1cb4-a1e6-4e11-91cb-673ed25f5680"
+    },
+    {
+      "usage_id": "7cef0918-828a-4482-b4c9-4580055bb58d",
+      "created_at": "2026-09-01T17:43:53.878375+00:00",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "actual_amount": 20,
+      "planning_product_id": "70745334-487f-4eb7-8491-97c15fd43599"
+    },
+    {
+      "usage_id": "6bab479b-bdd1-4cc7-a651-f8895be101a7",
+      "created_at": "2026-09-01T17:43:53.878375+00:00",
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "actual_amount": 3,
+      "planning_product_id": "b67c55e4-e1a7-4644-bb88-9da32d8a5a97"
+    },
+    {
+      "usage_id": "abcb7fe6-1cc6-4913-b5fe-936f2abd6abd",
+      "created_at": "2026-09-01T23:25:47.97519+00:00",
+      "planning_id": "a13d71b2-740e-4516-aa55-470e14708e5f",
+      "actual_amount": 144,
+      "planning_product_id": "a420147b-8f4f-46ed-8657-6c8ff52ddf20"
+    },
+    {
+      "usage_id": "8365cd6d-f0de-4a65-a50d-2e2a963a68fc",
+      "created_at": "2026-09-01T23:28:56.394385+00:00",
+      "planning_id": "73b9ddd6-cde0-471a-897b-61a66f000836",
+      "actual_amount": 66,
+      "planning_product_id": "92870ca9-77bf-4946-92b3-bea2bc65baa4"
+    },
+    {
+      "usage_id": "19c37850-fc7a-4344-892a-81d57264ca1d",
+      "created_at": "2026-09-01T23:30:52.580081+00:00",
+      "planning_id": "f27f0960-f83a-473e-85ad-afdd35d2e580",
+      "actual_amount": 96,
+      "planning_product_id": "c913dc26-6feb-4f7d-8365-b4cba5a7c4db"
+    },
+    {
+      "usage_id": "328b1f6b-512e-4739-984a-06499c17f7d5",
+      "created_at": "2026-09-01T23:33:16.494603+00:00",
+      "planning_id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa",
+      "actual_amount": 46.7,
+      "planning_product_id": "82c22a01-06fa-4c12-8892-c7fe6a7a5da0"
+    },
+    {
+      "usage_id": "0f42556f-d53d-4307-a716-51a27c0b18f0",
+      "created_at": "2026-09-01T23:36:23.613277+00:00",
+      "planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "actual_amount": 27,
+      "planning_product_id": "5d5685b7-81ec-4435-b21c-341c6274f1c1"
+    },
+    {
+      "usage_id": "d59cda57-f4a3-468a-98bc-79c69458b013",
+      "created_at": "2026-09-01T23:36:23.613277+00:00",
+      "planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "actual_amount": 9,
+      "planning_product_id": "811b5001-484e-42a2-8437-66bed6a46e42"
+    }
+  ],
+  "usage_lots": [
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "usage_id": "524d1552-09c4-4570-9388-a3dfce85805a",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "usage_id": "de385af3-b2f3-410a-9d54-9b695e74ebf2",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "usage_id": "1ee73a0c-0c3a-4dbd-9798-da4e6e42f119",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "usage_id": "922f4216-12ea-4fcf-ba67-1c19ecafed5b",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc"
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "usage_id": "79d371f4-6542-4445-9e39-2e87ae83484c",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "usage_id": "b8483615-1fb2-45d4-94d9-203aec27cd9f",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "usage_id": "7cef0918-828a-4482-b4c9-4580055bb58d",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "usage_id": "6bab479b-bdd1-4cc7-a651-f8895be101a7",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "81e0ba67-b201-4bb6-ac01-09b26f6635aa",
+      "usage_id": "abcb7fe6-1cc6-4913-b5fe-936f2abd6abd",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "a21d67cd-667d-4c17-bbc6-db7f4b20b617",
+      "usage_id": "8365cd6d-f0de-4a65-a50d-2e2a963a68fc",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "usage_id": "19c37850-fc7a-4344-892a-81d57264ca1d",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "a7df5a3f-9b62-4347-b576-be736896470d",
+      "usage_id": "328b1f6b-512e-4739-984a-06499c17f7d5",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "21bdf5bf-fef2-419d-814d-22a508134ac0",
+      "usage_id": "0f42556f-d53d-4307-a716-51a27c0b18f0",
+      "sub_lot_id": null
+    },
+    {
+      "lot_id": "21bdf5bf-fef2-419d-814d-22a508134ac0",
+      "usage_id": "d59cda57-f4a3-468a-98bc-79c69458b013",
+      "sub_lot_id": null
+    }
+  ],
+  "notifications": [
+    {
+      "id": "bb1f34fc-d06b-46bd-be79-41ff9ee1f1af",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "type": "low_stock",
+      "data": {
+        "product_id": "d5c44c66-8467-42aa-89db-aa852e5c5bd9",
+        "current_stock": 3
+      },
+      "created_at": "2026-08-31T16:33:48.282Z"
+    },
+    {
+      "id": "e1d28b85-df29-4147-a9db-cc99f74c6948",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "type": "low_stock",
+      "data": {
+        "product_id": "d5c44c66-8467-42aa-89db-aa852e5c5bd9",
+        "current_stock": 3
+      },
+      "created_at": "2026-08-31T16:33:48.346Z"
+    },
+    {
+      "id": "23cea898-adf8-4499-a92b-e1c11e08f121",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:01.697Z"
+    },
+    {
+      "id": "7acbb9a1-8149-4d89-a589-c9937a2de2bc",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:02.139Z"
+    },
+    {
+      "id": "13698fb6-4739-41b2-90c3-8b8d93e1f757",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:02.475Z"
+    },
+    {
+      "id": "4e1094d5-6ecd-489b-b410-4c9bffcdcc84",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:02.782Z"
+    },
+    {
+      "id": "ce007cd0-f35c-495d-904d-0692e6f428d8",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:03.149Z"
+    },
+    {
+      "id": "b5629752-cebf-4e00-ba1d-ab15818a3ebd",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "4a4031c9-e364-411e-8cf0-674ca7ea5180"
+      },
+      "created_at": "2026-09-09T09:00:03.682Z"
+    },
+    {
+      "id": "6325d75f-8af4-4e4e-b99e-955b8df250c2",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:03.960Z"
+    },
+    {
+      "id": "1ea0c626-ea99-42db-ad77-e2630a584159",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:04.246Z"
+    },
+    {
+      "id": "a7528edc-0bfe-419c-b29f-156e3888a30f",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:04.563Z"
+    },
+    {
+      "id": "0177af4c-b163-4c76-82fd-5c9ef2483e71",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:05.623Z"
+    },
+    {
+      "id": "bb86db74-2389-448a-a2aa-9e5e036a8f32",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:07.072Z"
+    },
+    {
+      "id": "aa46cc0d-4d04-4ad9-9d31-8e2757811c6b",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "ccc8d203-cb66-4567-88a3-eb7ea72c0bb1"
+      },
+      "created_at": "2026-09-09T09:00:07.243Z"
+    },
+    {
+      "id": "157544d9-5239-470c-b632-391e8ad60073",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:07.345Z"
+    },
+    {
+      "id": "7ed240b4-85c5-4229-aa50-dae01f9f8f11",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:07.824Z"
+    },
+    {
+      "id": "006ba1ce-c1a5-4b22-8a12-b7536d0feb49",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:08.238Z"
+    },
+    {
+      "id": "d8bd1eaf-5503-42e9-9519-ab35e3c8a0e5",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:08.362Z"
+    },
+    {
+      "id": "9406e8a4-83d2-4982-b4c0-e8677000d273",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:08.680Z"
+    },
+    {
+      "id": "d9dc13c8-b59f-4df9-8e48-6ce96dd03f9d",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "b36a8fcc-5018-41ee-a9cf-9cc6ec92cebe"
+      },
+      "created_at": "2026-09-09T09:00:08.999Z"
+    },
+    {
+      "id": "d540a264-6da4-437f-a54f-890ad80f9054",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:09.261Z"
+    },
+    {
+      "id": "45d3182d-b7a1-4578-b301-9175be7d4abe",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:09.661Z"
+    },
+    {
+      "id": "4197822b-981b-4420-b261-5b156dd03807",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:10.157Z"
+    },
+    {
+      "id": "524baca0-d6b4-4bd2-9288-6653df007980",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:10.503Z"
+    },
+    {
+      "id": "874cd621-3035-4842-a14e-dab513dd95c0",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:10.720Z"
+    },
+    {
+      "id": "ecc1ef14-b3bb-4685-a8f2-2e441ef37213",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 3,
+        "product_id": "c7996694-f147-4eec-ac94-8462b0090051"
+      },
+      "created_at": "2026-09-09T09:00:10.815Z"
+    },
+    {
+      "id": "10b8bcf4-2528-43d1-aadb-0b260ee48013",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:10.974Z"
+    },
+    {
+      "id": "63f34807-082d-4624-b025-7b1cc07e5e78",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:11.294Z"
+    },
+    {
+      "id": "659464eb-9013-439c-abf7-4a2b3e25db7f",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:11.403Z"
+    },
+    {
+      "id": "8c53ce42-97b6-4c1b-956a-ea96430708ba",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:11.512Z"
+    },
+    {
+      "id": "ab879e70-59d2-471f-8d02-7a7a1adf5c1d",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:11.841Z"
+    },
+    {
+      "id": "8deb7a89-b108-4a88-9e39-c07904f22072",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5,
+        "product_id": "5867871c-4304-40ca-90f2-ba003ccc2216"
+      },
+      "created_at": "2026-09-09T09:00:12.379Z"
+    },
+    {
+      "id": "1948be89-184d-4d4b-89f8-449e6d58427f",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:12.728Z"
+    },
+    {
+      "id": "9970cba6-617a-49d3-a1ad-2a82fb8d464e",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:13.010Z"
+    },
+    {
+      "id": "45e88fab-b74c-486b-9aed-7321607b736a",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:13.288Z"
+    },
+    {
+      "id": "34d8ca36-146f-411a-89b5-f927d0b38ce4",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:13.404Z"
+    },
+    {
+      "id": "2f4b74ab-58cc-4698-a154-b827858f03e6",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:13.501Z"
+    },
+    {
+      "id": "b2b81036-2174-40a3-9874-4b77a7fd6a9a",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 1,
+        "product_id": "79066ca8-104b-4eb9-a98e-8a2513670011"
+      },
+      "created_at": "2026-09-09T09:00:13.787Z"
+    },
+    {
+      "id": "4b6b14f6-ce95-4b67-b6b4-6cf947d0e58d",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5.5,
+        "product_id": "28576c18-e0ca-41b2-9ae1-396e1d69efd7"
+      },
+      "created_at": "2026-09-09T09:00:13.890Z"
+    },
+    {
+      "id": "60ab1264-2a24-439a-a97e-78fbc8480e6f",
+      "company_id": null,
+      "type": "low_stock",
+      "data": {
+        "available": 5.5,
+        "product_id": "28576c18-e0ca-41b2-9ae1-396e1d69efd7"
+      },
+      "created_at": "2026-09-09T09:00:14.175Z"
+    }
+  ],
+  "views": [
+    {
+      "viewname": "planning_with_derived",
+      "definition": " SELECT id,\n    title,\n    description,\n    activity_type,\n    start_at,\n    end_at,\n    responsible_user,\n    status,\n    vehicle_id,\n    created_by,\n    created_at,\n    updated_at,\n    enabled,\n    date_range,\n        CASE\n            WHEN ((status <> ALL (ARRAY['completado'::text, 'cancelado'::text])) AND (now() > end_at)) THEN 'en_demora'::text\n            ELSE status\n        END AS status_effective\n   FROM planning p;"
+    }
+  ],
+  "rls": [
+    {
+      "relname": "fuel",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "planning_lots",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "usage_lots",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "products",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "vehicles",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "users",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "weather",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "plans",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "planning",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "usage_records",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "harvest_records",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "planning_products",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "invitations",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "companies",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "notifications",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "payments",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "rain_records",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "vehicle_fuel_records",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "spatial_ref_sys",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "lots",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "harvest_cycle_closures",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "lot_layouts",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "sub_lots",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "crops",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "campaigns",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "harvest_crop_assignments",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "planning_product_completions",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "crop_assignments",
+      "relrowsecurity": false,
+      "relforcerowsecurity": false
+    }
+  ],
+  "crop_assignments": [
+    {
+      "id": "8b0241db-9ece-4ef4-86cc-1d86f81b2f88",
+      "source_planning_id": "fe4b75d4-84eb-4f4b-814e-3d06653e572e"
+    },
+    {
+      "id": "5636c381-fe9b-448c-8268-6e3e24047b4f",
+      "source_planning_id": null
+    },
+    {
+      "id": "0f8bcc4e-5b7b-44aa-91be-98ecbfb08238",
+      "source_planning_id": "c63f3573-7f63-4285-84bf-b077d8e52bc6"
+    },
+    {
+      "id": "1a1a4674-0b77-45fb-b411-21fd449ac00f",
+      "source_planning_id": "075de7e9-855b-4147-8c70-4f227a7b971b"
+    },
+    {
+      "id": "c8654dae-944c-40f9-bbe4-a3f7bfa33e64",
+      "source_planning_id": "8286a037-ec63-460d-abd3-b20f79c822f9"
+    },
+    {
+      "id": "06fcf99f-e44e-4b33-ad60-f902109133c4",
+      "source_planning_id": "6fd39ecc-6436-410a-b967-cf4b6f3c96e3"
+    },
+    {
+      "id": "417313c5-fa51-40d5-86d4-b6b7219cdca3",
+      "source_planning_id": "8beb0869-876f-4dd8-8b0b-c54851b9867c"
+    },
+    {
+      "id": "7d1b2d9f-aea1-416a-8a71-6fc9e58dfa2e",
+      "source_planning_id": "446de46f-9204-43ea-a8b9-ffbb9f1b01ba"
+    },
+    {
+      "id": "f5376999-22cf-4d7c-ad0c-98854832ce02",
+      "source_planning_id": "e9a5fbee-e1c9-47ea-ab9c-b0f76a4afb7b"
+    },
+    {
+      "id": "b85eaf78-5506-4c0a-9ff4-6807a5a0f86a",
+      "source_planning_id": "5ed6a57d-ab27-4f46-9137-fe874d6dc752"
+    },
+    {
+      "id": "3d2b80df-5ec0-4cdc-8737-6f98bb453a7f",
+      "source_planning_id": "4f2b53bf-4e7e-4113-9f88-95c4eec4410c"
+    },
+    {
+      "id": "ce62df2e-b202-40b5-b4fc-f83337a77a14",
+      "source_planning_id": "e1181e12-a449-4f23-b016-327333a7ce0c"
+    },
+    {
+      "id": "fc7f07f9-3594-4369-afe8-87eb7317a931",
+      "source_planning_id": "d5a86347-958e-4422-91d2-001211aecb24"
+    }
+  ],
+  "planning_lots": [
+    {
+      "lot_id": "f992c02e-dd31-4d52-8d49-38fccc9b9d24",
+      "area_ha": 70.9676,
+      "sub_lot_id": null,
+      "planning_id": "74842b24-19cd-4f88-bf4b-3f43dedd7837"
+    },
+    {
+      "lot_id": "81e0ba67-b201-4bb6-ac01-09b26f6635aa",
+      "area_ha": 92.6495,
+      "sub_lot_id": null,
+      "planning_id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1"
+    },
+    {
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "area_ha": 64.3593,
+      "sub_lot_id": null,
+      "planning_id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255"
+    },
+    {
+      "lot_id": "a21d67cd-667d-4c17-bbc6-db7f4b20b617",
+      "area_ha": 44.0532,
+      "sub_lot_id": null,
+      "planning_id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec"
+    },
+    {
+      "lot_id": "a7df5a3f-9b62-4347-b576-be736896470d",
+      "area_ha": 68.8447,
+      "sub_lot_id": null,
+      "planning_id": "b71d0fad-659e-493b-8127-104b93844983"
+    },
+    {
+      "lot_id": "12aad78a-66de-4b08-9b07-f841c072f703",
+      "area_ha": 68.713,
+      "sub_lot_id": null,
+      "planning_id": "c843269e-50a5-4ea5-b63d-4c5587e5b48d"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "area_ha": 49.9421,
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc",
+      "planning_id": "0f69e902-c031-44cd-b1e6-e6b716c671b1"
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "area_ha": 10.5351,
+      "sub_lot_id": null,
+      "planning_id": "983ba418-4be6-4a75-95d3-3e6f16566f53"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "area_ha": 49.9421,
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc",
+      "planning_id": "075de7e9-855b-4147-8c70-4f227a7b971b"
+    },
+    {
+      "lot_id": "d9b8c003-8156-4ec8-9bbe-be131132fe28",
+      "area_ha": 10.5351,
+      "sub_lot_id": null,
+      "planning_id": "8286a037-ec63-460d-abd3-b20f79c822f9"
+    },
+    {
+      "lot_id": "fbd5e67e-b791-437d-883b-dc28cffbb328",
+      "area_ha": 12.1991,
+      "sub_lot_id": null,
+      "planning_id": "6fd39ecc-6436-410a-b967-cf4b6f3c96e3"
+    },
+    {
+      "lot_id": "81e0ba67-b201-4bb6-ac01-09b26f6635aa",
+      "area_ha": 92.6495,
+      "sub_lot_id": null,
+      "planning_id": "a13d71b2-740e-4516-aa55-470e14708e5f"
+    },
+    {
+      "lot_id": "a21d67cd-667d-4c17-bbc6-db7f4b20b617",
+      "area_ha": 44.0532,
+      "sub_lot_id": null,
+      "planning_id": "73b9ddd6-cde0-471a-897b-61a66f000836"
+    },
+    {
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "area_ha": 64.3593,
+      "sub_lot_id": null,
+      "planning_id": "f27f0960-f83a-473e-85ad-afdd35d2e580"
+    },
+    {
+      "lot_id": "a7df5a3f-9b62-4347-b576-be736896470d",
+      "area_ha": 68.8447,
+      "sub_lot_id": null,
+      "planning_id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa"
+    },
+    {
+      "lot_id": "21bdf5bf-fef2-419d-814d-22a508134ac0",
+      "area_ha": 46.0932,
+      "sub_lot_id": null,
+      "planning_id": "513d7676-dd7a-4987-9259-ad24371b24bb"
+    },
+    {
+      "lot_id": "f992c02e-dd31-4d52-8d49-38fccc9b9d24",
+      "area_ha": 70.9676,
+      "sub_lot_id": null,
+      "planning_id": "fe4b75d4-84eb-4f4b-814e-3d06653e572e"
+    },
+    {
+      "lot_id": "21bdf5bf-fef2-419d-814d-22a508134ac0",
+      "area_ha": 46.0932,
+      "sub_lot_id": null,
+      "planning_id": "446de46f-9204-43ea-a8b9-ffbb9f1b01ba"
+    },
+    {
+      "lot_id": "81e0ba67-b201-4bb6-ac01-09b26f6635aa",
+      "area_ha": 92.6495,
+      "sub_lot_id": null,
+      "planning_id": "8beb0869-876f-4dd8-8b0b-c54851b9867c"
+    },
+    {
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "area_ha": 19.8314,
+      "sub_lot_id": "91c3a4bc-f14b-4ca3-9576-535b0af344f2",
+      "planning_id": "e9a5fbee-e1c9-47ea-ab9c-b0f76a4afb7b"
+    },
+    {
+      "lot_id": "b47cd160-195e-4acc-91da-06bdc28afd9c",
+      "area_ha": 121.8981,
+      "sub_lot_id": null,
+      "planning_id": "5ed6a57d-ab27-4f46-9137-fe874d6dc752"
+    },
+    {
+      "lot_id": "deb90445-dd6c-46ac-956a-1262725ca57e",
+      "area_ha": 68.2926,
+      "sub_lot_id": null,
+      "planning_id": "c63f3573-7f63-4285-84bf-b077d8e52bc6"
+    },
+    {
+      "lot_id": "d78a9bb3-6fc1-434a-82b3-111ab74b2a23",
+      "area_ha": 105.9591,
+      "sub_lot_id": null,
+      "planning_id": "e1181e12-a449-4f23-b016-327333a7ce0c"
+    },
+    {
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "area_ha": 26.9964,
+      "sub_lot_id": "8aea6068-1572-4de2-bbf4-25fa05f033f1",
+      "planning_id": "d5a86347-958e-4422-91d2-001211aecb24"
+    },
+    {
+      "lot_id": "12aad78a-66de-4b08-9b07-f841c072f703",
+      "area_ha": 68.713,
+      "sub_lot_id": null,
+      "planning_id": "4f2b53bf-4e7e-4113-9f88-95c4eec4410c"
+    }
+  ],
+  "all_schema_product_fk": [
+    {
+      "tbl": "planning_products",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id)"
+    },
+    {
+      "tbl": "usage_records",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    }
+  ],
+  "db_time": [
+    {
+      "now": "2026-09-13 23:33:01.752333+00",
+      "timezone": "UTC"
+    }
+  ],
+  "indirect_counts": [
+    {
+      "product_id": "5185a9b6-9c0d-43ac-a06e-2f83714a9f49",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "571bfc48-a3c7-4ffb-93c8-932e7d392446",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "5fe76cef-2c05-4f98-b902-c4e3370add3b",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "7a17bc98-87ec-47b4-a6cf-971bf229a653",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "9221197b-2b9a-43d2-90d8-035b9eefe20f",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "a009dbe1-931c-4980-a9bc-29c014fd43e6",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "c7996694-f147-4eec-ac94-8462b0090051",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "efff7e45-bedd-4d86-a8c2-82cc7ed5f2df",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    },
+    {
+      "product_id": "f687a8f4-17eb-4269-a870-138335468a8b",
+      "crop_assignments": 0,
+      "harvests": 0,
+      "closures": 0
+    }
+  ]
+}

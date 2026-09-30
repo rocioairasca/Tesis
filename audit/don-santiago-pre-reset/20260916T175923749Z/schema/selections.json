@@ -1,0 +1,179 @@
+{
+  "campaigns": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 3,
+    "file": "data/campaigns.json",
+    "geometry_columns": []
+  },
+  "companies": {
+    "predicate": "t.id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 1,
+    "file": "data/companies.json",
+    "geometry_columns": []
+  },
+  "crop_assignments": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 13,
+    "file": "data/crop_assignments.json",
+    "geometry_columns": []
+  },
+  "crops": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 6,
+    "file": "data/crops.json",
+    "geometry_columns": []
+  },
+  "fuel": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/fuel.json",
+    "geometry_columns": []
+  },
+  "harvest_crop_assignments": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"crop_assignments\" p1_0 WHERE t.\"crop_assignment_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"harvest_records\" p1_1 WHERE t.\"harvest_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 11,
+    "file": "data/harvest_crop_assignments.json",
+    "geometry_columns": []
+  },
+  "harvest_cycle_closures": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/harvest_cycle_closures.json",
+    "geometry_columns": []
+  },
+  "harvest_records": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 11,
+    "file": "data/harvest_records.json",
+    "geometry_columns": []
+  },
+  "invitations": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 2,
+    "file": "data/invitations.json",
+    "geometry_columns": []
+  },
+  "lot_layouts": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 21,
+    "file": "data/lot_layouts.json",
+    "geometry_columns": [
+      "parent_geom_snapshot"
+    ],
+    "geometry_files": [
+      "geometries/lot_layouts.parent_geom_snapshot.json"
+    ]
+  },
+  "lots": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 18,
+    "file": "data/lots.json",
+    "geometry_columns": [
+      "geom"
+    ],
+    "geometry_files": [
+      "geometries/lots.geom.json"
+    ]
+  },
+  "notifications": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 82,
+    "file": "data/notifications.json",
+    "geometry_columns": []
+  },
+  "planning": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 25,
+    "file": "data/planning.json",
+    "geometry_columns": []
+  },
+  "planning_lots": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"planning\" p1_1 WHERE t.\"planning_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"sub_lots\" p1_2 WHERE t.\"sub_lot_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 25,
+    "file": "data/planning_lots.json",
+    "geometry_columns": []
+  },
+  "planning_product_completions": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"planning\" p1_0 WHERE t.\"planning_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"planning_products\" p1_1 WHERE t.\"planning_product_id\"=p1_1.\"id\" AND (EXISTS (SELECT 1 FROM public.\"planning\" p2_0 WHERE p1_1.\"planning_id\"=p2_0.\"id\" AND (p2_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"products\" p2_1 WHERE p1_1.\"product_id\"=p2_1.\"id\" AND (p2_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)))) OR EXISTS (SELECT 1 FROM public.\"usage_records\" p1_2 WHERE t.\"usage_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 24,
+    "file": "data/planning_product_completions.json",
+    "geometry_columns": []
+  },
+  "planning_products": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"planning\" p1_0 WHERE t.\"planning_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"products\" p1_1 WHERE t.\"product_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 25,
+    "file": "data/planning_products.json",
+    "geometry_columns": []
+  },
+  "plans": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"users\" p1_1 WHERE t.\"responsible\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 0,
+    "file": "data/plans.json",
+    "geometry_columns": []
+  },
+  "products": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 55,
+    "file": "data/products.json",
+    "geometry_columns": []
+  },
+  "rain_records": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 24,
+    "file": "data/rain_records.json",
+    "geometry_columns": []
+  },
+  "stock_batches": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/stock_batches.json",
+    "geometry_columns": []
+  },
+  "stock_movements": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/stock_movements.json",
+    "geometry_columns": []
+  },
+  "sub_lots": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 8,
+    "file": "data/sub_lots.json",
+    "geometry_columns": [
+      "geom"
+    ],
+    "geometry_files": [
+      "geometries/sub_lots.geom.json"
+    ]
+  },
+  "usage_lots": {
+    "predicate": "EXISTS (SELECT 1 FROM public.\"lots\" p1_0 WHERE t.\"lot_id\"=p1_0.\"id\" AND (p1_0.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"sub_lots\" p1_1 WHERE t.\"sub_lot_id\"=p1_1.\"id\" AND (p1_1.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid)) OR EXISTS (SELECT 1 FROM public.\"usage_records\" p1_2 WHERE t.\"usage_id\"=p1_2.\"id\" AND (p1_2.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid))",
+    "rows": 14,
+    "file": "data/usage_lots.json",
+    "geometry_columns": []
+  },
+  "usage_records": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 24,
+    "file": "data/usage_records.json",
+    "geometry_columns": []
+  },
+  "users": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 2,
+    "file": "data/users.json",
+    "geometry_columns": []
+  },
+  "vehicle_fuel_records": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/vehicle_fuel_records.json",
+    "geometry_columns": []
+  },
+  "vehicles": {
+    "predicate": "t.company_id='2791ea15-7dad-48e2-945b-3791e2d44478'::uuid",
+    "rows": 0,
+    "file": "data/vehicles.json",
+    "geometry_columns": []
+  }
+}

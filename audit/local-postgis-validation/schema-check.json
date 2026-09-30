@@ -1,0 +1,3949 @@
+{
+  "definitions": {
+    "functions": [
+      {
+        "proname": "check_stock_initial_complete",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.check_stock_initial_complete()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE opening stock_initial_openings%ROWTYPE; expected integer;\nBEGIN\n  SELECT * INTO opening FROM stock_initial_openings WHERE id=NEW.id;\n  expected:=jsonb_array_length(opening.payload->'entries');\n  IF opening.result IS NULL OR expected IS NULL OR expected<1\n    OR (SELECT count(*) FROM stock_batches WHERE stock_initial_id=opening.id)<>expected\n    OR (SELECT count(*) FROM stock_movements WHERE stock_initial_id=opening.id)<>expected THEN\n    RAISE EXCEPTION 'Incomplete STOCK_INITIAL transaction' USING ERRCODE='23514';\n  END IF;\n  IF EXISTS(\n    (SELECT e->>'product_id', e->>'unit', (e->>'quantity')::numeric, (e->>'expiration_date')::date\n      FROM jsonb_array_elements(opening.payload->'entries') e\n     EXCEPT ALL\n     SELECT product_id::text,unit,initial_quantity,expiration_date FROM stock_batches WHERE stock_initial_id=opening.id)\n    UNION ALL\n    (SELECT product_id::text,unit,initial_quantity,expiration_date FROM stock_batches WHERE stock_initial_id=opening.id\n     EXCEPT ALL\n     SELECT e->>'product_id', e->>'unit', (e->>'quantity')::numeric, (e->>'expiration_date')::date\n      FROM jsonb_array_elements(opening.payload->'entries') e)\n  ) THEN RAISE EXCEPTION 'STOCK_INITIAL manifest does not match batches' USING ERRCODE='23514'; END IF;\n  RETURN NULL;\nEND $function$\n"
+      },
+      {
+        "proname": "check_usage_inventory_impact",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.check_usage_inventory_impact()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.source_planning_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM planning p WHERE p.id=NEW.source_planning_id AND p.company_id=NEW.company_id\n      AND p.inventory_impact_mode=NEW.inventory_impact_mode\n  ) THEN RAISE EXCEPTION 'Usage and Planning inventory modes must agree' USING ERRCODE='23514'; END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "gs_polygon_from_location",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.gs_polygon_from_location(location_value jsonb)\n RETURNS geometry\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nDECLARE\n  ring JSONB;\n  point JSONB;\n  coords TEXT := '';\n  first_lng DOUBLE PRECISION;\n  first_lat DOUBLE PRECISION;\n  last_lng DOUBLE PRECISION;\n  last_lat DOUBLE PRECISION;\n  lng DOUBLE PRECISION;\n  lat DOUBLE PRECISION;\n  count_points INTEGER := 0;\nBEGIN\n  IF location_value IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  IF jsonb_typeof(location_value) = 'string' THEN\n    RETURN gs_polygon_from_location((location_value #>> '{}')::JSONB);\n  END IF;\n\n  IF location_value ? 'type'\n     AND lower(location_value->>'type') = 'polygon'\n     AND location_value ? 'coordinates' THEN\n    RETURN ST_SetSRID(ST_GeomFromGeoJSON(location_value::text), 4326);\n  END IF;\n\n  IF jsonb_typeof(location_value) <> 'array'\n     OR jsonb_array_length(location_value) = 0\n     OR jsonb_typeof(location_value->0) <> 'array' THEN\n    RETURN NULL;\n  END IF;\n\n  ring := location_value->0;\n\n  FOR point IN SELECT value FROM jsonb_array_elements(ring)\n  LOOP\n    IF point ? 'lng' AND point ? 'lat' THEN\n      lng := (point->>'lng')::DOUBLE PRECISION;\n      lat := (point->>'lat')::DOUBLE PRECISION;\n    ELSIF jsonb_typeof(point) = 'array' AND jsonb_array_length(point) >= 2 THEN\n      lat := (point->>0)::DOUBLE PRECISION;\n      lng := (point->>1)::DOUBLE PRECISION;\n    ELSE\n      RETURN NULL;\n    END IF;\n\n    IF count_points = 0 THEN\n      first_lng := lng;\n      first_lat := lat;\n    END IF;\n\n    last_lng := lng;\n    last_lat := lat;\n    coords := coords || CASE WHEN coords = '' THEN '' ELSE ',' END || lng || ' ' || lat;\n    count_points := count_points + 1;\n  END LOOP;\n\n  IF count_points < 3 THEN\n    RETURN NULL;\n  END IF;\n\n  IF first_lng <> last_lng OR first_lat <> last_lat THEN\n    coords := coords || ',' || first_lng || ' ' || first_lat;\n    count_points := count_points + 1;\n  END IF;\n\n  IF count_points < 4 THEN\n    RETURN NULL;\n  END IF;\n\n  RETURN ST_SetSRID(ST_GeomFromText('POLYGON((' || coords || '))'), 4326);\nEXCEPTION\n  WHEN OTHERS THEN\n    RETURN NULL;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "gs_polygon_from_location_text",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.gs_polygon_from_location_text(location_text text)\n RETURNS geometry\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nBEGIN\n  IF location_text IS NULL OR btrim(location_text) = '' THEN\n    RETURN NULL;\n  END IF;\n\n  RETURN gs_polygon_from_location(location_text::JSONB);\nEXCEPTION\n  WHEN OTHERS THEN\n    RETURN NULL;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "gs_set_lot_geom_area",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.gs_set_lot_geom_area()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n  parsed_geom geometry;\nBEGIN\n  IF NEW.geom IS NULL AND NEW.location IS NOT NULL THEN\n    parsed_geom := gs_polygon_from_location_text(NEW.location::TEXT);\n    IF parsed_geom IS NOT NULL AND ST_IsValid(parsed_geom) THEN\n      NEW.geom := parsed_geom;\n    END IF;\n  END IF;\n\n  IF NEW.geom IS NOT NULL THEN\n    IF NOT ST_IsValid(NEW.geom) THEN\n      RAISE EXCEPTION 'La geometria del lote no es valida';\n    END IF;\n\n    NEW.geom := ST_SetSRID(ST_Force2D(NEW.geom), 4326);\n    NEW.area_ha := ROUND((ST_Area(NEW.geom::geography) / 10000)::NUMERIC, 4);\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "gs_set_sub_lot_area",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.gs_set_sub_lot_area()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n  layout_record lot_layouts%ROWTYPE;\nBEGIN\n  SELECT *\n  INTO layout_record\n  FROM lot_layouts\n  WHERE id = NEW.layout_id;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'Layout no encontrado';\n  END IF;\n\n  IF NEW.lot_id <> layout_record.lot_id OR NEW.company_id <> layout_record.company_id THEN\n    RAISE EXCEPTION 'El sublote no pertenece al mismo lote/layout/empresa';\n  END IF;\n\n  IF NOT ST_IsValid(NEW.geom) THEN\n    RAISE EXCEPTION 'La geometria del sublote no es valida';\n  END IF;\n\n  NEW.geom := ST_SetSRID(ST_Force2D(NEW.geom), 4326);\n  NEW.area_ha := ROUND((ST_Area(NEW.geom::geography) / 10000)::NUMERIC, 4);\n\n  IF NEW.area_ha <= 0 THEN\n    RAISE EXCEPTION 'La superficie del sublote debe ser mayor a 0';\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "guard_opened_inventory_date",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.guard_opened_inventory_date()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.inventory_control_start_date IS DISTINCT FROM OLD.inventory_control_start_date\n    AND EXISTS(SELECT 1 FROM stock_initial_openings WHERE company_id=OLD.id) THEN\n    RAISE EXCEPTION 'Opened inventory date is immutable' USING ERRCODE='23514';\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "guard_stock_initial_batch",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.guard_stock_initial_batch()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE opening stock_initial_openings%ROWTYPE;\nBEGIN\n  IF TG_OP='INSERT' THEN\n    PERFORM pg_advisory_xact_lock(hashtextextended('stock-initial:'||NEW.company_id,0));\n    IF NEW.origin='legacy' AND EXISTS(SELECT 1 FROM stock_initial_openings WHERE company_id=NEW.company_id) THEN\n      RAISE EXCEPTION 'Legacy opening cannot follow STOCK_INITIAL; use an audited adjustment' USING ERRCODE='23514';\n    END IF;\n    IF NEW.origin='stock_initial' THEN\n      SELECT * INTO opening FROM stock_initial_openings WHERE id=NEW.stock_initial_id AND company_id=NEW.company_id;\n      IF NOT FOUND OR opening.result IS NOT NULL OR NEW.received_date IS DISTINCT FROM opening.effective_date\n        OR NEW.created_by IS DISTINCT FROM opening.actor_id OR NEW.available_quantity<>NEW.initial_quantity\n        OR NEW.unit_price IS NOT NULL OR NEW.currency IS NOT NULL OR NEW.supplier IS NOT NULL THEN\n        RAISE EXCEPTION 'Invalid STOCK_INITIAL batch' USING ERRCODE='23514';\n      END IF;\n    END IF;\n    RETURN NEW;\n  END IF;\n  IF OLD.stock_initial_id IS NOT NULL THEN\n    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Stock initial batch provenance is immutable' USING ERRCODE='23514'; END IF;\n    IF (to_jsonb(NEW)-ARRAY['available_quantity','updated_at']) IS DISTINCT FROM\n      (to_jsonb(OLD)-ARRAY['available_quantity','updated_at']) THEN\n      RAISE EXCEPTION 'Stock initial batch provenance is immutable' USING ERRCODE='23514';\n    END IF;\n  ELSIF TG_OP='UPDATE' AND NEW.stock_initial_id IS NOT NULL THEN\n    RAISE EXCEPTION 'Cannot relabel a batch as STOCK_INITIAL' USING ERRCODE='23514';\n  END IF;\n  IF TG_OP='DELETE' THEN RETURN OLD; END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "guard_stock_initial_movement",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.guard_stock_initial_movement()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'Stock movements are immutable' USING ERRCODE='23514'; END IF;\n  IF NEW.movement_type='stock_initial' AND NOT EXISTS(\n    SELECT 1 FROM stock_initial_openings o JOIN stock_batches b ON b.stock_initial_id=o.id AND b.company_id=o.company_id\n    WHERE o.id=NEW.stock_initial_id AND o.company_id=NEW.company_id AND o.result IS NULL\n      AND b.id=NEW.batch_id AND b.product_id=NEW.product_id AND b.unit=NEW.unit AND b.initial_quantity=NEW.quantity\n      AND NEW.effective_date=o.effective_date AND NEW.created_by=o.actor_id AND NEW.operation_id=o.id\n      AND NEW.idempotency_key=o.idempotency_key AND NEW.request_hash=o.request_hash\n  ) THEN RAISE EXCEPTION 'Invalid STOCK_INITIAL movement' USING ERRCODE='23514'; END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "guard_stock_initial_opening",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.guard_stock_initial_opening()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF TG_OP='INSERT' THEN\n    PERFORM pg_advisory_xact_lock(hashtextextended('stock-initial:'||NEW.company_id,0));\n    IF NEW.effective_date IS DISTINCT FROM (SELECT inventory_control_start_date FROM companies WHERE id=NEW.company_id)\n      OR EXISTS(SELECT 1 FROM stock_batches WHERE company_id=NEW.company_id)\n      OR EXISTS(SELECT 1 FROM stock_movements WHERE company_id=NEW.company_id) THEN\n      RAISE EXCEPTION 'Initial opening requires configured date and empty inventory' USING ERRCODE='23514';\n    END IF;\n    RETURN NEW;\n  END IF;\n  IF TG_OP='UPDATE' AND OLD.result IS NULL AND NEW.result IS NOT NULL\n    AND (to_jsonb(NEW)-'result')=(to_jsonb(OLD)-'result') THEN RETURN NEW; END IF;\n  RAISE EXCEPTION 'Stock initial audit is immutable' USING ERRCODE='23514';\nEND $function$\n"
+      },
+      {
+        "proname": "inventory_guard_movement",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_guard_movement()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE original stock_movements%ROWTYPE;\nBEGIN\n  IF TG_OP <> 'INSERT' THEN RAISE EXCEPTION 'Stock movements are immutable'; END IF;\n  IF NEW.movement_type='reversal' THEN\n    SELECT * INTO original FROM stock_movements WHERE id=NEW.reversed_movement_id;\n    IF NOT FOUND OR original.movement_type<>'consumption'\n      OR NEW.quantity<>-original.quantity OR NEW.batch_id<>original.batch_id\n      OR NEW.usage_id IS DISTINCT FROM original.usage_id\n      OR NEW.company_id<>original.company_id OR NEW.product_id<>original.product_id\n    THEN RAISE EXCEPTION 'Invalid stock reversal'; END IF;\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "inventory_guard_product_unit",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_guard_product_unit()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda'\nAS $function$\r\nDECLARE reference record; has_history boolean;\r\nBEGIN\r\n  IF TG_OP='UPDATE' AND NEW.unit IS NOT DISTINCT FROM OLD.unit THEN RETURN NEW; END IF;\r\n  NEW.unit:=stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(NEW.unit);\r\n  IF NEW.unit IS NULL OR NEW.unit NOT IN ('L','mL','kg','g','unit','bag') THEN\r\n    RAISE EXCEPTION 'Seleccioná una unidad base válida.' USING ERRCODE='23514';\r\n  END IF;\r\n  IF TG_OP='INSERT' THEN RETURN NEW; END IF;\r\n  IF NEW.unit=stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(OLD.unit) THEN\r\n    NEW.unit:=OLD.unit; RETURN NEW; -- label normalization is not a historical rewrite\r\n  END IF;\r\n  has_history:=COALESCE(OLD.total_quantity,0)<>0 OR COALESCE(OLD.available_quantity,0)<>0;\r\n  FOR reference IN\r\n    SELECT DISTINCT n.nspname,rel.relname,a.attname FROM pg_constraint fk\r\n    JOIN pg_class rel ON rel.oid=fk.conrelid JOIN pg_namespace n ON n.oid=rel.relnamespace\r\n    CROSS JOIN LATERAL unnest(fk.conkey,fk.confkey) AS keys(local_key,foreign_key)\r\n    JOIN pg_attribute a ON a.attrelid=fk.conrelid AND a.attnum=keys.local_key\r\n    JOIN pg_attribute target ON target.attrelid=fk.confrelid AND target.attnum=keys.foreign_key\r\n    WHERE fk.contype='f' AND fk.confrelid='stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products'::regclass AND target.attname='id'\r\n  LOOP\r\n    EXIT WHEN has_history;\r\n    EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.%I WHERE %I=$1)',reference.nspname,reference.relname,reference.attname)\r\n      INTO has_history USING OLD.id;\r\n  END LOOP;\r\n  IF has_history THEN\r\n    RAISE EXCEPTION 'La unidad base no puede modificarse porque el producto ya posee movimientos o registros asociados.' USING ERRCODE='23514';\r\n  END IF;\r\n  RETURN NEW;\r\nEND $function$\n"
+      },
+      {
+        "proname": "inventory_inherit_product_unit",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_inherit_product_unit()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda'\nAS $function$\r\nDECLARE base_unit text;\r\nBEGIN\r\n  IF NEW.product_id IS NULL THEN RETURN NEW; END IF;\r\n  SELECT unit INTO base_unit FROM stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products WHERE id=NEW.product_id FOR UPDATE;\r\n  IF NOT FOUND THEN RAISE EXCEPTION 'Producto no disponible.' USING ERRCODE='23503'; END IF;\r\n  IF base_unit IS NULL OR stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(base_unit) NOT IN ('L','mL','kg','g','unit','bag') OR\r\n    (NEW.unit IS NOT NULL AND stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(NEW.unit) IS DISTINCT FROM stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(base_unit)) THEN\r\n    RAISE EXCEPTION 'La unidad debe coincidir con la unidad base del producto.' USING ERRCODE='23514';\r\n  END IF;\r\n  NEW.unit:=base_unit;\r\n  RETURN NEW;\r\nEND $function$\n"
+      },
+      {
+        "proname": "inventory_normalize_unit",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_normalize_unit(value text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE STRICT\nAS $function$\r\n  SELECT CASE btrim(value)\r\n    WHEN 'litros' THEN 'L' WHEN 'litro' THEN 'L' WHEN 'lt' THEN 'L' WHEN 'l' THEN 'L'\r\n    WHEN 'kilos' THEN 'kg' WHEN 'kilo' THEN 'kg'\r\n    WHEN 'bolsas' THEN 'bag' WHEN 'bolsa' THEN 'bag'\r\n    WHEN 'unidades' THEN 'unit' WHEN 'unidad' THEN 'unit'\r\n    ELSE btrim(value) END\r\n$function$\n"
+      },
+      {
+        "proname": "inventory_stamp_updated_at",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.inventory_stamp_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN NEW.updated_at=now(); RETURN NEW; END $function$\n"
+      },
+      {
+        "proname": "normalize_new_harvest_cycle_area",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.normalize_new_harvest_cycle_area()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nBEGIN\r\n  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.company_id::text || ':' || NEW.lot_id::text, 0));\r\n  IF TG_OP = 'INSERT' THEN\r\n    NEW.area_ha := round(NEW.area_ha, 2);\r\n  ELSIF NEW.area_ha IS DISTINCT FROM OLD.area_ha THEN\r\n    NEW.area_ha := round(NEW.area_ha, 2);\r\n  END IF;\r\n  IF NEW.end_date IS NOT NULL AND NEW.harvest_closure_source IS NULL THEN\r\n    NEW.harvest_closure_source := 'legacy';\r\n  END IF;\r\n  -- Check AFTER taking the same lot lock used by harvest writes. This also covers\r\n  -- a new cycle whose application-level conflict check ran before a reopening.\r\n  IF TG_OP = 'INSERT' THEN\r\n    IF EXISTS (\r\n      SELECT 1 FROM crop_assignments other\r\n      LEFT JOIN sub_lots previous_surface ON previous_surface.id = other.sub_lot_id\r\n      LEFT JOIN sub_lots new_surface ON new_surface.id = NEW.sub_lot_id\r\n      WHERE other.company_id = NEW.company_id AND other.lot_id = NEW.lot_id\r\n        AND EXISTS (SELECT 1 FROM harvest_crop_assignments hca WHERE hca.crop_assignment_id = other.id)\r\n        AND daterange(other.start_date, COALESCE(other.end_date, 'infinity'::date), '[]')\r\n          && daterange(NEW.start_date, COALESCE(NEW.end_date, 'infinity'::date), '[]')\r\n        AND (other.sub_lot_id IS NULL OR NEW.sub_lot_id IS NULL OR other.sub_lot_id = NEW.sub_lot_id\r\n          OR ST_Area(ST_CollectionExtract(ST_Intersection(\r\n            ST_CollectionExtract(ST_MakeValid(previous_surface.geom), 3),\r\n            ST_CollectionExtract(ST_MakeValid(new_surface.geom), 3)), 3)::geography) > 1)\r\n    ) THEN\r\n      RAISE EXCEPTION 'New cycle overlaps a cycle with linked harvests' USING ERRCODE = '23514';\r\n    END IF;\r\n  END IF;\r\n  RETURN NEW;\r\nEND $function$\n"
+      },
+      {
+        "proname": "protect_harvest_cycle_structure",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.protect_harvest_cycle_structure()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nBEGIN\r\n  IF (NEW.end_date, NEW.harvest_closure_source) IS DISTINCT FROM (OLD.end_date, OLD.harvest_closure_source)\r\n    AND current_setting('growsync.harvest_cycle_write', true) IS DISTINCT FROM 'on'\r\n    AND (OLD.harvest_closure_source IN ('automatic', 'manual', 'legacy')\r\n      OR EXISTS (SELECT 1 FROM harvest_crop_assignments WHERE crop_assignment_id=OLD.id)) THEN\r\n    RAISE EXCEPTION 'Harvest-linked or historical closure requires an explicit harvest operation' USING ERRCODE = '23514';\r\n  END IF;\r\n  IF (NEW.company_id, NEW.campaign_id, NEW.lot_id, NEW.sub_lot_id, NEW.crop_id, NEW.start_date, NEW.area_ha)\r\n      IS DISTINCT FROM\r\n     (OLD.company_id, OLD.campaign_id, OLD.lot_id, OLD.sub_lot_id, OLD.crop_id, OLD.start_date, OLD.area_ha)\r\n     AND EXISTS (SELECT 1 FROM harvest_crop_assignments WHERE crop_assignment_id = OLD.id) THEN\r\n    RAISE EXCEPTION 'Cannot change structure of a cycle with linked harvests' USING ERRCODE = '23514';\r\n  END IF;\r\n  RETURN NEW;\r\nEND $function$\n"
+      },
+      {
+        "proname": "protect_historical_audit",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.protect_historical_audit()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  RAISE EXCEPTION 'Historical audit is immutable' USING ERRCODE='23514';\nEND $function$\n"
+      },
+      {
+        "proname": "protect_historical_import_audit",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.protect_historical_import_audit()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Historical import is immutable' USING ERRCODE='23514'; END IF;\n  IF OLD.result IS NOT NULL OR (to_jsonb(NEW)-'result') IS DISTINCT FROM (to_jsonb(OLD)-'result') THEN\n    RAISE EXCEPTION 'Historical import is immutable' USING ERRCODE='23514';\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "protect_inventory_impact_mode",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.protect_inventory_impact_mode()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF TG_TABLE_NAME='crop_assignments' AND OLD.inventory_impact_mode='HISTORICAL_NO_STOCK'\n     AND NEW IS DISTINCT FROM OLD THEN\n    RAISE EXCEPTION 'Historical productive cycles cannot be recalculated' USING ERRCODE='23514';\n  END IF;\n  IF NEW.inventory_impact_mode IS DISTINCT FROM OLD.inventory_impact_mode\n     OR NEW.historical_import_id IS DISTINCT FROM OLD.historical_import_id THEN\n    RAISE EXCEPTION 'Inventory impact mode and import provenance are immutable' USING ERRCODE='23514';\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "reject_historical_stock_movement",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.reject_historical_stock_movement()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF EXISTS (SELECT 1 FROM usage_records u WHERE u.id=NEW.usage_id\n    AND u.inventory_impact_mode='HISTORICAL_NO_STOCK') THEN\n    RAISE EXCEPTION 'Historical usage cannot have stock movements' USING ERRCODE='23514';\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+      },
+      {
+        "proname": "set_lot_layouts_updated_at",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.set_lot_layouts_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "set_lots_updated_at",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.set_lots_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n"
+      },
+      {
+        "proname": "set_sub_lots_updated_at",
+        "definition": "CREATE OR REPLACE FUNCTION stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.set_sub_lots_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n"
+      }
+    ],
+    "triggers": [
+      {
+        "tgname": "check_usage_inventory_impact",
+        "definition": "CREATE TRIGGER check_usage_inventory_impact BEFORE INSERT OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records FOR EACH ROW EXECUTE FUNCTION check_usage_inventory_impact()"
+      },
+      {
+        "tgname": "inventory_batch_updated",
+        "definition": "CREATE TRIGGER inventory_batch_updated BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_batches FOR EACH ROW EXECUTE FUNCTION inventory_stamp_updated_at()"
+      },
+      {
+        "tgname": "inventory_inherit_unit",
+        "definition": "CREATE TRIGGER inventory_inherit_unit BEFORE INSERT OR UPDATE OF unit, product_id ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records FOR EACH ROW EXECUTE FUNCTION inventory_inherit_product_unit()"
+      },
+      {
+        "tgname": "inventory_inherit_unit",
+        "definition": "CREATE TRIGGER inventory_inherit_unit BEFORE INSERT OR UPDATE OF unit, product_id ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_batches FOR EACH ROW EXECUTE FUNCTION inventory_inherit_product_unit()"
+      },
+      {
+        "tgname": "inventory_inherit_unit",
+        "definition": "CREATE TRIGGER inventory_inherit_unit BEFORE INSERT OR UPDATE OF unit, product_id ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_products FOR EACH ROW EXECUTE FUNCTION inventory_inherit_product_unit()"
+      },
+      {
+        "tgname": "inventory_movement_guard",
+        "definition": "CREATE TRIGGER inventory_movement_guard BEFORE INSERT OR DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements FOR EACH ROW EXECUTE FUNCTION inventory_guard_movement()"
+      },
+      {
+        "tgname": "inventory_movement_no_truncate",
+        "definition": "CREATE TRIGGER inventory_movement_no_truncate BEFORE TRUNCATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements FOR EACH STATEMENT EXECUTE FUNCTION inventory_guard_movement()"
+      },
+      {
+        "tgname": "inventory_product_unit_guard",
+        "definition": "CREATE TRIGGER inventory_product_unit_guard BEFORE INSERT OR UPDATE OF unit ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products FOR EACH ROW EXECUTE FUNCTION inventory_guard_product_unit()"
+      },
+      {
+        "tgname": "inventory_product_updated",
+        "definition": "CREATE TRIGGER inventory_product_updated BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products FOR EACH ROW EXECUTE FUNCTION inventory_stamp_updated_at()"
+      },
+      {
+        "tgname": "lot_layouts_set_updated_at",
+        "definition": "CREATE TRIGGER lot_layouts_set_updated_at BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts FOR EACH ROW EXECUTE FUNCTION set_lot_layouts_updated_at()"
+      },
+      {
+        "tgname": "lots_set_geom_area",
+        "definition": "CREATE TRIGGER lots_set_geom_area BEFORE INSERT OR UPDATE OF location, geom ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lots FOR EACH ROW EXECUTE FUNCTION gs_set_lot_geom_area()"
+      },
+      {
+        "tgname": "lots_set_updated_at",
+        "definition": "CREATE TRIGGER lots_set_updated_at BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lots FOR EACH ROW EXECUTE FUNCTION set_lots_updated_at()"
+      },
+      {
+        "tgname": "normalize_new_harvest_cycle_area",
+        "definition": "CREATE TRIGGER normalize_new_harvest_cycle_area BEFORE INSERT OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments FOR EACH ROW EXECUTE FUNCTION normalize_new_harvest_cycle_area()"
+      },
+      {
+        "tgname": "opened_inventory_date_guard",
+        "definition": "CREATE TRIGGER opened_inventory_date_guard BEFORE UPDATE OF inventory_control_start_date ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.companies FOR EACH ROW EXECUTE FUNCTION guard_opened_inventory_date()"
+      },
+      {
+        "tgname": "protect_harvest_cycle_structure",
+        "definition": "CREATE TRIGGER protect_harvest_cycle_structure BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments FOR EACH ROW EXECUTE FUNCTION protect_harvest_cycle_structure()"
+      },
+      {
+        "tgname": "protect_historical_events",
+        "definition": "CREATE TRIGGER protect_historical_events BEFORE DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.historical_events FOR EACH ROW EXECUTE FUNCTION protect_historical_audit()"
+      },
+      {
+        "tgname": "protect_historical_import_audit",
+        "definition": "CREATE TRIGGER protect_historical_import_audit BEFORE DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.historical_imports FOR EACH ROW EXECUTE FUNCTION protect_historical_import_audit()"
+      },
+      {
+        "tgname": "protect_inventory_impact_mode",
+        "definition": "CREATE TRIGGER protect_inventory_impact_mode BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning FOR EACH ROW EXECUTE FUNCTION protect_inventory_impact_mode()"
+      },
+      {
+        "tgname": "protect_inventory_impact_mode",
+        "definition": "CREATE TRIGGER protect_inventory_impact_mode BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments FOR EACH ROW EXECUTE FUNCTION protect_inventory_impact_mode()"
+      },
+      {
+        "tgname": "protect_inventory_impact_mode",
+        "definition": "CREATE TRIGGER protect_inventory_impact_mode BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.harvest_records FOR EACH ROW EXECUTE FUNCTION protect_inventory_impact_mode()"
+      },
+      {
+        "tgname": "protect_inventory_impact_mode",
+        "definition": "CREATE TRIGGER protect_inventory_impact_mode BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records FOR EACH ROW EXECUTE FUNCTION protect_inventory_impact_mode()"
+      },
+      {
+        "tgname": "reject_historical_stock_movement",
+        "definition": "CREATE TRIGGER reject_historical_stock_movement BEFORE INSERT ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements FOR EACH ROW EXECUTE FUNCTION reject_historical_stock_movement()"
+      },
+      {
+        "tgname": "stock_initial_batch_guard",
+        "definition": "CREATE TRIGGER stock_initial_batch_guard BEFORE INSERT OR DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_batches FOR EACH ROW EXECUTE FUNCTION guard_stock_initial_batch()"
+      },
+      {
+        "tgname": "stock_initial_complete",
+        "definition": "CREATE CONSTRAINT TRIGGER stock_initial_complete AFTER INSERT ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_stock_initial_complete()"
+      },
+      {
+        "tgname": "stock_initial_movement_guard",
+        "definition": "CREATE TRIGGER stock_initial_movement_guard BEFORE INSERT OR DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements FOR EACH ROW EXECUTE FUNCTION guard_stock_initial_movement()"
+      },
+      {
+        "tgname": "stock_initial_movement_no_truncate",
+        "definition": "CREATE TRIGGER stock_initial_movement_no_truncate BEFORE TRUNCATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements FOR EACH STATEMENT EXECUTE FUNCTION guard_stock_initial_movement()"
+      },
+      {
+        "tgname": "stock_initial_opening_guard",
+        "definition": "CREATE TRIGGER stock_initial_opening_guard BEFORE INSERT OR DELETE OR UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings FOR EACH ROW EXECUTE FUNCTION guard_stock_initial_opening()"
+      },
+      {
+        "tgname": "stock_initial_opening_no_truncate",
+        "definition": "CREATE TRIGGER stock_initial_opening_no_truncate BEFORE TRUNCATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings FOR EACH STATEMENT EXECUTE FUNCTION guard_stock_initial_opening()"
+      },
+      {
+        "tgname": "sub_lots_set_area",
+        "definition": "CREATE TRIGGER sub_lots_set_area BEFORE INSERT OR UPDATE OF geom, layout_id, lot_id, company_id ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots FOR EACH ROW EXECUTE FUNCTION gs_set_sub_lot_area()"
+      },
+      {
+        "tgname": "sub_lots_set_updated_at",
+        "definition": "CREATE TRIGGER sub_lots_set_updated_at BEFORE UPDATE ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots FOR EACH ROW EXECUTE FUNCTION set_sub_lots_updated_at()"
+      }
+    ],
+    "constraints": [
+      {
+        "conname": "actividades_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "activities_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL"
+      },
+      {
+        "conname": "campaigns_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((start_date <= end_date))"
+      },
+      {
+        "conname": "campaigns_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "campaigns_name_not_empty",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((btrim(name) <> ''::text))"
+      },
+      {
+        "conname": "campaigns_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "campaigns_status_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'closed'::text])))"
+      },
+      {
+        "conname": "campaigns_work_start_before_start_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((work_start_date IS NULL) OR (work_start_date <= start_date)))"
+      },
+      {
+        "conname": "chk_harvest_records_campaign_format",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((campaign ~ '^[0-9]{4}-[0-9]{4}$'::text))"
+      },
+      {
+        "conname": "chk_harvest_records_crop_not_empty",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((btrim(crop) <> ''::text))"
+      },
+      {
+        "conname": "companies_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "companies_subscription_source_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((subscription_source = ANY (ARRAY['unknown'::text, 'mercadopago'::text, 'manual'::text])))"
+      },
+      {
+        "conname": "crop_assignments_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((area_ha > (0)::numeric))"
+      },
+      {
+        "conname": "crop_assignments_campaign_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "crop_assignments_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((end_date IS NULL) OR (start_date <= end_date)))"
+      },
+      {
+        "conname": "crop_assignments_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "crop_assignments_crop_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "crop_assignments_harvest_closure_source_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((((end_date IS NULL) AND (harvest_closure_source IS NULL)) OR ((end_date IS NOT NULL) AND (harvest_closure_source IS NOT NULL) AND (harvest_closure_source = ANY (ARRAY['automatic'::text, 'manual'::text, 'legacy'::text])))))"
+      },
+      {
+        "conname": "crop_assignments_historical_import_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (historical_import_id) REFERENCES historical_imports(id)"
+      },
+      {
+        "conname": "crop_assignments_inventory_impact_mode_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((inventory_impact_mode = ANY (ARRAY['NORMAL'::text, 'HISTORICAL_NO_STOCK'::text])))"
+      },
+      {
+        "conname": "crop_assignments_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "crop_assignments_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "crop_assignments_source_planning_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (source_planning_id) REFERENCES planning(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "crop_assignments_sub_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (sub_lot_id) REFERENCES sub_lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "crops_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "crops_name_not_empty",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((btrim(name) <> ''::text))"
+      },
+      {
+        "conname": "crops_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "end_after_start",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((end_at >= start_at))"
+      },
+      {
+        "conname": "fk_harvest_records_company",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id)"
+      },
+      {
+        "conname": "fk_harvest_records_created_by",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id)"
+      },
+      {
+        "conname": "fk_harvest_records_lot",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id)"
+      },
+      {
+        "conname": "harvest_crop_assignments_area_positive",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((harvested_area_ha > (0)::numeric) AND (harvested_area_ha <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "harvest_crop_assignments_crop_assignment_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_assignment_id) REFERENCES crop_assignments(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_crop_assignments_harvest_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (harvest_id) REFERENCES harvest_records(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_crop_assignments_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (harvest_id, crop_assignment_id)"
+      },
+      {
+        "conname": "harvest_cycle_closures_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((total_area_ha = (harvested_area_ha + remaining_area_ha)))"
+      },
+      {
+        "conname": "harvest_cycle_closures_check1",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((reason <> 'other'::text) OR ((notes IS NOT NULL) AND (btrim(notes) <> ''::text))))"
+      },
+      {
+        "conname": "harvest_cycle_closures_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_cycle_closures_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_cycle_closures_crop_assignment_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_assignment_id) REFERENCES crop_assignments(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_cycle_closures_crop_assignment_id_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (crop_assignment_id)"
+      },
+      {
+        "conname": "harvest_cycle_closures_harvested_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((harvested_area_ha >= (0)::numeric) AND (harvested_area_ha <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "harvest_cycle_closures_notes_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((notes IS NULL) OR (length(notes) <= 2000)))"
+      },
+      {
+        "conname": "harvest_cycle_closures_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "harvest_cycle_closures_reason_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((reason = ANY (ARRAY['measurement_difference'::text, 'unharvested_area'::text, 'loss'::text, 'weather'::text, 'other'::text])))"
+      },
+      {
+        "conname": "harvest_cycle_closures_remaining_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((remaining_area_ha > (0)::numeric) AND (remaining_area_ha <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "harvest_cycle_closures_total_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((total_area_ha > (0)::numeric) AND (total_area_ha <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "harvest_records_campaign_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_records_crop_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_records_harvested_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((harvested_area_ha > (0)::numeric))"
+      },
+      {
+        "conname": "harvest_records_historical_import_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (historical_import_id) REFERENCES historical_imports(id)"
+      },
+      {
+        "conname": "harvest_records_inventory_impact_mode_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((inventory_impact_mode = ANY (ARRAY['NORMAL'::text, 'HISTORICAL_NO_STOCK'::text])))"
+      },
+      {
+        "conname": "harvest_records_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "harvest_records_production_kg_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((production_kg >= (0)::numeric))"
+      },
+      {
+        "conname": "harvest_records_sub_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (sub_lot_id) REFERENCES sub_lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "harvest_registration_trace_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((((registered_retroactively IS NULL) AND (retroactive_reason IS NULL) AND (retroactive_notes IS NULL) AND (registration_timezone IS NULL)) OR ((registered_retroactively IS FALSE) AND (retroactive_reason IS NULL) AND (retroactive_notes IS NULL) AND (registration_timezone IS NOT NULL)) OR ((registered_retroactively IS TRUE) AND (registration_timezone IS NOT NULL) AND (retroactive_reason IS NOT NULL) AND (retroactive_reason = ANY (ARRAY['pending_record'::text, 'historical_regularization'::text, 'information_correction'::text, 'other'::text])) AND ((retroactive_reason <> 'other'::text) OR (COALESCE(length(btrim(retroactive_notes)), 0) > 0)))))"
+      },
+      {
+        "conname": "harvest_retroactive_notes_length",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((length(retroactive_notes) <= 2000))"
+      },
+      {
+        "conname": "historical_events_actor_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (actor_id) REFERENCES users(id)"
+      },
+      {
+        "conname": "historical_events_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id)"
+      },
+      {
+        "conname": "historical_events_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "historical_imports_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "historical_imports_company_id_idempotency_key_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (company_id, idempotency_key)"
+      },
+      {
+        "conname": "historical_imports_idempotency_key_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((length(btrim(idempotency_key)) >= 1) AND (length(btrim(idempotency_key)) <= 200)))"
+      },
+      {
+        "conname": "historical_imports_imported_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (imported_by) REFERENCES users(id)"
+      },
+      {
+        "conname": "historical_imports_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "historical_imports_source_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((length(btrim(source)) > 0))"
+      },
+      {
+        "conname": "lot_layouts_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "lot_layouts_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL"
+      },
+      {
+        "conname": "lot_layouts_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "lot_layouts_lot_id_version_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (lot_id, version)"
+      },
+      {
+        "conname": "lot_layouts_parent_area_ha_snapshot_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((parent_area_ha_snapshot > (0)::numeric))"
+      },
+      {
+        "conname": "lot_layouts_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "lot_layouts_status_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'locked'::text, 'archived'::text])))"
+      },
+      {
+        "conname": "lot_layouts_tolerance_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((tolerance_ha >= (0)::numeric))"
+      },
+      {
+        "conname": "lotes_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "lots_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "notifications_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "notifications_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "notifications_priority_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((priority)::text = ANY (ARRAY[('low'::character varying)::text, ('medium'::character varying)::text, ('high'::character varying)::text])))"
+      },
+      {
+        "conname": "notifications_user_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "planning_activity_type_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((activity_type = ANY (ARRAY['fumigacion'::text, 'siembra'::text, 'cosecha'::text, 'fertilizacion'::text, 'riego'::text, 'mantenimiento'::text, 'otro'::text])))"
+      },
+      {
+        "conname": "planning_campaign_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "planning_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id)"
+      },
+      {
+        "conname": "planning_crop_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_end_after_start_chk",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((end_at >= start_at))"
+      },
+      {
+        "conname": "planning_historical_import_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (historical_import_id) REFERENCES historical_imports(id)"
+      },
+      {
+        "conname": "planning_inventory_impact_mode_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((inventory_impact_mode = ANY (ARRAY['NORMAL'::text, 'HISTORICAL_NO_STOCK'::text])))"
+      },
+      {
+        "conname": "planning_lots_area_ha_positive",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((area_ha IS NULL) OR (area_ha > (0)::numeric)))"
+      },
+      {
+        "conname": "planning_lots_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id)"
+      },
+      {
+        "conname": "planning_lots_planning_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (planning_id) REFERENCES planning(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "planning_lots_sub_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (sub_lot_id) REFERENCES sub_lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "planning_product_completions_actual_amount_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((actual_amount >= (0)::numeric))"
+      },
+      {
+        "conname": "planning_product_completions_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (planning_product_id)"
+      },
+      {
+        "conname": "planning_product_completions_planning_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (planning_id) REFERENCES planning(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_product_completions_planning_product_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (planning_product_id) REFERENCES planning_products(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_product_completions_usage_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (usage_id) REFERENCES usage_records(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "planning_products_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (planning_id, product_id)"
+      },
+      {
+        "conname": "planning_products_planning_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (planning_id) REFERENCES planning(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "planning_products_product_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (product_id) REFERENCES products(id)"
+      },
+      {
+        "conname": "planning_responsible_user_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (responsible_user) REFERENCES users(id)"
+      },
+      {
+        "conname": "planning_status_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((status = ANY (ARRAY['planificado'::text, 'pendiente'::text, 'en_progreso'::text, 'completado'::text, 'en_demora'::text, 'cancelado'::text])))"
+      },
+      {
+        "conname": "planning_vehicle_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)"
+      },
+      {
+        "conname": "products_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "products_minimum_stock_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((minimum_stock >= (0)::numeric) AND (minimum_stock <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((available_quantity >= (0)::numeric) AND (available_quantity <= initial_quantity) AND (available_quantity <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_check1",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((currency IS NOT NULL) OR ((unit_price IS NULL) AND (total_original IS NULL) AND (total_ars IS NULL))))"
+      },
+      {
+        "conname": "stock_batches_check2",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((currency IS DISTINCT FROM 'USD'::text) OR (exchange_rate IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_batches_company_id_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, created_by) REFERENCES users(company_id, id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_batches_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_batches_company_id_product_id_id_unit_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (company_id, product_id, id, unit)"
+      },
+      {
+        "conname": "stock_batches_company_id_product_id_unit_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, product_id, unit) REFERENCES products(company_id, id, unit) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_batches_company_id_stock_initial_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, stock_initial_id) REFERENCES stock_initial_openings(company_id, id)"
+      },
+      {
+        "conname": "stock_batches_currency_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((currency = ANY (ARRAY['ARS'::text, 'USD'::text])))"
+      },
+      {
+        "conname": "stock_batches_exchange_rate_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((exchange_rate > (0)::numeric) AND (exchange_rate <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_initial_link",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((origin = 'stock_initial'::text) = (stock_initial_id IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_batches_initial_quantity_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((initial_quantity > (0)::numeric) AND (initial_quantity <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_origin_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((origin = ANY (ARRAY['legacy'::text, 'purchase'::text, 'adjustment'::text, 'return'::text, 'stock_initial'::text])))"
+      },
+      {
+        "conname": "stock_batches_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "stock_batches_received_date_required",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((origin <> ALL (ARRAY['purchase'::text, 'return'::text])) OR (received_date IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_batches_total_ars_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((total_ars >= (0)::numeric) AND (total_ars <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_total_original_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((total_original >= (0)::numeric) AND (total_original <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_batches_unit_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((unit = ANY (ARRAY['L'::text, 'mL'::text, 'kg'::text, 'g'::text, 'unit'::text, 'bag'::text, 'litros'::text, 'bolsas'::text])))"
+      },
+      {
+        "conname": "stock_batches_unit_price_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((unit_price >= (0)::numeric) AND (unit_price <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_categoria_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((category = ANY (ARRAY['semillas'::text, 'agroquimicos'::text, 'fertilizantes'::text, 'combustible'::text])))"
+      },
+      {
+        "conname": "stock_initial_complete",
+        "contype": "t",
+        "convalidated": true,
+        "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED"
+      },
+      {
+        "conname": "stock_initial_openings_company_id_actor_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, actor_id) REFERENCES users(company_id, id)"
+      },
+      {
+        "conname": "stock_initial_openings_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id)"
+      },
+      {
+        "conname": "stock_initial_openings_company_id_id_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (company_id, id)"
+      },
+      {
+        "conname": "stock_initial_openings_company_id_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (company_id)"
+      },
+      {
+        "conname": "stock_initial_openings_idempotency_key_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((length(btrim(idempotency_key)) >= 1) AND (length(btrim(idempotency_key)) <= 200)))"
+      },
+      {
+        "conname": "stock_initial_openings_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "stock_initial_openings_request_hash_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((length(request_hash) = 64))"
+      },
+      {
+        "conname": "stock_movements_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((((movement_type = ANY (ARRAY['opening'::text, 'receipt'::text, 'adjustment_in'::text, 'reversal'::text, 'stock_initial'::text])) AND (quantity > (0)::numeric)) OR ((movement_type = ANY (ARRAY['consumption'::text, 'adjustment_out'::text])) AND (quantity < (0)::numeric))))"
+      },
+      {
+        "conname": "stock_movements_check1",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((movement_type = 'reversal'::text) = (reversed_movement_id IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_movements_check2",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((movement_type <> 'consumption'::text) OR (usage_id IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_movements_company_id_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, created_by) REFERENCES users(company_id, id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_movements_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_movements_company_id_product_id_batch_id_unit_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, product_id, batch_id, unit) REFERENCES stock_batches(company_id, product_id, id, unit) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_movements_company_id_product_id_id_unit_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (company_id, product_id, id, unit)"
+      },
+      {
+        "conname": "stock_movements_company_id_product_id_reversed_movement_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, product_id, reversed_movement_id, unit) REFERENCES stock_movements(company_id, product_id, id, unit) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_movements_company_id_product_id_usage_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, product_id, usage_id) REFERENCES usage_records(company_id, product_id, id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "stock_movements_company_id_stock_initial_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id, stock_initial_id) REFERENCES stock_initial_openings(company_id, id)"
+      },
+      {
+        "conname": "stock_movements_idempotency_key_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((length(btrim(idempotency_key)) >= 1) AND (length(btrim(idempotency_key)) <= 200)))"
+      },
+      {
+        "conname": "stock_movements_initial_date",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((movement_type <> 'stock_initial'::text) OR ((effective_date IS NOT NULL) AND (usage_id IS NULL))))"
+      },
+      {
+        "conname": "stock_movements_initial_link",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((movement_type = 'stock_initial'::text) = (stock_initial_id IS NOT NULL)))"
+      },
+      {
+        "conname": "stock_movements_movement_type_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((movement_type = ANY (ARRAY['opening'::text, 'receipt'::text, 'consumption'::text, 'adjustment_in'::text, 'adjustment_out'::text, 'reversal'::text, 'stock_initial'::text])))"
+      },
+      {
+        "conname": "stock_movements_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "stock_movements_quantity_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK (((quantity <> (0)::numeric) AND (quantity <> 'NaN'::numeric)))"
+      },
+      {
+        "conname": "stock_movements_request_hash_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((length(request_hash) = 64))"
+      },
+      {
+        "conname": "stock_movements_unit_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((unit = ANY (ARRAY['L'::text, 'mL'::text, 'kg'::text, 'g'::text, 'unit'::text, 'bag'::text, 'litros'::text, 'bolsas'::text])))"
+      },
+      {
+        "conname": "stock_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "sub_lots_area_ha_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((area_ha > (0)::numeric))"
+      },
+      {
+        "conname": "sub_lots_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "sub_lots_layout_id_code_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (layout_id, code)"
+      },
+      {
+        "conname": "sub_lots_layout_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (layout_id) REFERENCES lot_layouts(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "sub_lots_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "sub_lots_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "usage_lots_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (lot_id) REFERENCES lots(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "usage_lots_sub_lot_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (sub_lot_id) REFERENCES sub_lots(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "usage_lots_usage_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (usage_id) REFERENCES usage_records(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "usage_records_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "usage_records_crop_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "usage_records_historical_import_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (historical_import_id) REFERENCES historical_imports(id)"
+      },
+      {
+        "conname": "usage_records_inventory_impact_mode_check",
+        "contype": "c",
+        "convalidated": true,
+        "definition": "CHECK ((inventory_impact_mode = ANY (ARRAY['NORMAL'::text, 'HISTORICAL_NO_STOCK'::text])))"
+      },
+      {
+        "conname": "usage_records_product_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+      },
+      {
+        "conname": "usage_records_source_planning_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (source_planning_id) REFERENCES planning(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "usage_records_source_planning_product_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (source_planning_product_id) REFERENCES planning_products(id) ON DELETE RESTRICT"
+      },
+      {
+        "conname": "usage_records_user_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL"
+      },
+      {
+        "conname": "users_auth0_sub_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (auth0_sub)"
+      },
+      {
+        "conname": "users_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL"
+      },
+      {
+        "conname": "users_email_key",
+        "contype": "u",
+        "convalidated": true,
+        "definition": "UNIQUE (email)"
+      },
+      {
+        "conname": "users_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "vehicles_company_id_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "conname": "vehicles_created_by_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id)"
+      },
+      {
+        "conname": "vehicles_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "conname": "vehicles_responsible_user_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "definition": "FOREIGN KEY (responsible_user) REFERENCES users(id)"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "actividades_pkey",
+        "indexdef": "CREATE UNIQUE INDEX actividades_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records USING btree (id)"
+      },
+      {
+        "indexname": "campaigns_company_name_ci_unique",
+        "indexdef": "CREATE UNIQUE INDEX campaigns_company_name_ci_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.campaigns USING btree (company_id, lower(btrim(name)))"
+      },
+      {
+        "indexname": "campaigns_pkey",
+        "indexdef": "CREATE UNIQUE INDEX campaigns_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.campaigns USING btree (id)"
+      },
+      {
+        "indexname": "companies_pkey",
+        "indexdef": "CREATE UNIQUE INDEX companies_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.companies USING btree (id)"
+      },
+      {
+        "indexname": "crop_assignments_pkey",
+        "indexdef": "CREATE UNIQUE INDEX crop_assignments_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments USING btree (id)"
+      },
+      {
+        "indexname": "crop_assignments_source_planning_sub_lot_unique",
+        "indexdef": "CREATE UNIQUE INDEX crop_assignments_source_planning_sub_lot_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments USING btree (source_planning_id, sub_lot_id) WHERE ((source_planning_id IS NOT NULL) AND (sub_lot_id IS NOT NULL))"
+      },
+      {
+        "indexname": "crop_assignments_source_planning_whole_lot_unique",
+        "indexdef": "CREATE UNIQUE INDEX crop_assignments_source_planning_whole_lot_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crop_assignments USING btree (source_planning_id, lot_id) WHERE ((source_planning_id IS NOT NULL) AND (sub_lot_id IS NULL))"
+      },
+      {
+        "indexname": "crops_company_name_ci_unique",
+        "indexdef": "CREATE UNIQUE INDEX crops_company_name_ci_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crops USING btree (company_id, lower(btrim(name)))"
+      },
+      {
+        "indexname": "crops_pkey",
+        "indexdef": "CREATE UNIQUE INDEX crops_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.crops USING btree (id)"
+      },
+      {
+        "indexname": "harvest_crop_assignments_pkey",
+        "indexdef": "CREATE UNIQUE INDEX harvest_crop_assignments_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.harvest_crop_assignments USING btree (harvest_id, crop_assignment_id)"
+      },
+      {
+        "indexname": "harvest_cycle_closures_crop_assignment_id_key",
+        "indexdef": "CREATE UNIQUE INDEX harvest_cycle_closures_crop_assignment_id_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.harvest_cycle_closures USING btree (crop_assignment_id)"
+      },
+      {
+        "indexname": "harvest_cycle_closures_pkey",
+        "indexdef": "CREATE UNIQUE INDEX harvest_cycle_closures_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.harvest_cycle_closures USING btree (id)"
+      },
+      {
+        "indexname": "harvest_records_pkey",
+        "indexdef": "CREATE UNIQUE INDEX harvest_records_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.harvest_records USING btree (id)"
+      },
+      {
+        "indexname": "historical_events_pkey",
+        "indexdef": "CREATE UNIQUE INDEX historical_events_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.historical_events USING btree (id)"
+      },
+      {
+        "indexname": "historical_imports_company_id_idempotency_key_key",
+        "indexdef": "CREATE UNIQUE INDEX historical_imports_company_id_idempotency_key_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.historical_imports USING btree (company_id, idempotency_key)"
+      },
+      {
+        "indexname": "historical_imports_pkey",
+        "indexdef": "CREATE UNIQUE INDEX historical_imports_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.historical_imports USING btree (id)"
+      },
+      {
+        "indexname": "idx_lot_layouts_company_lot",
+        "indexdef": "CREATE INDEX idx_lot_layouts_company_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING btree (company_id, lot_id, version DESC)"
+      },
+      {
+        "indexname": "idx_lot_layouts_parent_geom",
+        "indexdef": "CREATE INDEX idx_lot_layouts_parent_geom ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING gist (parent_geom_snapshot)"
+      },
+      {
+        "indexname": "idx_lot_layouts_status",
+        "indexdef": "CREATE INDEX idx_lot_layouts_status ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING btree (company_id, status)"
+      },
+      {
+        "indexname": "idx_sub_lots_company_lot",
+        "indexdef": "CREATE INDEX idx_sub_lots_company_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots USING btree (company_id, lot_id)"
+      },
+      {
+        "indexname": "idx_sub_lots_geom",
+        "indexdef": "CREATE INDEX idx_sub_lots_geom ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots USING gist (geom)"
+      },
+      {
+        "indexname": "idx_sub_lots_layout",
+        "indexdef": "CREATE INDEX idx_sub_lots_layout ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots USING btree (layout_id, sort_order, code)"
+      },
+      {
+        "indexname": "inventory_product_unit_key",
+        "indexdef": "CREATE UNIQUE INDEX inventory_product_unit_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products USING btree (company_id, id, unit)"
+      },
+      {
+        "indexname": "inventory_usage_product_key",
+        "indexdef": "CREATE UNIQUE INDEX inventory_usage_product_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records USING btree (company_id, product_id, id)"
+      },
+      {
+        "indexname": "inventory_user_company_key",
+        "indexdef": "CREATE UNIQUE INDEX inventory_user_company_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.users USING btree (company_id, id)"
+      },
+      {
+        "indexname": "lot_layouts_lot_id_version_key",
+        "indexdef": "CREATE UNIQUE INDEX lot_layouts_lot_id_version_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING btree (lot_id, version)"
+      },
+      {
+        "indexname": "lot_layouts_one_active_per_lot_idx",
+        "indexdef": "CREATE UNIQUE INDEX lot_layouts_one_active_per_lot_idx ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING btree (lot_id) WHERE (status = 'active'::text)"
+      },
+      {
+        "indexname": "lot_layouts_pkey",
+        "indexdef": "CREATE UNIQUE INDEX lot_layouts_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lot_layouts USING btree (id)"
+      },
+      {
+        "indexname": "lotes_pkey",
+        "indexdef": "CREATE UNIQUE INDEX lotes_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.lots USING btree (id)"
+      },
+      {
+        "indexname": "notifications_pkey",
+        "indexdef": "CREATE UNIQUE INDEX notifications_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.notifications USING btree (id)"
+      },
+      {
+        "indexname": "planning_lots_unique_full_lot",
+        "indexdef": "CREATE UNIQUE INDEX planning_lots_unique_full_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_lots USING btree (planning_id, lot_id) WHERE (sub_lot_id IS NULL)"
+      },
+      {
+        "indexname": "planning_lots_unique_sub_lot",
+        "indexdef": "CREATE UNIQUE INDEX planning_lots_unique_sub_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_lots USING btree (planning_id, sub_lot_id) WHERE (sub_lot_id IS NOT NULL)"
+      },
+      {
+        "indexname": "planning_pkey",
+        "indexdef": "CREATE UNIQUE INDEX planning_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning USING btree (id)"
+      },
+      {
+        "indexname": "planning_product_completions_pkey",
+        "indexdef": "CREATE UNIQUE INDEX planning_product_completions_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_product_completions USING btree (planning_product_id)"
+      },
+      {
+        "indexname": "planning_products_id_unique",
+        "indexdef": "CREATE UNIQUE INDEX planning_products_id_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_products USING btree (id)"
+      },
+      {
+        "indexname": "planning_products_pkey",
+        "indexdef": "CREATE UNIQUE INDEX planning_products_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.planning_products USING btree (planning_id, product_id)"
+      },
+      {
+        "indexname": "stock_batches_company_id_product_id_id_unit_key",
+        "indexdef": "CREATE UNIQUE INDEX stock_batches_company_id_product_id_id_unit_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_batches USING btree (company_id, product_id, id, unit)"
+      },
+      {
+        "indexname": "stock_batches_pkey",
+        "indexdef": "CREATE UNIQUE INDEX stock_batches_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_batches USING btree (id)"
+      },
+      {
+        "indexname": "stock_initial_once_per_batch",
+        "indexdef": "CREATE UNIQUE INDEX stock_initial_once_per_batch ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements USING btree (batch_id) WHERE (movement_type = 'stock_initial'::text)"
+      },
+      {
+        "indexname": "stock_initial_openings_company_id_id_key",
+        "indexdef": "CREATE UNIQUE INDEX stock_initial_openings_company_id_id_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings USING btree (company_id, id)"
+      },
+      {
+        "indexname": "stock_initial_openings_company_id_key",
+        "indexdef": "CREATE UNIQUE INDEX stock_initial_openings_company_id_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings USING btree (company_id)"
+      },
+      {
+        "indexname": "stock_initial_openings_pkey",
+        "indexdef": "CREATE UNIQUE INDEX stock_initial_openings_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_initial_openings USING btree (id)"
+      },
+      {
+        "indexname": "stock_movements_company_id_product_id_id_unit_key",
+        "indexdef": "CREATE UNIQUE INDEX stock_movements_company_id_product_id_id_unit_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements USING btree (company_id, product_id, id, unit)"
+      },
+      {
+        "indexname": "stock_movements_once_per_batch",
+        "indexdef": "CREATE UNIQUE INDEX stock_movements_once_per_batch ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements USING btree (company_id, idempotency_key, batch_id, movement_type)"
+      },
+      {
+        "indexname": "stock_movements_pkey",
+        "indexdef": "CREATE UNIQUE INDEX stock_movements_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements USING btree (id)"
+      },
+      {
+        "indexname": "stock_movements_reversal_once",
+        "indexdef": "CREATE UNIQUE INDEX stock_movements_reversal_once ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.stock_movements USING btree (reversed_movement_id) WHERE (reversed_movement_id IS NOT NULL)"
+      },
+      {
+        "indexname": "stock_pkey",
+        "indexdef": "CREATE UNIQUE INDEX stock_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.products USING btree (id)"
+      },
+      {
+        "indexname": "sub_lots_layout_id_code_key",
+        "indexdef": "CREATE UNIQUE INDEX sub_lots_layout_id_code_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots USING btree (layout_id, code)"
+      },
+      {
+        "indexname": "sub_lots_pkey",
+        "indexdef": "CREATE UNIQUE INDEX sub_lots_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.sub_lots USING btree (id)"
+      },
+      {
+        "indexname": "usage_lots_unique_full_lot",
+        "indexdef": "CREATE UNIQUE INDEX usage_lots_unique_full_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_lots USING btree (usage_id, lot_id) WHERE (sub_lot_id IS NULL)"
+      },
+      {
+        "indexname": "usage_lots_unique_sub_lot",
+        "indexdef": "CREATE UNIQUE INDEX usage_lots_unique_sub_lot ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_lots USING btree (usage_id, sub_lot_id) WHERE (sub_lot_id IS NOT NULL)"
+      },
+      {
+        "indexname": "usage_records_source_planning_product_unique",
+        "indexdef": "CREATE UNIQUE INDEX usage_records_source_planning_product_unique ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.usage_records USING btree (source_planning_product_id) WHERE (source_planning_product_id IS NOT NULL)"
+      },
+      {
+        "indexname": "users_auth0_sub_key",
+        "indexdef": "CREATE UNIQUE INDEX users_auth0_sub_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.users USING btree (auth0_sub)"
+      },
+      {
+        "indexname": "users_email_key",
+        "indexdef": "CREATE UNIQUE INDEX users_email_key ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.users USING btree (email)"
+      },
+      {
+        "indexname": "users_pkey",
+        "indexdef": "CREATE UNIQUE INDEX users_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.users USING btree (id)"
+      },
+      {
+        "indexname": "vehicles_pkey",
+        "indexdef": "CREATE UNIQUE INDEX vehicles_pkey ON stock_initial_test_0f5c1cc634a644a9a8cfc94d07427fda.vehicles USING btree (id)"
+      }
+    ],
+    "types": [
+      {
+        "table_name": "campaigns",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "start_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "end_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "status",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "campaigns",
+        "column_name": "work_start_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "plan",
+        "data_type": "character varying",
+        "udt_name": "varchar",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "subscription_status",
+        "data_type": "character varying",
+        "udt_name": "varchar",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "subscription_started_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "subscription_expires_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "subscription_source",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "companies",
+        "column_name": "inventory_control_start_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "campaign_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "sub_lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "crop_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "start_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "end_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "source_planning_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "harvest_closure_source",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "inventory_impact_mode",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crop_assignments",
+        "column_name": "historical_import_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "crops",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_crop_assignments",
+        "column_name": "harvest_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_crop_assignments",
+        "column_name": "crop_assignment_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_crop_assignments",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_crop_assignments",
+        "column_name": "harvested_area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "crop_assignment_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "finalized_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "reason",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "total_area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "harvested_area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "remaining_area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_cycle_closures",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "crop",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "campaign",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "harvest_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "production_kg",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 14,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "harvested_area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 10,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "yield_kg_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 2
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "crop_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "sub_lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "campaign_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "registered_retroactively",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "retroactive_reason",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "retroactive_notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "registration_timezone",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "inventory_impact_mode",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "harvest_records",
+        "column_name": "historical_import_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "actor_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "entity_table",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "entity_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "occurred_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "before_data",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_events",
+        "column_name": "after_data",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "idempotency_key",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "request_hash",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "imported_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "imported_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "source",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "payload",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "historical_imports",
+        "column_name": "result",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "version",
+        "data_type": "integer",
+        "udt_name": "int4",
+        "numeric_precision": 32,
+        "numeric_scale": 0
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "status",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "parent_geom_snapshot",
+        "data_type": "USER-DEFINED",
+        "udt_name": "geometry",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "parent_area_ha_snapshot",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 4
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "tolerance_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 4
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "activated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "locked_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lot_layouts",
+        "column_name": "archived_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "area",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "created_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "location",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "geom",
+        "data_type": "USER-DEFINED",
+        "udt_name": "geometry",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "lots",
+        "column_name": "area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 4
+      },
+      {
+        "table_name": "lots",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "user_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "type",
+        "data_type": "character varying",
+        "udt_name": "varchar",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "priority",
+        "data_type": "character varying",
+        "udt_name": "varchar",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "title",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "message",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "data",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "read",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "title",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "description",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "activity_type",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "start_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "end_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "responsible_user",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "status",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "vehicle_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "date_range",
+        "data_type": "tstzrange",
+        "udt_name": "tstzrange",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "crop_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "campaign_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "effective_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "completed_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "registered_retroactively",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "inventory_impact_mode",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning",
+        "column_name": "historical_import_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_lots",
+        "column_name": "planning_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_lots",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_lots",
+        "column_name": "sub_lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_lots",
+        "column_name": "area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 4
+      },
+      {
+        "table_name": "planning_product_completions",
+        "column_name": "planning_product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_product_completions",
+        "column_name": "planning_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_product_completions",
+        "column_name": "usage_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_product_completions",
+        "column_name": "actual_amount",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "planning_product_completions",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_products",
+        "column_name": "planning_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_products",
+        "column_name": "product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_products",
+        "column_name": "amount",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_products",
+        "column_name": "unit",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "planning_products",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "category",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "unit",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "expiration_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "cost",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "created_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "total_quantity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "available_quantity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "price",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "acquisition_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "active_ingredient",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "formulation",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "manufacturer",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "minimum_stock",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "products",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "products",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "initial_quantity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "available_quantity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "unit",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "received_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "expiration_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "unit_price",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "currency",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "exchange_rate",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "total_original",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "total_ars",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "supplier",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "reference",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "origin",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_batches",
+        "column_name": "stock_initial_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "effective_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "actor_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "idempotency_key",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "request_hash",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "payload",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "result",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_initial_openings",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "batch_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "movement_type",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "quantity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 20,
+        "numeric_scale": 6
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "unit",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "usage_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "operation_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "reversed_movement_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "idempotency_key",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "request_hash",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "occurred_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "stock_initial_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "stock_movements",
+        "column_name": "effective_date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "layout_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "code",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "geom",
+        "data_type": "USER-DEFINED",
+        "udt_name": "geometry",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "area_ha",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": 12,
+        "numeric_scale": 4
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "sort_order",
+        "data_type": "integer",
+        "udt_name": "int4",
+        "numeric_precision": 32,
+        "numeric_scale": 0
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "sub_lots",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_lots",
+        "column_name": "usage_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_lots",
+        "column_name": "lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_lots",
+        "column_name": "sub_lot_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "date",
+        "data_type": "date",
+        "udt_name": "date",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "created_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "amount_used",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "unit",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "total_area",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "previous_crop",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "current_crop",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "user_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "source_planning_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "source_planning_product_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "crop_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "inventory_impact_mode",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "usage_records",
+        "column_name": "historical_import_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "email",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "full_name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "role",
+        "data_type": "integer",
+        "udt_name": "int4",
+        "numeric_precision": 32,
+        "numeric_scale": 0
+      },
+      {
+        "table_name": "users",
+        "column_name": "created_at",
+        "data_type": "timestamp without time zone",
+        "udt_name": "timestamp",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "auth0_id",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "username",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "nickname",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "picture",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "auth0_sub",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "users",
+        "column_name": "custom_permissions",
+        "data_type": "jsonb",
+        "udt_name": "jsonb",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "name",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "type",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "brand",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "model",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "plate",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "capacity",
+        "data_type": "numeric",
+        "udt_name": "numeric",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "notes",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "status",
+        "data_type": "text",
+        "udt_name": "text",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "responsible_user",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "created_by",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "udt_name": "timestamptz",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "enabled",
+        "data_type": "boolean",
+        "udt_name": "bool",
+        "numeric_precision": null,
+        "numeric_scale": null
+      },
+      {
+        "table_name": "vehicles",
+        "column_name": "company_id",
+        "data_type": "uuid",
+        "udt_name": "uuid",
+        "numeric_precision": null,
+        "numeric_scale": null
+      }
+    ]
+  },
+  "geometry_before": [
+    {
+      "kind": "layout",
+      "id": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c01d5a643bdf7f4ec01d5a643bdfff40c01d5a643bdf7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "1.0248",
+      "parent": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "layout": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0"
+    },
+    {
+      "kind": "lot",
+      "id": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c01d5a643bdf7f4ec01d5a643bdfff40c01d5a643bdf7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "1.0248",
+      "parent": null,
+      "layout": null
+    },
+    {
+      "kind": "sub_lot",
+      "id": "e8848e0b-3ce1-417e-acd2-ccc8e191e977",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c00e2db29def7f4ec01d5a643bdfff40c00e2db29def7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "0.5124",
+      "parent": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "layout": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0"
+    }
+  ],
+  "geometry_after": [
+    {
+      "kind": "layout",
+      "id": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c01d5a643bdf7f4ec01d5a643bdfff40c01d5a643bdf7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "1.0248",
+      "parent": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "layout": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0"
+    },
+    {
+      "kind": "lot",
+      "id": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c01d5a643bdf7f4ec01d5a643bdfff40c01d5a643bdf7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "1.0248",
+      "parent": null,
+      "layout": null
+    },
+    {
+      "kind": "sub_lot",
+      "id": "e8848e0b-3ce1-417e-acd2-ccc8e191e977",
+      "ewkb": "0103000020e610000001000000050000000000000000804ec000000000000041c00000000000804ec01d5a643bdfff40c00e2db29def7f4ec01d5a643bdfff40c00e2db29def7f4ec000000000000041c00000000000804ec000000000000041c0",
+      "srid": 4326,
+      "points": 5,
+      "area": "0.5124",
+      "parent": "70acd245-09cb-47b6-9b54-6ec8370446d8",
+      "layout": "cca8f7ea-09d5-4dd1-aaec-fd1f61fd94b0"
+    }
+  ],
+  "legacy_quantities_unchanged": true,
+  "existing_modes_normal": true,
+  "control_date_null": true
+}

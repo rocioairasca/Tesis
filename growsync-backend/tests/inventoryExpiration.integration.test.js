@@ -31,14 +31,14 @@ before(async()=>{
   await db.exec(fs.readFileSync(require.resolve('../migrations/20260916_stock_initial.sql'),'utf8'));
   await db.exec(require('./stockInitialExpiration.fixture'));
 });
-after(async()=>{delete process.env.INVENTORY_V1_COMPANY_IDS;await db?.close();});
+after(async()=>{await db?.close();});
 async function fixture(){
   today='2026-09-01';
   const companyId=randomUUID(),actorId=randomUUID(),productId=randomUUID();
   await db.query('INSERT INTO companies(id) VALUES($1)',[companyId]);
   await db.query('INSERT INTO users(id,company_id) VALUES($1,$2)',[actorId,companyId]);
   await db.query("INSERT INTO products(id,company_id,name,unit) VALUES($1,$2,'Expiry test','kg')",[productId,companyId]);
-  process.env.INVENTORY_V1_COMPANY_IDS=companyId;
+
   const ctx={companyId,actorId,productId,unit:'kg'};
   const receive=(expiry={},extra={})=>stock.transaction(pool,c=>stock.receiveStock(c,{...ctx,origin:'purchase',received_date:'2020-01-01',quantity:'1',key:randomUUID(),...expiry,...extra}));
   const balance=async()=> (await stock.balances(db,companyId,[productId])).get(productId);

@@ -33,15 +33,15 @@ async function fixture(t,v1=false){
     usage_records:[{id:usageId,company_id:companyId,product_id:productId,amount_used:30,unit:'kg',date:'2020-01-01',user_id:actorId,created_by:actorId,source_planning_id:planningId,source_planning_product_id:ppId}],
     usage_lots:[{usage_id:usageId,lot_id:lotId,sub_lot_id:null}],
     planning_product_completions:[{planning_id:planningId,planning_product_id:ppId,usage_id:usageId,actual_amount:30}]};
-  if(v1){process.env.INVENTORY_V1_COMPANY_IDS=companyId;await stock.transaction(x.pool,c=>stock.receiveStock(c,{companyId,actorId,productId,unit:'kg',quantity:10,origin:'purchase',received_date:'2020-01-01',key:randomUUID()}));}
-  else delete process.env.INVENTORY_V1_COMPANY_IDS;
-  t.after(()=>delete process.env.INVENTORY_V1_COMPANY_IDS);
+  if(v1){await stock.transaction(x.pool,c=>stock.receiveStock(c,{companyId,actorId,productId,unit:'kg',quantity:10,origin:'purchase',received_date:'2020-01-01',key:randomUUID()}));}
+
+
   const args={companyId,actorId,key:randomUUID(),source:'test',confirmedNoStock:true,records};
   const snapshot=async()=>Object.fromEntries(await Promise.all(['products','stock_batches','stock_movements','notifications'].map(async table=>[table,(await db.query('SELECT * FROM '+table+' ORDER BY id')).rows])));
   const edit=(body={},enabled,table='planning',id=planningId)=>mutation.mutate(x.pool,{companyId,actorId,table,id,body,enabled});
   return {...x,...args,args,planningId,ppId,usageId,productId,lotId,snapshot,edit};
 }
-for(const v1 of [false,true])test(`historical import/edit/disable/restore leaves every stock column and alert unchanged (${v1?'V1':'legacy'})`,async t=>{
+for(const v1 of [false,true])test(`historical import/edit/disable/restore leaves every stock column and alert unchanged (${v1?'con partidas':'sin partidas'})`,async t=>{
   const x=await fixture(t,v1),before=await x.snapshot();
   const result=await history.importHistory(x.pool,x.args);
   assert.equal(result.counts.usage_records,1);
@@ -64,15 +64,22 @@ for(const v1 of [false,true])test(`historical import/edit/disable/restore leaves
   await assert.rejects(stock.transaction(x.pool,c=>stock.consumeStock(c,{companyId:x.companyId,actorId:x.actorId,productId:x.productId,usageId:x.usageId,unit:'kg',quantity:1,key:randomUUID()})),/antecedente/);
   assert.deepEqual(await x.snapshot(),before);
 });
-for(const v1 of [false,true])for(const historical of [false,true])test(`completion ${historical?'HISTORICAL':'NORMAL'} / ${v1?'V1':'legacy'}`,async t=>{
+for(const v1 of [false,true])for(const historical of [false,true])test(`completion ${historical?'HISTORICAL':'NORMAL'} / ${v1?'con partidas':'sin partidas'}`,async t=>{
   const x=await fixture(t,v1);const mode=historical?HISTORICAL:'NORMAL';
   await x.db.query(`INSERT INTO planning(id,company_id,activity_type,status,start_at,end_at,responsible_user,inventory_impact_mode)
     VALUES($1,$2,'fumigacion','pendiente','2020-01-01','2020-01-01',$3,$4)`,[x.planningId,x.companyId,x.actorId,mode]);
   await x.db.query('INSERT INTO planning_products(id,planning_id,product_id,amount,unit) VALUES($1,$2,$3,3,\'kg\')',[x.ppId,x.planningId,x.productId]);
   const before=await x.snapshot();
-  await stock.transaction(x.pool,client=>completion.applyPlanningProductUsage(client,{companyId:x.companyId,actorId:x.actorId,
+  const run = () => stock.transaction(x.pool,client=>completion.applyPlanningProductUsage(client,{companyId:x.companyId,actorId:x.actorId,
     planning:{id:x.planningId,inventory_impact_mode:mode,responsible_user:x.actorId},selections:[{lot_id:x.lotId,area_ha:2}],
     plannedProducts:[{id:x.ppId,product_id:x.productId,unit:'kg',amount:3}],effectiveDate:'2020-01-01'}));
+  if(!historical && !v1){
+    await assert.rejects(run,/No hay stock suficiente/);
+    assert.deepEqual(await x.snapshot(),before);
+    assert.equal((await x.db.query('SELECT count(*)::int n FROM planning_product_completions')).rows[0].n,0);
+    return;
+  }
+  await run();
   const after=await x.snapshot();
   if(historical)assert.deepEqual(after,before);
   else if(v1){assert.equal(after.stock_batches[0].available_quantity,'7.000000');assert.equal(after.stock_movements.length,before.stock_movements.length+1);}

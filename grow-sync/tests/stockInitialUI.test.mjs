@@ -38,7 +38,6 @@ test('apertura inicial: contratos, estado, permisos, manifiesto e idempotencia',
       entries: [{ ...manifest.entries[0], quantity: '0.250000', unit: 'L', entered_quantity: '250', entered_unit: 'mL', expiration_date: null }] };
     assert.equal(m.canConfirmInitial({ ...status, can_confirm: true }, preview), true);
     assert.equal(m.canConfirmInitial(status, preview), false);
-    assert.equal(m.canConfirmInitial({ ...status, can_confirm: true }, { ...preview, inventory_v1_enabled: false }), false);
     assert.equal(m.canConfirmInitial({ ...status, can_confirm: true }, { ...preview, preview_hash: '' }), false);
     const calls = [];
     let fail = true;
@@ -66,7 +65,7 @@ test('apertura inicial: contratos, estado, permisos, manifiesto e idempotencia',
     assert.equal(calls.at(-1).config.headers['Idempotency-Key'], 'stable-key');
     assert.equal(m.canOpenInitial(true, { opening: { exists: true } }), false);
     assert.equal(m.canConfirmInitial({ can_confirm: true, opening: { exists: true } }, preview), false);
-    for (const code of ['CONTROL_DATE_MISSING','INVENTORY_V1_DISABLED','OPENING_ALREADY_EXISTS','INVENTORY_NOT_EMPTY']) assert.ok(m.initialBlockers[code]);
+    for (const code of ['CONTROL_DATE_MISSING','OPENING_ALREADY_EXISTS','INVENTORY_NOT_EMPTY']) assert.ok(m.initialBlockers[code]);
     const { InitialPreview, InitialEntries, availableInitialProducts, initialSummary, newInitialRow, addInitialProduct, initialSearchKeyDown, initialSearchSelect, restoreInitialSearch, default: StockInitial } = await server.ssrLoadModule('/src/features/inventory/components/StockInitial.jsx');
     const { Form } = await import('antd');
     const manyProducts = Array.from({ length: 49 }, (_, i) => ({ id: String(i), name: `Producto ${i}`, unit: 'L', enabled: true }));

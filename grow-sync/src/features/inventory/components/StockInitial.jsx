@@ -264,7 +264,6 @@ function StockInitialSession({ user, products, ready, onSaved }) {
         <Button loading={busy} disabled={!date || busy} onClick={() => run(async () => { await service.setDate(date.format('YYYY-MM-DD')); await refresh(); })}>Continuar</Button>
       </Space> : review ? <>
         <InitialPreview {...review} products={catalog} />
-        {review.preview.inventory_v1_enabled === false && <Alert type="warning" message={initialBlockers.INVENTORY_V1_DISABLED} />}
         {attempt.current && <Alert type="info" message="Hay un intento de confirmación pendiente. Reintentá sin cambiar los datos." />}
       </> : <>
         {recovered && <Alert type="info" showIcon message="Recuperamos la carga de inventario inicial que estabas completando." />}

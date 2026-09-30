@@ -1,0 +1,452 @@
+{
+  "expected_count_differences": [],
+  "foreign_key_exceptions": [],
+  "semantic_relationship_exceptions": [],
+  "company_scope_exceptions": [],
+  "database_recheck": [
+    {
+      "table_or_geometry": "campaigns",
+      "rows_exported": 3,
+      "rows_rechecked": 3,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "ec7f8990c8dd11596ee6bb0b864e6d00b6ddd0592af44f8709585747b090a9a8"
+    },
+    {
+      "table_or_geometry": "companies",
+      "rows_exported": 1,
+      "rows_rechecked": 1,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "04b1d686b32c587aa6af0930611b74b76653db568ccd74c50e154c646216d682"
+    },
+    {
+      "table_or_geometry": "crop_assignments",
+      "rows_exported": 13,
+      "rows_rechecked": 13,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "920cab1ab77758e7f43d42068b4a66a1b07cd2c8018f61e32364e6900f3983d5"
+    },
+    {
+      "table_or_geometry": "crops",
+      "rows_exported": 6,
+      "rows_rechecked": 6,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "b42b7d7d8318e03edaf1d60a905ae434c7878b1036f3b57ea1e1ff8c3e386bb2"
+    },
+    {
+      "table_or_geometry": "fuel",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "harvest_crop_assignments",
+      "rows_exported": 11,
+      "rows_rechecked": 11,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "39262d8d6f52fdd8296ca61590db907782210b9e0a97eeab66d7bdcb25a98e72"
+    },
+    {
+      "table_or_geometry": "harvest_cycle_closures",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "harvest_records",
+      "rows_exported": 11,
+      "rows_rechecked": 11,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "5b3262858c1c4c51d9857a2de366abce17ff32ab4582332f9453017b6e2c247c"
+    },
+    {
+      "table_or_geometry": "invitations",
+      "rows_exported": 2,
+      "rows_rechecked": 2,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "5f04600535ae265c4f7a70b5ae9b35f4f2fa446ba5647fbce49395387d1aaed4"
+    },
+    {
+      "table_or_geometry": "lot_layouts",
+      "rows_exported": 21,
+      "rows_rechecked": 21,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "575a28be3750d4fb9452f567bdbb902d351257959c9c9aff6e7c75cf709a9bda"
+    },
+    {
+      "table_or_geometry": "geometries/lot_layouts.parent_geom_snapshot.json",
+      "rows_exported": 21,
+      "rows_rechecked": 21,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "b5ffa91c1a9755f63e48b04f100a99c5de543d91d0d5d468aaca08930c6b90ef"
+    },
+    {
+      "table_or_geometry": "lots",
+      "rows_exported": 18,
+      "rows_rechecked": 18,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "ca8e9419b43e8ae305c6bd5dd4284fcab0afe160a90b86510495cee1290df02b"
+    },
+    {
+      "table_or_geometry": "geometries/lots.geom.json",
+      "rows_exported": 18,
+      "rows_rechecked": 18,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "8f4ba3d42cdece75e85e23a3d43e1ee9626315168cac25f233df1b138559f82e"
+    },
+    {
+      "table_or_geometry": "notifications",
+      "rows_exported": 82,
+      "rows_rechecked": 82,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "f1cdf1e84d181970215092a9fce337be74a503cc232c7a136c34d02b59b11687"
+    },
+    {
+      "table_or_geometry": "planning",
+      "rows_exported": 25,
+      "rows_rechecked": 25,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "ccb85da16da8d7fe70b6862ca79fa144fcc7e854cd4589b00221b899641c0bfc"
+    },
+    {
+      "table_or_geometry": "planning_lots",
+      "rows_exported": 25,
+      "rows_rechecked": 25,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "cc649a98f7b95cf44ba48b2e45a4df3f25326e3e39a458d921545a63ffde0e30"
+    },
+    {
+      "table_or_geometry": "planning_product_completions",
+      "rows_exported": 24,
+      "rows_rechecked": 24,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "169d149934ce80c0bfabcaf6fc311bad4f36bc982f0b5ca25c423b57fd742829"
+    },
+    {
+      "table_or_geometry": "planning_products",
+      "rows_exported": 25,
+      "rows_rechecked": 25,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "61df6aba7398906f0eb212524e6710b7d63126972d4baaa72f119b492b57ee8d"
+    },
+    {
+      "table_or_geometry": "plans",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "products",
+      "rows_exported": 55,
+      "rows_rechecked": 55,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "38af3f1d44f67b13dd2638e0e9d2b5fe68428af142730e6b5df024e3504b062a"
+    },
+    {
+      "table_or_geometry": "rain_records",
+      "rows_exported": 24,
+      "rows_rechecked": 24,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "3aec3f46e8b43d2c27693f7e3d8ad5c815cd48b80cc058c2dc3438ea9f793736"
+    },
+    {
+      "table_or_geometry": "stock_batches",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "stock_movements",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "sub_lots",
+      "rows_exported": 8,
+      "rows_rechecked": 8,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "335f975254c6e7548e7055bffeb5398b637611b92b22ee464225516ba98186be"
+    },
+    {
+      "table_or_geometry": "geometries/sub_lots.geom.json",
+      "rows_exported": 8,
+      "rows_rechecked": 8,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "c182365a0ba52ed4d06bf35ef5f93cec2e2e525e81c39701c4870c76146b1481"
+    },
+    {
+      "table_or_geometry": "usage_lots",
+      "rows_exported": 14,
+      "rows_rechecked": 14,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "8d131564ba9d8e5112f6e15b555bdf9208dff44be3d2dc3caf08606ce401508b"
+    },
+    {
+      "table_or_geometry": "usage_records",
+      "rows_exported": 24,
+      "rows_rechecked": 24,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "077fa1720b6b30911484606159ab4fc1d46108d91cd96118ecb82be2cd7ad1a7"
+    },
+    {
+      "table_or_geometry": "users",
+      "rows_exported": 2,
+      "rows_rechecked": 2,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "944e9877fd82db4b102f44ca3f54546de2fac8f19b51883c76b1eded00aa07d9"
+    },
+    {
+      "table_or_geometry": "vehicle_fuel_records",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    },
+    {
+      "table_or_geometry": "vehicles",
+      "rows_exported": 0,
+      "rows_rechecked": 0,
+      "file_matches_export": true,
+      "database_matches_file": true,
+      "sha256": "2ba33ca0557f1bb5b7ba88d67f9d0093c7185a36ec51fe2b7bd9372d3e001d6d"
+    }
+  ],
+  "geometry_checks": [
+    {
+      "table": "lot_layouts",
+      "column": "parent_geom_snapshot",
+      "total": 21,
+      "nonnull": 21,
+      "ewkb_roundtrip_exact": 21
+    },
+    {
+      "table": "lots",
+      "column": "geom",
+      "total": 18,
+      "nonnull": 18,
+      "ewkb_roundtrip_exact": 18
+    },
+    {
+      "table": "sub_lots",
+      "column": "geom",
+      "total": 8,
+      "nonnull": 8,
+      "ewkb_roundtrip_exact": 8
+    }
+  ],
+  "planning_text_checks": [
+    {
+      "id": "075de7e9-855b-4147-8c70-4f227a7b971b",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "0f69e902-c031-44cd-b1e6-e6b716c671b1",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "446de46f-9204-43ea-a8b9-ffbb9f1b01ba",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "4f2b53bf-4e7e-4113-9f88-95c4eec4410c",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "513d7676-dd7a-4987-9259-ad24371b24bb",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "5ed6a57d-ab27-4f46-9137-fe874d6dc752",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "6fd39ecc-6436-410a-b967-cf4b6f3c96e3",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "73b9ddd6-cde0-471a-897b-61a66f000836",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "74842b24-19cd-4f88-bf4b-3f43dedd7837",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "8286a037-ec63-460d-abd3-b20f79c822f9",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "8beb0869-876f-4dd8-8b0b-c54851b9867c",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "983ba418-4be6-4a75-95d3-3e6f16566f53",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "a13d71b2-740e-4516-aa55-470e14708e5f",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "ab0c87f3-8edf-40b3-b1e4-4eca931734ec",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "b71d0fad-659e-493b-8127-104b93844983",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "bc06146e-086e-4a10-8dec-fcaa3d5d71f1",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "c63f3573-7f63-4285-84bf-b077d8e52bc6",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "c6a6bea6-345b-44f2-baa8-9d10cd81e255",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "c843269e-50a5-4ea5-b63d-4c5587e5b48d",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "d5a86347-958e-4422-91d2-001211aecb24",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "d64e494f-6de5-4d79-a423-d5e8b1aba9aa",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "e1181e12-a449-4f23-b016-327333a7ce0c",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "e9a5fbee-e1c9-47ea-ab9c-b0f76a4afb7b",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "f27f0960-f83a-473e-85ad-afdd35d2e580",
+      "title_exact": true,
+      "description_exact": true
+    },
+    {
+      "id": "fe4b75d4-84eb-4f4b-814e-3d06653e572e",
+      "title_exact": true,
+      "description_exact": true
+    }
+  ],
+  "external_dependencies": [],
+  "local_json_validation": {
+    "files": [
+      "data/campaigns.json",
+      "data/companies.json",
+      "data/crops.json",
+      "data/crop_assignments.json",
+      "data/fuel.json",
+      "data/harvest_crop_assignments.json",
+      "data/harvest_cycle_closures.json",
+      "data/harvest_records.json",
+      "data/invitations.json",
+      "data/lots.json",
+      "data/lot_layouts.json",
+      "data/notifications.json",
+      "data/planning.json",
+      "data/planning_lots.json",
+      "data/planning_products.json",
+      "data/planning_product_completions.json",
+      "data/plans.json",
+      "data/products.json",
+      "data/rain_records.json",
+      "data/stock_batches.json",
+      "data/stock_movements.json",
+      "data/sub_lots.json",
+      "data/usage_lots.json",
+      "data/usage_records.json",
+      "data/users.json",
+      "data/vehicles.json",
+      "data/vehicle_fuel_records.json",
+      "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-before.json",
+      "evidence/audit/harvest-reconciliation/2026-09-09T01-19-54-058Z-result.json",
+      "evidence/audit/inventory-data-2026-09-13.json",
+      "evidence/audit/inventory-schema-2026-09-13.json",
+      "geometries/lots.geom.json",
+      "geometries/lot_layouts.parent_geom_snapshot.json",
+      "geometries/sub_lots.geom.json",
+      "schema/schema.json",
+      "schema/selections.json",
+      "schema/spatial_ref_sys.json"
+    ],
+    "all_valid": true
+  },
+  "all_required_checks_passed": true,
+  "recheck_context": {
+    "read_only": "on",
+    "isolation": "repeatable read",
+    "captured_at": "2026-09-16 18:01:49.598711+00",
+    "database": "postgres",
+    "db_user": "postgres",
+    "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "snapshot": "3477:3477:"
+  },
+  "restore_test": "No restore executed. Syntax, FK closure, exact source bytes, planning text, and EWKB roundtrip checked read-only/local."
+}

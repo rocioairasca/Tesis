@@ -1,0 +1,104 @@
+TAP version 13
+# Subtest: clean database: repository migrations expose missing historical baseline (not silently repaired)
+ok 1 - clean database: repository migrations expose missing historical baseline (not silently repaired)
+  ---
+  duration_ms: 402.8928
+  type: 'test'
+  ...
+# Clean install blocked: base users/products/lots/planning/usage/inventory schema is not created by the repository migration chain.
+# Subtest: legacy migration and historical spatial chain preserve quantities, mode defaults, EWKB, SRID and layout identity
+not ok 2 - legacy migration and historical spatial chain preserve quantities, mode defaults, EWKB, SRID and layout identity
+  ---
+  duration_ms: 1149.9008
+  type: 'test'
+  location: 'D:\\Proyectos\\Tesis\\growsync-backend\\tests\\preResetPostgis.integration.test.js:46:1'
+  failureType: 'testCodeFailure'
+  error: 'Campos desconocidos en planning.'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (D:\Proyectos\Tesis\growsync-backend\services\inventoryImpact.js:5:61)
+    D:\Proyectos\Tesis\growsync-backend\services\historicalImport.js:91:83
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Object.transaction (D:\Proyectos\Tesis\growsync-backend\services\stock.js:36:20)
+    async TestContext.<anonymous> (D:\Proyectos\Tesis\growsync-backend\tests\preResetPostgis.integration.test.js:62:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: real concurrent sessions: retry, different-key opening and receipt race never produce duplicate or partial opening
+ok 3 - real concurrent sessions: retry, different-key opening and receipt race never produce duplicate or partial opening
+  ---
+  duration_ms: 2473.9766
+  type: 'test'
+  ...
+# {"scenario":"same-key","results":["ok","ok"],"openings":1,"balance":"10.000000"}
+# {"scenario":"different-key","results":["ok",409],"openings":1,"balance":"10.000000"}
+# {"scenario":"receipt","results":["ok","40P01"],"openings":1,"balance":"10.000000"}
+# Subtest: A/B/C: configured date, exact positive quantities, explicit compatible units and full/null expiry
+ok 4 - A/B/C: configured date, exact positive quantities, explicit compatible units and full/null expiry
+  ---
+  duration_ms: 1129.0425
+  type: 'test'
+  ...
+# Subtest: D/E/J: preview writes nothing; two products, exact quantity/date/actor, NULL expiry and no legacy double count
+ok 5 - D/E/J: preview writes nothing; two products, exact quantity/date/actor, NULL expiry and no legacy double count
+  ---
+  duration_ms: 701.0388
+  type: 'test'
+  ...
+# Subtest: F: injected failure during second batch INSERT rolls back opening, first batch and first movement
+ok 6 - F: injected failure during second batch INSERT rolls back opening, first batch and first movement
+  ---
+  duration_ms: 832.4466
+  type: 'test'
+  ...
+# Subtest: G/H/I: retry returns recorded result; changed payload conflicts; other key cannot open twice
+ok 7 - G/H/I: retry returns recorded result; changed payload conflicts; other key cannot open twice
+  ---
+  duration_ms: 830.3635
+  type: 'test'
+  ...
+# Subtest: confirmation, preview freshness, V1 opt-in, effective permissions and tenant catalog are enforced
+ok 8 - confirmation, preview freshness, V1 opt-in, effective permissions and tenant catalog are enforced
+  ---
+  duration_ms: 1015.4067
+  type: 'test'
+  ...
+# Subtest: existing receipts prevent initial opening; duplicate lines rejected; separate known expiries allowed
+ok 9 - existing receipts prevent initial opening; duplicate lines rejected; separate known expiries allowed
+  ---
+  duration_ms: 736.2521
+  type: 'test'
+  ...
+# Subtest: K/L/M/N/P: opening → historical import without alerts → purchase → NORMAL Planning → audited adjustment
+not ok 10 - K/L/M/N/P: opening → historical import without alerts → purchase → NORMAL Planning → audited adjustment
+  ---
+  duration_ms: 1281.2645
+  type: 'test'
+  location: 'D:\\Proyectos\\Tesis\\growsync-backend\\tests\\stockInitial.integration.test.js:104:1'
+  failureType: 'testCodeFailure'
+  error: 'Campos desconocidos en planning.'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (D:\Proyectos\Tesis\growsync-backend\services\inventoryImpact.js:5:61)
+    D:\Proyectos\Tesis\growsync-backend\services\historicalImport.js:91:83
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Object.transaction (D:\Proyectos\Tesis\growsync-backend\services\stock.js:36:20)
+    async TestContext.<anonymous> (D:\Proyectos\Tesis\growsync-backend\tests\stockInitial.integration.test.js:111:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: O: movements, opening metadata, original batch and effective date cannot be rewritten; incomplete SQL opening rolls back
+ok 11 - O: movements, opening metadata, original batch and effective date cannot be rewritten; incomplete SQL opening rolls back
+  ---
+  duration_ms: 1268.7104
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 9
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 14456.3634

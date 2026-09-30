@@ -25,7 +25,7 @@ async function fixture(t){
     await db.query("UPDATE lots SET geom=ST_GeomFromText('POLYGON((0 0,0 1,1 1,1 0,0 0))',4326) WHERE id=$1",[lotId]);
     assert.equal((await db.query('SELECT ST_IsValid(geom) valid FROM lots WHERE id=$1',[lotId])).rows[0].valid,true);
   }
-  process.env.INVENTORY_V1_COMPANY_IDS=companyId;t.after(()=>delete process.env.INVENTORY_V1_COMPANY_IDS);
+
   const args={companyId,actorId,date:'2020-01-01',entries:[{product_id:productId,unit:'kg',quantity:'10.123456',expiration_date:null}],key:randomUUID(),confirmed:true};
   const prepare=(a=args)=>initial.prepare(pool,a);
   const confirm=async(a=args)=>initial.confirm(pool,{...a,previewHash:(await prepare(a)).preview_hash});
@@ -36,7 +36,8 @@ async function fixture(t){
 test('A/B/C: configured date, exact positive quantities, explicit compatible units and full/null expiry',async t=>{
   const x=await fixture(t);
   for(const quantity of [0,-1,'NaN','1.1234567','1e3',null]) await assert.rejects(x.prepare({...x.args,entries:[{...x.args.entries[0],quantity}]}),{status:400});
-  for(const unit of ['g','bag',null,undefined]) await assert.rejects(x.prepare({...x.args,entries:[{...x.args.entries[0],quantity:1050,unit}]}),{status:400});
+  for(const unit of ['L','bag',null,undefined]) await assert.rejects(x.prepare({...x.args,entries:[{...x.args.entries[0],quantity:1050,unit}]}),{status:400});
+  assert.equal((await x.prepare({...x.args,entries:[{...x.args.entries[0],quantity:1050,unit:'g'}]})).entries[0].quantity,'1.050000');
   for(const expiration_date of ['03/27','12/26','01/27','2027-02-30','']) await assert.rejects(x.prepare({...x.args,entries:[{...x.args.entries[0],expiration_date}]}),{status:400});
   await x.db.query('UPDATE companies SET inventory_control_start_date=NULL WHERE id=$1',[x.companyId]);
   await assert.rejects(x.prepare(),/inicio de control/);
@@ -82,11 +83,11 @@ test('G/H/I: retry returns recorded result; changed payload conflicts; other key
     unit:'kg',quantity:5,origin:'legacy',approvedLegacy:true,key:randomUUID()})),/Legacy opening cannot/);
   assert.equal(await x.count('stock_batches'),1);assert.equal(await x.count('stock_movements'),1);
 });
-test('confirmation, preview freshness, V1 opt-in, effective permissions and tenant catalog are enforced',async t=>{
+test('confirmation, preview freshness, effective permissions and tenant catalog are enforced',async t=>{
   const x=await fixture(t),preview=await x.prepare(),args={...x.args,previewHash:preview.preview_hash};
   for(const override of [{confirmed:false},{key:''},{previewHash:undefined}]) await assert.rejects(initial.confirm(x.pool,{...args,...override}),{status:400});
   await assert.rejects(initial.confirm(x.pool,{...args,previewHash:'a'.repeat(64)}),/preview cambió/);
-  delete process.env.INVENTORY_V1_COMPANY_IDS;await assert.rejects(initial.confirm(x.pool,args),/INVENTORY_V1/);process.env.INVENTORY_V1_COMPANY_IDS=x.companyId;
+
   await x.db.query('UPDATE users SET role=3,custom_permissions=$2 WHERE id=$1',[x.actorId,'[]']);
   await assert.rejects(x.prepare(),{status:403});
   await x.db.query('UPDATE users SET role=1,custom_permissions=$2 WHERE id=$1',[x.actorId,'["history.import"]']);

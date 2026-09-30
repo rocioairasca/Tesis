@@ -35,13 +35,13 @@ before(async()=>{
  assert.deepEqual((await db.query('SELECT * FROM stock_movements')).rows,snapshot.rows);
  assert.equal((await db.query('SELECT unit FROM products WHERE id=$1',[p])).rows[0].unit,'litros');
 });
-after(async()=>{delete process.env.INVENTORY_V1_COMPANY_IDS;await db.close();});
+after(async()=>{await db.close();});
 async function fixture(unit='g'){
  const companyId=randomUUID(),actorId=randomUUID(),productId=randomUUID(),lotId=randomUUID();
  await db.query('INSERT INTO companies VALUES($1)',[companyId]);await db.query('INSERT INTO users VALUES($1,$2,true)',[actorId,companyId]);
  await db.query("INSERT INTO products(id,company_id,name,unit) VALUES($1,$2,'Producto de prueba',$3)",[productId,companyId,unit]);
  await db.query('INSERT INTO lots VALUES($1,$2)',[lotId,companyId]);
- process.env.INVENTORY_V1_COMPANY_IDS=companyId;
+
  const ctx={companyId,actorId,productId,unit};
  return {...ctx,lotId,receive:(quantity,date='2099-01-01')=>stock.transaction(pool,c=>stock.receiveStock(c,{...ctx,quantity,expiration_date:date,origin:'purchase',received_date:'2026-01-01',key:randomUUID()})),balance:async()=> (await stock.balances(client,companyId,[productId])).get(productId).available_quantity};
 }

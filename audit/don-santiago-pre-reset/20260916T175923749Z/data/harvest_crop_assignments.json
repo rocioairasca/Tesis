@@ -1,0 +1,13 @@
+[
+{"harvest_id":"18a8bac3-ac82-4e42-8778-bb8f1dc79bde","crop_assignment_id":"5636c381-fe9b-448c-8268-6e3e24047b4f","created_at":"2026-08-31T14:19:03.683685+00:00","harvested_area_ha":68.29},
+{"harvest_id":"2286c8ee-c78a-47f9-a08e-5aa7980deffe","crop_assignment_id":"417313c5-fa51-40d5-86d4-b6b7219cdca3","created_at":"2026-09-02T18:29:12.343864+00:00","harvested_area_ha":92.00},
+{"harvest_id":"6348a48e-0b30-4206-be99-e4d2886dce22","crop_assignment_id":"b85eaf78-5506-4c0a-9ff4-6807a5a0f86a","created_at":"2026-09-02T18:50:07.19994+00:00","harvested_area_ha":120.00},
+{"harvest_id":"77c0a72f-d622-466c-b094-5d192cca72fd","crop_assignment_id":"f5376999-22cf-4d7c-ad0c-98854832ce02","created_at":"2026-09-02T18:35:34.471736+00:00","harvested_area_ha":19.83},
+{"harvest_id":"78e452d6-51e3-47f3-947d-09eb50866573","crop_assignment_id":"1a1a4674-0b77-45fb-b411-21fd449ac00f","created_at":"2026-09-02T18:27:13.586066+00:00","harvested_area_ha":49.94},
+{"harvest_id":"7f95f333-a1ae-4b2e-8e00-424b66ab7311","crop_assignment_id":"7d1b2d9f-aea1-416a-8a71-6fc9e58dfa2e","created_at":"2026-09-02T18:33:06.650073+00:00","harvested_area_ha":45.00},
+{"harvest_id":"821539c5-9bb3-407c-a98d-47e1d139e085","crop_assignment_id":"06fcf99f-e44e-4b33-ad60-f902109133c4","created_at":"2026-09-02T18:28:30.563374+00:00","harvested_area_ha":12.00},
+{"harvest_id":"88bbe2f7-6762-4906-81de-72216e29dc4e","crop_assignment_id":"fc7f07f9-3594-4369-afe8-87eb7317a931","created_at":"2026-09-02T18:53:45.090232+00:00","harvested_area_ha":27.00},
+{"harvest_id":"aacf2ea4-8243-4f9b-8f3d-513da4f68cb8","crop_assignment_id":"c8654dae-944c-40f9-bbe4-a3f7bfa33e64","created_at":"2026-09-02T18:28:01.382061+00:00","harvested_area_ha":10.00},
+{"harvest_id":"ecd0461d-1da5-4fa3-98da-a2e3549f14f3","crop_assignment_id":"ce62df2e-b202-40b5-b4fc-f83337a77a14","created_at":"2026-09-02T18:53:05.174295+00:00","harvested_area_ha":104.00},
+{"harvest_id":"f68e8919-0801-4cc9-9e1c-b395f278b94c","crop_assignment_id":"3d2b80df-5ec0-4cdc-8737-6f98bb453a7f","created_at":"2026-09-02T18:51:48.230362+00:00","harvested_area_ha":68.30}
+]

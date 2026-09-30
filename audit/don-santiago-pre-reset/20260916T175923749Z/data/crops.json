@@ -1,0 +1,8 @@
+[
+{"id":"2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Trigo","enabled":true,"created_at":"2026-08-30T16:56:35.111122+00:00","updated_at":"2026-08-30T16:56:35.111122+00:00"},
+{"id":"3c63160d-4ad3-4594-823c-554271c73dd4","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Soja","enabled":true,"created_at":"2026-08-30T16:56:35.111122+00:00","updated_at":"2026-08-30T16:56:35.111122+00:00"},
+{"id":"72a820fd-86b2-43a7-a486-be7a6a42afcd","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Girasol","enabled":true,"created_at":"2026-08-30T16:56:35.111122+00:00","updated_at":"2026-08-30T16:56:35.111122+00:00"},
+{"id":"8c8e7d51-218b-4d9e-95d4-c4b1170dcccb","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Maíz","enabled":true,"created_at":"2026-08-30T16:56:35.111122+00:00","updated_at":"2026-08-30T16:56:35.111122+00:00"},
+{"id":"fb5158a3-7c70-4f56-bf31-8de684037e45","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Cebada","enabled":true,"created_at":"2026-09-01T23:35:07.422814+00:00","updated_at":"2026-09-01T23:35:07.422814+00:00"},
+{"id":"fbe5fe76-ef78-41d4-b877-7df0fc46d27d","company_id":"2791ea15-7dad-48e2-945b-3791e2d44478","name":"Sorgo","enabled":true,"created_at":"2026-08-30T16:56:35.111122+00:00","updated_at":"2026-08-30T16:56:35.111122+00:00"}
+]

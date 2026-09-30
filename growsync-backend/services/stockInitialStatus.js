@@ -22,7 +22,6 @@ module.exports = async function stockInitialStatus(pool, { companyId, actorId })
     const batches = Number(row.batches), movements = Number(row.movements);
     const blockers = [];
     if (!row.control_date) blockers.push('CONTROL_DATE_MISSING');
-    if (!enabled) blockers.push('INVENTORY_V1_DISABLED');
     if (exists) blockers.push('OPENING_ALREADY_EXISTS');
     if (batches > 0 || movements > 0) blockers.push('INVENTORY_NOT_EMPTY');
     return {

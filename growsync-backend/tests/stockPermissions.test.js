@@ -58,13 +58,12 @@ test('listado general exige permiso extra y false textual sigue filtrando enable
 });
 test('modelo activo rechaza saldo directo y toggle por edición',async()=>{
   const {db,calls}=fake(),ctrl=load('../controllers/products/products.js',db);
-  process.env.INVENTORY_V1_COMPANY_IDS='company';
-  try{
+  {
     for(const body of [{available_quantity:5},{total_quantity:7},{enabled:true},{price:2}]){
       let error;await ctrl.editProduct({user:{company_id:'company'},params:{id:'product'},body},response(),e=>{error=e;});
       assert.equal(error.status,400);assert.equal(calls.length,0);
     }
-  }finally{delete process.env.INVENTORY_V1_COMPANY_IDS;}
+  }
 });
 test('rutas usan inventory.edit y permisos explícitos en servicios nuevos',()=>{
   const routes=fs.readFileSync(path.join(__dirname,'../routes/products.js'),'utf8');
@@ -72,10 +71,10 @@ test('rutas usan inventory.edit y permisos explícitos en servicios nuevos',()=>
   assert(routes.includes("router.post('/:id/receipts',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT)"));
   assert(routes.includes("router.post('/:id/adjustments',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT)"));
   assert(routes.includes("router.get('/:id/movements',checkRole(0),requirePermission(PERMISSIONS.INVENTORY_VIEW)"));
-  assert.equal(stock.isEnabled('unconfigured-company'),false);
+  assert.equal(stock.isEnabled('unconfigured-company'),true);
 });
 test('Usage legacy valida producto/empresa antes de insertar',async()=>{
-  const {db,calls}=fake(),ctrl=load('../controllers/usage/usage.js',db),res=response();
+  const {db,calls}=fake(),ctrl=load('../controllers/usage/usage.js',db,{...stock,isEnabled:()=>false}),res=response();
   await ctrl.createUsage({user:{company_id:'company'},body:{product_id:'foreign-product',unit:'kg',amount_used:2}},res);
   assert.equal(res.code,404);
   assert(calls.some(c=>c[0]==='eq'&&c[1]==='company_id'&&c[2]==='company'));
@@ -83,12 +82,11 @@ test('Usage legacy valida producto/empresa antes de insertar',async()=>{
 });
 
 test('listado vacío informa flag booleano de la empresa sin exponer configuración',async()=>{
-  for(const enabled of [false,true]){
+  for(const enabled of [true]){
     const {db}=fake(),ctrl=load('../controllers/products/products.js',db,{...stock,isEnabled:()=>enabled,decorate:async()=>[]}),res=response();
     await ctrl.listProducts({user:{company_id:'company'},query:{}},res,e=>{throw e;});
     assert.equal(res.body.inventory_v1_enabled,enabled);
     assert.equal(res.body.data.length,0);
-    assert.equal(res.body.INVENTORY_V1_COMPANY_IDS,undefined);
   }
 });
 test('crear identidad sin activar partidas admite metadatos y saldo inicial cero',async()=>{

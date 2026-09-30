@@ -25,7 +25,7 @@ before(async()=>{
     CREATE TABLE planning_product_completions(planning_product_id uuid PRIMARY KEY,planning_id uuid,usage_id uuid,actual_amount numeric);`);
   await db.exec(require('./stockSchema.fixture'));
 });
-after(async()=>{delete process.env.INVENTORY_V1_COMPANY_IDS;await db.close();});
+after(async()=>{await db.close();});
 async function fixture(){
   const companyId=randomUUID(),actorId=randomUUID(),productId=randomUUID(),usageId=randomUUID(),lotId=randomUUID();
   await db.query('INSERT INTO companies VALUES($1)',[companyId]);
@@ -33,7 +33,7 @@ async function fixture(){
   await db.query("INSERT INTO products(id,company_id,name,unit,available_quantity,total_quantity) VALUES($1,$2,'Test','kg',999,1000)",[productId,companyId]);
   await db.query('INSERT INTO usage_records(id,company_id,product_id,amount_used,unit) VALUES($1,$2,$3,1,\'kg\')',[usageId,companyId,productId]);
   await db.query('INSERT INTO lots VALUES($1,$2)',[lotId,companyId]);
-  process.env.INVENTORY_V1_COMPANY_IDS=companyId;
+
   const queries=[];
   const client={query:(sql,args=[])=>{queries.push(sql);return db.query(sql,args);},release(){}};
   const pool={query:client.query,connect:async()=>client};
@@ -242,11 +242,11 @@ test('idempotencia normaliza fecha omitida y NULL, pero detecta fecha distinta',
   assert.equal(a.id,b.id);
   await assert.rejects(stock.transaction(x.pool,c=>stock.receiveStock(c,{...input,received_date:'2020-01-01'})),/otra operación/);
 });
-test('desactivado conserva legacy y activado sin partidas expone cero; lectura deriva partidas',async()=>{
+test('V1 global ignora saldo legacy y sin partidas expone cero; lectura deriva partidas',async()=>{
   const x=await fixture();const p={id:x.ctx.productId,available_quantity:999,total_quantity:1000};
-  delete process.env.INVENTORY_V1_COMPANY_IDS;
-  assert.equal((await stock.decorate(x.pool,x.ctx.companyId,[p]))[0].available_quantity,999);
-  process.env.INVENTORY_V1_COMPANY_IDS=x.ctx.companyId;
+
+  assert.equal(stock.isEnabled(x.ctx.companyId),true);
+
   assert.equal((await stock.decorate(x.pool,x.ctx.companyId,[p]))[0].available_quantity,'0');
   await x.receive(3);await x.receive(4,'2020-01-01');
   const [current]=await stock.decorate(x.pool,x.ctx.companyId,[p]);
@@ -291,7 +291,7 @@ test('ajuste negativo FEFO incluye vencidas, reparte y excluye deshabilitadas',a
   for(const [id,expected] of [[expired,'0.000000'],[future,'13.000000'],[noDate,'8.000000'],[disabled,'50.000000']])assert.equal((await db.query('SELECT available_quantity FROM stock_batches WHERE id=$1',[id])).rows[0].available_quantity,expected);
   await assert.rejects(()=>stock.transaction(x.pool,c=>stock.adjustStock(c,{...body,key:randomUUID(),quantity:22})),/stock suficiente/);
 });
-test('ajustes validan cantidad, motivo, clave, activación y aislamiento',async()=>{
+test('ajustes validan cantidad, motivo, clave y aislamiento con V1 global',async()=>{
   const x=await fixture();await x.receive(10);
   const body={...x.ctx,key:randomUUID(),direction:'out',quantity:1,reason:'Conteo'};
   const run=change=>stock.transaction(x.pool,c=>stock.adjustStock(c,{...body,...change}));
@@ -302,8 +302,9 @@ test('ajustes validan cantidad, motivo, clave, activación y aislamiento',async(
   await assert.rejects(()=>run({actorId:randomUUID()}),/Usuario no disponible/);
   const foreign=await fixture();
   await assert.rejects(()=>stock.transaction(foreign.pool,c=>stock.adjustStock(c,{...body,companyId:foreign.ctx.companyId,actorId:foreign.ctx.actorId})),/Producto no disponible/);
-  delete process.env.INVENTORY_V1_COMPANY_IDS;
-  await assert.rejects(()=>run({}),/no están disponibles/);assert.equal(await x.total(),'10.000000');
+
+  assert.equal(stock.isEnabled(x.ctx.companyId),true);
+  await run({});assert.equal(await x.total(),'9.000000');
 });
 test('V1 bloquea deshabilitar con stock y conserva partidas al deshabilitar saldo cero',async()=>{
   const x=await fixture();await x.receive(2,'2020-01-01');

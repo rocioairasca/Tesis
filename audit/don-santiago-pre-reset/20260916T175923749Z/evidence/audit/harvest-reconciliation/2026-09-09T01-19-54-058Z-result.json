@@ -1,0 +1,117 @@
+{
+  "committed_at": "2026-09-09T01:20:00.260Z",
+  "reason": "Conciliación histórica autorizada: diferencia entre superficie manual cargada y superficie estructural del ciclo. Se usa la superficie operativa redondeada a dos decimales.",
+  "backup_path": "C:\\Proyectos\\Tesis\\audit\\harvest-reconciliation\\2026-09-09T01-19-54-058Z-before.json",
+  "before": [
+    {
+      "id": "77c0a72f-d622-466c-b094-5d192cca72fd",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "crop": "soja",
+      "campaign": "2025-2026",
+      "harvest_date": "2026-05-01T00:00:00.000Z",
+      "production_kg": "45000.00",
+      "harvested_area_ha": "20.00",
+      "yield_kg_ha": "2250.00",
+      "notes": null,
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "enabled": true,
+      "created_at": "2026-09-02T18:35:34.471Z",
+      "updated_at": "2026-09-02T18:35:34.471Z",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "sub_lot_id": "91c3a4bc-f14b-4ca3-9576-535b0af344f2",
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73"
+    },
+    {
+      "id": "78e452d6-51e3-47f3-947d-09eb50866573",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "crop": "sorgo",
+      "campaign": "2025-2026",
+      "harvest_date": "2026-06-30T00:00:00.000Z",
+      "production_kg": "127240.00",
+      "harvested_area_ha": "50.00",
+      "yield_kg_ha": "2544.80",
+      "notes": null,
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "enabled": true,
+      "created_at": "2026-09-02T18:27:13.586Z",
+      "updated_at": "2026-09-02T18:27:13.586Z",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc",
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73"
+    }
+  ],
+  "after": [
+    {
+      "id": "78e452d6-51e3-47f3-947d-09eb50866573",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "lot_id": "512b4146-bdc9-4d8e-8b57-dc8139b96ba9",
+      "crop": "sorgo",
+      "campaign": "2025-2026",
+      "harvest_date": "2026-06-30T00:00:00.000Z",
+      "production_kg": "127240.00",
+      "harvested_area_ha": "49.94",
+      "yield_kg_ha": "2547.86",
+      "notes": null,
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "enabled": true,
+      "created_at": "2026-09-02T18:27:13.586Z",
+      "updated_at": "2026-09-09T01:19:55.793Z",
+      "crop_id": "fbe5fe76-ef78-41d4-b877-7df0fc46d27d",
+      "sub_lot_id": "1c3b286b-4618-427c-8f49-56dfc5db9ecc",
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73"
+    },
+    {
+      "id": "77c0a72f-d622-466c-b094-5d192cca72fd",
+      "company_id": "2791ea15-7dad-48e2-945b-3791e2d44478",
+      "lot_id": "b3e6227c-65cc-45ff-9174-19f432cf5a3a",
+      "crop": "soja",
+      "campaign": "2025-2026",
+      "harvest_date": "2026-05-01T00:00:00.000Z",
+      "production_kg": "45000.00",
+      "harvested_area_ha": "19.83",
+      "yield_kg_ha": "2269.29",
+      "notes": null,
+      "created_by": "5b8c04fc-7f94-44e7-9a9e-1a7d3fd92394",
+      "enabled": true,
+      "created_at": "2026-09-02T18:35:34.471Z",
+      "updated_at": "2026-09-09T01:19:55.793Z",
+      "crop_id": "3c63160d-4ad3-4594-823c-554271c73dd4",
+      "sub_lot_id": "91c3a4bc-f14b-4ca3-9576-535b0af344f2",
+      "campaign_id": "2877e3ab-fd97-4e93-9f49-daf80b283f73"
+    }
+  ],
+  "unaffected_fingerprints_match": true,
+  "unaffected_fingerprints": {
+    "crop_assignments": {
+      "count": "19",
+      "digest": "c053f3bcedbafd661ee2c2075b0157e8"
+    },
+    "harvest_crop_assignments": {
+      "count": "13",
+      "digest": "a0930bb35b2125d76924f7f5e4645a70"
+    },
+    "planning": {
+      "count": "47",
+      "digest": "d272f6753289ea5df9fa8b3de5b55bf5"
+    },
+    "planning_lots": {
+      "count": "56",
+      "digest": "c4ea9af112b83fc9dcb4b99a049ee352"
+    },
+    "other_harvests": {
+      "count": "17",
+      "digest": "c7e026044ff9d68f016cf74972bb278e"
+    }
+  },
+  "audit": [
+    {
+      "harvest_total": "19",
+      "link_total": "13",
+      "individual_excesses_all": "0",
+      "accumulated_excesses_enabled": "0",
+      "multi_link_harvests": "0"
+    }
+  ]
+}

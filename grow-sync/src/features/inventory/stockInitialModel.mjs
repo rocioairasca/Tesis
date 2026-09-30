@@ -3,14 +3,13 @@ import { receiptExpirationPayload } from './inventoryModel.mjs';
 
 export const initialBlockers = {
   CONTROL_DATE_MISSING: 'Primero elegí la fecha desde la que GrowSync empezará a controlar el inventario.',
-  INVENTORY_V1_DISABLED: 'La nueva gestión de inventario todavía no está habilitada para esta empresa. Podés cargar y revisar los datos, pero todavía no confirmarlos.',
   OPENING_ALREADY_EXISTS: 'El inventario inicial ya fue registrado.',
   INVENTORY_NOT_EMPTY: 'Ya existen movimientos de inventario y no se puede volver a cargar un inventario inicial.',
 };
 export const enabledProducts = products => products.filter(p => p.enabled !== false);
 export const canOpenInitial = (allowed, status) => allowed && status?.opening?.exists === false;
 export const canConfirmInitial = (status, preview) => status?.can_confirm === true && !status.opening?.exists
-  && preview?.inventory_v1_enabled === true && /^[a-f0-9]{64}$/.test(preview?.preview_hash || '');
+  && /^[a-f0-9]{64}$/.test(preview?.preview_hash || '');
 
 export function initialManifest(date, rows, products) {
   if (!date) throw new Error(initialBlockers.CONTROL_DATE_MISSING);
