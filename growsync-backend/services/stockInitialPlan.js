@@ -96,26 +96,6 @@ async function confirm(pool,x){
     if(stock.fingerprint(plan)!==x.previewHash) throw stock.fail('El preview cambió; volver a preparar y revisar.');
 
     const openingId=randomUUID();
-    await client.query(`INSERT INTO stock_initial_openings(id,company_id,effective_date,actor_id,idempotency_key,request_hash,payload)
-      VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)`,[openingId,x.companyId,plan.date,x.actorId,x.key,hash,JSON.stringify(plan)]);
-
-    const entries=[];
-
-    for(const e of plan.entries){
-
-      const {rows:b}=await client.query(`INSERT INTO stock_batches(company_id,product_id,initial_quantity,available_quantity,unit,
-        received_date,expiration_date,origin,created_by,stock_initial_id,expiration_year,expiration_month)
-        VALUES($1,$2,$3,$3,$4,$5,$6,'stock_initial',$7,$8,$9,$10) RETURNING *`,
-      [x.companyId,e.product_id,e.quantity,e.unit,plan.date,e.expiration_date,x.actorId,openingId,e.expiration_year,e.expiration_month]);
-
-      const {rows:m}=await client.query(`INSERT INTO stock_movements(company_id,product_id,batch_id,movement_type,quantity,unit,
-        operation_id,idempotency_key,request_hash,created_by,stock_initial_id,effective_date)
-        VALUES($1,$2,$3,'stock_initial',$4,$5,$6,$7,$8,$9,$6,$10) RETURNING *`,
-      [x.companyId,e.product_id,b[0].id,e.quantity,e.unit,openingId,x.key,hash,x.actorId,plan.date]);
-      entries.push({...e,batch_id:b[0].id,movement_id:m[0].id});
-    }
-
-    const result={kind:'STOCK_INITIAL',opening_id:openingId,date:plan.date,actor_id:x.actorId,entries,persisted:true};
     await client.query(`
       INSERT INTO stock_initial_openings(
         id,
@@ -136,6 +116,28 @@ async function confirm(pool,x){
       hash,
       JSON.stringify(plan)
     ]);
+
+    const entries=[];
+
+    for(const e of plan.entries){
+
+      const {rows:b}=await client.query(`INSERT INTO stock_batches(company_id,product_id,initial_quantity,available_quantity,unit,
+        received_date,expiration_date,origin,created_by,stock_initial_id,expiration_year,expiration_month)
+        VALUES($1,$2,$3,$3,$4,$5,$6,'stock_initial',$7,$8,$9,$10) RETURNING *`,
+      [x.companyId,e.product_id,e.quantity,e.unit,plan.date,e.expiration_date,x.actorId,openingId,e.expiration_year,e.expiration_month]);
+
+      const {rows:m}=await client.query(`INSERT INTO stock_movements(company_id,product_id,batch_id,movement_type,quantity,unit,
+        operation_id,idempotency_key,request_hash,created_by,stock_initial_id,effective_date)
+        VALUES($1,$2,$3,'stock_initial',$4,$5,$6,$7,$8,$9,$6,$10) RETURNING *`,
+      [x.companyId,e.product_id,b[0].id,e.quantity,e.unit,openingId,x.key,hash,x.actorId,plan.date]);
+      entries.push({...e,batch_id:b[0].id,movement_id:m[0].id});
+    }
+
+    const result={kind:'STOCK_INITIAL',opening_id:openingId,date:plan.date,actor_id:x.actorId,entries,persisted:true};
+    await client.query(
+      'UPDATE stock_initial_openings SET result=$2::text::jsonb WHERE id=$1',
+      [openingId, JSON.stringify(result)]
+    );
 
     const { rows: debugRows } = await client.query(`
       SELECT
