@@ -116,10 +116,26 @@ async function confirm(pool,x){
     }
 
     const result={kind:'STOCK_INITIAL',opening_id:openingId,date:plan.date,actor_id:x.actorId,entries,persisted:true};
-    await client.query(
-      'UPDATE stock_initial_openings SET result=$2::jsonb WHERE id=$1',
-      [openingId, JSON.stringify(result)]
-    );
+    await client.query(`
+      INSERT INTO stock_initial_openings(
+        id,
+        company_id,
+        effective_date,
+        actor_id,
+        idempotency_key,
+        request_hash,
+        payload
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7::text::jsonb)
+    `, [
+      openingId,
+      x.companyId,
+      plan.date,
+      x.actorId,
+      x.key,
+      hash,
+      JSON.stringify(plan)
+    ]);
 
     const { rows: debugRows } = await client.query(`
       SELECT
