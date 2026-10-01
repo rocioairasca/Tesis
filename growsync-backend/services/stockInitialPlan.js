@@ -125,7 +125,22 @@ async function confirm(pool,x){
       SELECT
         o.id,
         o.result IS NOT NULL AS has_result,
-        jsonb_array_length(o.payload->'entries')::int AS expected,
+
+        jsonb_typeof(o.payload) AS payload_type,
+        o.payload ? 'entries' AS has_entries,
+
+        ARRAY(
+          SELECT jsonb_object_keys(o.payload)
+        ) AS payload_keys,
+
+        o.payload ->> 'kind' AS payload_kind,
+        o.payload ->> 'date' AS payload_date,
+
+        CASE
+          WHEN jsonb_typeof(o.payload->'entries') = 'array'
+          THEN jsonb_array_length(o.payload->'entries')
+          ELSE NULL
+        END::int AS expected,
 
         (
           SELECT count(*)
