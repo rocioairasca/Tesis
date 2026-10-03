@@ -85,13 +85,20 @@ async function consumeStock(client, x) {
   await assertActor(client, x.companyId, x.actorId);
   const product = await lockProduct(client, x.companyId, x.productId, x.unit);
   if (!x.usageId) throw fail('El consumo requiere un registro de uso.', 400);
-  const { rows: usage } = await client.query('SELECT id FROM usage_records WHERE company_id=$1 AND product_id=$2 AND id=$3 AND enabled=true', [x.companyId,x.productId,x.usageId]);
+  const { rows: usage } = await client.query('SELECT id, date::text AS date FROM usage_records WHERE company_id=$1 AND product_id=$2 AND id=$3 AND enabled=true', [x.companyId,x.productId,x.usageId]);
   if (!usage.length) throw fail('Uso no disponible en esta empresa/producto.', 404);
+  // Manual Usage.date and Planning's copied effective_date are the authority.
+  // Old undated usages retain the operational-today fallback.
+  const effectiveDate = calendarDate(usage[0].date ?? localToday());
+  // STOCK_INITIAL already writes its opening date to received_date. Undated
+  // adjustment/legacy batches cannot prove existence before local creation day.
+  // Consume only remaining quantity; never reuse quantities spent after D.
   const { rows: batches } = await client.query(`SELECT * FROM stock_batches
     WHERE company_id=$1 AND product_id=$2 AND enabled=true AND available_quantity>0
+      AND COALESCE(received_date, (created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) <= $3::date
       AND (${effectiveExpirationSql} IS NULL OR ${effectiveExpirationSql} >= $3::date)
     ORDER BY ${effectiveExpirationSql} ASC NULLS LAST, received_date ASC NULLS LAST, id ASC FOR UPDATE`,
-  [x.companyId,x.productId,localToday()]);
+  [x.companyId,x.productId,effectiveDate]);
   if (batches.reduce((sum,b) => sum+decimal(b.available_quantity),0n) < quantity) throw fail('Stock utilizable insuficiente.');
   let remaining = quantity;
   const operationId = randomUUID(), result = [];

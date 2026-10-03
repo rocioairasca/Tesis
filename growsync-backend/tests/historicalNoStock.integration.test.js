@@ -177,7 +177,7 @@ for(const v1 of [false,true])for(const historical of [false,true])test(`completi
     planning:{id:x.planningId,inventory_impact_mode:mode,responsible_user:x.actorId},selections:[{lot_id:x.lotId,area_ha:2}],
     plannedProducts:[{id:x.ppId,product_id:x.productId,unit:'kg',amount:3}],effectiveDate:'2020-01-01'}));
   if(!historical && !v1){
-    await assert.rejects(run,/No hay stock suficiente/);
+    await assert.rejects(run,e=>e.status===409 && /stock.*insuficiente/i.test(e.message));
     assert.deepEqual(await x.snapshot(),before);
     assert.equal((await x.db.query('SELECT count(*)::int n FROM planning_product_completions')).rows[0].n,0);
     return;

@@ -364,7 +364,7 @@ const Planning = () => {
   ), [selectedFormProducts]);
 
   const productStockExceeded = useMemo(() => (
-    !isEditingHistorical && !isEditingCompleted &&
+    !registerCompleted && !isEditingHistorical && !isEditingCompleted &&
     Array.isArray(selectedFormProducts)
     && selectedFormProducts.some((item) => {
       if (!item?.product_id) return false;
@@ -373,7 +373,7 @@ const Planning = () => {
       try { return exceedsAvailable(item.amount,item.unit,product.unit,product.available_quantity); }
       catch { return false; } // Field validation reports invalid precision or units.
     })
-  ), [getCatalogProductById, isEditingCompleted, isEditingHistorical, selectedFormProducts]);
+  ), [getCatalogProductById, registerCompleted, isEditingCompleted, isEditingHistorical, selectedFormProducts]);
 
   const campaignCompatibilityRange = useMemo(() => (
     registerCompleted && selectedEffectiveDate
@@ -449,13 +449,13 @@ const Planning = () => {
                   </div>
                 </Col>
                 <Col xs={24} md={7}>
-                  <div style={{ color: "#6b7280", fontSize: 12 }}>Stock disponible</div>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>Stock utilizable hoy (referencia)</div>
                   <strong>{quantityLabel(available,baseUnit)}</strong>
                 </Col>
                 <Col xs={24} md={7}>
                   <QuantityUnitFields quantityName={["actual_products",productId,"actual_amount"]}
                     unitName={["actual_products",productId,"unit"]} label="Cantidad real" baseUnit={baseUnit}
-                    available={available} allowZero allowConversion={inventoryEnabled} />
+                    allowZero allowConversion={inventoryEnabled} extra="El stock se valida al guardar según la fecha efectiva." />
                 </Col>
               </Row>
             </div>
@@ -2041,7 +2041,7 @@ const Planning = () => {
                   <Alert
                     type="info"
                     showIcon
-                    message="Los productos indicados se descontarán del stock actual."
+                    message="Los productos se descontarán de partidas existentes y vigentes en la fecha efectiva. El stock se valida al guardar."
                     style={{ marginBottom: 12 }}
                   />
                 )}
@@ -2095,7 +2095,7 @@ const Planning = () => {
                           return (
                             <QuantityUnitFields key={name} quantityName={[name,"amount"]} unitName={[name,"unit"]} watchPrefix={["products"]}
                               label={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
-                              baseUnit={unit} available={available} extra={productId ? stockLabel : null}
+                              baseUnit={unit} available={registerCompleted ? undefined : available} extra={productId ? (registerCompleted ? `Stock utilizable hoy (referencia): ${quantityLabel(available,unit)}. Se valida al guardar según la fecha efectiva.` : stockLabel) : null}
                               disabled={isEditingCompleted} allowConversion={inventoryEnabled && !isEditingCompleted} />
                           );
                         }}

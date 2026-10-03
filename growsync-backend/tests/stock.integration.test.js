@@ -43,6 +43,60 @@ async function fixture(){
   const total=async()=> (await db.query('SELECT sum(available_quantity)::text AS n FROM stock_batches WHERE product_id=$1',[productId])).rows[0].n;
   return {ctx,pool,queries,receive,consume,total,lotId};
 }
+test('fecha operativa: excluye ingresos posteriores y rechaza con 409 aunque alcance el saldo actual',async()=>{
+  const x=await fixture();
+  await db.query("UPDATE usage_records SET date='2026-09-22' WHERE id=$1",[x.ctx.usageId]);
+  await x.receive(10,null,'2026-09-25');
+  await assert.rejects(x.consume(1),e=>e.status===409 && /insuficiente/.test(e.message));
+  const earlier=(await x.receive(2,null,'2026-09-20'))[0].batch_id;
+  await assert.rejects(x.consume(3),e=>e.status===409);
+  assert.equal(await x.total(),'12.000000');
+  const movements=await x.consume(2);
+  assert.deepEqual(movements.map(m=>m.batch_id),[earlier]);
+  assert.equal(await x.total(),'10.000000');
+});
+
+test('vencimiento retrospectivo y FEFO se evalúan en D, inclusive fin de mes',async()=>{
+  const x=await fixture();
+  await db.query("UPDATE usage_records SET date='2026-09-22' WHERE id=$1",[x.ctx.usageId]);
+  const monthly=(await x.receive(1,null,'2026-09-20'))[0].batch_id;
+  await db.query('UPDATE stock_batches SET expiration_year=2026,expiration_month=9 WHERE id=$1',[monthly]);
+  const first=(await x.receive(1,'2026-09-23','2026-09-20'))[0].batch_id;
+  const exact=(await x.receive(1,'2026-09-30','2026-09-21'))[0].batch_id;
+  await x.receive(10,'2026-09-20','2026-09-20');
+  await x.receive(10,'2026-09-22','2026-09-25');
+  const moves=await x.consume(3);
+  assert.deepEqual(moves.map(m=>m.batch_id),[first,monthly,exact]);
+  await assert.rejects(x.consume(1),e=>e.status===409);
+});
+
+test('partidas sin ingreso usan creación local como límite, sin inventar fechas de recepción',async()=>{
+  const x=await fixture();
+  await db.query("UPDATE usage_records SET date='2026-09-22' WHERE id=$1",[x.ctx.usageId]);
+  const [batch]=await stock.transaction(x.pool,c=>stock.receiveStock(c,{...x.ctx,usageId:undefined,
+    origin:'adjustment',quantity:2,key:randomUUID()}));
+  await db.query("UPDATE stock_batches SET created_at='2026-09-23T03:00:00Z' WHERE id=$1",[batch.batch_id]);
+  await assert.rejects(x.consume(1),e=>e.status===409);
+  await db.query("UPDATE stock_batches SET created_at='2026-09-23T02:59:00Z' WHERE id=$1",[batch.batch_id]);
+  await x.consume(1);
+  assert.equal((await db.query('SELECT received_date FROM stock_batches WHERE id=$1',[batch.batch_id])).rows[0].received_date,null);
+});
+
+for(const flow of ['Usage','Planning'])test(`${flow} NORMAL usa fecha persistida y revierte todo si solo hay ingreso posterior`,async()=>{
+  const x=await fixture();await x.receive(10,null,'2026-09-25');
+  const run=()=>flow==='Usage'
+    ? usage.createManualUsage(x.pool,{...x.ctx,key:randomUUID(),body:{product_id:x.ctx.productId,
+      amount_used:1,unit:'kg',date:'2026-09-22',lot_ids:[x.lotId]}})
+    : stock.transaction(x.pool,c=>planning.applyPlanningProductUsage(c,{...x.ctx,effectiveDate:'2026-09-22',
+      planning:{id:randomUUID(),responsible_user:x.ctx.actorId},selections:[{lot_id:x.lotId,area_ha:1}],
+      plannedProducts:[{id:randomUUID(),product_id:x.ctx.productId,amount:1,unit:'kg',product_unit:'kg'}],actualProducts:[]}));
+  await assert.rejects(run(),e=>e.status===409);
+  assert.equal((await db.query('SELECT count(*)::int n FROM usage_records WHERE product_id=$1',[x.ctx.productId])).rows[0].n,1);
+  assert.equal(await x.total(),'10.000000');
+  await x.receive(1,'2026-09-30','2026-09-20');
+  await run();assert.equal(await x.total(),'10.000000');
+});
+
 test('una partida, saldo exacto y legacy no se sobrescribe',async()=>{
   const x=await fixture();await x.receive('2.1');const m=await x.consume('0.1');
   assert.equal(m.length,1);assert.equal(m[0].quantity,'-0.100000');assert.equal(await x.total(),'2.000000');

@@ -25,7 +25,7 @@ before(async()=>{
     CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role integer DEFAULT 3,enabled boolean DEFAULT true);
     CREATE TABLE products(id uuid PRIMARY KEY,company_id uuid,name text,unit text,enabled boolean DEFAULT true,
       available_quantity numeric DEFAULT 0,total_quantity numeric DEFAULT 0,expiration_date date,acquisition_date date);
-    CREATE TABLE usage_records(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid,product_id uuid,amount_used numeric,unit text,enabled boolean DEFAULT true);`);
+    CREATE TABLE usage_records(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid,product_id uuid,amount_used numeric,unit text,date date,enabled boolean DEFAULT true);`);
   await db.exec(require('./stockSchema.fixture'));
   // Existing opening schema; then install the target checker as a test fixture.
   await db.exec(fs.readFileSync(require.resolve('../migrations/20260916_stock_initial.sql'),'utf8'));
@@ -50,6 +50,18 @@ async function fixture(){
   return {...ctx,receive,balance,consume};
 }
 const month=(expiration_year,expiration_month)=>({expiration_year,expiration_month});
+
+test('hoy en octubre permite consumo de septiembre con vencimiento exacto o mensual',async()=>{
+  for(const expiry of [{expiration_date:'2026-09-30'},month(2026,9)]) {
+    const x=await fixture();await x.receive(expiry);
+    today='2026-10-03';
+    const usageId=randomUUID();
+    await db.query("INSERT INTO usage_records(id,company_id,product_id,amount_used,unit,date) VALUES($1,$2,$3,1,'kg','2026-09-22')",[usageId,x.companyId,x.productId]);
+    assert.equal((await x.balance()).available_quantity,'0');
+    const result=await stock.transaction(pool,c=>stock.consumeStock(c,{...x,usageId,quantity:1,key:randomUUID()}));
+    assert.equal(result.length,1);
+  }
+});
 
 test('09/2026 válido todo septiembre inclusive; vencido el 01/10, sin fecha almacenada ficticia',async()=>{
   const x=await fixture();await x.receive(month(2026,9),{quantity:'4'});
@@ -175,7 +187,7 @@ test('apertura: el checker SQL de destino detecta mes distinto del manifiesto y 
 
 test('migración nueva solo inspeccionada: checker coincide con fixture; sin reescrituras de fechas',()=>{
   const sql=fs.readFileSync(require.resolve('../migrations/20260924_inventory_monthly_expiration.sql'),'utf8');
-  assert(sql.includes(require('./stockInitialExpiration.fixture')));
+  assert(sql.replace(/\r\n/g,'\n').includes(require('./stockInitialExpiration.fixture').replace(/\r\n/g,'\n')));
   assert(!/UPDATE\s+stock_batches/i.test(sql));
   assert(sql.includes('CHECK (expiration_year BETWEEN 2000 AND 2100)'));
   for(const name of ['expiration_pair','expiration_precision','expiration_year_range','expiration_month_range'])assert(sql.includes('stock_batches_'+name));

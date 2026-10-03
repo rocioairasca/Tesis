@@ -482,8 +482,8 @@ const Usage = () => {
           </Form.Item>
 
           <QuantityUnitFields quantityName="amount_used" unitName="unit" label="Cantidad usada"
-            baseUnit={selectedProduct?.unit} available={selectedProduct?.available_quantity}
-            extra={selectedProduct ? `Disponible: ${formatQuantity(selectedProduct.available_quantity,selectedProduct.unit)}` : null}
+            baseUnit={selectedProduct?.unit}
+            extra={selectedProduct ? `Stock utilizable hoy (referencia): ${formatQuantity(selectedProduct.available_quantity,selectedProduct.unit)}. Se valida al guardar según la fecha del uso.` : null}
             allowConversion={inventoryEnabled && !editingUsage} />
 
           <Form.Item

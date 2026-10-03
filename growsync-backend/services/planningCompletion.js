@@ -259,8 +259,9 @@ const applyPlanningProductUsage = async (
     `,
     [companyId, productIds]
   );
-  const currentProducts = noStock ? lockedProducts : await stock.decorate(client, companyId, lockedProducts);
-  const productsById = new Map(currentProducts.map((product) => [String(product.id), product]));
+  // V1 validates dated batches atomically in consumeStock. Today's decorated
+  // balance would incorrectly reject a retrospective use of a now-expired batch.
+  const productsById = new Map(lockedProducts.map((product) => [String(product.id), product]));
   const requestedByProduct = new Map();
 
   for (const planned of normalizedProducts) {
@@ -287,7 +288,7 @@ const applyPlanningProductUsage = async (
 
   for (const [productId, requestedAmount] of requestedByProduct.entries()) {
     const product = productsById.get(productId);
-    if (!noStock && requestedAmount > stock.decimal(product.available_quantity || 0)) {
+    if (!noStock && !stock.isEnabled(companyId) && requestedAmount > stock.decimal(product.available_quantity || 0)) {
       const err = new Error(historicalStockConsumption
         ? `No hay stock actual suficiente de ${product.name} para registrar este consumo histórico. Disponible: ${product.available_quantity} ${product.unit}.`
         : `No hay stock suficiente de ${product.name}. Disponible: ${product.available_quantity} ${product.unit}.`);

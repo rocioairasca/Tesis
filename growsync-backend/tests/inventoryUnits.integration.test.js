@@ -210,8 +210,8 @@ test('Planning valida familia y stock después de normalizar; rollback y precisi
  const x=await fixture('L');await x.receive('0.2');
  await assert.rejects(planningLine(x,'15','g'),/compatible/);
  const line=await planningLine(x,'250','cc');
- await assert.rejects(completeLine(x,line,[]),/stock suficiente/);
- await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'250',unit:'mL'}]),/stock suficiente/);
+ await assert.rejects(completeLine(x,line,[]),e=>e.status===409 && /stock.*insuficiente/i.test(e.message));
+ await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'250',unit:'mL'}]),e=>e.status===409 && /stock.*insuficiente/i.test(e.message));
  await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'1',unit:'kg'}]),/compatible/);
  await assert.rejects(completeLine(x,line,[{planning_product_id:line.id,actual_amount:'0.000001',unit:'cc'}]),/seis decimales/);
  assert.equal(await x.balance(),'0.200000');
