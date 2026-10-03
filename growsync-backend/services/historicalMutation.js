@@ -7,8 +7,9 @@ const FIELDS={
   harvest_records:['notes'],
 };
 async function event(client,companyId,actorId,table,id,before,after){
+  // Bind serialized JSON as text so postgres.js does not encode it a second time.
   await client.query(`INSERT INTO historical_events(company_id,actor_id,entity_table,entity_id,before_data,after_data)
-    VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb)`,[companyId,actorId,table,id,JSON.stringify(before),JSON.stringify(after)]);
+    VALUES($1,$2,$3,$4,$5::text::jsonb,$6::text::jsonb)`,[companyId,actorId,table,id,JSON.stringify(before),JSON.stringify(after)]);
 }
 // Returns null for ordinary operations. Historical edits are atomic and never call inventory/cycle services.
 async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){

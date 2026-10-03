@@ -1,0 +1,22 @@
+.gs-planning { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; padding: 24px; }
+.gs-planning-header { gap: 12px; margin-bottom: 16px; }
+.gs-planning-header > .ant-col,
+.gs-planning-actions .ant-space,
+.gs-planning-actions .ant-space-item { min-width: 0; max-width: 100%; }
+.gs-planning-actions .ant-space-item { white-space: normal; }
+.gs-planning-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; min-width: 0; }
+.gs-planning-filter { flex: 0 1 var(--planning-filter-width); min-width: 0; max-width: 100%; }
+.gs-planning-table { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+.gs-planning-table .ant-tag { max-width: 100%; white-space: normal; }
+.gs-planning-cards, .gs-planning-cards .inventory-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.gs-planning-cards .card-header { box-sizing: border-box; gap: 8px; flex-wrap: wrap; padding-inline: 0; }
+.gs-planning-cards .card-header h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.gs-planning-cards .card-header > p { flex-basis: 100%; order: 1; }
+.gs-planning-cards .card-icons { flex-shrink: 0; }
+.gs-planning-cards .flex-row { flex-wrap: wrap; overflow-wrap: anywhere; }
+.gs-planning-cards .flex-row > svg { flex-shrink: 0; }
+.gs-planning-calendar { min-width: 0; max-width: 100%; background: #fff; padding: 12px; border-radius: 8px; box-sizing: border-box; }
+.gs-planning-calendar .ant-picker-content { width: 100%; table-layout: fixed; }
+.gs-planning-calendar .ant-picker-calendar-mini .ant-picker-cell-inner {
+  display: block; width: 100%; min-width: 0; height: auto; min-height: 30px;
+}

@@ -77,8 +77,9 @@ async function importHistory(pool, {companyId, actorId, key, source, confirmedNo
       if (previous[0].request_hash!==hash) throw fail('La clave de importación ya corresponde a otro contenido.');
       return {...previous[0].result,replayed:true};
     }
+    // Bind serialized JSON as text, matching STOCK_INITIAL's postgres.js handling.
     const {rows:imports}=await client.query(`INSERT INTO historical_imports(company_id,idempotency_key,request_hash,imported_by,source,payload)
-      VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING id`,[companyId,key,hash,actorId,source,JSON.stringify(records)]);
+      VALUES ($1,$2,$3,$4,$5,$6::text::jsonb) RETURNING id`,[companyId,key,hash,actorId,source,JSON.stringify(records)]);
     const importId=imports[0].id;
     const {rows:columns}=await client.query(`SELECT table_name,column_name,is_generated FROM information_schema.columns
       WHERE table_schema=current_schema() AND table_name=ANY($1::text[])`,[TABLES]);
@@ -116,7 +117,7 @@ async function importHistory(pool, {companyId, actorId, key, source, confirmedNo
       }
     }
     const result={import_id:importId,counts,inventory_impact_mode:HISTORICAL};
-    await client.query('UPDATE historical_imports SET result=$2::jsonb WHERE id=$1',[importId,JSON.stringify(result)]);
+    await client.query('UPDATE historical_imports SET result=$2::text::jsonb WHERE id=$1',[importId,JSON.stringify(result)]);
     return result;
   });
 }

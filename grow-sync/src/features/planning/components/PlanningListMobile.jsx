@@ -1,3 +1,4 @@
+import { canEditPlanning } from '../historicalPlanning.mjs';
 import React from 'react';
 import { Button, Dropdown, Modal, Tooltip } from 'antd';
 import { EditOutlined, EyeOutlined, MoreOutlined } from '../../../components/AppIcons';
@@ -13,6 +14,7 @@ import {
 
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
+const canImportHistory = hasPermission(currentUser, PERMISSIONS.HISTORY_IMPORT);
 const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
 const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
     minimumFractionDigits: 0,
@@ -83,7 +85,7 @@ const PlanningListMobile = ({
     getPrimaryStatusAction,
 }) => {
     return (
-        <div className="inventory-cards-container">
+        <div className="inventory-cards-container gs-planning-cards">
             {list.map((r) => {
                 const lotsText = (r.lots || []).map(getPlanningLotName).filter(Boolean).join(", ") || "-";
                 const period = formatPlanningPeriod(r, "-");
@@ -125,7 +127,7 @@ const PlanningListMobile = ({
                                         onClick={() => onView(r)}
                                     />
                                 </Tooltip>
-                                {canEdit && <Tooltip title="Editar">
+                                {canEditPlanning(r, canEdit, canImportHistory) && <Tooltip title="Editar">
                                     <Button
                                         type="text"
                                         shape="circle"

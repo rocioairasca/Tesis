@@ -1,3 +1,6 @@
+import { PLANNING_COLUMN_WIDTHS as columnWidth, PLANNING_TABLE_WIDTH } from '../planningLayout.mjs';
+import '../planning.css';
+import { canEditPlanning } from '../historicalPlanning.mjs';
 import { campaignLabel } from '../../../utils/campaigns.mjs';
 /**
  * Componente: PlanningTable
@@ -21,6 +24,7 @@ import {
 
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
+const canImportHistory = hasPermission(currentUser, PERMISSIONS.HISTORY_IMPORT);
 const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
 const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
     minimumFractionDigits: 0,
@@ -104,7 +108,7 @@ const PlanningTable = ({
         const tag = statusTag(effectiveStatus);
 
         return (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", whiteSpace: "nowrap" }}>
                 {dropdownItems.length ? (
                     <Dropdown menu={{ items: dropdownItems }} trigger={["click"]} placement="bottomLeft">
                         <button
@@ -141,13 +145,13 @@ const PlanningTable = ({
                 </Tooltip>
             ),
             ellipsis: true,
-            width: 115,
+            width: columnWidth.crop,
         },
         {
             title: "Actividad",
             dataIndex: "activity_type",
             render: (t, row) => <><Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>{row.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <Tag color="blue">Histórico · Sin impacto en inventario</Tag>}</>,
-            width: 125,
+            width: columnWidth.activity,
         },
         {
             title: "Lote/Sublote",
@@ -159,44 +163,44 @@ const PlanningTable = ({
                     : summary.text;
             },
             ellipsis: true,
-            width: 155,
+            width: columnWidth.lots,
         },
         {
             title: "Período",
             key: "period",
             render: (_, r) => formatPlanningPeriod(r),
-            width: 145,
+            width: columnWidth.period,
         },
         {
             title: "Estado",
             dataIndex: "status",
             render: (_, row) => renderStatusControl(row),
-            width: 210,
+            width: columnWidth.status,
         },
         {
             title: "Superficie",
             key: "planned_area_ha",
             render: (_, r) => formatHa(getPlanningArea(r)),
-            width: 105,
+            width: columnWidth.area,
         },
         {
             title: "Responsable",
             dataIndex: "responsible_user",
             render: (id) => userIx[id] || "—",
             ellipsis: true,
-            width: 140,
+            width: columnWidth.responsible,
         },
         {
             title: "Campaña",
             dataIndex: "campaign_name",
             render: (_, row) => campaignLabel(row),
             responsive: ["lg"],
-            width: 95,
+            width: columnWidth.campaign,
         },
         {
             title: "Acciones",
             key: "actions",
-            width: 110,
+            width: columnWidth.actions,
             align: "center",
             render: (_, record) => {
                 const menuItems = buildStatusMenuItems(
@@ -209,8 +213,8 @@ const PlanningTable = ({
                         <Tooltip title="Ver detalle">
                             <Button size="small" type="text" shape="circle" icon={<EyeOutlined />} onClick={() => onView(record)} />
                         </Tooltip>
-                        {canEdit && <Tooltip title="Editar">
-                            <Button size="small" type="text" shape="circle" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+                        {canEditPlanning(record, canEdit, canImportHistory) && <Tooltip title="Editar">
+                            <Button size="small" type="text" shape="circle" aria-label="Editar planificación" icon={<EditOutlined />} onClick={() => onEdit(record)} />
                         </Tooltip>}
                         {menuItems.length > 0 && <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={["click"]}>
                             <Button size="small" type="text" shape="circle" icon={<MoreOutlined />} aria-label="Más acciones" />
@@ -222,15 +226,18 @@ const PlanningTable = ({
     ];
 
     return (
+        <div className="gs-planning-table">
         <Table
             columns={columns}
             dataSource={list}
             loading={loading}
             size="small"
             tableLayout="fixed"
+            scroll={{ x: PLANNING_TABLE_WIDTH }}
             pagination={{ pageSize: 8, position: ["bottomCenter"] }}
             rowKey={rowKey}
         />
+        </div>
     );
 };
 

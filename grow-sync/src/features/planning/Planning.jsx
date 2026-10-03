@@ -1,3 +1,7 @@
+import HistoricalPlanningFields from './components/HistoricalPlanningFields';
+import usePlanningLayout from './usePlanningLayout';
+import './planning.css';
+import { buildHistoricalPayload, canEditPlanning, isHistoricalPlanning } from './historicalPlanning.mjs';
 import { campaignLabel, campaignPeriod, sortCampaigns } from '../../utils/campaigns.mjs';
 import {quantityLabel,normalizeUnit} from '../../utils/inventoryUnits';
 import QuantityUnitFields from '../../components/QuantityUnitFields';
@@ -286,6 +290,8 @@ const Planning = () => {
   const registerCompleted = Boolean(Form.useWatch("register_completed", form));
   const selectedEffectiveDate = Form.useWatch("effective_date", form);
   const selectedFormProducts = Form.useWatch("products", form) || [];
+  const isHistorical = editing?.inventory_impact_mode === 'HISTORICAL_NO_STOCK';
+  const isEditingHistorical = Boolean(editing) && isHistorical;
   const isEditingCompleted = editing?.status === "completado";
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [savingCampaign, setSavingCampaign] = useState(false);
@@ -302,10 +308,12 @@ const Planning = () => {
   const isSubmittingRef = useRef(false);
 
   const isMobile = useIsMobile();
+  const { containerRef, useCompactPlanningList } = usePlanningLayout();
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
   const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
+  const canImportHistory = hasPermission(currentUser, PERMISSIONS.HISTORY_IMPORT);
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
@@ -356,7 +364,7 @@ const Planning = () => {
   ), [selectedFormProducts]);
 
   const productStockExceeded = useMemo(() => (
-    !isEditingCompleted &&
+    !isEditingHistorical && !isEditingCompleted &&
     Array.isArray(selectedFormProducts)
     && selectedFormProducts.some((item) => {
       if (!item?.product_id) return false;
@@ -365,7 +373,7 @@ const Planning = () => {
       try { return exceedsAvailable(item.amount,item.unit,product.unit,product.available_quantity); }
       catch { return false; } // Field validation reports invalid precision or units.
     })
-  ), [getCatalogProductById, isEditingCompleted, selectedFormProducts]);
+  ), [getCatalogProductById, isEditingCompleted, isEditingHistorical, selectedFormProducts]);
 
   const campaignCompatibilityRange = useMemo(() => (
     registerCompleted && selectedEffectiveDate
@@ -1024,9 +1032,16 @@ const Planning = () => {
 
   // ---------- drawer handlers ----------
   const openDrawer = (row = null) => {
+    if (row && !canEditPlanning(row, canEdit, canImportHistory)) {
+      openDetail(row);
+      return;
+    }
+    form.resetFields();
     setEditing(row);
     if (row) {
       form.setFieldsValue({
+        title: row.title,
+        historical_lots: (row.lots || []).map(lot => ({ area_ha: lot.area_ha })),
         description: row.description,
         activity_type: row.activity_type,
         campaign_id: row.campaign_id,
@@ -1038,6 +1053,8 @@ const Planning = () => {
           .map(planningLotToSelectionKey)
           .filter(Boolean),
         products: Array.isArray(row.products) ? row.products.map(p => ({
+          planning_product_id: p.planning_product_id || p.id,
+          actual_amount: p.actual_amount,
           product_id: p.product_id,
           amount: p.amount,
           unit: normalizeUnit(p.unit),
@@ -1081,6 +1098,17 @@ const Planning = () => {
     setIsSubmitting(true);
 
     try {
+      if (isEditingHistorical) {
+        if (!canEditPlanning(editing, canEdit, canImportHistory)) {
+          throw new Error("No tenés permiso para corregir antecedentes históricos.");
+        }
+        const historicalPayload = buildHistoricalPayload(editing, values);
+        await api.patch(`/planning/${getId(editing)}`, historicalPayload);
+        notification.success({ message: "Antecedente corregido" });
+        fetchPlanning();
+        closeDrawer();
+        return;
+      }
       const shouldRegisterCompleted = !editing && values.register_completed;
       const effectiveDate = values.effective_date;
       const [start, end] = shouldRegisterCompleted
@@ -1388,7 +1416,7 @@ const Planning = () => {
   };
 
   const updateStatus = async (row, status) => {
-    if (statusActionLoading) return;
+    if (statusActionLoading || isHistoricalPlanning(row)) return;
 
     if (status === "completado" && PRODUCT_CONSUMING_ACTIVITIES.has(row?.activity_type)) {
       if (row?.activity_type === "siembra") {
@@ -1417,7 +1445,7 @@ const Planning = () => {
 
   const getStatusTransitionActions = (item) => {
     const status = item?.status;
-    if (!canEdit) return [];
+    if (!canEdit || isHistoricalPlanning(item)) return [];
 
     if (status === "planificado" || status === "pendiente") {
       return [
@@ -1464,7 +1492,7 @@ const Planning = () => {
         updateStatus(item, action.status);
       },
     })),
-    canEdit && canDisable && item?.status !== "completado" && item?.status !== "cancelado"
+    !isHistoricalPlanning(item) && canEdit && canDisable && item?.status !== "completado" && item?.status !== "cancelado"
       ? {
           key: "cancel",
           danger: true,
@@ -1593,7 +1621,7 @@ const Planning = () => {
   ].filter(Boolean);
 
   const moreFiltersContent = (
-    <Space direction="vertical" style={{ width: 280 }} size="middle">
+    <Space direction="vertical" style={{ width: 280, maxWidth: 'calc(100vw - 48px)' }} size="middle">
       <Select
         style={{ width: "100%" }}
         placeholder="Todas las campañas"
@@ -1631,11 +1659,11 @@ const Planning = () => {
 
   // ---------- UI ----------
   return (
-    <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+    <div ref={containerRef} className="gs-planning">
+      <Row justify="space-between" align="middle" className="gs-planning-header">
         <Col><h2>Planificaciones</h2></Col>
-        <Col>
-          <Space>
+        <Col className="gs-planning-actions">
+          <Space wrap>
             <Segmented
               size="middle"
               value={viewMode}
@@ -1652,7 +1680,7 @@ const Planning = () => {
                 </Dropdown>
               ) : null
             ) : (
-              <Space>
+              <Space wrap>
                 {canViewDisabled && <Button onClick={() => navigate("/planificaciones-deshabilitadas")}>Ver canceladas</Button>}
                 {(canCreate || canEdit) && <Button onClick={() => setIsCampaignModalOpen(true)}>Campañas</Button>}
                 {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
@@ -1664,10 +1692,10 @@ const Planning = () => {
         </Col>
       </Row>
 
-      {/* Filtros (Desktop) */}
+      {/* Filtros adaptables al espacio disponible */}
       {viewMode === "table" && (
-        <Row gutter={[12, 12]} align="middle" style={{ marginBottom: 16 }}>
-          <Col flex="180px">
+        <div className="gs-planning-filters">
+          <div className="gs-planning-filter" style={{ '--planning-filter-width': '180px' }}>
             <Select
               style={{ width: "100%" }}
               placeholder="Todos los cultivos"
@@ -1677,8 +1705,8 @@ const Planning = () => {
               options={crops.map(crop => ({ value: crop.id ?? crop._id, label: crop.name }))}
               notFoundContent="No hay cultivos disponibles."
             />
-          </Col>
-          <Col flex="190px">
+          </div>
+          <div className="gs-planning-filter" style={{ '--planning-filter-width': '190px' }}>
             <Select
               style={{ width: "100%" }}
               placeholder="Todas las actividades"
@@ -1687,8 +1715,8 @@ const Planning = () => {
               onChange={(v) => handleFilterChange("type", v)}
               options={ACTIVITY_OPTIONS}
             />
-          </Col>
-          <Col flex="170px">
+          </div>
+          <div className="gs-planning-filter" style={{ '--planning-filter-width': '170px' }}>
             <Select
               style={{ width: "100%" }}
               placeholder="Todos los estados"
@@ -1704,24 +1732,24 @@ const Planning = () => {
                 { value: "en_demora", label: "En demora" },
               ]}
             />
-          </Col>
-          <Col flex="none">
+          </div>
+          <div>
             <Popover content={moreFiltersContent} trigger="click" placement="bottomLeft">
               <Button>
                 Más filtros{activeExtraFilterCount ? ` (${activeExtraFilterCount})` : ""}
               </Button>
             </Popover>
-          </Col>
+          </div>
           {hasActiveFilters && (
-            <Col flex="none">
+            <div>
               <Button type="link" onClick={clearFilters}>Limpiar filtros</Button>
-            </Col>
+            </div>
           )}
-        </Row>
+        </div>
       )}
 
-      {/* Tabla (desktop) */}
-      {viewMode === "table" && !isMobile && (
+      {/* Tabla cuando caben sus columnas completas */}
+      {viewMode === "table" && !useCompactPlanningList && (
         <PlanningTable
           list={list}
           loading={loading}
@@ -1740,7 +1768,7 @@ const Planning = () => {
 
       {/* Vista CALENDARIO (desktop y mobile) */}
       {viewMode === "calendar" && (
-        <div style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
+        <div className="gs-planning-calendar">
           <AntCalendar
             fullscreen={!isMobile}
             cellRender={(current, info) => (
@@ -1757,8 +1785,8 @@ const Planning = () => {
         </div>
       )}
 
-      {/* Cards (mobile) */}
-      {isMobile && viewMode === "table" && (
+      {/* Cards en espacios compactos, incluidos tablet y escritorio angosto */}
+      {useCompactPlanningList && viewMode === "table" && (
         <PlanningListMobile
           list={list}
           onEdit={openDrawer}
@@ -1776,7 +1804,7 @@ const Planning = () => {
 
       {/* Drawer crear/editar */}
       <Drawer
-        title={editing ? "Editar Planificación" : "Nueva Planificación"}
+        title={isEditingHistorical ? "Corrección de antecedente" : editing ? "Editar Planificación" : "Nueva Planificación"}
         placement={isMobile ? "bottom" : "right"}
         onClose={closeDrawer}
         open={isDrawerOpen}
@@ -1786,6 +1814,7 @@ const Planning = () => {
         styles={{ body: { paddingBottom: 80 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
+          {isEditingHistorical ? <HistoricalPlanningFields editing={editing} responsibleOptions={responsibleOptions} /> : <>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", marginBottom: 12, textTransform: "uppercase" }}>
             Planificación
           </div>
@@ -2107,6 +2136,7 @@ const Planning = () => {
             <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
           </Form.Item>
 
+          </>}
           <Form.Item>
             <Button
               type="primary"
@@ -2115,7 +2145,7 @@ const Planning = () => {
               loading={isSubmitting}
               disabled={isSubmitting || productStockExceeded}
             >
-              {editing ? "Actualizar" : registerCompleted ? "Registrar actividad" : "Crear Planificación"}
+              {isEditingHistorical ? "Guardar corrección" : editing ? "Actualizar" : registerCompleted ? "Registrar actividad" : "Crear Planificación"}
             </Button>
           </Form.Item>
         </Form>
@@ -2673,4 +2703,3 @@ const Planning = () => {
 };
 
 export default Planning;
-

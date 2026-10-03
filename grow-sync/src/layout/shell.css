@@ -2,7 +2,7 @@
 .gs-shell-main { margin-left: var(--gs-sidebar-width); min-width: 0; min-height: 0; height: 100%; transition: margin-left .2s ease; }
 /* The header stays outside the only scrolling region. Contain Leaflet's layers
    here; Ant Design portals remain above the shell in the document body. */
-.gs-shell-scroll { flex: 1; min-height: 0; overflow: auto; position: relative; isolation: isolate; display: flex; flex-direction: column; }
+.gs-shell-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; position: relative; isolation: isolate; display: flex; flex-direction: column; }
 .gs-header.ant-layout-header { flex-shrink: 0; }
 .gs-shell-scroll > .gs-workspace { flex: 1 0 auto; }
 .gs-shell-footer { flex-shrink: 0; }

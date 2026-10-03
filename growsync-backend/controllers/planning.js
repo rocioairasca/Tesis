@@ -617,9 +617,10 @@ exports.list = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
+               LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
@@ -673,9 +674,10 @@ exports.getOne = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
+               LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
@@ -1568,9 +1570,10 @@ exports.listDisabled = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
+               LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
       FROM base b;
