@@ -18,6 +18,7 @@ before(async()=>{
   await db.exec(planningTrigger.function_definition);await db.exec(planningTrigger.definition);
   await db.exec(fs.readFileSync(require.resolve('../migrations/20261005_historical_adoption_diagnostics.sql'),'utf8'));
   await db.exec(fs.readFileSync(require.resolve('../migrations/20261005_preserve_adopted_planning_timestamp.sql'),'utf8'));
+  await db.exec(fs.readFileSync(require.resolve('../migrations/20261006_adopt_historical_cycles_with_harvest.sql'),'utf8'));
   // Match the real cycle timestamp trigger; adoption must preserve its timestamp.
   await db.exec(`CREATE FUNCTION set_crop_assignments_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.updated_at=now(); RETURN NEW; END$$;
     CREATE TRIGGER crop_assignments_set_updated_at BEFORE UPDATE ON crop_assignments FOR EACH ROW EXECUTE FUNCTION set_crop_assignments_updated_at();`);
@@ -153,7 +154,7 @@ test('ciclo con cierre o cosecha vinculada exige revisión, sin modificar otras 
   const x=await fixture('siembra');
   await db.query(`INSERT INTO harvest_cycle_closures(company_id,crop_assignment_id,finalized_date,reason,created_by,total_area_ha,harvested_area_ha,remaining_area_ha)
     VALUES($1,$2,'2020-02-01','weather',$3,1.5,0,1.5)`,[x.companyId,x.cycleId,x.actorId]);
-  const preview=await x.prepare();assert.equal(preview.can_confirm,false);assert.match(preview.items[0].blockers.join(' '),/cosechas o cierres/);
+  const preview=await x.prepare();assert.equal(preview.can_confirm,false);assert.match(preview.items[0].blockers.join(' '),/cierre de cosecha/);
   assert.equal((await x.confirm()).conflict,true);
 });
 test('rollback total ante efecto secundario en inventario, auditoría o relaciones',async()=>{

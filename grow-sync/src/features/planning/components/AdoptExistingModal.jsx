@@ -1,3 +1,4 @@
+import HistoricalHarvestPreview from './HistoricalHarvestPreview';
 import React, {useEffect,useRef,useState} from 'react';
 import {Alert,Checkbox,Descriptions,Modal,Spin,Table} from 'antd';
 import api from '../../../services/apiClient';
@@ -30,6 +31,7 @@ export default function AdoptExistingModal({planning,onClose,onAdopted}) {
     }finally{setBusy(false);}
   };
   const item=preview?.items?.[0],graph=item?.graph;
+  const includesHarvest=Boolean(graph?.harvest_records?.length);
   const lots=new Map((graph?.lots||[]).map(x=>[x.id,x.name]));
   const sublots=new Map((graph?.sub_lots||[]).map(x=>[x.id,x.name||x.code]));
   const products=new Map((graph?.products||[]).map(x=>[x.id,x.name]));
@@ -37,7 +39,7 @@ export default function AdoptExistingModal({planning,onClose,onAdopted}) {
     onOk={confirm} okText="Marcar como histórica" cancelText="Cancelar" confirmLoading={busy}
     okButtonProps={{disabled:loading||busy||!confirmed||!preview?.can_confirm}} cancelButtonProps={{disabled:busy}}
     closable={!busy} maskClosable={!busy} width={760}>
-    <Alert type="info" showIcon message="Esta planificación se conservará tal como está y quedará identificada como un registro histórico. Las existencias del inventario no se modificarán." />
+    {!includesHarvest&&<Alert type="info" showIcon message="Esta planificación se conservará tal como está y quedará identificada como un registro histórico. Las existencias del inventario no se modificarán." />}
     {loading&&<Spin />}
     {error&&<Alert type="error" showIcon message={error} />}
     {item&&<>
@@ -52,15 +54,16 @@ export default function AdoptExistingModal({planning,onClose,onAdopted}) {
         <Table size="small" pagination={false} rowKey={r=>`${r.lot_id}:${r.sub_lot_id||''}`} dataSource={graph.planning_lots}
           columns={[{title:'Lote',render:(_,r)=>lots.get(r.lot_id)||'Lote sin nombre'},{title:'Sublote',dataIndex:'sub_lot_id',render:v=>v?(sublots.get(v)||'Sublote sin nombre'):'Lote completo'},
             {title:'Superficie (ha)',dataIndex:'area_ha',render:v=>v??'Sin dato'}]} />
+        <HistoricalHarvestPreview harvests={graph.harvest_records} lots={graph.lots} sublots={graph.sub_lots} />
         <h4>Productos registrados</h4>
         <Table size="small" pagination={false} rowKey="id" dataSource={graph.planning_products}
           columns={[{title:'Producto',render:(_,r)=>products.get(r.product_id)||'Producto sin nombre'},{title:'Cantidad planificada',dataIndex:'amount'},
             {title:'Unidad',dataIndex:'unit'},{title:'Cantidad utilizada',render:(_,r)=>graph.planning_product_completions.find(c=>c.planning_product_id===r.id)?.actual_amount??'Sin cantidad registrada'}]} />
-        <p>Los datos actuales de esta planificación se mantendrán sin cambios. Este cambio no se puede deshacer.</p>
+        <p>{includesHarvest?'Los datos actuales de estos registros se mantendrán sin cambios. Este cambio no se puede deshacer.':'Los datos actuales de esta planificación se mantendrán sin cambios. Este cambio no se puede deshacer.'}</p>
       </>}
     </>}
     <Checkbox checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} disabled={busy||!preview?.can_confirm}>
-      Confirmo que esta planificación corresponde a una actividad realizada antes de comenzar el control de inventario y que no debe modificar las existencias.
+      {includesHarvest?'Confirmo que esta actividad y sus cosechas se realizaron antes de comenzar el control de inventario y que no deben modificar las existencias.':'Confirmo que esta planificación corresponde a una actividad realizada antes de comenzar el control de inventario y que no debe modificar las existencias.'}
     </Checkbox>
   </Modal>;
 }

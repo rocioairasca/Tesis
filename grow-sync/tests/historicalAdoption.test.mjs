@@ -73,3 +73,17 @@ test('modal usa fechas DD/MM/YYYY, evita IDs visibles y conserva las acciones co
   assert.match(modal,/title="Marcar como registro histórico"/);
   assert.match(modal,/okText="Marcar como histórica"/);
 });
+test('preview de cosecha muestra datos independientes, fechas locales y ningún identificador visible',async()=>{
+  const {createServer}=await import('vite');
+  const React=await import('react');
+  const {renderToStaticMarkup}=await import('react-dom/server');
+  const {fileURLToPath}=await import('node:url');
+  const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),configFile:false,optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
+  try{
+    const {default:Preview}=await server.ssrLoadModule('/src/features/planning/components/HistoricalHarvestPreview.jsx');
+    const html=renderToStaticMarkup(React.createElement(Preview,{harvests:[{id:'private-harvest',lot_id:'private-lot',sub_lot_id:'private-sub',harvest_date:'2026-05-01',harvested_area_ha:45,production_kg:89640}],lots:[{id:'private-lot',name:'Lote 12'}],sublots:[{id:'private-sub',name:'A'}]}));
+    for(const text of ['Lote 12','A','01/05/2026','45','89.640','Superficie cosechada','Producción','registros históricos'])assert.ok(html.includes(text),text);
+    assert.doesNotMatch(html,/private-harvest|private-lot|private-sub|inventory_impact_mode|harvest_crop_assignments|crop_assignment/);
+    assert.equal(renderToStaticMarkup(React.createElement(Preview,{})),'');
+  }finally{await server.close();}
+});
