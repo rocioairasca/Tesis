@@ -20,6 +20,7 @@ const uuidArrayNoDup = (fieldLabel = 'IDs') =>
 const LotSelectionItem = z.object({
   lot_id: z.string().uuid(),
   sub_lot_id: z.string().uuid().optional().nullable(),
+  effective_area_ha: z.union([z.number(), z.string()]).optional().nullable(),
 });
 
 const lotSelectionArrayNoDup = z.array(LotSelectionItem).refine(

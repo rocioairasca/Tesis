@@ -23,7 +23,8 @@ const lotSelectionJsonSql = `
       'sub_lot_id', sl.id,
       'sub_lot_name', sl.name,
       'sub_lot_geom', ST_AsGeoJSON(sl.geom)::json,
-      'area_ha', pl.area_ha
+      'area_ha', pl.area_ha,
+      'effective_area_ha', COALESCE(pl.effective_area_ha, pl.area_ha)
     )
     ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST
   )
@@ -34,7 +35,7 @@ const lotSelectionJsonSql = `
 `;
 
 const plannedAreaSql = `
-  SELECT COALESCE(ROUND(SUM(pl.area_ha)::NUMERIC, 4), 0)
+  SELECT COALESCE(ROUND(SUM(COALESCE(pl.effective_area_ha, pl.area_ha))::NUMERIC, 4), 0)
   FROM planning_lots pl
   WHERE pl.planning_id = b.id
 `;
@@ -285,199 +286,7 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   return campaign;
 };
 
-const normalizeLotSelections = (lotIds = [], lotSelections = null) => {
-  if (Array.isArray(lotSelections) && (lotSelections.length > 0 || !Array.isArray(lotIds) || lotIds.length === 0)) {
-    return lotSelections.map(item => ({
-      lot_id: item.lot_id,
-      sub_lot_id: item.sub_lot_id || null,
-    }));
-  }
-
-  if (Array.isArray(lotIds)) {
-    return lotIds.map(lotId => ({
-      lot_id: lotId,
-      sub_lot_id: null,
-    }));
-  }
-
-  return [];
-};
-
-const validateSelectionMix = (selections) => {
-  const byLot = new Map();
-
-  for (const selection of selections) {
-    const current = byLot.get(selection.lot_id) || { full: false, subLots: new Set() };
-    if (selection.sub_lot_id) {
-      current.subLots.add(selection.sub_lot_id);
-    } else {
-      current.full = true;
-    }
-    byLot.set(selection.lot_id, current);
-  }
-
-  for (const [lotId, current] of byLot.entries()) {
-    if (current.full && current.subLots.size) {
-      const err = new Error('No se puede seleccionar un lote completo junto con sus sublotes');
-      err.status = 400;
-      err.details = { lot_id: lotId };
-      throw err;
-    }
-  }
-};
-
-const selectionKey = (selection) => `${selection.lot_id}:${selection.sub_lot_id || 'full'}`;
-
-const haveSameSelections = (a, b) => {
-  if (a.length !== b.length) return false;
-
-  const aKeys = new Set(a.map(selectionKey));
-  if (aKeys.size !== b.length) return false;
-
-  return b.every(selection => aKeys.has(selectionKey(selection)));
-};
-
-const resolveLotSelections = async (client, selections, companyId, options = {}) => {
-  const allowHistoricalSelectionKeys = options.allowHistoricalSelectionKeys || new Set();
-  validateSelectionMix(selections);
-
-  if (!selections.length) return [];
-
-  const lotIds = selections.map(item => item.lot_id);
-  const subLotIds = selections.map(item => item.sub_lot_id);
-
-  const { rows } = await client.query(`
-    WITH requested AS (
-      SELECT
-        lot_id,
-        sub_lot_id,
-        ord
-      FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS r(lot_id, sub_lot_id, ord)
-    )
-    SELECT
-      r.ord,
-      r.lot_id,
-      r.sub_lot_id,
-      l.name AS lot_name,
-      sl.name AS sub_lot_name,
-      CASE
-        WHEN r.sub_lot_id IS NULL THEN COALESCE(l.area_ha, NULLIF(l.area, 0)::NUMERIC)
-        ELSE sl.area_ha
-      END AS area_ha,
-      CASE WHEN l.id IS NULL THEN TRUE ELSE FALSE END AS missing_lot,
-      CASE
-        WHEN r.sub_lot_id IS NULL THEN FALSE
-        WHEN sl.id IS NULL THEN TRUE
-        ELSE FALSE
-      END AS missing_sub_lot,
-      ll.status AS layout_status
-    FROM requested r
-    LEFT JOIN lots l
-      ON l.id = r.lot_id
-     AND l.company_id = $3
-     AND COALESCE(l.enabled, TRUE) IS TRUE
-    LEFT JOIN sub_lots sl
-      ON sl.id = r.sub_lot_id
-     AND sl.lot_id = r.lot_id
-     AND sl.company_id = $3
-     AND COALESCE(sl.enabled, TRUE) IS TRUE
-    LEFT JOIN lot_layouts ll
-      ON ll.id = sl.layout_id
-     AND ll.lot_id = r.lot_id
-     AND ll.company_id = $3
-    ORDER BY r.ord;
-  `, [lotIds, subLotIds, companyId]);
-
-  const invalidLot = rows.find(row => row.missing_lot);
-  if (invalidLot) {
-    const err = new Error('El lote seleccionado no existe o no pertenece a la empresa');
-    err.status = 400;
-    err.details = { lot_id: invalidLot.lot_id };
-    throw err;
-  }
-
-  const invalidSubLot = rows.find(row => row.missing_sub_lot);
-  if (invalidSubLot) {
-    const err = new Error('El sublote seleccionado no existe o no pertenece al lote indicado');
-    err.status = 400;
-    err.details = { lot_id: invalidSubLot.lot_id, sub_lot_id: invalidSubLot.sub_lot_id };
-    throw err;
-  }
-
-  const inactiveSubLot = rows.find(row => (
-    row.sub_lot_id
-    && row.layout_status !== 'active'
-    && !allowHistoricalSelectionKeys.has(`${row.lot_id}:${row.sub_lot_id}`)
-  ));
-  if (inactiveSubLot) {
-    const err = new Error('El sublote seleccionado ya no corresponde a la división vigente del lote.');
-    err.status = 400;
-    err.details = { lot_id: inactiveSubLot.lot_id, sub_lot_id: inactiveSubLot.sub_lot_id };
-    throw err;
-  }
-
-  const missingArea = rows.find(row => row.area_ha === null || Number(row.area_ha) <= 0);
-  if (missingArea) {
-    const err = new Error('No se pudo determinar la superficie del lote o sublote seleccionado');
-    err.status = 400;
-    err.details = { lot_id: missingArea.lot_id, sub_lot_id: missingArea.sub_lot_id };
-    throw err;
-  }
-
-  return rows.map(row => ({
-    lot_id: row.lot_id,
-    sub_lot_id: row.sub_lot_id || null,
-    area_ha: row.area_ha,
-  }));
-};
-
-const checkLotScheduleConflicts = async (client, selections, startAt, endAt, companyId, excludePlanningId = null) => {
-  if (!selections.length || !startAt || !endAt) return [];
-
-  const lotIds = selections.map(item => item.lot_id);
-  const subLotIds = selections.map(item => item.sub_lot_id);
-  const params = [lotIds, subLotIds, startAt, endAt, companyId];
-  const excludeSql = excludePlanningId ? 'AND p.id <> $6' : '';
-  if (excludePlanningId) params.push(excludePlanningId);
-
-  const { rows } = await client.query(`
-    WITH requested AS (
-      SELECT lot_id, sub_lot_id
-      FROM unnest($1::uuid[], $2::uuid[]) AS r(lot_id, sub_lot_id)
-    )
-    SELECT DISTINCT pl.lot_id, pl.sub_lot_id
-    FROM planning p
-    JOIN planning_lots pl ON pl.planning_id = p.id
-    JOIN requested r ON r.lot_id = pl.lot_id
-    WHERE p.status <> 'cancelado'
-      AND p.date_range && tstzrange($3::timestamptz, $4::timestamptz, '[]')
-      AND p.company_id = $5
-      ${excludeSql}
-      AND (
-        r.sub_lot_id IS NULL
-        OR pl.sub_lot_id IS NULL
-        OR pl.sub_lot_id = r.sub_lot_id
-      );
-  `, params);
-
-  return rows;
-};
-
-const insertPlanningLots = async (client, planningId, selections) => {
-  if (!selections.length) return;
-
-  const params = [planningId];
-  const values = selections.map((selection, index) => {
-    const base = index * 3 + 2;
-    params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha);
-    return `($1, $${base}, $${base + 1}, $${base + 2})`;
-  });
-
-  await client.query(
-    `INSERT INTO planning_lots(planning_id, lot_id, sub_lot_id, area_ha) VALUES ${values.join(',')}`,
-    params
-  );
-};
+const {normalizeLotSelections,resolveLotSelections,selectionKey,haveSameSelections,checkLotScheduleConflicts,insertPlanningLots,validateEffectiveArea} = require('../services/planningSelections');
 
 /**
  * Controlador: Planificación
@@ -747,7 +556,7 @@ const createPlanningRecord = async (
   const resolvedCrop = await resolveCrop(client, crop_id, companyId);
 
   const requestedSelections = normalizeLotSelections(lot_ids, lot_selections);
-  const resolvedSelections = await resolveLotSelections(client, requestedSelections, companyId);
+  const resolvedSelections = await resolveLotSelections(client, requestedSelections, companyId, {activityType: activity_type});
 
   if (!skipScheduleConflicts && resolvedSelections.length && start_at && end_at) {
     const conflicts = await checkLotScheduleConflicts(client, resolvedSelections, start_at, end_at, companyId);
@@ -1114,7 +923,7 @@ exports.update = async (req, res, next) => {
     await client.query('BEGIN');
 
     // Verificar que la planificación pertenezca a la compañía
-    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, status, enabled FROM planning WHERE id = $1 AND company_id = $2';
+    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, status, enabled FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE';
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
@@ -1221,15 +1030,16 @@ exports.update = async (req, res, next) => {
       : [];
     let existingSelections = [];
 
-    if (shouldCheckLotConflicts) {
+    if (shouldCheckLotConflicts || activity_type !== undefined) {
       const { rows } = await client.query(
-        'SELECT lot_id, sub_lot_id, area_ha FROM planning_lots WHERE planning_id = $1',
+        'SELECT lot_id, sub_lot_id, area_ha, effective_area_ha FROM planning_lots WHERE planning_id = $1',
         [id]
       );
       existingSelections = rows.map(row => ({
         lot_id: row.lot_id,
         sub_lot_id: row.sub_lot_id || null,
         area_ha: row.area_ha,
+        effective_area_ha: row.effective_area_ha,
       }));
     }
 
@@ -1241,15 +1051,38 @@ exports.update = async (req, res, next) => {
         .filter(row => row.sub_lot_id)
         .map(selectionKey)
     );
-    const resolvedSelections = shouldUpdateLots
-      ? (
-        relationChanged
-          ? await resolveLotSelections(client, requestedSelections, company_id, {
-            allowHistoricalSelectionKeys: existingHistoricalKeys,
-          })
-          : existingSelections
-      )
-      : [];
+    let resolvedSelections = [];
+    if (shouldUpdateLots) {
+      if(checkRows[0].status === 'completado') {
+        if(relationChanged || requestedSelections.some(selection => {
+          const old=existingSelections.find(row=>selectionKey(row)===selectionKey(selection));
+          return selection.effective_area_ha != null && Number(selection.effective_area_ha)!==Number(old.effective_area_ha ?? old.area_ha);
+        })) throw Object.assign(new Error('La superficie de una planificación completada no puede modificarse.'),{status:409});
+        resolvedSelections=existingSelections;
+      } else {
+        const unchangedAreas = !relationChanged && requestedSelections.every(selection=>{
+          const old=existingSelections.find(row=>selectionKey(row)===selectionKey(selection));
+          const effective=validateEffectiveArea(selection.effective_area_ha,old.area_ha,effectiveActivityType,old.sub_lot_id);
+          return Number(effective ?? old.area_ha)===Number(old.effective_area_ha ?? old.area_ha);
+        });
+        if(unchangedAreas) {
+          // Unchanged selections keep their snapshot, including archived layouts or changed geometry.
+          resolvedSelections=existingSelections;
+        } else {
+          const physicalSelections=await resolveLotSelections(client, requestedSelections, company_id, {
+            allowHistoricalSelectionKeys: existingHistoricalKeys, activityType: effectiveActivityType,
+          });
+          resolvedSelections=physicalSelections.map(row=>{
+            const old=existingSelections.find(item=>selectionKey(item)===selectionKey(row));
+            const area=old?.area_ha ?? row.area_ha;
+            const requested=requestedSelections.find(item=>selectionKey(item)===selectionKey(row));
+            return {...row,area_ha:area,effective_area_ha:validateEffectiveArea(requested.effective_area_ha,area,effectiveActivityType,row.sub_lot_id)};
+          });
+        }
+      }
+    } else if(activity_type !== undefined) {
+      for(const row of existingSelections) validateEffectiveArea(row.effective_area_ha,row.area_ha,effectiveActivityType,row.sub_lot_id);
+    }
 
     // Revalidar conflictos si cambian fecha/lotes/vehículo
     if (shouldCheckLotConflicts) {
@@ -1324,9 +1157,15 @@ exports.update = async (req, res, next) => {
     }
 
     // Lotes
-    if (shouldUpdateLots && relationChanged) {
-      await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
-      await insertPlanningLots(client, id, resolvedSelections);
+    if (shouldUpdateLots && checkRows[0].status !== 'completado') {
+      if(relationChanged) {
+        await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
+        await insertPlanningLots(client, id, resolvedSelections);
+      } else {
+        for(const selection of resolvedSelections) await client.query(
+          'UPDATE planning_lots SET effective_area_ha=$1 WHERE planning_id=$2 AND lot_id=$3 AND sub_lot_id IS NOT DISTINCT FROM $4::uuid AND effective_area_ha IS DISTINCT FROM $1::numeric',
+          [selection.effective_area_ha,id,selection.lot_id,selection.sub_lot_id]);
+      }
     }
 
     // Productos

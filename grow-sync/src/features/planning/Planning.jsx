@@ -1,3 +1,5 @@
+import EffectiveAreaFields from './components/EffectiveAreaFields';
+import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
 import AdoptExistingModal from './components/AdoptExistingModal';
 import { canAdoptExisting } from './historicalAdoption.mjs';
 import HistoricalPlanningFields from './components/HistoricalPlanningFields';
@@ -82,7 +84,7 @@ const getLotArea = (lot) => Number(lot?.area_ha ?? lot?.area ?? 0);
 const getActiveSubLots = (lot) => (
   Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
-const getPlanningLotArea = (lot) => Number(lot?.area_ha || 0);
+const getPlanningLotArea = effectiveArea;
 const getPlanningArea = (row) => {
   const plannedArea = Number(row?.planned_area_ha || 0);
   if (plannedArea > 0) return plannedArea;
@@ -286,6 +288,7 @@ const Planning = () => {
   const [sowingForm] = Form.useForm();
   const [completionForm] = Form.useForm();
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
+  const effectiveAreas = Form.useWatch("effective_areas", form) || {};
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedDateRange = Form.useWatch("date_range", form);
   const selectedCampaignId = Form.useWatch("campaign_id", form);
@@ -331,20 +334,26 @@ const Planning = () => {
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
-  const selectedPlanningArea = useMemo(() => {
-    return selectedLotKeys.reduce((sum, key) => {
-      const parsed = parseSelectionKey(key);
-      if (!parsed) return sum;
-
-      const lot = lots.find(item => (item.id ?? item._id) === parsed.lot_id);
-      if (!lot) return sum;
-
-      if (!parsed.sub_lot_id) return sum + getLotArea(lot);
-
-      const subLot = getActiveSubLots(lot).find(item => item.id === parsed.sub_lot_id);
-      return sum + Number(subLot?.area_ha || 0);
-    }, 0);
-  }, [lots, selectedLotKeys]);
+  const selectedAreaRows = selectedLotKeys.map(key=>{
+    const parsed=parseSelectionKey(key);
+    if(!parsed)return null;
+    const saved=editing?.lots?.find(item=>planningLotToSelectionKey(item)===key);
+    const lot=lots.find(item=>(item.id ?? item._id)===parsed.lot_id);
+    const sub=getActiveSubLots(lot).find(item=>item.id===parsed.sub_lot_id);
+    const area=saved?.area_ha ?? (parsed.sub_lot_id ? sub?.area_ha : getLotArea(lot));
+    return {key,name:saved ? getPlanningLotName(saved) : (parsed.sub_lot_id ? (lot?.name+' / '+(sub?.name||sub?.code)) : lot?.name),area_ha:area,effective_area_ha:saved ? effectiveArea(saved) : area};
+  }).filter(Boolean);
+  const selectedPlanningArea=selectedAreaRows.reduce((sum,row)=>sum+Number(
+    !isEditingCompleted && !partialAreaAllowed(selectedActivityType) ? row.area_ha : (effectiveAreas[row.key] ?? row.effective_area_ha)
+  ),0);
+  useEffect(()=>{
+    if(!isEditingCompleted && !isEditingHistorical && !partialAreaAllowed(selectedActivityType)) {
+      const values=form.getFieldValue('effective_areas') || {};
+      let changed=false;
+      for(const row of selectedAreaRows) if(Number(values[row.key])!==Number(row.area_ha)) {values[row.key]=row.area_ha;changed=true;}
+      if(changed)form.setFieldValue('effective_areas',{...values});
+    }
+  },[selectedActivityType,selectedLotKeys.join('|'),isEditingCompleted,isEditingHistorical]);
 
   const getCatalogProduct = useCallback((planningProduct) => (
     products.find(product => getProductId(product) === planningProduct?.product_id)
@@ -1055,6 +1064,7 @@ const Planning = () => {
     if (row) {
       form.setFieldsValue({
         title: row.title,
+        effective_areas: Object.fromEntries((row.lots || []).map(lot=>[planningLotToSelectionKey(lot),effectiveArea(lot)])),
         historical_lots: (row.lots || []).map(lot => ({ area_ha: lot.area_ha })),
         description: row.description,
         activity_type: row.activity_type,
@@ -1130,9 +1140,9 @@ const Planning = () => {
         : values.date_range || [];
 
       // Build payload conditionally to avoid sending empty strings
-      const lotSelections = (values.lot_selection_keys || [])
-        .map(parseSelectionKey)
-        .filter(Boolean);
+      const lotSelections = (values.lot_selection_keys || []).map(key=>({
+        ...parseSelectionKey(key),effective_area_ha:values.effective_areas?.[key],
+      }));
 
       const payload = {
         activity_type: values.activity_type,
@@ -2028,8 +2038,9 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <div style={{ marginTop: -12, marginBottom: 16, color: "#595959", fontSize: 13 }}>
-            Superficie planificada: <strong>{formatHa(selectedPlanningArea)}</strong>
+          <EffectiveAreaFields selections={selectedAreaRows} activity={selectedActivityType} completed={isEditingCompleted} />
+          <div style={{ marginBottom: 16, color: "#595959", fontSize: 13 }}>
+            Superficie total: <strong>{formatHa(selectedPlanningArea)}</strong>
           </div>
 
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
@@ -2221,7 +2232,7 @@ const Planning = () => {
               <Descriptions.Item label="Vehículo">
                 {vehIx[viewing.vehicle_id] || "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Superficie planificada">
+              <Descriptions.Item label="Superficie total">
                 {formatHa(getPlanningArea(viewing))}
               </Descriptions.Item>
               <Descriptions.Item label="Descripción">
@@ -2249,7 +2260,7 @@ const Planning = () => {
                 renderItem={item => (
                   <List.Item>
                     <strong>{getPlanningLotName(item)}</strong>
-                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{selectionAreaLabel(item)}</span> : null}
                   </List.Item>
                 )}
                 locale={{ emptyText: "Sin lotes asignados" }}
@@ -2344,7 +2355,7 @@ const Planning = () => {
                 renderItem={(item) => (
                   <List.Item>
                     {getPlanningLotName(item)}
-                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{selectionAreaLabel(item)}</span> : null}
                   </List.Item>
                 )}
                 locale={{ emptyText: "Sin lotes asignados" }}
@@ -2418,7 +2429,7 @@ const Planning = () => {
                 renderItem={(item) => (
                   <List.Item>
                     {getPlanningLotName(item)}
-                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{formatHa(item.area_ha)}</span> : null}
+                    {item.area_ha ? <span style={{ marginLeft: 8, color: "#595959" }}>{selectionAreaLabel(item)}</span> : null}
                   </List.Item>
                 )}
                 locale={{ emptyText: "Sin lotes asignados" }}

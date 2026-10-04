@@ -33,7 +33,7 @@ const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
 const getPlanningArea = (row) => {
     const plannedArea = Number(row?.planned_area_ha || 0);
     if (plannedArea > 0) return plannedArea;
-    return (row?.lots || []).reduce((sum, lot) => sum + Number(lot?.area_ha || 0), 0);
+    return (row?.lots || []).reduce((sum, lot) => sum + Number(lot?.effective_area_ha ?? lot?.area_ha ?? 0), 0);
 };
 const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}) => {
     const { includeTransitions = true, includeReopen = true, includeCancel = true } = options;

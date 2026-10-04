@@ -125,6 +125,7 @@ const getPlanningSelectionsForUsage = async (client, planningId, companyId) => {
       pl.lot_id,
       pl.sub_lot_id,
       pl.area_ha,
+      COALESCE(pl.effective_area_ha, pl.area_ha) AS effective_area_ha,
       l.name AS lot_name,
       sl.name AS sub_lot_name
     FROM planning_lots pl
@@ -297,7 +298,7 @@ const applyPlanningProductUsage = async (
     }
   }
 
-  const totalArea = selections.reduce((sum, selection) => sum + Number(selection.area_ha || 0), 0);
+  const totalArea = selections.reduce((sum, selection) => sum + Number(selection.effective_area_ha ?? selection.area_ha ?? 0), 0);
   const currentCrop = getCurrentCropLabelForUsage(planning);
   let usageCount = 0;
   let consumedProducts = 0;

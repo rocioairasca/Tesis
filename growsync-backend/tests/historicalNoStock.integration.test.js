@@ -24,6 +24,7 @@ function serializeExplicitJsonParameters(sql,args=[]){
 async function database(t,migrate=true,postgresJson=false){
   const db=new PGlite();t.after(()=>db.close());
   await db.exec(fs.readFileSync(path.join(__dirname,'historySchema.fixture.sql'),'utf8'));
+  await db.exec(fs.readFileSync(require.resolve('../migrations/20261007_planning_effective_area.sql'),'utf8'));
   if(migrate) await db.exec(fs.readFileSync(path.join(__dirname,'../migrations/20260916_historical_no_stock.sql'),'utf8'));
   let tail=Promise.resolve();const queries=[];
   const pool={async connect(){const previous=tail;let release;tail=new Promise(r=>release=r);await previous;

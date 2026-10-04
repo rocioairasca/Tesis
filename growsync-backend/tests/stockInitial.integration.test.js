@@ -11,6 +11,7 @@ const completion=require('../services/planningCompletion');
 async function fixture(t){
   const db=await require('./stockInitialDatabase.fixture')(t);
   await db.exec(fs.readFileSync(path.join(__dirname,'historySchema.fixture.sql'),'utf8'));
+  await db.exec(fs.readFileSync(require.resolve('../migrations/20261007_planning_effective_area.sql'),'utf8'));
   await db.exec('BEGIN;'+fs.readFileSync(path.join(__dirname,'../migrations/20260914_inventory_base_units.sql'),'utf8')+'COMMIT;');
   for(const file of ['20260916_historical_no_stock.sql','20260916_stock_initial.sql']) await db.exec(fs.readFileSync(path.join(__dirname,'../migrations',file),'utf8'));
   let tail=Promise.resolve();const queries=[];

@@ -7,7 +7,7 @@ const read=f=>fs.readFileSync(path.resolve(__dirname,'..',f),'utf8');
 module.exports=async function fixture(t,apply=true){
   const db=new PGlite();t.after(()=>db.close());
   await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
-  for(const f of ['tests/historySchema.fixture.sql','migrations/20260916_historical_no_stock.sql','migrations/20261004_adopt_existing_history.sql','migrations/20261005_historical_adoption_diagnostics.sql'])await db.exec(read(f));
+  for(const f of ['tests/historySchema.fixture.sql','migrations/20261007_planning_effective_area.sql','migrations/20260916_historical_no_stock.sql','migrations/20261004_adopt_existing_history.sql','migrations/20261005_historical_adoption_diagnostics.sql'])await db.exec(read(f));
   await db.exec("SET TIME ZONE 'UTC'");
   const backup=table=>JSON.parse(read('../audit/don-santiago-pre-reset/20260916T175923749Z/data/'+table+'.json'));
   const ids=['446de46f-9204-43ea-a8b9-ffbb9f1b01ba','8beb0869-876f-4dd8-8b0b-c54851b9867c','e9a5fbee-e1c9-47ea-ab9c-b0f76a4afb7b'];
