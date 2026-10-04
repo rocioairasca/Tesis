@@ -34,7 +34,7 @@ export default function AddHistoricalProduct({planning,onAdded}) {
     } finally {pending.current=false;setBusy(false);}
   };
   return <>
-    <Button onClick={()=>{setError(null);setOpen(true);}}>Agregar producto histórico</Button>
+    <Button onClick={()=>{setError(null);setOpen(true);}} style={{ marginBottom: 12 }}>Agregar producto histórico</Button>
     <Modal title="Agregar producto histórico" open={open} onCancel={()=>setOpen(false)} onOk={submit}
       okText="Agregar producto" cancelText="Cancelar" confirmLoading={busy} okButtonProps={{disabled:loading || !products.length}}
       closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{disabled:busy}}>

@@ -22,11 +22,12 @@ export default function HistoricalPlanningFields({ editing, responsibleOptions, 
       <DatePicker.RangePicker format="DD/MM/YYYY" allowClear={false} style={{ width: '100%' }} />
     </Form.Item>
     <Form.Item name="effective_date" label="Fecha real de realización"
-      extra="Las fechas y superficies con ciclos vinculados requieren una corrección histórica integral.">
+      extra="Si hay un cultivo vinculado, cambiar las fechas requiere una revisión integral.">
       <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: '100%' }} />
     </Form.Item>
     {(editing.lots || []).map((lot, index) => <Form.Item key={`${lot.lot_id || lot.id}:${lot.sub_lot_id || ''}`}
-      name={['historical_lots', index, 'area_ha']} label={`${getPlanningLotName(lot)} · Superficie histórica (ha)`}
+      name={['historical_lots', index, 'area_ha']} label={`${getPlanningLotName(lot)} · Superficie histórica trabajada (ha)`}
+      extra="Área realmente trabajada en esta actividad. No modifica la superficie del lote ni la del cultivo vinculado."
       rules={[{ validator: (_, value) => value == null || (Number.isFinite(Number(value)) && Number(value) > 0)
         ? Promise.resolve() : Promise.reject(new Error('Ingresá una superficie positiva.')) }]}>
       <InputNumber stringMode min="0.000001" style={{ width: '100%' }} />

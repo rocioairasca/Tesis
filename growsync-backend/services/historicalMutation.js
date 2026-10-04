@@ -1,3 +1,4 @@
+const {protectPlanning,planningGraph,planningMembership}=require('./historicalPlanningGuard');
 const stock=require('./stock');
 const {isHistorical,assertModeUnchanged,fail}=require('./inventoryImpact');
 const {authorize,validateReferences}=require('./historicalImport');
@@ -21,6 +22,9 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
     assertModeUnchanged(current,body);
     if (!isHistorical(current)) return null;
     await authorize(client,companyId,actorId);
+    const verifyProtected=table==='planning'?await protectPlanning(client,companyId,actorId,typeof enabled==='boolean'?(enabled?'planning.enable':'planning.disable'):'planning.edit'):null;
+    const beforeGraph=table==='planning'?await planningGraph(client,id):null;
+    let linkedCycles=false,beforeMembership;
     const before={...current};
     if(table==='planning'){
       before.products=(await client.query('SELECT * FROM planning_products WHERE planning_id=$1',[id])).rows;
@@ -40,9 +44,22 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
     const next={...current,...changes};
     if(table==='planning') {
       if(!Number.isFinite(Date.parse(next.start_at)) || !Number.isFinite(Date.parse(next.end_at)) || Date.parse(next.start_at)>Date.parse(next.end_at)) throw fail('Período inválido.',400);
-      if(['start_at','end_at','effective_date','lot_selections'].some(k=>body[k]!==undefined)) {
-        const {rows:assignments}=await client.query('SELECT id FROM crop_assignments WHERE company_id=$1 AND source_planning_id=$2',[companyId,id]);
-        if(assignments.length) throw fail('El antecedente tiene ciclos vinculados: requiere corrección histórica integral, sin reasignación automática.');
+      const {rows:assignments}=await client.query('SELECT id FROM crop_assignments WHERE company_id=$1 AND source_planning_id=$2',[companyId,id]);
+      linkedCycles=assignments.length>0;
+      if(linkedCycles){
+        beforeMembership=await planningMembership(client,id);
+        // Identical date submissions are no-ops; actual temporal changes still require integral review.
+        for(const key of ['start_at','end_at','effective_date'])if(body[key]!==undefined){
+          const equal=key==='effective_date'?String(body[key])===(current[key] instanceof Date?current[key].toISOString().slice(0,10):String(current[key]).slice(0,10)):Date.parse(body[key])===Date.parse(current[key]);
+          if(!equal)throw fail('Esta actividad tiene un cultivo vinculado. Cambiar sus fechas requiere una revisión integral.',409);
+          delete changes[key];
+        }
+        if(body.lot_selections!==undefined){
+          const identity=rows=>rows.map(r=>String(r.lot_id).toLowerCase()+':'+String(r.sub_lot_id||'').toLowerCase()).sort();
+          if(!Array.isArray(body.lot_selections) || body.lot_selections.some(r=>!r || typeof r!=='object') ||
+            JSON.stringify(identity(body.lot_selections))!==JSON.stringify(identity(before.lots)))
+            throw fail('Esta actividad tiene un cultivo vinculado. No se pueden cambiar sus lotes o subdivisiones desde esta corrección.',409);
+        }
       }
     }
     await validateReferences(client,table,next,companyId);
@@ -57,16 +74,23 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
         if(selection.area_ha!=null && stock.decimal(selection.area_ha)<=0n) throw fail('Superficie inválida.',400);
         await validateReferences(client,child,{...selection,[parent]:id},companyId);
       }
-      await client.query(`DELETE FROM ${child} WHERE ${parent}=$1`,[id]);
-      for(const s of body.lot_selections) await client.query(table==='planning'
-        ? 'INSERT INTO planning_lots(planning_id,lot_id,sub_lot_id,area_ha) VALUES($1,$2,$3,$4)'
-        : 'INSERT INTO usage_lots(usage_id,lot_id,sub_lot_id) VALUES($1,$2,$3)',
-      table==='planning'?[id,s.lot_id,s.sub_lot_id||null,s.area_ha??null]:[id,s.lot_id,s.sub_lot_id||null]);
-      if(table==='planning') {
-        await client.query('DELETE FROM usage_lots WHERE usage_id IN (SELECT id FROM usage_records WHERE company_id=$1 AND source_planning_id=$2)',[companyId,id]);
-        await client.query(`INSERT INTO usage_lots(usage_id,lot_id,sub_lot_id)
-          SELECT u.id,pl.lot_id,pl.sub_lot_id FROM usage_records u JOIN planning_lots pl ON pl.planning_id=u.source_planning_id
-          WHERE u.company_id=$1 AND u.source_planning_id=$2`,[companyId,id]);
+      if(linkedCycles){
+        // The worked area belongs to this activity, not to the geographic lot or structural crop cycle.
+        for(const selection of body.lot_selections)await client.query(
+          'UPDATE planning_lots SET area_ha=$4 WHERE planning_id=$1 AND lot_id=$2 AND sub_lot_id IS NOT DISTINCT FROM $3::uuid',
+          [id,selection.lot_id,selection.sub_lot_id||null,selection.area_ha??null]);
+      } else {
+        await client.query(`DELETE FROM ${child} WHERE ${parent}=$1`,[id]);
+        for(const s of body.lot_selections) await client.query(table==='planning'
+          ? 'INSERT INTO planning_lots(planning_id,lot_id,sub_lot_id,area_ha) VALUES($1,$2,$3,$4)'
+          : 'INSERT INTO usage_lots(usage_id,lot_id,sub_lot_id) VALUES($1,$2,$3)',
+        table==='planning'?[id,s.lot_id,s.sub_lot_id||null,s.area_ha??null]:[id,s.lot_id,s.sub_lot_id||null]);
+        if(table==='planning') {
+          await client.query('DELETE FROM usage_lots WHERE usage_id IN (SELECT id FROM usage_records WHERE company_id=$1 AND source_planning_id=$2)',[companyId,id]);
+          await client.query(`INSERT INTO usage_lots(usage_id,lot_id,sub_lot_id)
+            SELECT u.id,pl.lot_id,pl.sub_lot_id FROM usage_records u JOIN planning_lots pl ON pl.planning_id=u.source_planning_id
+            WHERE u.company_id=$1 AND u.source_planning_id=$2`,[companyId,id]);
+        }
       }
     }
     if(body.products!==undefined){
@@ -92,10 +116,21 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
     }
     if(table==='planning'){
       if(typeof enabled==='boolean') await client.query('UPDATE usage_records SET enabled=$3 WHERE company_id=$1 AND source_planning_id=$2',[companyId,id,enabled]);
-      if(body.effective_date!==undefined) await client.query('UPDATE usage_records SET date=$3 WHERE company_id=$1 AND source_planning_id=$2',[companyId,id,body.effective_date]);
+      if(changes.effective_date!==undefined) await client.query('UPDATE usage_records SET date=$3 WHERE company_id=$1 AND source_planning_id=$2',[companyId,id,body.effective_date]);
     }
-    await event(client,companyId,actorId,table,id,before,{...next,request:body});
+    if(table==='planning'){
+      const afterGraph=await planningGraph(client,id);
+      await client.query(`INSERT INTO historical_events(company_id,actor_id,entity_table,entity_id,before_data,after_data)
+        VALUES($1,$2,'planning',$3,$4::text::jsonb,$5::text::jsonb || jsonb_build_object('request',$6::text::jsonb))`,
+        [companyId,actorId,id,beforeGraph,afterGraph,JSON.stringify(body)]);
+      await verifyProtected();
+      if(linkedCycles && await planningMembership(client,id)!==beforeMembership)
+        throw fail('No se guardó la corrección porque cambiaría los datos que vinculan esta actividad con su cultivo.',409);
+    } else await event(client,companyId,actorId,table,id,before,{...next,request:body});
     return {ok:true,id,inventory_impact_mode:current.inventory_impact_mode};
+  }).catch(error=>{
+    if(['55P03','40P01','57014'].includes(error.code))throw fail('Hay operaciones en curso. Intentá guardar la corrección nuevamente en unos momentos.',409);
+    throw error;
   });
 }
 module.exports={mutate};
