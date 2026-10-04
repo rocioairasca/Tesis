@@ -132,7 +132,7 @@ test('historical correction requires history.import and rejects ordinary product
   await x.db.query('UPDATE users SET custom_permissions=$2 WHERE id=$1',[x.actorId,JSON.stringify(['planning.edit','history.import'])]);
   await assert.rejects(x.edit({products:[{product_id:x.productId,unit:'kg',amount:5}]}),/producto inválida/);
   await assert.rejects(x.edit({status:'pendiente'}),/Campo no editable/);
-  await assert.rejects(x.edit({products:[{planning_product_id:randomUUID(),actual_amount:4}]}),/producto con Usage/);
+  await assert.rejects(x.edit({products:[{planning_product_id:randomUUID(),actual_amount:4}]}),/producto registrado/);
   assert.equal(Number((await x.db.query('SELECT amount FROM planning_products WHERE id=$1',[x.ppId])).rows[0].amount),30);
   assert.deepEqual(await x.snapshot(),before);
 });

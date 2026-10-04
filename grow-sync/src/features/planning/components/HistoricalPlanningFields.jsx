@@ -1,3 +1,4 @@
+import AddHistoricalProduct from './AddHistoricalProduct';
 import React from 'react';
 import { Alert, DatePicker, Form, Input, InputNumber, Select } from 'antd';
 import { getPlanningLotName } from '../planningDisplay';
@@ -7,7 +8,7 @@ const positiveQuantity = [{ required: true, message: 'Ingresá una cantidad posi
     ? Promise.resolve() : Promise.reject(new Error('Ingresá una cantidad positiva.')),
 }];
 
-export default function HistoricalPlanningFields({ editing, responsibleOptions }) {
+export default function HistoricalPlanningFields({ editing, responsibleOptions, onProductAdded }) {
   return <>
     <Alert type="info" showIcon message="Corrección de antecedente"
       description="Esta actividad es histórica. Los cambios no modifican el inventario."
@@ -30,16 +31,18 @@ export default function HistoricalPlanningFields({ editing, responsibleOptions }
         ? Promise.resolve() : Promise.reject(new Error('Ingresá una superficie positiva.')) }]}>
       <InputNumber stringMode min="0.000001" style={{ width: '100%' }} />
     </Form.Item>)}
+    <h4>Productos registrados</h4>
+    <AddHistoricalProduct key={editing.id || editing._id} planning={editing} onAdded={onProductAdded} />
     {(editing.products || []).map((product, index) => <div key={product.planning_product_id || product.id}
       style={{ borderTop: '1px solid #eee', paddingTop: 12, marginBottom: 16 }}>
       <Form.Item label="Producto"><Input aria-label="Producto" readOnly value={product.name} /></Form.Item>
       <Form.Item label="Unidad"><Input aria-label="Unidad" readOnly value={product.unit} /></Form.Item>
-      {!product.usage_id && <Alert type="info" message="Este producto no tiene un uso histórico vinculado; sus cantidades son de solo lectura." />}
-      <Form.Item name={['products', index, 'amount']} label="Cantidad planificada" rules={product.usage_id ? positiveQuantity : []}>
-        <InputNumber stringMode disabled={!product.usage_id} min="0.000001" style={{ width: '100%' }} />
+      {product.actual_amount == null && <Alert type="info" message="Este producto todavía no tiene una cantidad utilizada registrada; sus cantidades son de solo lectura." />}
+      <Form.Item name={['products', index, 'amount']} label="Cantidad planificada" rules={product.actual_amount != null ? positiveQuantity : []}>
+        <InputNumber stringMode disabled={product.actual_amount == null} min="0.000001" style={{ width: '100%' }} />
       </Form.Item>
-      <Form.Item name={['products', index, 'actual_amount']} label="Cantidad real utilizada" rules={product.usage_id ? positiveQuantity : []}>
-        <InputNumber stringMode disabled={!product.usage_id} min="0.000001" style={{ width: '100%' }} />
+      <Form.Item name={['products', index, 'actual_amount']} label="Cantidad real utilizada" rules={product.actual_amount != null ? positiveQuantity : []}>
+        <InputNumber stringMode disabled={product.actual_amount == null} min="0.000001" style={{ width: '100%' }} />
       </Form.Item>
     </div>)}
   </>;

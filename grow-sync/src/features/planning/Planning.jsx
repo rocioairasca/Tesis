@@ -1833,7 +1833,15 @@ const Planning = () => {
         styles={{ body: { paddingBottom: 80 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          {isEditingHistorical ? <HistoricalPlanningFields editing={editing} responsibleOptions={responsibleOptions} /> : <>
+          {isEditingHistorical ? <HistoricalPlanningFields editing={editing} responsibleOptions={responsibleOptions}
+            onProductAdded={product=>{
+              if(!(editing.products || []).some(p=>p.product_id===product.product_id)) {
+                form.setFieldsValue({products:[...(form.getFieldValue('products') || []),product]});
+                setEditing({...editing,products:[...(editing.products || []),product]});
+              }
+              fetchPlanning();
+              notification.success({message:'Producto agregado al registro histórico'});
+            }} /> : <>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", marginBottom: 12, textTransform: "uppercase" }}>
             Planificación
           </div>

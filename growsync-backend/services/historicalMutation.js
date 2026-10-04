@@ -75,10 +75,10 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
       for(const product of body.products){
         if(Object.keys(product).some(k=>!['planning_product_id','actual_amount','amount'].includes(k))||seen.has(product.planning_product_id)) throw fail('Corrección de producto inválida.',400);
         seen.add(product.planning_product_id);
-        const {rows:pp}=await client.query(`SELECT pp.*,pc.usage_id FROM planning_products pp LEFT JOIN planning_product_completions pc ON pc.planning_product_id=pp.id
+        const {rows:pp}=await client.query(`SELECT pp.*,pc.usage_id,pc.actual_amount FROM planning_products pp LEFT JOIN planning_product_completions pc ON pc.planning_product_id=pp.id
           WHERE pp.id=$1 AND pp.planning_id=$2 FOR UPDATE OF pp`,[product.planning_product_id,id]);
-        if(!pp.length||!pp[0].usage_id||stock.decimal(product.actual_amount)<=0n) throw fail('Se requiere producto con Usage histórico y cantidad positiva.');
-        await client.query('UPDATE usage_records SET amount_used=$2 WHERE id=$1 AND company_id=$3 AND inventory_impact_mode=\'HISTORICAL_NO_STOCK\'',[pp[0].usage_id,product.actual_amount,companyId]);
+        if(!pp.length||pp[0].actual_amount==null||stock.decimal(product.actual_amount)<=0n) throw fail('Se requiere un producto registrado con cantidad utilizada positiva.');
+        if(pp[0].usage_id) await client.query('UPDATE usage_records SET amount_used=$2 WHERE id=$1 AND company_id=$3 AND inventory_impact_mode=\'HISTORICAL_NO_STOCK\'',[pp[0].usage_id,product.actual_amount,companyId]);
         await client.query('UPDATE planning_product_completions SET actual_amount=$2 WHERE planning_product_id=$1',[product.planning_product_id,product.actual_amount]);
         if(product.amount!==undefined){
           if(stock.decimal(product.amount)<=0n) throw fail('Cantidad planificada inválida.',400);

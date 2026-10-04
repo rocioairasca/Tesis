@@ -53,4 +53,20 @@ router.post('/adopt-existing/confirm',requirePermission('planning.edit'),async(r
     res.status(result.conflict?409:200).json(result);
   } catch(e){next(e);}
 });
+router.get('/planning/:id/product-options',requirePermission('planning.edit'),async(req,res,next)=>{
+  try {
+    res.set('Cache-Control','no-store');
+    res.json(await require('../services/historicalPlanningProduct').listProducts(pool,{
+      companyId:req.user.company_id,actorId:req.user.id,planningId:req.params.id
+    }));
+  } catch(e){next(e);}
+});
+router.post('/planning/:id/products',requirePermission('planning.edit'),async(req,res,next)=>{
+  try {
+    const result=await require('../services/historicalPlanningProduct').addProduct(pool,{
+      companyId:req.user.company_id,actorId:req.user.id,planningId:req.params.id,body:req.body
+    });
+    res.status(result.replayed?200:201).json(result);
+  } catch(e){next(e);}
+});
 module.exports=router;

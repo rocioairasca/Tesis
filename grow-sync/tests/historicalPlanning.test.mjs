@@ -63,7 +63,8 @@ test('rendered historical form, desktop/mobile permissions, and friendly error i
     const html = renderToStaticMarkup(React.createElement(Form, { initialValues: values() },
       React.createElement(Fields, { editing: row, responsibleOptions: [{ value: 'user', label: 'Responsable' }] })));
     for (const label of ['Corrección de antecedente', 'Los cambios no modifican el inventario', 'Superficie histórica', 'Cantidad planificada', 'Cantidad real utilizada', 'Producto existente']) assert.ok(html.includes(label), label);
-    assert.ok(!html.includes('Agregar producto'));
+    assert.ok(html.includes('Agregar producto histórico'));
+    assert.ok(html.includes('Productos registrados'));
     assert.ok(!html.includes('Eliminar'));
     assert.match(html, /readonly/i);
     const { getUserFriendlyError } = await server.ssrLoadModule('/src/utils/userFriendlyErrors.js');
@@ -88,4 +89,10 @@ test('rendered historical form, desktop/mobile permissions, and friendly error i
       }
     }
   } finally { delete globalThis.localStorage; await server.close(); }
+});
+
+test('quantities added without a consumption record remain editable',()=>{
+  const historical={...row,products:[{...row.products[0],usage_id:null}]};
+  const form=values();form.products[0].actual_amount='4613.05';form.products[0].amount='4613.05';
+  assert.deepEqual(buildHistoricalPayload(historical,form).products,[{planning_product_id:'pp',actual_amount:'4613.05',amount:'4613.05'}]);
 });

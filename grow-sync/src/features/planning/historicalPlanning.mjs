@@ -33,8 +33,8 @@ export function buildHistoricalPayload(editing, values) {
     payload.lot_selections = lots;
   }
   const products = (editing.products || []).flatMap((product, index) => {
-    // The existing backend only corrects products with a linked historical Usage.
-    if (!product.usage_id) return [];
+    // Recorded quantities also support historical products without a consumption record.
+    if (product.actual_amount == null) return [];
     const value = values.products?.[index];
     if (!value) throw new Error('Faltan las cantidades del producto.');
     if (sameQuantity(value.amount, product.amount) && sameQuantity(value.actual_amount, product.actual_amount)) return [];
