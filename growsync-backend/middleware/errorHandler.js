@@ -13,7 +13,8 @@ module.exports = (err, req, res, _next) => {
     type: err.type,
     message: err.message,
     code: err.code,
-    status: err.status
+    status: err.status,
+    ...(err.adoptionDiagnostic ? { adoptionDiagnostic: err.adoptionDiagnostic } : {})
   });
 
   const statusMessage = (status) => {

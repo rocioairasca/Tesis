@@ -13,6 +13,11 @@ before(async()=>{
   await db.exec(fs.readFileSync(require.resolve('./historySchema.fixture.sql'),'utf8'));
   await db.exec(fs.readFileSync(require.resolve('../migrations/20260916_historical_no_stock.sql'),'utf8'));
   await db.exec(fs.readFileSync(require.resolve('../migrations/20261004_adopt_existing_history.sql'),'utf8'));
+  const captured=JSON.parse(fs.readFileSync(require('node:path').resolve(__dirname,'../../audit/historical-adoption-schema-readonly.json'),'utf8'));
+  const planningTrigger=captured.triggers.find(t=>t.tgname==='trg_planning_updated_at');
+  await db.exec(planningTrigger.function_definition);await db.exec(planningTrigger.definition);
+  await db.exec(fs.readFileSync(require.resolve('../migrations/20261005_historical_adoption_diagnostics.sql'),'utf8'));
+  await db.exec(fs.readFileSync(require.resolve('../migrations/20261005_preserve_adopted_planning_timestamp.sql'),'utf8'));
   // Match the real cycle timestamp trigger; adoption must preserve its timestamp.
   await db.exec(`CREATE FUNCTION set_crop_assignments_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.updated_at=now(); RETURN NEW; END$$;
     CREATE TRIGGER crop_assignments_set_updated_at BEFORE UPDATE ON crop_assignments FOR EACH ROW EXECUTE FUNCTION set_crop_assignments_updated_at();`);

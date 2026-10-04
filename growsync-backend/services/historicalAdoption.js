@@ -35,7 +35,19 @@ async function run(pool, input, confirm) {
   } catch (error) {
     if (error.code === '42501') throw stock.fail('No tenés permisos para adoptar antecedentes.',403);
     if (error.code === '22023') throw stock.fail('Revisá los registros y la confirmación.',400);
-    if (error.code === 'P0001') throw stock.fail(error.message,409);
+    if (error.code === 'P0001') {
+      const failure = stock.fail(error.message,409);
+      // Kept separately from response details: the HTTP handler only logs this property.
+      if (error.detail) {
+        try {
+          const diagnostic = JSON.parse(error.detail);
+          if (diagnostic.kind === 'historical_adoption_diff') {
+            Object.defineProperty(failure, 'adoptionDiagnostic', { value: diagnostic });
+          }
+        } catch { /* An unstructured database detail is not a public message. */ }
+      }
+      throw failure;
+    }
     if (['55P03','40P01','57014'].includes(error.code)) throw stock.fail('Hay operaciones en curso. Reintentá la adopción en unos momentos.',409);
     throw error;
   }
