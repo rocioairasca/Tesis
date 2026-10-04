@@ -327,7 +327,7 @@ const Planning = () => {
     return ()=>{active=false;};
   },[currentUser?.company_id,currentUser?.role,canImportHistory,canEdit]);
   const getAdoptionActions = row => canAdoptExisting(currentUser,row,adoptionCutoff)
-    ? [{key:'adopt-history',label:'Convertir en antecedente histórico',onClick:()=>setAdopting(row)}] : [];
+    ? [{key:'adopt-history',label:'Marcar como registro histórico',onClick:()=>setAdopting(row)}] : [];
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
@@ -1820,7 +1820,7 @@ const Planning = () => {
       )}
 
       {adopting && <AdoptExistingModal key={adopting.id} planning={adopting} onClose={()=>setAdopting(null)}
-        onAdopted={async()=>{await fetchPlanning();setViewing(null);notification.success({message:'Histórico · Sin impacto en inventario'});}} />}
+        onAdopted={async()=>{await fetchPlanning();setViewing(null);notification.success({message:'La planificación quedó marcada como registro histórico. Las existencias no se modificaron.'});}} />}
       {/* Drawer crear/editar */}
       <Drawer
         title={isEditingHistorical ? "Corrección de antecedente" : editing ? "Editar Planificación" : "Nueva Planificación"}
