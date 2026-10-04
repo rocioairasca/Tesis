@@ -35,4 +35,22 @@ router.put('/inventory-control-start',async(req,res,next)=>{
     });res.json(result);
   }catch(e){next(e);}
 });
+// Mounted behind checkJwt + userData + requireTenant in index.js.
+router.post('/adopt-existing/prepare',requirePermission('planning.edit'),async(req,res,next)=>{
+  try {
+    res.set('Cache-Control','no-store');
+    res.json(await require('../services/historicalAdoption').prepare(pool,{
+      companyId:req.user.company_id,actorId:req.user.id,planningIds:req.body.planning_ids
+    }));
+  } catch(e){next(e);}
+});
+router.post('/adopt-existing/confirm',requirePermission('planning.edit'),async(req,res,next)=>{
+  try {
+    const result=await require('../services/historicalAdoption').confirm(pool,{
+      companyId:req.user.company_id,actorId:req.user.id,planningIds:req.body.planning_ids,
+      key:req.get('Idempotency-Key'),confirmed:req.body.confirmed_no_stock
+    });
+    res.status(result.conflict?409:200).json(result);
+  } catch(e){next(e);}
+});
 module.exports=router;

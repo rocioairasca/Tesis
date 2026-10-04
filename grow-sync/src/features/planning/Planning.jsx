@@ -1,3 +1,5 @@
+import AdoptExistingModal from './components/AdoptExistingModal';
+import { canAdoptExisting } from './historicalAdoption.mjs';
 import HistoricalPlanningFields from './components/HistoricalPlanningFields';
 import usePlanningLayout from './usePlanningLayout';
 import './planning.css';
@@ -314,6 +316,18 @@ const Planning = () => {
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
   const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
   const canImportHistory = hasPermission(currentUser, PERMISSIONS.HISTORY_IMPORT);
+  const [adopting,setAdopting]=useState(null);
+  const [adoptionCutoff,setAdoptionCutoff]=useState(null);
+  useEffect(()=>{
+    let active=true;
+    if(Number(currentUser?.role)===3 && canImportHistory && canEdit) {
+      api.get('/history/stock-initial/status').then(({data})=>{if(active)setAdoptionCutoff(data.inventory_control_start_date);})
+        .catch(()=>{if(active)setAdoptionCutoff(null);});
+    } else setAdoptionCutoff(null);
+    return ()=>{active=false;};
+  },[currentUser?.company_id,currentUser?.role,canImportHistory,canEdit]);
+  const getAdoptionActions = row => canAdoptExisting(currentUser,row,adoptionCutoff)
+    ? [{key:'adopt-history',label:'Convertir en antecedente histórico',onClick:()=>setAdopting(row)}] : [];
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
@@ -1484,6 +1498,7 @@ const Planning = () => {
   };
 
   const getMonthlyMenuItems = (item, secondaryActions) => [
+    ...getAdoptionActions(item),
     ...secondaryActions.map((action) => ({
       key: action.key,
       label: action.label,
@@ -1763,6 +1778,7 @@ const Planning = () => {
           statusTag={statusTag}
           statusActionLoading={statusActionLoading}
           getPrimaryStatusAction={getPrimaryStatusAction}
+          getAdoptionActions={getAdoptionActions}
         />
       )}
 
@@ -1799,9 +1815,12 @@ const Planning = () => {
           statusTag={statusTag}
           statusActionLoading={statusActionLoading}
           getPrimaryStatusAction={getPrimaryStatusAction}
+          getAdoptionActions={getAdoptionActions}
         />
       )}
 
+      {adopting && <AdoptExistingModal key={adopting.id} planning={adopting} onClose={()=>setAdopting(null)}
+        onAdopted={async()=>{await fetchPlanning();setViewing(null);notification.success({message:'Histórico · Sin impacto en inventario'});}} />}
       {/* Drawer crear/editar */}
       <Drawer
         title={isEditingHistorical ? "Corrección de antecedente" : editing ? "Editar Planificación" : "Nueva Planificación"}

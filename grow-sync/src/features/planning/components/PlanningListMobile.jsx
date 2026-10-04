@@ -83,6 +83,7 @@ const PlanningListMobile = ({
     statusTag,
     statusActionLoading,
     getPrimaryStatusAction,
+    getAdoptionActions = () => [],
 }) => {
     return (
         <div className="inventory-cards-container gs-planning-cards">
@@ -95,6 +96,7 @@ const PlanningListMobile = ({
                     { onUpdateStatus, onCancel },
                     { includeTransitions: false, includeReopen: true, includeCancel: true }
                 );
+                menuItems.push(...getAdoptionActions(r));
                 const statusDropdownItems = buildStatusMenuItems(
                     r,
                     { onUpdateStatus, onCancel },

@@ -94,6 +94,7 @@ const PlanningTable = ({
     statusTag,
     statusActionLoading,
     getPrimaryStatusAction,
+    getAdoptionActions = () => [],
 }) => {
     const renderStatusControl = (record) => {
         const effectiveStatus = record.status_effective || record.status;
@@ -208,6 +209,7 @@ const PlanningTable = ({
                     { onUpdateStatus, onCancel },
                     { includeTransitions: false, includeReopen: true, includeCancel: true }
                 );
+                menuItems.push(...getAdoptionActions(record));
                 return (
                     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, minWidth: 96, whiteSpace: "nowrap" }}>
                         <Tooltip title="Ver detalle">
