@@ -74,7 +74,7 @@ export const formatPlanningPeriod = (row, fallback = "—") => {
   if (!start || !end) return fallback;
   return start === end
     ? formatPlanningDate(start, fallback)
-    : `${formatPlanningDate(start, fallback)} → ${formatPlanningDate(end, fallback)}`;
+    : `${formatPlanningDate(start, fallback)} al ${formatPlanningDate(end, fallback)}`;
 };
 
 export const getPlanningLotName = (lot) => (

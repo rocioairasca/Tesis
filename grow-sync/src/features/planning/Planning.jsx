@@ -1,3 +1,5 @@
+import PlanningDateFields from './components/PlanningDateFields';
+import {durationMode,validatedDateRange,activityChangeFields} from './planningFormFlow.mjs';
 import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel,fieldSituation} from './fieldContext.mjs';
 import EffectiveAreaFields from './components/EffectiveAreaFields';
 import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
@@ -1074,6 +1076,7 @@ const Planning = () => {
         crop_id: row.crop_id,
         field_context: row.field_context,
         date_range: [getPlanningDayjs(row.start_at), getPlanningDayjs(row.end_at)],
+        duration_mode: durationMode(row.start_at,row.end_at),
         responsible_user: row.responsible_user,
         vehicle_id: row.vehicle_id,
         lot_selection_keys: (row.lots || [])
@@ -1094,6 +1097,7 @@ const Planning = () => {
       form.resetFields();
       form.setFieldsValue({
         status: "planificado",
+        duration_mode: "day",
         products: [],
         campaign_id: undefined,
         register_completed: false,
@@ -1140,7 +1144,7 @@ const Planning = () => {
       const effectiveDate = values.effective_date;
       const [start, end] = shouldRegisterCompleted
         ? [effectiveDate, effectiveDate]
-        : values.date_range || [];
+        : validatedDateRange(values.date_range,values.duration_mode || "day");
 
       // Build payload conditionally to avoid sending empty strings
       const lotSelections = (values.lot_selection_keys || []).map(key=>({
@@ -1869,14 +1873,27 @@ const Planning = () => {
             />
           )}
 
-          {!editing && (
+          <Form.Item name="activity_type" label={<strong style={{fontSize:16}}>Actividad</strong>} rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná la actividad" }]}>
+            <Select disabled={isEditingCompleted} options={ACTIVITY_OPTIONS} onChange={activity=>form.setFieldsValue(activityChangeFields(activity))} placeholder="Seleccioná la actividad" />
+          </Form.Item>
+
+          {selectedActivityType && <>
+          {(!registerCompleted || editing) && <PlanningDateFields form={form} disabled={isEditingCompleted} onRangeChange={syncCampaignForRange} />}
+
+          {!editing && registerCompleted && (
             <Form.Item
-              name="register_completed"
-              label="Registrar como realizada"
-              valuePropName="checked"
-              style={{ marginBottom: 16 }}
+              name="effective_date"
+              label="Fecha real de realización"
+              extra="Indicá la fecha en la que el trabajo se realizó efectivamente."
+              rules={[{ required: true, message: "Seleccioná la fecha real de realización." }]}
             >
-              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+              <DatePicker
+                format="DD/MM/YYYY"
+                style={{ width: "100%" }}
+                onChange={(date) => {
+                  syncCampaignForRange(date ? [date, date] : null);
+                }}
+              />
             </Form.Item>
           )}
 
@@ -1915,100 +1932,6 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <Form.Item name="activity_type" label="Actividad" rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná la actividad" }]}>
-            <Select disabled={isEditingCompleted} options={ACTIVITY_OPTIONS} placeholder="Seleccioná la actividad" />
-          </Form.Item>
-
-          <Form.Item
-            name="campaign_id"
-            label="Campaña"
-            rules={isEditingCompleted ? [] : [
-              { required: true, message: "Seleccioná una campaña." },
-              {
-                validator: () => (
-                  campaignDateMismatch
-                    ? Promise.reject(new Error("La campaña seleccionada no admite trabajos en las fechas indicadas."))
-                    : Promise.resolve()
-                ),
-              },
-            ]}
-            extra={(
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4, lineHeight: 1.35 }}>
-                {selectedCampaign && (
-                  <div style={{ color: "#6b7280" }}>
-                    {formatCampaignOptionMeta(selectedCampaign)}
-                  </div>
-                )}
-                {selectedCampaign?.status === "closed" && (
-                  <div style={{ color: "#8c6d1f" }}>
-                    Esta campaña está cerrada. Estás cargando información histórica.
-                  </div>
-                )}
-                {campaignDateMismatch && (
-                  <div style={{ color: "#cf1322" }}>
-                    La campaña seleccionada no admite trabajos en las fechas indicadas.
-                    {suggestedCampaign ? ` Campaña sugerida: ${suggestedCampaign.name}.` : ""}
-                  </div>
-                )}
-                {!campaignDateMismatch && selectedPlanningStartsBeforeCampaign && (
-                  <div style={{ color: "#595959" }}>
-                    Este trabajo se realizará antes del inicio de la campaña y quedará asociado a ella.
-                  </div>
-                )}
-                {!campaignDateMismatch && campaignCompatibilityRange?.[0] && campaignCompatibilityRange?.[1] && compatibleCampaignCount === 0 && (
-                  <div style={{ color: "#595959" }}>
-                    No hay campañas que admitan trabajos en las fechas indicadas.
-                  </div>
-                )}
-                {!campaignDateMismatch && compatibleCampaignCount > 1 && !selectedCampaignId && (
-                  <div style={{ color: "#595959" }}>
-                    Hay varias campañas compatibles con la fecha. Seleccioná la que corresponde.
-                  </div>
-                )}
-              </div>
-            )}
-          >
-            <Select
-              disabled={isEditingCompleted}
-              placeholder="Seleccioná una campaña"
-              options={planningCampaignOptions}
-              optionFilterProp="searchLabel"
-              optionRender={(option) => (
-                option.data?.campaign
-                  ? renderCampaignDropdownOption(option.data.campaign, option.data.suffix)
-                  : option.data?.label
-              )}
-              notFoundContent="No hay campañas compatibles."
-            />
-          </Form.Item>
-
-          {(!registerCompleted || editing) && (
-            <Form.Item name="date_range" label="Período" rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná el período" }]}>
-              <RangePicker
-                disabled={isEditingCompleted}
-                format="DD/MM/YYYY"
-                style={{ width: "100%" }}
-                onChange={syncCampaignForRange}
-              />
-            </Form.Item>
-          )}
-
-          {!editing && registerCompleted && (
-            <Form.Item
-              name="effective_date"
-              label="Fecha real de realización"
-              extra="Indicá la fecha en la que el trabajo se realizó efectivamente."
-              rules={[{ required: true, message: "Seleccioná la fecha real de realización." }]}
-            >
-              <DatePicker
-                format="DD/MM/YYYY"
-                style={{ width: "100%" }}
-                onChange={(date) => {
-                  syncCampaignForRange(date ? [date, date] : null);
-                }}
-              />
-            </Form.Item>
-          )}
 
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
             Ubicación
@@ -2160,9 +2083,87 @@ const Planning = () => {
             )}
           </Form.List>
 
+          <Form.Item name="description" label="Descripción">
+            <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
+          </Form.Item>
+
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
             Información adicional
           </div>
+
+          <Form.Item
+            name="campaign_id"
+            label="Campaña"
+            rules={isEditingCompleted ? [] : [
+              { required: true, message: "Seleccioná una campaña." },
+              {
+                validator: () => (
+                  campaignDateMismatch
+                    ? Promise.reject(new Error("La campaña seleccionada no admite trabajos en las fechas indicadas."))
+                    : Promise.resolve()
+                ),
+              },
+            ]}
+            extra={(
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4, lineHeight: 1.35 }}>
+                {selectedCampaign && (
+                  <div style={{ color: "#6b7280" }}>
+                    {formatCampaignOptionMeta(selectedCampaign)}
+                  </div>
+                )}
+                {selectedCampaign?.status === "closed" && (
+                  <div style={{ color: "#8c6d1f" }}>
+                    Esta campaña está cerrada. Estás cargando información histórica.
+                  </div>
+                )}
+                {campaignDateMismatch && (
+                  <div style={{ color: "#cf1322" }}>
+                    La campaña seleccionada no admite trabajos en las fechas indicadas.
+                    {suggestedCampaign ? ` Campaña sugerida: ${suggestedCampaign.name}.` : ""}
+                  </div>
+                )}
+                {!campaignDateMismatch && selectedPlanningStartsBeforeCampaign && (
+                  <div style={{ color: "#595959" }}>
+                    Este trabajo se realizará antes del inicio de la campaña y quedará asociado a ella.
+                  </div>
+                )}
+                {!campaignDateMismatch && campaignCompatibilityRange?.[0] && campaignCompatibilityRange?.[1] && compatibleCampaignCount === 0 && (
+                  <div style={{ color: "#595959" }}>
+                    No hay campañas que admitan trabajos en las fechas indicadas.
+                  </div>
+                )}
+                {!campaignDateMismatch && compatibleCampaignCount > 1 && !selectedCampaignId && (
+                  <div style={{ color: "#595959" }}>
+                    Hay varias campañas compatibles con la fecha. Seleccioná la que corresponde.
+                  </div>
+                )}
+              </div>
+            )}
+          >
+            <Select
+              disabled={isEditingCompleted}
+              placeholder="Seleccioná una campaña"
+              options={planningCampaignOptions}
+              optionFilterProp="searchLabel"
+              optionRender={(option) => (
+                option.data?.campaign
+                  ? renderCampaignDropdownOption(option.data.campaign, option.data.suffix)
+                  : option.data?.label
+              )}
+              notFoundContent="No hay campañas compatibles."
+            />
+          </Form.Item>
+
+          {!editing && (
+            <Form.Item
+              name="register_completed"
+              label="Registrar como realizada"
+              valuePropName="checked"
+              style={{ marginBottom: 16 }}
+            >
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )}
 
           {(!registerCompleted || editing) && (
             <Form.Item name="status" label="Estado">
@@ -2179,10 +2180,8 @@ const Planning = () => {
             </Form.Item>
           )}
 
-          <Form.Item name="description" label="Descripción">
-            <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
-          </Form.Item>
 
+          </>}
           </>}
           <Form.Item>
             <Button
@@ -2190,7 +2189,7 @@ const Planning = () => {
               htmlType="submit"
               block
               loading={isSubmitting}
-              disabled={isSubmitting || productStockExceeded}
+              disabled={isSubmitting || productStockExceeded || (!isEditingHistorical && !selectedActivityType)}
             >
               {isEditingHistorical ? "Guardar corrección" : editing ? "Actualizar" : registerCompleted ? "Registrar actividad" : "Crear Planificación"}
             </Button>
@@ -2223,7 +2222,7 @@ const Planning = () => {
               {viewing.title && !viewing.crop_id && !viewing.crop_name && (
                 <Descriptions.Item label="Título histórico">{viewing.title}</Descriptions.Item>
               )}
-              <Descriptions.Item label="Período">
+              <Descriptions.Item label={durationMode(viewing.start_at,viewing.end_at) === "day" ? "Fecha" : "Período"}>
                 {formatPeriod(viewing)}
               </Descriptions.Item>
               {viewing.registered_retroactively === true && (
