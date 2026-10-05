@@ -40,15 +40,7 @@ const plannedAreaSql = `
   WHERE pl.planning_id = b.id
 `;
 
-const ACTIVITIES_REQUIRING_CROP = new Set(['fumigacion', 'siembra', 'cosecha', 'fertilizacion']);
-
-const validateRequiredCrop = (activityType, cropId) => {
-  if (ACTIVITIES_REQUIRING_CROP.has(activityType) && !cropId) {
-    const err = new Error('Seleccioná un cultivo.');
-    err.status = 400;
-    throw err;
-  }
-};
+const {validateFieldContext,cropDescription} = require('../services/planningFieldContext');
 
 const resolveCrop = async (client, cropId, companyId, options = {}) => {
   if (!cropId) return null;
@@ -537,6 +529,7 @@ const createPlanningRecord = async (
     vehicle_id,
     campaign_id,
     crop_id,
+    field_context,
     lot_ids = [],
     lot_selections,
     products = [],
@@ -551,7 +544,7 @@ const createPlanningRecord = async (
     endAt: end_at,
     allowClosedHistorical,
   });
-  validateRequiredCrop(activity_type, crop_id);
+  const fieldContext=validateFieldContext(activity_type,crop_id,field_context,{creating:true});
   assertSowingUsesCompletionEndpoint(activity_type, effectiveStatus);
   const resolvedCrop = await resolveCrop(client, crop_id, companyId);
 
@@ -588,8 +581,8 @@ const createPlanningRecord = async (
   const insertSql = `
     INSERT INTO planning(
       title, description, activity_type, start_at, end_at, campaign_id, crop_id,
-      responsible_user, status, vehicle_id, created_by, company_id
-    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      responsible_user, status, vehicle_id, created_by, company_id, field_context
+    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING id;
   `;
   const { rows: newPlan } = await client.query(insertSql, [
@@ -605,6 +598,7 @@ const createPlanningRecord = async (
     vehicle_id ?? null,
     creator,
     companyId,
+    fieldContext,
   ]);
   const id = newPlan[0].id;
 
@@ -654,7 +648,7 @@ exports.create = async (req, res, next) => {
         'planning_assigned',
         'low',
         'Nueva planificación asignada',
-        `Se te asignó una planificación de ${activityLabel(req.body.activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
+        `Se te asignó una planificación de ${activityLabel(req.body.activity_type)}${cropDescription(req.body.activity_type,req.body.field_context,resolvedCrop?.name)}.`,
         { planning_id: id, activity_type: req.body.activity_type },
         company_id
       ).catch(err => console.error('Error enviando notificación:', err));
@@ -732,7 +726,7 @@ exports.registerCompleted = async (req, res, next) => {
         'planning_assigned',
         'low',
         'Actividad registrada como realizada',
-        `Se registró como realizada una actividad de ${activityLabel(req.body.activity_type)}${resolvedCrop?.name ? ` para ${resolvedCrop.name}` : ''}.`,
+        `Se registró como realizada una actividad de ${activityLabel(req.body.activity_type)}${cropDescription(req.body.activity_type,req.body.field_context,resolvedCrop?.name)}.`,
         { planning_id: id, activity_type: req.body.activity_type, new_status: 'completado' },
         company_id
       ).catch(err => console.error('Error enviando notificación:', err));
@@ -874,7 +868,7 @@ exports.completeWork = async (req, res, next) => {
         'state_change',
         'low',
         'Trabajo completado',
-        `Se completó la ${activityLabel(planning.activity_type)}${planning.crop_name ? ` de ${planning.crop_name}` : ''} en ${locationText}.`,
+        `Se completó la ${activityLabel(planning.activity_type)}${cropDescription(planning.activity_type,planning.field_context,planning.crop_name)} en ${locationText}.`,
         { planning_id: id, new_status: 'completado' },
         company_id
       ).catch(err => console.error('Error enviando notificación:', err));
@@ -911,7 +905,7 @@ exports.update = async (req, res, next) => {
     const { id } = req.params;
     const {
       title, description, activity_type, start_at, end_at,
-      responsible_user, status, vehicle_id, campaign_id, crop_id, lot_ids, lot_selections, products
+      responsible_user, status, vehicle_id, campaign_id, crop_id, field_context, lot_ids, lot_selections, products
     } = req.body;
 
     const { company_id } = req.user;
@@ -923,7 +917,7 @@ exports.update = async (req, res, next) => {
     await client.query('BEGIN');
 
     // Verificar que la planificación pertenezca a la compañía
-    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, status, enabled FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE';
+    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, field_context, status, enabled FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE';
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
@@ -947,6 +941,7 @@ exports.update = async (req, res, next) => {
       || lot_selections !== undefined
       || start_at !== undefined
       || end_at !== undefined
+      || field_context !== undefined
       || crop_id !== undefined
       || campaign_id !== undefined
       || activity_type !== undefined
@@ -1012,8 +1007,13 @@ exports.update = async (req, res, next) => {
 
     const effectiveActivityType = activity_type ?? checkRows[0].activity_type;
     const effectiveCropId = crop_id !== undefined ? crop_id : checkRows[0].crop_id;
-    if (crop_id !== undefined || activity_type !== undefined) {
-      validateRequiredCrop(effectiveActivityType, effectiveCropId);
+    const effectiveContext=field_context !== undefined ? field_context : checkRows[0].field_context;
+    if (crop_id !== undefined || activity_type !== undefined || field_context !== undefined) {
+      validateFieldContext(effectiveActivityType,effectiveCropId,effectiveContext,{
+        creating: checkRows[0].field_context != null || (activity_type !== undefined && activity_type !== checkRows[0].activity_type),
+      });
+      if(checkRows[0].status==='completado' && field_context !== undefined && field_context !== checkRows[0].field_context)
+        throw Object.assign(new Error('La situación del lote de una actividad completada no puede modificarse desde esta edición.'),{status:409});
     }
     if (crop_id !== undefined) {
       await resolveCrop(client, crop_id, company_id, {
@@ -1145,6 +1145,7 @@ exports.update = async (req, res, next) => {
     if (vehicle_id !== undefined) push(vehicle_id, 'vehicle_id');
     if (campaign_id !== undefined) push(campaign_id, 'campaign_id');
     if (crop_id !== undefined) push(crop_id, 'crop_id');
+    if (field_context !== undefined || activity_type === 'siembra') push(effectiveActivityType === 'siembra' ? null : (field_context ?? null), 'field_context');
 
     if (sets.length > 0) {
       vals.push(id, company_id);

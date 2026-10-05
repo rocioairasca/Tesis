@@ -1,3 +1,4 @@
+import {fieldSituation} from './fieldContext.mjs';
 export const ACTIVITY_LABELS = {
   siembra: "Siembra",
   fumigacion: "Fumigación",
@@ -105,6 +106,8 @@ export const summarizePlanningLotsShort = (lots = []) => {
 };
 
 export const getCropDisplayName = (row, cropIx = {}) => {
+  const situation=fieldSituation(row,cropIx);
+  if(situation)return situation;
   const cropName = row?.crop_name || cropIx[row?.crop_id];
   if (cropName) return cropName;
   if (row?.crop_id) return "Cultivo";
@@ -113,6 +116,8 @@ export const getCropDisplayName = (row, cropIx = {}) => {
 
 export const getPlanningDisplayName = (row, cropIx = {}) => {
   const activity = formatActivity(row?.activity_type);
+  const situation=fieldSituation(row,cropIx);
+  if(situation)return `${situation} - ${activity}`;
   const cropName = row?.crop_name || cropIx[row?.crop_id];
   if (cropName) return `${cropName} - ${activity}`;
   if (row?.crop_id) return `Cultivo - ${activity}`;

@@ -4,9 +4,17 @@ const selections=require('../services/planningSelections'),stock=require('../ser
 let db,controller,client;
 before(async()=>{
  db=new PGlite();await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
- for(const f of ['./historySchema.fixture.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql'])await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
+ for(const f of ['./historySchema.fixture.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql','../migrations/20261008_planning_field_context.sql'])await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
  await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
- client={query:(s,a)=>db.query(s,a),release(){}};
+ client={async query(s,a){
+  // No PostGIS in PGlite: with a NULL selected geometry the real spatial query returns no intersections.
+  if(s.includes('ST_MakeValid')) {
+    const ids=Array.isArray(a[0]) ? a[0] : [a[2]],company=Array.isArray(a[0]) ? a[2] : a[1];
+    for(const id of ids) assert.equal((await db.query('SELECT geom FROM lots WHERE id=$1 AND company_id=$2',[id,company])).rows[0].geom,null);
+    return {rows:[]};
+  }
+  return db.query(s,a);
+ },release(){}};
  const filename=require.resolve('../controllers/planning'),actual=createRequire(filename),module={exports:{}};
  vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>{
   if(name==='../db/supabaseClient')return {pool:{...client,connect:async()=>client}};
@@ -23,7 +31,7 @@ async function fixture(){
  await db.query("INSERT INTO crops(id,company_id,name) VALUES($1,$2,'Test')",[cropId,companyId]);
  await db.query("INSERT INTO campaigns(id,company_id,name,start_date,end_date,status) VALUES($1,$2,'Test','2026-01-01','2026-12-31','active')",[campaignId,companyId]);
  const user={id:actorId,company_id:companyId,role:3};
- const body={activity_type:'fumigacion',start_at:'2026-09-01T00:00:00Z',end_at:'2026-09-01T00:00:00Z',responsible_user:actorId,crop_id:cropId,campaign_id:campaignId,status:'pendiente',lot_selections:[{lot_id:lotId,effective_area_ha:10}]};
+ const body={activity_type:'fumigacion',field_context:'growing_crop',start_at:'2026-09-01T00:00:00Z',end_at:'2026-09-01T00:00:00Z',responsible_user:actorId,crop_id:cropId,campaign_id:campaignId,status:'pendiente',lot_selections:[{lot_id:lotId,effective_area_ha:10}]};
  const call=async(method,body={},id,query={})=>{let result,code=200;await controller[method]({body,params:{id},user,query},{status(n){code=n;return this;},json(data){result=data;return this;}},e=>{throw e;});return {code,data:result};};
  return {companyId,actorId,lotId,body,call};
 }
@@ -105,4 +113,63 @@ test('unchanged selections preserve full sowing snapshot even after the physical
  await db.query('UPDATE lots SET area_ha=150 WHERE id=$1',[x.lotId]);
  await x.call('update',{lot_selections:[{lot_id:x.lotId,effective_area_ha:101.3}]},id);
  const view=(await x.call('getOne',{},id)).data;assert.equal(Number(view.planned_area_ha),101.3);
+});
+test('Santos stubble: saves context, maize and 10ha without changing cycles or inventory',async()=>{
+ const x=await fixture();await db.query("UPDATE crops SET name='Maíz' WHERE id=$1",[x.body.crop_id]);
+ await db.query('INSERT INTO crop_assignments(company_id,campaign_id,lot_id,crop_id,start_date,area_ha) VALUES($1,$2,$3,$4,$5,101.3)',[x.companyId,x.body.campaign_id,x.lotId,x.body.crop_id,'2026-01-01']);
+ const snapshot=async()=>({cycles:(await db.query('SELECT * FROM crop_assignments WHERE company_id=$1',[x.companyId])).rows,stock:(await db.query('SELECT * FROM stock_movements WHERE company_id=$1',[x.companyId])).rows});
+ const before=await snapshot();const {data:{id}}=await x.call('create',{...x.body,field_context:'stubble',start_at:'2026-09-22T00:00:00Z',end_at:'2026-09-22T00:00:00Z'});
+ const view=(await x.call('getOne',{},id)).data;assert.equal(view.field_context,'stubble');assert.equal(view.crop_name,'Maíz');assert.equal(Number(view.planned_area_ha),10);
+ await x.call('update',{field_context:'pre_sowing'},id);assert.deepEqual(await snapshot(),before);
+ await x.call('update',{field_context:'stubble'},id);assert.deepEqual(await snapshot(),before);
+});
+test('context validation on new activities and PATCH merged with existing fields',async()=>{
+ const {createSchema}=require('../validations/planning.schema');
+ for(const context of ['growing_crop','stubble']){
+  const x=await fixture(),body={...x.body,field_context:context,crop_id:null};
+  assert.equal(createSchema.safeParse({body}).success,false);await assert.rejects(x.call('create',body),e=>e.status===400);
+ }
+ for(const context of ['fallow','pre_sowing','other'])for(const activity of ['fumigacion','fertilizacion']){
+  const x=await fixture(),body={...x.body,field_context:context,crop_id:null,activity_type:activity};
+  assert.equal(createSchema.safeParse({body}).success,true);
+  const {data:{id}}=await x.call('create',body);assert.equal((await x.call('getOne',{},id)).data.field_context,context);
+  await assert.rejects(x.call('update',{field_context:'stubble'},id),e=>e.status===400);
+  await x.call('update',{field_context:'pre_sowing',crop_id:x.body.crop_id},id);
+ }
+ for(const context of [undefined,null,'unknown']){
+  const x=await fixture(),body={...x.body,field_context:context};assert.equal(createSchema.safeParse({body}).success,false);
+  await assert.rejects(x.call('create',body),e=>e.status===400);
+ }
+});
+test('legacy NULL context remains readable/editable without inferring a situation',async()=>{
+ const x=await fixture(),{data:{id}}=await x.call('create',x.body);await db.query('UPDATE planning SET field_context=NULL WHERE id=$1',[id]);
+ await x.call('update',{description:'Texto corregido',crop_id:x.body.crop_id,field_context:null},id);
+ const view=(await x.call('getOne',{},id)).data;assert.equal(view.field_context,null);assert.equal(view.crop_id,x.body.crop_id);
+ await assert.rejects(db.query("UPDATE planning SET field_context='unknown' WHERE id=$1",[id]),e=>e.code==='23514');
+});
+test('sowing normalizes context without changing creation of productive cycle',async()=>{
+ const x=await fixture();await db.query("UPDATE companies SET inventory_control_start_date='2026-01-01' WHERE id=$1",[x.companyId]);
+ const {data:{id}}=await x.call('create',{...x.body,activity_type:'siembra',field_context:'stubble',lot_selections:[{lot_id:x.lotId}]});
+ assert.equal((await x.call('getOne',{},id)).data.field_context,null);
+ const result=await x.call('completeSowing',{effective_date:'2026-09-01'},id);assert.equal(result.code,200);
+ const cycles=(await db.query('SELECT crop_id,area_ha FROM crop_assignments WHERE source_planning_id=$1',[id])).rows;
+ assert.equal(cycles.length,1);assert.equal(cycles[0].crop_id,x.body.crop_id);assert.equal(Number(cycles[0].area_ha),101.3);
+ await assert.rejects(x.call('create',{...x.body,activity_type:'siembra',crop_id:null}),e=>e.status===400);
+});
+test('stubble completion does not imply a growing crop or create productive cycles',async()=>{
+ const x=await fixture(),productId=uuid();await db.query("INSERT INTO products(id,company_id,name,unit,total_quantity,available_quantity) VALUES($1,$2,'Test','kg',0,0)",[productId,x.companyId]);
+ await db.query("UPDATE companies SET inventory_control_start_date='2026-01-01' WHERE id=$1",[x.companyId]);
+ await stock.transaction({connect:async()=>client},c=>stock.receiveStock(c,{companyId:x.companyId,actorId:x.actorId,productId,quantity:100,unit:'kg',origin:'purchase',received_date:'2026-01-01',key:uuid()}));
+ const {data:{id}}=await x.call('registerCompleted',{...x.body,field_context:'stubble',effective_date:'2026-09-22',products:[{product_id:productId,amount:7,unit:'kg'}]});
+ const usage=(await db.query('SELECT crop_id,current_crop,total_area,amount_used FROM usage_records WHERE source_planning_id=$1',[id])).rows[0];
+ assert.equal(usage.crop_id,x.body.crop_id);assert.equal(usage.current_crop,null);assert.equal(Number(usage.total_area),10);assert.equal(Number(usage.amount_used),7);
+ assert.equal((await db.query('SELECT count(*)::int n FROM crop_assignments WHERE company_id=$1',[x.companyId])).rows[0].n,0);
+});
+test('field context migration leaves existing records untouched including historical markers',async()=>{
+ const isolated=new PGlite();try{
+ await isolated.exec("CREATE TABLE planning(id int, crop_id text,inventory_impact_mode text);INSERT INTO planning VALUES(1,'legacy','NORMAL'),(2,'corrected','HISTORICAL_NO_STOCK');");
+ const before=(await isolated.query('SELECT * FROM planning ORDER BY id')).rows;
+ await isolated.exec(fs.readFileSync(require.resolve('../migrations/20261008_planning_field_context.sql'),'utf8'));
+ const after=(await isolated.query('SELECT * FROM planning ORDER BY id')).rows;assert.deepEqual(after.map(({field_context,...r})=>r),before);assert.ok(after.every(r=>r.field_context===null));
+ }finally{await isolated.close();}
 });

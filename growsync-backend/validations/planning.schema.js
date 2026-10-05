@@ -4,7 +4,7 @@ const { z } = require('zod');
 const ActivityType = z.enum(['fumigacion','siembra','cosecha','fertilizacion','riego','mantenimiento','otro']);
 const EditableStatus = z.enum(['planificado','pendiente','en_progreso','completado']);
 const StatusFilter = z.enum(['planificado','pendiente','en_progreso','completado','en_demora','cancelado']);
-const ACTIVITIES_REQUIRING_CROP = new Set(['fumigacion', 'siembra', 'cosecha', 'fertilizacion']);
+const {FIELD_CONTEXTS,validateFieldContext} = require('../services/planningFieldContext');
 
 // Helpers
 const Title = z.string().trim().min(1, 'Título requerido').optional().nullable();
@@ -68,6 +68,7 @@ const baseBodyShape = {
   status: EditableStatus,
   vehicle_id: z.string().uuid().optional().nullable(),
   campaign_id: z.string().uuid(),
+  field_context: z.enum(FIELD_CONTEXTS, {message:"Seleccioná una situación del lote válida."}).optional().nullable(),
   crop_id: z.string().uuid().optional().nullable(),
   lot_ids: uuidArrayNoDup('Lotes').optional(),
   lot_selections: lotSelectionArrayNoDup.optional(),
@@ -78,13 +79,8 @@ const baseBodyShape = {
 const refinePlanningBody = (val, ctx) => {
   requireLotSelection(val, ctx);
 
-  if (ACTIVITIES_REQUIRING_CROP.has(val.activity_type) && !val.crop_id) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Seleccioná un cultivo.',
-      path: ['crop_id'],
-    });
-  }
+  try { validateFieldContext(val.activity_type,val.crop_id,val.field_context,{creating:true}); }
+  catch(error) { ctx.addIssue({code:z.ZodIssueCode.custom,message:error.message,path:[/situación/.test(error.message)?'field_context':'crop_id']}); }
 
   // start <= end
   const start = Date.parse(val.start_at);
@@ -117,7 +113,7 @@ exports.registerCompletedSchema = z.object({
 
 exports.updateSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
-  body: baseBody.partial().extend({
+  body: z.object(baseBodyShape).partial().extend({
     // En PATCH, lot_ids/products pueden venir omitidos o vacios; seguimos validando duplicados si vienen
     lot_ids: uuidArrayNoDup('Lotes').optional(),
     lot_selections: lotSelectionArrayNoDup.optional(),

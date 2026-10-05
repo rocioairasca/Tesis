@@ -17,7 +17,8 @@ const toDateOnlyString = (value) => {
 };
 
 const getCurrentCropLabelForUsage = (planning) => (
-  planning.crop_name || null
+  (!planning.field_context || planning.field_context === 'growing_crop' || planning.activity_type === 'siembra')
+    ? planning.crop_name || null : null
 );
 
 const assertDateFormat = (value, label) => {
@@ -90,6 +91,7 @@ const getPlanningForCompletion = async (client, planningId, companyId) => {
       p.enabled,
       p.campaign_id,
       p.crop_id,
+      p.field_context,
       p.responsible_user,
       c.name AS crop_name,
       cp.name AS campaign_name

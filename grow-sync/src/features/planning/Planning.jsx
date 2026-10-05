@@ -1,3 +1,4 @@
+import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel,fieldSituation} from './fieldContext.mjs';
 import EffectiveAreaFields from './components/EffectiveAreaFields';
 import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
 import AdoptExistingModal from './components/AdoptExistingModal';
@@ -187,7 +188,7 @@ const ACTIVITY_OPTIONS = [
   { value: "mantenimiento", label: "Mantenimiento" },
   { value: "otro", label: "Otro" },
 ];
-const ACTIVITIES_REQUIRING_CROP = new Set(["siembra", "fumigacion", "fertilizacion", "cosecha"]);
+
 const PRODUCT_CONSUMING_ACTIVITIES = new Set(["siembra", "fumigacion", "fertilizacion"]);
 const ADD_CROP_VALUE = "__add_crop__";
 const MAX_CALENDAR_LANES = 3;
@@ -290,6 +291,7 @@ const Planning = () => {
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
   const effectiveAreas = Form.useWatch("effective_areas", form) || {};
   const selectedActivityType = Form.useWatch("activity_type", form);
+  const selectedFieldContext = Form.useWatch("field_context", form);
   const selectedDateRange = Form.useWatch("date_range", form);
   const selectedCampaignId = Form.useWatch("campaign_id", form);
   const registerCompleted = Boolean(Form.useWatch("register_completed", form));
@@ -1070,6 +1072,7 @@ const Planning = () => {
         activity_type: row.activity_type,
         campaign_id: row.campaign_id,
         crop_id: row.crop_id,
+        field_context: row.field_context,
         date_range: [getPlanningDayjs(row.start_at), getPlanningDayjs(row.end_at)],
         responsible_user: row.responsible_user,
         vehicle_id: row.vehicle_id,
@@ -1148,6 +1151,7 @@ const Planning = () => {
         activity_type: values.activity_type,
         campaign_id: values.campaign_id,
         crop_id: values.crop_id || null,
+        field_context: hasFieldContext(values.activity_type) ? (values.field_context ?? null) : null,
         start_at: start?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
         end_at: end?.format("YYYY-MM-DD[T]00:00:00.000[Z]"),
         responsible_user: values.responsible_user,
@@ -1876,14 +1880,19 @@ const Planning = () => {
             </Form.Item>
           )}
 
+          {hasFieldContext(selectedActivityType) && <Form.Item name="field_context" label="Situación del lote"
+            rules={(!editing || editing.field_context != null || selectedActivityType !== editing.activity_type) ? [{required:true,message:'Seleccioná la situación del lote.'}] : []}>
+            <Select disabled={isEditingCompleted} allowClear={Boolean(editing && editing.field_context == null)}
+              placeholder={editing ? 'Sin especificar' : 'Seleccioná la situación del lote'} options={FIELD_CONTEXT_OPTIONS} />
+          </Form.Item>}
           <Form.Item
             name="crop_id"
-            label="Cultivo"
-            required={!isEditingCompleted && ACTIVITIES_REQUIRING_CROP.has(selectedActivityType)}
+            label={contextCropLabel(hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
+            required={!isEditingCompleted && cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
             rules={isEditingCompleted ? [] : [
               {
                 validator: (_, value) => {
-                  if (ACTIVITIES_REQUIRING_CROP.has(selectedActivityType) && !value) {
+                  if (cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null) && !value) {
                     return Promise.reject(new Error("Seleccioná un cultivo."));
                   }
                   return Promise.resolve();
@@ -2206,6 +2215,7 @@ const Planning = () => {
                 <strong>{getPlanningDisplayName(viewing, cropIx)}</strong>
                 {viewing.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario. Los productos y cantidades son informativos y no modificaron el stock.</p>}
               </Descriptions.Item>
+              {fieldSituation(viewing,cropIx) && <Descriptions.Item label="Situación del lote">{fieldSituation(viewing,cropIx)}</Descriptions.Item>}
               <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
               <Descriptions.Item label="Campaña">
                 {campaignLabel(viewing)}
