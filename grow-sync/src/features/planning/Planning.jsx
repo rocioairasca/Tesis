@@ -1,5 +1,6 @@
+import PlanningRegistrationType from './components/PlanningRegistrationType';
 import PlanningDateFields from './components/PlanningDateFields';
-import {durationMode,validatedDateRange,activityChangeFields} from './planningFormFlow.mjs';
+import {durationMode,validatedDateRange,activityChangeFields,registrationModeFields} from './planningFormFlow.mjs';
 import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel,fieldSituation} from './fieldContext.mjs';
 import EffectiveAreaFields from './components/EffectiveAreaFields';
 import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
@@ -31,7 +32,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   Alert,
   Button, Card, Drawer, Form, Input, Select, DatePicker,
-  Dropdown, Space, Row, Col, Tag, notification, Switch,
+  Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
 import {
@@ -1878,14 +1879,21 @@ const Planning = () => {
           </Form.Item>
 
           {selectedActivityType && <>
+          {!editing && <Form.Item name="register_completed" label="¿La actividad ya se realizó?"
+            extra={registerCompleted ? 'Registrá un trabajo que ya fue realizado.' : 'La actividad se realizará próximamente.'}>
+            <PlanningRegistrationType onChange={completed=>{
+              form.setFieldsValue(registrationModeFields(completed));
+              form.setFields([{name:'date_range',errors:[]},{name:'effective_date',errors:[]}]);
+            }} />
+          </Form.Item>}
           {(!registerCompleted || editing) && <PlanningDateFields form={form} disabled={isEditingCompleted} onRangeChange={syncCampaignForRange} />}
 
           {!editing && registerCompleted && (
             <Form.Item
               name="effective_date"
-              label="Fecha real de realización"
+              label="Fecha de realización"
               extra="Indicá la fecha en la que el trabajo se realizó efectivamente."
-              rules={[{ required: true, message: "Seleccioná la fecha real de realización." }]}
+              rules={[{ required: true, message: "Seleccioná la fecha de realización." }]}
             >
               <DatePicker
                 format="DD/MM/YYYY"
@@ -2154,16 +2162,6 @@ const Planning = () => {
             />
           </Form.Item>
 
-          {!editing && (
-            <Form.Item
-              name="register_completed"
-              label="Registrar como realizada"
-              valuePropName="checked"
-              style={{ marginBottom: 16 }}
-            >
-              <Switch checkedChildren="Sí" unCheckedChildren="No" />
-            </Form.Item>
-          )}
 
           {(!registerCompleted || editing) && (
             <Form.Item name="status" label="Estado">

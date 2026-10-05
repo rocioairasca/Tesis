@@ -9,3 +9,8 @@ export function validatedDateRange(range,mode='day') {
  return dates;
 }
 export const activityChangeFields=activity=>hasFieldContext(activity) ? {} : {field_context:null};
+
+// Creation-only toggle. Clear both date stores so a hidden value cannot be submitted later.
+export const registrationModeFields=completed=>({
+ register_completed:Boolean(completed),date_range:undefined,effective_date:undefined,duration_mode:'day',
+});

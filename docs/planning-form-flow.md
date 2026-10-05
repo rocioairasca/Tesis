@@ -1,5 +1,7 @@
 # Flujo del formulario Planning: actividad y duración
 
+Actualización posterior: el tipo de registro ahora aparece inmediatamente después de Actividad. Ver [planning-registration-type.md](planning-registration-type.md) para el orden y comportamiento vigentes. El resto de este documento describe la implementación original de duración.
+
 Cambio exclusivamente frontend en C:\Proyectos\Tesis. Sin commit ni staging. Sin modificaciones de backend, base de datos, reglas de inventario o registros existentes. No requiere migración.
 
 ## Orden visual
