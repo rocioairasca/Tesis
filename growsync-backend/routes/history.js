@@ -3,6 +3,7 @@ const {pool}=require('../db/supabaseClient');
 const requirePermission=require('../middleware/requirePermission');
 const {importHistory}=require('../services/historicalImport');
 router.use(requirePermission('history.import'));
+router.use('/reconcile-sowing', require('./reconcileSowing')(pool));
 router.get('/stock-initial/status',async(req,res,next)=>{
   try {
     res.set('Cache-Control','no-store');
