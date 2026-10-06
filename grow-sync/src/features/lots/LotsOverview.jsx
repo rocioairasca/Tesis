@@ -1,3 +1,4 @@
+import {unitCampaign,conflictMessage} from './productiveStatePresentation.mjs';
 import { campaignOptions, campaignValue } from '../../utils/campaigns.mjs';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Drawer, Select } from 'antd';
@@ -62,7 +63,7 @@ export default function LotsOverview({ user, source = lotsOverviewSource, initia
   const clearFilters = () => { setFilters({ ...initialFilters, state: access.view ? 'enabled' : 'disabled' }); setPage(1); };
   const metrics = overviewMetrics(visible);
   const crops = [...new Set(rows.filter(row => row.productiveAvailable).flatMap(row => row.crops))].sort();
-  const campaigns = [...new Map(rows.filter(row=>row.productiveAvailable).flatMap(row=>row.units.map(unit=>unit.current_crop)).filter(c=>c?.campaign_id || c?.campaign_name).map(c=>[campaignValue(c),c])).values()];
+  const campaigns = [...new Map(rows.filter(row=>row.productiveAvailable).flatMap(row=>row.units.map(unitCampaign)).filter(c=>c?.campaign_id || c?.campaign_name).map(c=>[campaignValue(c),c])).values()];
   const actionFor = row => lotActions(row, access).map(action => ({ ...action, label: action.key === 'edit' && action.disabled ? 'Editar (habilitá el lote primero)' : action.label,
     onClick: () => {
       if (action.hidden || action.disabled) return;
@@ -91,7 +92,7 @@ export default function LotsOverview({ user, source = lotsOverviewSource, initia
   const columns = [
     { title: 'Lote', key: 'name', dataIndex: 'name', render: (_, row) => <div className={row.enabled ? '' : 'gs-lots-muted'}><EntityLink onClick={() => openOnMap(row)}>{row.name}</EntityLink>{row.divisions.length > 0 && <details className="gs-lots-sub-list"><summary>{row.divisions.length} divisiones</summary>{row.divisions.map(sub => <p key={sub.key}><EntityLink onClick={() => openOnMap(sub)}>{sub.name}</EntityLink><span> · {areaLabel(sub.area)}</span></p>)}</details>}</div> },
     { title: 'Superficie', key: 'area', render: (_, row) => areaLabel(row.area) },
-    { title: 'Cultivo', key: 'crop', render: (_, row) => cropText(row) },
+    { title: 'Cultivo', key: 'crop', render: (_, row) => <span>{cropText(row)}{row.productiveConflict && <small style={{display:'block',whiteSpace:'normal'}}>{conflictMessage}</small>}</span> },
     { title: 'Campaña', key: 'campaign', render: (_, row) => campaignText(row) },
     { title: 'Divisiones', key: 'divisions', render: (_, row) => row.divisions.length },
     { title: 'Estado', key: 'state', render: (_, row) => <StatusBadge tone="neutral">{row.enabled ? 'Activo' : 'Deshabilitado'}</StatusBadge> },
@@ -115,12 +116,9 @@ export default function LotsOverview({ user, source = lotsOverviewSource, initia
             {!mobile && <aside className="gs-lots-context" aria-label="Información del seleccionado"><LotOverviewContext row={selection} actions={actionFor} onClose={selection ? () => setSelectionKey(null) : undefined} /></aside>}
           </div>
           {mobile && <Drawer title="Lote seleccionado" closable={false} extra={<Button aria-label="Cerrar información del lote" onClick={() => setSelectionKey(null)}>Cerrar</Button>} placement="bottom" open={Boolean(selection)} onClose={() => setSelectionKey(null)} height="min(58dvh, 520px)" mask={false} rootClassName="gs-lots-bottom-sheet" destroyOnHidden><LotOverviewContext row={selection} actions={actionFor} /></Drawer>}
-        </> : <DataTable title="Lista de lotes" columns={columns.map(column => ({ ...column, ellipsis: false }))} dataSource={listRows(visible)} rowKey="key" rowLabel={row => row.name} actions={actionFor} pagination={{ current: page, pageSize: 10, onChange: setPage }} renderMobile={row => <div className={row.enabled ? '' : 'gs-lots-muted'}><p>{areaLabel(row.area)} · {row.productiveAvailable ? `${cropText(row)} · ${campaignText(row)}` : "Contexto productivo no disponible"}</p><StatusBadge tone="neutral">{row.enabled ? 'Activo' : 'Deshabilitado'}</StatusBadge><p><EntityLink onClick={() => openOnMap(row)}>Ver en mapa</EntityLink></p>{row.divisions.length > 0 && <details className="gs-lots-sub-list"><summary>{row.divisions.length} divisiones</summary>{row.divisions.map(sub => <p key={sub.key}><EntityLink onClick={() => openOnMap(sub)}>{sub.name}</EntityLink> · {areaLabel(sub.area)} · {cropText(sub)}</p>)}</details>}</div>} />}
+        </> : <DataTable title="Lista de lotes" columns={columns.map(column => ({ ...column, ellipsis: false }))} dataSource={listRows(visible)} rowKey="key" rowLabel={row => row.name} actions={actionFor} pagination={{ current: page, pageSize: 10, onChange: setPage }} renderMobile={row => <div className={row.enabled ? '' : 'gs-lots-muted'}><p>{areaLabel(row.area)} · {row.productiveAvailable ? `${cropText(row)} · ${campaignText(row)}` : "Contexto productivo no disponible"}</p>{row.productiveConflict && <p className="gs-lots-secondary">{conflictMessage}</p>}<StatusBadge tone="neutral">{row.enabled ? 'Activo' : 'Deshabilitado'}</StatusBadge><p><EntityLink onClick={() => openOnMap(row)}>Ver en mapa</EntityLink></p>{row.divisions.length > 0 && <details className="gs-lots-sub-list"><summary>{row.divisions.length} divisiones</summary>{row.divisions.map(sub => <p key={sub.key}><EntityLink onClick={() => openOnMap(sub)}>{sub.name}</EntityLink> · {areaLabel(sub.area)} · {cropText(sub)}</p>)}</details>}</div>} />}
       </>}
     </>}
     {confirmation && <ConfirmDialog open title={`${confirmation.action === 'disable' ? 'Deshabilitar' : 'Habilitar'} ${confirmation.row.name}`} description={confirmation.action === 'disable' ? 'El lote dejará de estar disponible para nuevas operaciones.' : 'El lote volverá a estar disponible en la lista de activos.'} consequences="El historial se conserva." destructive={confirmation.action === 'disable'} confirmLabel={confirmation.action === 'disable' ? 'Deshabilitar lote' : 'Habilitar lote'} onCancel={() => setConfirmation(null)} onConfirm={() => confirmation.action === 'disable' ? onDisable(confirmation.row.lot) : onEnable(confirmation.row.lot)} onSuccess={() => { setConfirmation(null); setSelectionKey(null); }} />}
   </div>;
 }
-
-
-

@@ -1,3 +1,5 @@
+import ProductiveStateLabel from './ProductiveStateLabel';
+import {stateLabel} from '../productiveStatePresentation.mjs';
 /**
  * Componente: LotTable
  * Ubicación: src/features/lots/components/LotTable.jsx
@@ -31,8 +33,8 @@ const getActiveSubLots = (lot) => (
     Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
 
-const getUnitCropName = (unit) => unit?.current_crop?.crop_name || null;
-const formatCropCount = (count) => `${count} ${count === 1 ? 'cultivo' : 'cultivos'}`;
+const getUnitCropName = stateLabel;
+const formatCropCount = (count) => `${count} ${count === 1 ? 'estado' : 'estados'}`;
 
 const LotTable = ({
     lots,
@@ -55,10 +57,10 @@ const LotTable = ({
         const state = productiveStates[getId(record)];
         const units = Array.isArray(state?.units) ? state.units : [];
 
-        if (!units.length) return <Text type="secondary">Sin cultivo</Text>;
+        if (!units.length) return <Text type="secondary">Estado no determinado</Text>;
 
-        const currentUnits = units.filter((unit) => unit.current_crop?.crop_name);
-        if (!currentUnits.length) return <Text type="secondary">Sin cultivo</Text>;
+        const currentUnits = units.filter((unit) => unit.state || unit.current_crop?.crop_name);
+        if (!currentUnits.length) return <Text type="secondary">Estado no determinado</Text>;
 
         if (state.mode === 'sub_lots') {
             const subLots = getActiveSubLots(record);
@@ -72,7 +74,7 @@ const LotTable = ({
             return (
                 <Space direction="vertical" size={4}>
                     {allSubLotsHaveSameCrop ? (
-                        <Text>{uniqueCrops[0]}</Text>
+                        <ProductiveStateLabel unit={currentUnits[0]} />
                     ) : (
                         <Tag color="green">{formatCropCount(uniqueCrops.length || currentUnits.length)}</Tag>
                     )}
@@ -80,13 +82,13 @@ const LotTable = ({
                         const cropName = getUnitCropName(unitBySubLotId.get(subLot.id));
                         return (
                             <Text key={subLot.id} type="secondary" style={{ paddingLeft: 18 }}>
-                                {cropName || 'Sin cultivo'}
+                                <ProductiveStateLabel unit={unitBySubLotId.get(subLot.id)} />
                             </Text>
                         );
                     })}
                     {subLots.length === 0 && currentUnits.slice(0, 2).map((unit) => (
                         <Text key={unit.sub_lot_id || unit.name} type="secondary" style={{ paddingLeft: 18 }}>
-                            {unit.current_crop.crop_name}
+                            <ProductiveStateLabel unit={unit} />
                         </Text>
                     ))}
                     {subLots.length === 0 && currentUnits.length > 2 && (
@@ -99,8 +101,8 @@ const LotTable = ({
         const unit = currentUnits[0];
         return (
             <Space direction="vertical" size={4}>
-                <Text>{unit.current_crop.crop_name}</Text>
-                {unit.current_crop.campaign_name && (
+                <Text><ProductiveStateLabel unit={unit} /></Text>
+                {!unit.state && unit.current_crop?.campaign_name && (
                     <Text type="secondary">{unit.current_crop.campaign_name}</Text>
                 )}
             </Space>

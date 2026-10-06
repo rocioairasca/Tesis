@@ -2,11 +2,13 @@
 
 Referencia: **06/10/2026**, Argentina. Empresa `2791ea15-7dad-48e2-945b-3791e2d44478`.
 
-## Actualización: fechas confirmadas e implementación de soporte
+## Actualización: cuatro Trigos reconciliados y declaraciones implementadas
 
 La fuente operativa confirmó que el primer día del período fue el inicio real de siembra: 13-15 **23/05/2026**, Lote 12 **26/05/2026**, Lote 1 **29/05/2026**, T1 **01/06/2026**. Ya no falta ese dato para estos cuatro casos. `effective_date` histórica se conserva, incluso si sigue NULL: la fecha confirmada se usa exclusivamente como inicio del nuevo ciclo.
 
-Implementados localmente `POST /api/history/reconcile-sowing/prepare` y `/confirm`, mediante servicio específico; no se ejecutaron contra producción. Soporte limitado a los cuatro IDs de Trigo y campaña confirmados. T2 y T3 excluidos explícitamente. Ver [reconcile-sowing-implementation.md](reconcile-sowing-implementation.md) para contrato, límites y ejecución posterior de prepare.
+Según confirmación del usuario, **13-15, 12, 1 y T1 ya fueron reconciliados exitosamente en producción mediante reconcile-sowing**: Trigo desde 23/05/2026, 26/05/2026, 29/05/2026 y 01/06/2026, respectivamente. **Stock unchanged; 0 movimientos creados.** Esta tarea no consultó producción para repetir esa comprobación ni ejecutó endpoints productivos. Soporte limitado a los cuatro IDs de Trigo y campaña confirmados. T2 y T3 excluidos explícitamente. Ver [reconcile-sowing-implementation.md](reconcile-sowing-implementation.md) para contrato, límites y ejecución posterior de prepare.
+
+Implementado localmente el modelo multiempresa de declaraciones y resolver único de lectura. T2-A puede representarse como Trigo y T2-B como Rastrojo de Soja observados el 06/10/2026, con conflicto explícito frente a Soja whole-lot abierta. **No se insertaron esas declaraciones reales**, no se modificó Soja ni la Planning Trigo de T2, y no se reparó T3, canal ni Alfalfa. Ver [productive-state-declarations.md](productive-state-declarations.md).
 
 ## Alcance y evidencia
 
@@ -47,10 +49,10 @@ A = reparación segura demostrada; B = dato faltante; C = historial compatible, 
 
 | Superficie | Verdad vigente | Clasificación con evidencia disponible | Diagnóstico / acción |
 |---|---|---|---|
-| T1 | Trigo | A condicionada al prepare vigente | Planning completada, cultivo NULL y vínculo faltante; effective_date NULL en backup. |
-| 13-15 | Trigo | A condicionada al prepare vigente | Igual; Soja previa cerrada 01/05/2026 compatible con período de Trigo. |
-| 12 | Trigo | A condicionada a cobertura/prepare vigente | Igual; backup tiene 12-A/12-B y Soja previa cerrada en A. Validar cobertura total y layout vigente. |
-| 1 | Trigo | A condicionada al prepare vigente | Igual; no assignment del lote en backup, ausencia actual no comprobada. |
+| T1 | Trigo | A ejecutada, confirmada por usuario | Reconciliado en producción mediante reconcile-sowing. Backup previo conservado como evidencia histórica, no estado vigente. |
+| 13-15 | Trigo | A ejecutada, confirmada por usuario | Reconciliado en producción mediante reconcile-sowing. Backup previo conservado como evidencia histórica, no estado vigente. |
+| 12 | Trigo | A ejecutada, confirmada por usuario | Reconciliado en producción mediante reconcile-sowing. Backup previo conservado como evidencia histórica, no estado vigente. |
+| 1 | Trigo | A ejecutada, confirmada por usuario | Reconciliado en producción mediante reconcile-sowing. Backup previo conservado como evidencia histórica, no estado vigente. |
 | T2-A | Trigo | D + B | Soja abierta whole-lot invade ambas unidades. No abrir Trigo hasta resolver integridad y fecha. |
 | T3 | Cebada | D + B | Siembra asociada a T4; confirmar grafo, fecha y superficie histórica. |
 | 16 | Alfalfa | B | Implantación sin fecha conocida. Declarar estado sin ciclo ficticio. |
@@ -78,7 +80,7 @@ Cultivo `2f9aabe7-d74d-400c-92c7-8b2b4f8fed8f`. Backup: campaña existente `4289
 | 1 | ab0c87f3-8edf-40b3-b1e4-4eca931734ec | 29–30/05/2026 | a21d67cd-667d-4c17-bbc6-db7f4b20b617 | 44.0532 |
 | T1 | b71d0fad-659e-493b-8127-104b93844983 | 01–02/06/2026 | a7df5a3f-9b62-4347-b576-be736896470d | 68.8447 |
 
-**La fecha inicial de los cuatro ciclos fue confirmada explícitamente por la fuente operativa.** effective_date/completed_at son NULL en backup y deben conservarse; esa ausencia ya no bloquea estos cuatro casos porque existe confirmación externa del inicio real. No se dedujo fecha desde usos ni desde el fallback de adopción. La ejecución sigue condicionada al prepare del grafo vigente y a todas las precondiciones, sin adopción automática.
+**La fecha inicial de los cuatro ciclos fue confirmada explícitamente por la fuente operativa.** effective_date/completed_at son NULL en backup y deben conservarse; esa ausencia ya no bloquea estos cuatro casos porque existe confirmación externa del inicio real. No se dedujo fecha desde usos ni desde el fallback de adopción. La ejecución de estos cuatro casos ya fue confirmada como exitosa por el usuario. El contrato mantiene las precondiciones para cualquier operación futura, sin adopción automática.
 
 Assignment debe tomar estructura vigente y cobertura documentada, conservando planning_lots.area_ha. Bajo trigger actual, si estructura coincide, valores nuevos serían 92.65/64.36/44.05/68.84; auditar área fuente y persistida. Para Lote 12 whole-lot puede representar cobertura completa aun subdividido, pero validar geometría y conflictos; no dividir la Planning ni inventar reparto de usos.
 
@@ -153,7 +155,7 @@ API: state.kind, cultivo/residuo, source derived/declaration, observed_on o fech
 - Declaraciones y, solo si la solución T2 lo exige, retractación administrativa general; no ignorar ciclos solo en un endpoint.
 - Variante acotada de historicalPlanningGuard y grafo completo; nuevo servicio/rutas reconcile-sowing. No ampliar whitelist genérica sin validación integral.
 - planningCompletion: separar área estructural de operativa/effective_area_ha y causa de transición. harvestCycles/harvestRegistration: evidencia explícita de cierre sin reinterpretar cantidades.
-- productiveState: resolver compartido, todas las evidencias/conflictos sin LIMIT 1 silencioso. GET `/productive-states` y `/:lotId/productive-state` en routes/lot.js; verificar prefijo de montaje. Nuevos prepare/confirm de declaraciones, todavía no disponibles.
+- productiveState: resolver compartido, todas las evidencias/conflictos sin LIMIT 1 silencioso. GET `/productive-states` y `/:lotId/productive-state` en routes/lot.js; verificar prefijo de montaje. Prepare/confirm de declaraciones implementados localmente; pendientes de desplegar, sin declaraciones reales insertadas.
 - Frontend de lotes/Planning: rastrojo, implantado con fecha desconocida, unknown y conflictos; no generar ciclos/consumos desde declaración.
 - historical_events/imports: auditoría/idempotencia reutilizadas con procedencia de reconciliación, sin editar eventos previos ni duplicar estado derivado.
 
@@ -267,9 +269,6 @@ El diagnóstico inicial fue documental. La implementación posterior agrega prue
 
 ## Decisión
 
-Las cuatro siembras Trigo cuentan con fecha de inicio confirmada y servicio local de corrección sin recompletar ni tocar usos/stock; **la ejecución requiere prepare vigente con todas las precondiciones cumplidas**. T2/T3 requieren revisión integral; Alfalfa/Santos se pueden representar por declaración de estado; canal conserva Sorgo y expone Soja vigente con discrepancia. Rastrojos compatibles se derivan solo con cierre respaldado y cobertura probada.
+Las cuatro siembras Trigo cuentan con fecha de inicio confirmada y servicio local de corrección sin recompletar ni tocar usos/stock; **la reconciliación de estos cuatro casos ya fue ejecutada exitosamente en producción según confirmación del usuario, con stock intacto y cero movimientos**. T2/T3 requieren revisión integral; Alfalfa/Santos se pueden representar por declaración de estado; canal conserva Sorgo y expone Soja vigente con discrepancia. Rastrojos compatibles se derivan solo con cierre respaldado y cobertura probada.
 
 Recomendación: hechos productivos + declaraciones auditadas no derivables, con un resolver único. Sin tabla duplicada editable de estado actual ni ciclos falsos. Despliegues y modificaciones de datos quedan fuera de esta tarea.
-
-
-

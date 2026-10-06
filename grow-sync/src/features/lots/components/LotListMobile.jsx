@@ -1,3 +1,5 @@
+import ProductiveStateLabel from './ProductiveStateLabel';
+import {stateLabel} from '../productiveStatePresentation.mjs';
 /**
  * Componente: LotListMobile
  * Ubicación: src/features/lots/components/LotListMobile.jsx
@@ -29,8 +31,8 @@ const getActiveSubLots = (lot) => (
     Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
 );
 
-const getUnitCropName = (unit) => unit?.current_crop?.crop_name || null;
-const formatCropCount = (count) => `${count} ${count === 1 ? 'cultivo' : 'cultivos'}`;
+const getUnitCropName = stateLabel;
+const formatCropCount = (count) => `${count} ${count === 1 ? 'estado' : 'estados'}`;
 
 const LotListMobile = ({
     lots,
@@ -50,7 +52,7 @@ const LotListMobile = ({
                 const subLots = getActiveSubLots(lot);
                 const productiveState = productiveStates[getId(lot)];
                 const productiveUnits = Array.isArray(productiveState?.units) ? productiveState.units : [];
-                const currentUnits = productiveUnits.filter((unit) => unit.current_crop?.crop_name);
+                const currentUnits = productiveUnits.filter((unit) => unit.state || unit.current_crop?.crop_name);
                 const unitBySubLotId = new Map(productiveUnits.map((unit) => [unit.sub_lot_id, unit]));
                 const cropNames = currentUnits.map(getUnitCropName).filter(Boolean);
                 const uniqueCrops = Array.from(new Set(cropNames));
@@ -127,7 +129,7 @@ const LotListMobile = ({
                                 {productiveState?.mode === 'sub_lots' ? (
                                     <>
                                         {allSubLotsHaveSameCrop ? (
-                                            <span>{uniqueCrops[0]}</span>
+                                            <ProductiveStateLabel unit={currentUnits[0]} />
                                         ) : (
                                             <Tag color="green">{formatCropCount(uniqueCrops.length || currentUnits.length)}</Tag>
                                         )}
@@ -135,19 +137,19 @@ const LotListMobile = ({
                                             <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                                                 {subLots.map((subLot) => (
                                                     <li key={subLot.id}>
-                                                        {getUnitCropName(unitBySubLotId.get(subLot.id)) || 'Sin cultivo'}
+                                                        <ProductiveStateLabel unit={unitBySubLotId.get(subLot.id)} />
                                                     </li>
                                                 ))}
                                             </ul>
                                         )}
                                     </>
                                 ) : (
-                                    <span>{currentUnits[0].current_crop.crop_name}</span>
+                                    <ProductiveStateLabel unit={currentUnits[0]} />
                                 )}
                             </div>
                         ) : (
                             <div style={{ marginTop: 6, color: '#8c8c8c' }}>
-                                Sin cultivo
+                                Estado no determinado
                             </div>
                         )}
                     </div>

@@ -1,0 +1,31 @@
+// Optional real PostGIS acceptance. Local loopback only, temp tables, no Supabase/.env.
+const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
+const {productiveStateSql}=require('../services/productiveStateLegacy');
+const localURL=process.env.PRODUCTIVE_STATE_LOCAL_POSTGIS_URL;
+test('PostGIS real: proyección legacy whole-lot y porcentajes de cobertura', {skip:!localURL},async t=>{
+ const url=new URL(localURL);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname),'Only local loopback PostgreSQL is allowed');
+ const {Client}=require('pg'),db=new Client({connectionString:localURL});await db.connect();t.after(async()=>{try{await db.query('ROLLBACK');}finally{await db.end();}});
+ await db.query('BEGIN');
+ await db.query('SELECT postgis_version()');
+ await db.query(`CREATE TEMP TABLE lots(id uuid,name text,company_id uuid,enabled bool,area_ha numeric,area numeric,geom geometry);
+ CREATE TEMP TABLE lot_layouts(id uuid,lot_id uuid,company_id uuid,status text);
+ CREATE TEMP TABLE sub_lots(id uuid,layout_id uuid,lot_id uuid,company_id uuid,name text,enabled bool,area_ha numeric,geom geometry,sort_order int);
+ CREATE TEMP TABLE crops(id uuid,company_id uuid,name text);
+ CREATE TEMP TABLE campaigns(id uuid,company_id uuid,name text,start_date date,end_date date,status text);
+ CREATE TEMP TABLE crop_assignments(id uuid,company_id uuid,lot_id uuid,sub_lot_id uuid,crop_id uuid,campaign_id uuid,start_date date,end_date date,created_at timestamptz);`);
+ const company=randomUUID(),lot=randomUUID(),layout=randomUUID(),a=randomUUID(),b=randomUUID(),crop=randomUUID(),campaign=randomUUID(),assignment=randomUUID(),old=randomUUID();
+ const parent='POLYGON((-63 -32,-62.98 -32,-62.98 -31.98,-63 -31.98,-63 -32))';
+ const ga='POLYGON((-63 -32,-62.99 -32,-62.99 -31.98,-63 -31.98,-63 -32))',gb='POLYGON((-62.99 -32,-62.98 -32,-62.98 -31.98,-62.99 -31.98,-62.99 -32))';
+ await db.query('INSERT INTO lots VALUES($1,\'T2\',$2,true,70.9676,70.97,ST_GeomFromText($3,4326))',[lot,company,parent]);
+ await db.query("INSERT INTO lot_layouts VALUES($1,$2,$3,'active')",[layout,lot,company]);
+ for(const [id,name,g,order] of [[a,'A',ga,0],[b,'B',gb,1],[old,'old-A',ga,2]])await db.query("INSERT INTO sub_lots VALUES($1,$2,$3,$4,$5,true,35,ST_GeomFromText($6,4326),$7)",[id,id===old?randomUUID():layout,lot,company,name,g,order]);
+ await db.query("INSERT INTO crops VALUES($1,$2,'Soja');",[crop,company]);await db.query("INSERT INTO campaigns VALUES($1,$2,'Campaign','2025-01-01',NULL,'active')",[campaign,company]);
+ await db.query("INSERT INTO crop_assignments VALUES($1,$2,$3,NULL,$4,$5,'2025-12-05',NULL,now())",[assignment,company,lot,crop,campaign]);
+ let rows=(await db.query(productiveStateSql('AND l.id=$3'),[company,'2026-10-06',lot])).rows;
+ assert.equal(rows.length,2);for(const row of rows)assert.equal(row.current_crop.assignment_id,assignment);
+ await db.query('DELETE FROM crop_assignments');
+ await db.query("INSERT INTO crop_assignments VALUES($1,$2,$3,$4,$5,$6,'2025-01-01','2025-02-01',now())",[assignment,company,lot,old,crop,campaign]);
+ rows=(await db.query(productiveStateSql('AND l.id=$3'),[company,'2026-10-06',lot])).rows;
+ assert.equal(rows.find(r=>r.sub_lot_id===a).previous_crops[0].percentage,100);
+ assert.deepEqual(rows.find(r=>r.sub_lot_id===b).previous_crops,[]);
+});

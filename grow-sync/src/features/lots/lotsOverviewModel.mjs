@@ -1,3 +1,4 @@
+import {stateLabel,unitCropName,unitCampaign,conflictMessage,observedLabel} from './productiveStatePresentation.mjs';
 import { campaignLabel, campaignValue, sortCampaigns } from '../../utils/campaigns.mjs';
 import { numberValue, formatNumber } from '../../utils/numberFormat.js';
 
@@ -19,8 +20,8 @@ export function buildLotRows(lots, states = {}, statesAvailable = true) {
         area: numberValue(sub ? entity.area_ha : entity.area_ha ?? entity.area),
         geometry: displayGeometry(entity.geom) || displayGeometry(entity.location),
         enabled: lot.enabled !== false, productiveAvailable: available && (!sub || matchingUnits.length > 0),
-        units: matchingUnits, crops: unique(matchingUnits.map(unit => unit.current_crop?.crop_name)),
-        campaigns: unique(sortCampaigns(matchingUnits.map(unit => unit.current_crop).filter(c=>c?.campaign_id || c?.campaign_name),'desc').map(campaignLabel)),
+        units: matchingUnits, crops: unique(matchingUnits.map(unitCropName)), stateLabels: unique(matchingUnits.map(stateLabel)), productiveConflict: matchingUnits.some(unit=>unit.state?.conflict), observations: unique(matchingUnits.map(observedLabel)),
+        campaigns: unique(sortCampaigns(matchingUnits.map(unitCampaign).filter(c=>c?.campaign_id || c?.campaign_name),'desc').map(campaignLabel)),
       };
     };
     const row = make(lot);
@@ -45,7 +46,7 @@ export function filterLotRows(rows, filters) {
     if (filters.divided === 'yes' && !row.children.length) return false;
     if (filters.divided === 'no' && row.children.length) return false;
     // Campaign + crop must match the same productive unit, not different siblings.
-    if ((filters.crop || filters.campaign) && (!row.productiveAvailable || !row.units.some(unit => (!filters.crop || unit.current_crop?.crop_name === filters.crop) && (!filters.campaign || campaignValue(unit.current_crop) === filters.campaign)))) return false;
+    if ((filters.crop || filters.campaign) && (!row.productiveAvailable || !row.units.some(unit => (!filters.crop || unitCropName(unit) === filters.crop) && (!filters.campaign || campaignValue(unitCampaign(unit)) === filters.campaign)))) return false;
     return true;
   });
 }
@@ -65,4 +66,3 @@ export function lotActions(row, access) {
     { key: 'disable', label: 'Deshabilitar lote', danger: true, hidden: !access.disable || !row.enabled || Boolean(row.subLot) },
   ];
 }
-

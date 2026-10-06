@@ -254,7 +254,4 @@ async function run(pool,input,confirming) {
     throw error;
   });
 }
-module.exports = {prepare:(pool,input)=>run(pool,input,false),confirm:(pool,input)=>run(pool,input,true),CASES,COMPANY,CROP,CAMPAIGN};
-
-
-
+module.exports = {prepare:(pool,input)=>run(pool,input,false),confirm:(pool,input)=>run(pool,input,true),CASES,COMPANY,CROP,CAMPAIGN,catalog,snapshot};

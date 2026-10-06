@@ -1,3 +1,5 @@
+import ProductiveStateLabel from './components/ProductiveStateLabel';
+import {unitCampaign} from './productiveStatePresentation.mjs';
 import { campaignLabel, sortCampaigns } from '../../utils/campaigns.mjs';
 import HarvestTrace from '../harvest/HarvestTrace';
 import { calendarDateKey, parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
@@ -622,22 +624,18 @@ const LotDivisions = () => {
               >
                 <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12}>
-                    <Text type="secondary">Cultivo actual</Text>
+                    <Text type="secondary">Estado productivo</Text>
                     <div>
-                      {unit.current_crop?.crop_name ? (
-                        <Text strong>{unit.current_crop.crop_name}</Text>
-                      ) : (
-                        <Text type="secondary">Sin cultivo asignado actualmente</Text>
-                      )}
+                      <ProductiveStateLabel unit={unit} details />
                     </div>
                   </Col>
                   <Col xs={12} sm={6}>
-                    <Text type="secondary">Desde</Text>
-                    <div>{unit.current_crop?.start_date ? formatDate(unit.current_crop.start_date) : '-'}</div>
+                    <Text type="secondary">{unit.state?.source === 'declaration' ? 'Fecha agronómica no documentada' : (unit.state ? 'Fecha del hecho' : 'Desde')}</Text>
+                    <div>{unit.state?.source === 'declaration' ? '-' : (unit.state?.effective_date ? formatDate(unit.state.effective_date) : (unit.current_crop?.start_date ? formatDate(unit.current_crop.start_date) : '-'))}</div>
                   </Col>
                   <Col xs={12} sm={6}>
                     <Text type="secondary">Campaña</Text>
-                    <div>{unit.current_crop?.campaign_name || '-'}</div>
+                    <div>{unitCampaign(unit)?.campaign_name || '-'}</div>
                   </Col>
                   <Col span={24}>
                     <Text type="secondary">
@@ -646,7 +644,7 @@ const LotDivisions = () => {
                     <div>{renderPreviousCrops(unit.previous_crops)}</div>
                   </Col>
                 </Row>
-                {canManageProductiveState && unit.current_crop?.assignment_id && !unit.current_crop?.end_date ? (
+                {canManageProductiveState && unit.state?.source !== 'declaration' && unit.current_crop?.assignment_id && !unit.current_crop?.end_date ? (
                   <Button
                     size="small"
                     style={{ marginTop: 12 }}
