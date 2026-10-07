@@ -6,27 +6,35 @@ const signature=x=>x.kind+':'+(x.crop?.id||'');
 const cropOf=x=>x.crop_id?{id:x.crop_id,name:x.crop_name}:null;
 const empty=()=>({kind:'unknown',crop:null,source:'derived',observed_on:null,effective_date:null,quality:'insufficient',conflict:false,conflicts:[],evidence_ids:[]});
 function resolveUnit(unit,date,cycles=[],declarations=[]) {
-  const conflicts=[],events=[];
+  const conflicts=[],events=[],supersededStarts=[];
   const applicable=cycles.filter(c=>c.lot_id===unit.lot_id && (c.sub_lot_id===null || c.sub_lot_id===unit.sub_lot_id));
   const uncertain=cycles.filter(c=>c.lot_id===unit.lot_id && c.sub_lot_id!==null && c.sub_lot_id!==unit.sub_lot_id && c.start_date<=date && (!c.end_date||c.end_date>=date));
   for(const c of uncertain)conflicts.push({type:'coverage_requires_review',assignment_id:c.id,crop_id:c.crop_id,crop_name:c.crop_name});
   for(const c of applicable) {
     if(c.start_date>date)continue;
-    events.push({kind:'growing_crop',crop:cropOf(c),effective_date:c.start_date,evidence_ids:[c.id],trusted:true});
+    const start={kind:'growing_crop',crop:cropOf(c),effective_date:c.start_date,evidence_ids:[c.id],trusted:true};
     const harvests=(c.harvests||[]).filter(h=>h.enabled&&h.harvest_date<=date);
     const closed=c.end_date && c.end_date<date;
     if(!closed){
+      events.push(start);
       // A partial real harvest is a dated fact, but never proof of full stubble.
       for(const h of harvests)events.push({kind:'growing_crop',crop:cropOf(c),effective_date:h.harvest_date,evidence_ids:[c.id,h.id],trusted:true});
     }else{
       const balance=cycleBalance(c.area_ha,harvests);
       const full=c.harvest_closure_source==='automatic' && balance.remaining===0 && balance.endDate===c.end_date && !(c.closures||[]).length;
-      if(full) events.push({kind:'stubble',crop:cropOf(c),effective_date:balance.endDate,evidence_ids:[c.id,...harvests.map(h=>h.id)],trusted:true});
+      let end;
+      if(full) end={kind:'stubble',crop:cropOf(c),effective_date:balance.endDate,evidence_ids:[c.id,...harvests.map(h=>h.id)],trusted:true};
       else {
         const closure=(c.closures||[]).filter(x=>x.finalized_date<=date).sort((a,b)=>a.finalized_date.localeCompare(b.finalized_date)).at(-1);
-        events.push({kind:'unknown',crop:null,effective_date:closure?.finalized_date||c.end_date,
-          evidence_ids:[c.id,...(closure?[closure.id]:[])],trusted:Boolean(closure)});
+        end={kind:'unknown',crop:null,effective_date:closure?.finalized_date||c.end_date,
+          evidence_ids:[c.id,...(closure?[closure.id]:[])],trusted:Boolean(closure)};
       }
+      // After the inclusive end day, a same-date closure supersedes this cycle's
+      // start. It is a transition, not two competing facts (including for declarations).
+      // Keep earlier starts: trusted facts still establish declaration precedence.
+      if(start.effective_date!==end.effective_date)events.push(start);
+      else supersededStarts.push(start);
+      events.push(end);
     }
   }
   const active=applicable.filter(c=>c.start_date<=date&&(!c.end_date||c.end_date>=date));
@@ -43,7 +51,10 @@ function resolveUnit(unit,date,cycles=[],declarations=[]) {
   const latestFact=sorted[0];
   let state=latestFact?{...empty(),...latestFact,quality:latestFact.kind==='unknown'?'insufficient':'evidenced'}:empty();
   if(latest){
-    const later=sorted.filter(e=>e.trusted&&e.effective_date>latest.observed_on)[0];
+    // Superseded starts still prove that a cycle began after a declaration,
+    // but cannot compete with its closure as the resolved state or a conflict.
+    const later=[...sorted,...supersededStarts].filter(e=>e.trusted&&e.effective_date>latest.observed_on)
+      .sort((a,b)=>b.effective_date.localeCompare(a.effective_date))[0];
     if(!later){
       const declared={kind:latest.kind,crop:cropOf(latest)};
       state={...empty(),...declared,source:'declaration',observed_on:latest.observed_on,effective_date:null,quality:'confirmed',evidence_ids:[latest.id]};
