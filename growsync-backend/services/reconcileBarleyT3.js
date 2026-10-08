@@ -70,7 +70,10 @@ async function build(client,input,schema,state){
   if(rows(state,'planning_product_completions').some(r=>r.planning_id===CASE.planning||r.planning_product_id===CASE.planningProduct))conflict('Apareció una completion vinculada.');
   if(rows(state,'crop_assignments').some(r=>r.source_planning_id===CASE.planning))conflict('Apareció un ciclo vinculado.');
   if(rows(state,'historical_events').some(r=>r.entity_id===CASE.planning))conflict('La Planning ya tiene eventos históricos.');
-  for(const [id,name] of [[CASE.fromLot,'T4'],[CASE.toLot,'T3']])if(!rows(state,'lots').some(r=>r.id===id&&r.name===name&&r.company_id===CASE.company&&r.enabled===true))
+  const lotRows=rows(state,'lots');
+  const fromLot=lotRows.find(r=>r.id===CASE.fromLot&&r.company_id===CASE.company&&r.enabled===true);
+  const toLot=lotRows.find(r=>r.id===CASE.toLot&&r.company_id===CASE.company&&r.enabled===true);
+  if(!fromLot||!toLot)
     conflict('T3/T4 no están disponibles en la misma empresa.');
   const crop=rows(state,'crops').find(r=>r.id===CASE.crop&&r.company_id===CASE.company&&r.name==='Cebada');
   const campaign=rows(state,'campaigns').find(r=>r.id===CASE.campaign&&r.company_id===CASE.company&&r.name==='Fina 2026 (Trigo, Cebada)');
@@ -99,8 +102,8 @@ async function build(client,input,schema,state){
     FROM public.planning_lots l WHERE planning_id=$1`,[CASE.planning,CASE.toLot])).rows[0].value;
   return {p,selections,products,expected,expectedLot,
     fingerprint:stock.fingerprint({operation:OPERATION,case:CASE,actor:input.actorId,schema,state}),
-    before:{lot:{id:CASE.fromLot,name:'T4'},crop:null,area_ha:'68.7130'},
-    after:{lot:{id:CASE.toLot,name:'T3'},crop:{id:CASE.crop,name:'Cebada'},area_ha:'68.7130'}};
+    before:{lot:{id:CASE.fromLot,name:fromLot.name},crop:null,area_ha:'68.7130'},
+    after:{lot:{id:CASE.toLot,name:toLot.name},crop:{id:CASE.crop,name:'Cebada'},area_ha:'68.7130'}};
 }
 async function run(pool,input,confirming){
   if(confirming&&(typeof input.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(input.fingerprint)||typeof input.key!=='string'||!input.key.trim()||input.key.length>200||input.confirmed!==true))

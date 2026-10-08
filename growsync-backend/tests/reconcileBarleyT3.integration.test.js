@@ -33,7 +33,7 @@ async function fixture(){
   for(const id of [CASE.actor,responsible])await put('users',{id,company_id:CASE.company,email:id+'@example.test',role:3});
   for(const [id,name] of [[CASE.crop,'Cebada'],[corn,'Maíz'],[soy,'Soja']])await put('crops',{id,company_id:CASE.company,name});
   await put('campaigns',{id:CASE.campaign,company_id:CASE.company,name:'Fina 2026 (Trigo, Cebada)',start_date:'2026-01-01',end_date:'2026-12-31'});
-  for(const [id,name,area] of [[CASE.fromLot,'T4',68.713],[CASE.toLot,'T3',46.0932]])await put('lots',{id,company_id:CASE.company,name,area,area_ha:area});
+  for(const [id,name,area] of [[CASE.fromLot,'Lote T4',68.713],[CASE.toLot,'Lote T3',46.0932]])await put('lots',{id,company_id:CASE.company,name,area,area_ha:area});
   await put('products',{id:CASE.product,company_id:CASE.company,name:'Fertilizante siembra trigo',unit:'kg',total_quantity:5000,available_quantity:5000});
   await put('products',{id:randomUUID(),company_id:CASE.company,name:'Otro fertilizante',unit:'kg',total_quantity:10,available_quantity:10});
   await put('planning',{id:CASE.planning,company_id:CASE.company,title:'Siembra Cebada',activity_type:'siembra',status:'completado',
@@ -61,11 +61,21 @@ async function fixture(){
 }
 test('prepare read-only: T4/null -> T3/Cebada, preserves historical 68.7130, stable fingerprint',async()=>{
   const x=await fixture(),before=await all(),p=await x.prepare();
-  assert.equal(p.persisted,false);assert.equal(p.before.lot.name,'T4');assert.equal(p.before.crop,null);
-  assert.equal(p.after.lot.name,'T3');assert.equal(p.after.crop.name,'Cebada');
+  assert.equal(p.persisted,false);assert.equal(p.before.lot.name,'Lote T4');assert.equal(p.before.crop,null);
+  assert.equal(p.after.lot.name,'Lote T3');assert.equal(p.after.crop.name,'Cebada');
   assert.equal(p.before.area_ha,'68.7130');assert.equal(p.after.area_ha,'68.7130');assert.equal(p.warning,WARNING);
   assert.ok(p.schema_review.incoming_fks.length);assert.ok(p.schema_review.relevant_triggers.length);
   assert.equal((await x.prepare()).fingerprint,p.fingerprint);assert.deepEqual(await all(),before);
+});
+test('lot identity uses UUID/company/enabled, independently of both visible names',async()=>{
+  const x=await fixture();
+  await db.query('UPDATE lots SET name=$2 WHERE id=$1',[CASE.fromLot,'Origen histórico']);
+  await db.query('UPDATE lots SET name=$2 WHERE id=$1',[CASE.toLot,'Destino renombrado']);
+  const before=await all(),p=await x.prepare();
+  assert.deepEqual(p.before.lot,{id:CASE.fromLot,name:'Origen histórico'});
+  assert.deepEqual(p.after.lot,{id:CASE.toLot,name:'Destino renombrado'});
+  assert.equal(p.before.area_ha,'68.7130');assert.equal(p.after.area_ha,'68.7130');
+  assert.deepEqual(await all(),before);
 });
 test('confirm changes only crop and lot; all inventory/harvest/cycle/declaration/other planning rows unchanged',async()=>{
   const x=await fixture(),before=await all(),p=await x.prepare(),result=await x.confirm(p),after=await all();
