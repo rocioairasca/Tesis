@@ -4,6 +4,7 @@ const requirePermission=require('../middleware/requirePermission');
 const {importHistory}=require('../services/historicalImport');
 router.use(requirePermission('history.import'));
 router.use('/reconcile-sowing', require('./reconcileSowing')(pool));
+router.use('/reconcile-barley-t3', require('./reconcileBarleyT3')(pool));
 router.use('/productive-state-declarations', require('./productiveStateDeclarations')(pool));
 router.get('/stock-initial/status',async(req,res,next)=>{
   try {
