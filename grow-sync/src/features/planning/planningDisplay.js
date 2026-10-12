@@ -1,4 +1,4 @@
-import {fieldSituation} from './fieldContext.mjs';
+
 export const ACTIVITY_LABELS = {
   siembra: "Siembra",
   fumigacion: "Fumigación",
@@ -105,27 +105,36 @@ export const summarizePlanningLotsShort = (lots = []) => {
   };
 };
 
-export const getCropDisplayName = (row, cropIx = {}) => {
-  const situation=fieldSituation(row,cropIx);
-  if(situation)return situation;
-  const cropName = row?.crop_name || cropIx[row?.crop_id];
-  if (cropName) return cropName;
-  if (row?.crop_id) return "Cultivo";
-  return row?.title || formatActivity(row?.activity_type);
+export const getCropDisplayName = (row, cropIx = {}) => (
+  row?.crop_name || cropIx[row?.crop_id] || "—"
+);
+
+// Presentation only: keep the persisted field context and form rules unchanged.
+export const getPlanningContextLabel = (row) => {
+  if (row?.activity_type === "siembra") return null;
+  return {
+    growing_crop: "Implantado",
+    stubble: "Rastrojo",
+    pre_sowing: "Pre-siembra",
+    fallow: "Barbecho",
+    other: "Otro",
+  }[row?.field_context] || null;
 };
 
 export const getPlanningDisplayName = (row, cropIx = {}) => {
   const activity = formatActivity(row?.activity_type);
-  const situation=fieldSituation(row,cropIx);
-  if(situation)return `${situation} - ${activity}`;
-  const cropName = row?.crop_name || cropIx[row?.crop_id];
-  if (cropName) return `${cropName} - ${activity}`;
+  const cropName = getCropDisplayName(row, cropIx);
+  if (cropName !== "—") return `${cropName} - ${activity}`;
+  const context = getPlanningContextLabel(row);
+  if (context) return `${context} - ${activity}`;
   if (row?.crop_id) return `Cultivo - ${activity}`;
   return row?.title || activity;
 };
 
 export const getPlanningEventLabel = (row, cropIx = {}) => {
-  const primary = getCropDisplayName(row, cropIx);
+  const cropName = getCropDisplayName(row, cropIx);
+  const primary = cropName !== "—" ? cropName
+    : (getPlanningContextLabel(row) || row?.title || formatActivity(row?.activity_type));
   const lots = summarizePlanningLotsShort(row?.lots || []);
   return lots.text !== "—" ? `${primary} · ${lots.text}` : primary;
 };

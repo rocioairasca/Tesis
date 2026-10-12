@@ -1,7 +1,7 @@
 import PlanningRegistrationType from './components/PlanningRegistrationType';
 import PlanningDateFields from './components/PlanningDateFields';
 import {durationMode,validatedDateRange,activityChangeFields,registrationModeFields} from './planningFormFlow.mjs';
-import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel,fieldSituation} from './fieldContext.mjs';
+import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel} from './fieldContext.mjs';
 import EffectiveAreaFields from './components/EffectiveAreaFields';
 import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
 import AdoptExistingModal from './components/AdoptExistingModal';
@@ -62,6 +62,7 @@ import {
   getCropDisplayName,
   getPlanningDatePart,
   getPlanningDisplayName,
+  getPlanningContextLabel,
   getPlanningEventLabel,
   getPlanningLotName,
   summarizePlanningLotsShort,
@@ -876,7 +877,8 @@ const Planning = () => {
     const status = ev.status_effective || ev.status;
     return (
       <div className="cal-event-popover">
-        <strong>{getCropDisplayName(ev, cropIx)} · {formatActivity(ev.activity_type)}</strong>
+        <strong>{getPlanningDisplayName(ev, cropIx)}</strong>
+        {getPlanningContextLabel(ev) && <div style={{ fontSize: 12, color: "#6b7280" }}>{getPlanningContextLabel(ev)}</div>}
         <div>{lots.join(", ") || "Sin lotes asignados"}</div>
         <div>{formatHa(getPlanningArea(ev))}</div>
         <div>{formatPeriod(ev)}</div>
@@ -2212,7 +2214,8 @@ const Planning = () => {
                 <strong>{getPlanningDisplayName(viewing, cropIx)}</strong>
                 {viewing.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario. Los productos y cantidades son informativos y no modificaron el stock.</p>}
               </Descriptions.Item>
-              {fieldSituation(viewing,cropIx) && <Descriptions.Item label="Situación del lote">{fieldSituation(viewing,cropIx)}</Descriptions.Item>}
+              <Descriptions.Item label="Cultivo">{getCropDisplayName(viewing, cropIx)}</Descriptions.Item>
+              {getPlanningContextLabel(viewing) && <Descriptions.Item label="Situación del lote">{getPlanningContextLabel(viewing)}</Descriptions.Item>}
               <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
               <Descriptions.Item label="Campaña">
                 {campaignLabel(viewing)}

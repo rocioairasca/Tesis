@@ -9,6 +9,7 @@ import {
     formatActivity,
     formatPlanningPeriod,
     getPlanningDisplayName,
+    getPlanningContextLabel,
     getPlanningLotName,
 } from "../planningDisplay";
 
@@ -118,6 +119,7 @@ const PlanningListMobile = ({
                     >
                         <div className="card-header">
                             <h3>{getPlanningDisplayName(r, cropIx)}</h3>
+                            {getPlanningContextLabel(r) && <p style={{ fontSize: 12, color: "#6b7280" }}>{getPlanningContextLabel(r)}</p>}
                             {r.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario</p>}
                             <div className="card-icons" onClick={(event) => event.stopPropagation()}>
                                 <Tooltip title="Ver detalle">
