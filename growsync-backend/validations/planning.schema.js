@@ -44,8 +44,14 @@ const requireLotSelection = (val, ctx) => {
   }
 };
 
+const rejectRecipeClientFields = (val,ctx) => {
+  if(val.recipe_id && val.products !== undefined) ctx.addIssue({code:z.ZodIssueCode.custom,message:'No envíes productos manuales cuando seleccionás una receta.',path:['products']});
+};
+
 // Products item
 const ProductItem = z.object({
+  dose_amount: z.never().optional(),
+  dose_unit: z.never().optional(),
   product_id: z.string().uuid(),
   amount: require('../services/inventoryQuantity').inputQuantitySchema.optional().nullable(),
   unit: require('../services/inventoryUnits').inputUnitSchema.optional().nullable(),
@@ -59,6 +65,8 @@ const ActualProductItem = z.object({
 
 // Body base (CREATE)
 const baseBodyShape = {
+  recipe_id: z.string().uuid().nullable().optional(),
+  recipe_name_snapshot: z.never().optional(),
   title: Title,
   description: Description,
   activity_type: ActivityType,
@@ -78,6 +86,7 @@ const baseBodyShape = {
 
 const refinePlanningBody = (val, ctx) => {
   requireLotSelection(val, ctx);
+  rejectRecipeClientFields(val,ctx);
 
   try { validateFieldContext(val.activity_type,val.crop_id,val.field_context,{creating:true}); }
   catch(error) { ctx.addIssue({code:z.ZodIssueCode.custom,message:error.message,path:[/situación/.test(error.message)?'field_context':'crop_id']}); }
@@ -108,7 +117,7 @@ exports.registerCompletedSchema = z.object({
     ...baseBodyShape,
     status: EditableStatus.optional(),
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
-  }).superRefine(refinePlanningBody),
+  }).superRefine((val,ctx)=>{refinePlanningBody(val,ctx);if(val.recipe_id)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.',path:['recipe_id']});}),
 });
 
 exports.updateSchema = z.object({
@@ -124,6 +133,7 @@ exports.updateSchema = z.object({
     enabled: z.coerce.boolean().optional(),
   })
   .superRefine((val, ctx) => {
+    rejectRecipeClientFields(val,ctx);
     // Si vienen ambas fechas, validar orden
     if (val.start_at && val.end_at) {
       const start = Date.parse(val.start_at);
@@ -181,3 +191,8 @@ exports.listQuery = z.object({
     includeDisabled: z.coerce.boolean().optional(),
   })
 });
+
+exports.recipeOptionsQuery=z.object({query:z.object({
+  activity_type:z.enum(['fumigacion','fertilizacion','siembra']),
+  field_context:z.enum(FIELD_CONTEXTS).nullable().optional(),crop_id:z.string().uuid().nullable().optional(),
+})});

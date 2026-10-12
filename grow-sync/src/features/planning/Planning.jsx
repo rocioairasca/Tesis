@@ -1,3 +1,6 @@
+import PlanningRecipeFields from './components/PlanningRecipeFields';
+import {recipeId as getRecipeId,MANUAL_RECIPE,totalLabel} from './planningRecipe.mjs';
+import {doseLabel} from '../recipes/recipeModel.mjs';
 import PlanningRegistrationType from './components/PlanningRegistrationType';
 import PlanningDateFields from './components/PlanningDateFields';
 import {durationMode,validatedDateRange,activityChangeFields,registrationModeFields} from './planningFormFlow.mjs';
@@ -296,6 +299,8 @@ const Planning = () => {
   const effectiveAreas = Form.useWatch("effective_areas", form) || {};
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedFieldContext = Form.useWatch("field_context", form);
+  const selectedFormCropId = Form.useWatch("crop_id",form);
+  const selectedRecipeId = getRecipeId(Form.useWatch("recipe_id",form));
   const selectedDateRange = Form.useWatch("date_range", form);
   const selectedCampaignId = Form.useWatch("campaign_id", form);
   const registerCompleted = Boolean(Form.useWatch("register_completed", form));
@@ -393,7 +398,7 @@ const Planning = () => {
   ), [selectedFormProducts]);
 
   const productStockExceeded = useMemo(() => (
-    !registerCompleted && !isEditingHistorical && !isEditingCompleted &&
+    !selectedRecipeId && !registerCompleted && !isEditingHistorical && !isEditingCompleted &&
     Array.isArray(selectedFormProducts)
     && selectedFormProducts.some((item) => {
       if (!item?.product_id) return false;
@@ -402,7 +407,7 @@ const Planning = () => {
       try { return exceedsAvailable(item.amount,item.unit,product.unit,product.available_quantity); }
       catch { return false; } // Field validation reports invalid precision or units.
     })
-  ), [getCatalogProductById, registerCompleted, isEditingCompleted, isEditingHistorical, selectedFormProducts]);
+  ), [getCatalogProductById, selectedRecipeId, registerCompleted, isEditingCompleted, isEditingHistorical, selectedFormProducts]);
 
   const campaignCompatibilityRange = useMemo(() => (
     registerCompleted && selectedEffectiveDate
@@ -1071,6 +1076,7 @@ const Planning = () => {
     if (row) {
       form.setFieldsValue({
         title: row.title,
+        recipe_id:row.recipe_id || MANUAL_RECIPE,
         effective_areas: Object.fromEntries((row.lots || []).map(lot=>[planningLotToSelectionKey(lot),effectiveArea(lot)])),
         historical_lots: (row.lots || []).map(lot => ({ area_ha: lot.area_ha })),
         description: row.description,
@@ -1102,6 +1108,7 @@ const Planning = () => {
         status: "planificado",
         duration_mode: "day",
         products: [],
+        recipe_id:MANUAL_RECIPE,
         campaign_id: undefined,
         register_completed: false,
         effective_date: undefined,
@@ -1144,6 +1151,8 @@ const Planning = () => {
         return;
       }
       const shouldRegisterCompleted = !editing && values.register_completed;
+      const effectiveRecipeId=getRecipeId(values.recipe_id);
+      if(shouldRegisterCompleted && effectiveRecipeId)throw new Error('Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.');
       const effectiveDate = values.effective_date;
       const [start, end] = shouldRegisterCompleted
         ? [effectiveDate, effectiveDate]
@@ -1167,6 +1176,10 @@ const Planning = () => {
       };
       if (payload.status === undefined) delete payload.status;
 
+      if(!isEditingCompleted){
+        if(effectiveRecipeId)payload.recipe_id=effectiveRecipeId;
+        else if(editing?.recipe_id)payload.recipe_id=null;
+      }
       // Only include optional fields if they have values
       if (values.description?.trim()) {
         payload.description = values.description.trim();
@@ -1176,7 +1189,7 @@ const Planning = () => {
         payload.vehicle_id = values.vehicle_id;
       }
 
-      if (!isEditingCompleted && values.products && values.products.length > 0) {
+      if (!effectiveRecipeId && !isEditingCompleted && values.products && values.products.length > 0) {
         payload.products = values.products.map(p => planningProductPayload(p,getCatalogProductById(p.product_id) || {unit:p.unit}));
       }
 
@@ -1985,6 +1998,12 @@ const Planning = () => {
             Superficie total: <strong>{formatHa(selectedPlanningArea)}</strong>
           </div>
 
+          {(['fumigacion','fertilizacion','siembra'].includes(selectedActivityType) || selectedRecipeId) && <PlanningRecipeFields
+            form={form} activity={selectedActivityType} context={hasFieldContext(selectedActivityType)?selectedFieldContext:null} crop={selectedFormCropId}
+            editing={editing} completed={isEditingCompleted} registerCompleted={registerCompleted}
+            selections={selectedAreaRows.map(row=>({...row,effective_area_ha:
+              !isEditingCompleted && !partialAreaAllowed(selectedActivityType)?row.area_ha:(effectiveAreas[row.key] ?? row.effective_area_ha)
+            }))} />}
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
             Recursos
           </div>
@@ -2009,7 +2028,7 @@ const Planning = () => {
             />
           </Form.Item>
 
-          <Form.List name="products">
+          {!selectedRecipeId && <Form.List name="products">
             {(fields, { add, remove }) => (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -2091,7 +2110,7 @@ const Planning = () => {
                 ))}
               </>
             )}
-          </Form.List>
+          </Form.List>}
 
           <Form.Item name="description" label="Descripción">
             <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
@@ -2214,6 +2233,7 @@ const Planning = () => {
                 <strong>{getPlanningDisplayName(viewing, cropIx)}</strong>
                 {viewing.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <p>Histórico · Sin impacto en inventario. Los productos y cantidades son informativos y no modificaron el stock.</p>}
               </Descriptions.Item>
+              {viewing.recipe_id && <Descriptions.Item label="Receta">{viewing.recipe_name_snapshot}</Descriptions.Item>}
               <Descriptions.Item label="Cultivo">{getCropDisplayName(viewing, cropIx)}</Descriptions.Item>
               {getPlanningContextLabel(viewing) && <Descriptions.Item label="Situación del lote">{getPlanningContextLabel(viewing)}</Descriptions.Item>}
               <Descriptions.Item label="Estado">{statusTag(viewing.status_effective || viewing.status)}</Descriptions.Item>
@@ -2286,7 +2306,7 @@ const Planning = () => {
                 bordered
                 dataSource={viewing.products || []}
                 renderItem={(product) => {
-                  const details = quantityLabel(product.amount,product.unit);
+                  const details = product.dose_amount!=null ? doseLabel(product.dose_amount,product.dose_unit)+' · Total: '+totalLabel(product.amount,product.unit) : quantityLabel(product.amount,product.unit);
                   return (
                     <List.Item>
                       {product.name || prodIx[product.product_id] || "Producto"}

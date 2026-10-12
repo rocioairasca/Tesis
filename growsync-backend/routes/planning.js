@@ -50,6 +50,9 @@ router.get('/',
   ctrl.list
 );
 
+router.get('/recipe-options', validate(schema.recipeOptionsQuery),
+  require('../middleware/requireAnyPermission')(PERMISSIONS.PLANNING_CREATE,PERMISSIONS.PLANNING_EDIT),ctrl.recipeOptions);
+
 // Crear una planificación y registrarla como realizada en una sola transacción
 router.post('/register-completed',
   validate(schema.registerCompletedSchema),

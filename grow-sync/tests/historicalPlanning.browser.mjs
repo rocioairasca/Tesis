@@ -41,7 +41,7 @@ try{
  await screen.findByText('Lote de prueba');
  if(denied){
    assert(!screen.queryByRole('button',{name:/Editar/}),'Historical edit hidden without history.import');
-   assert(screen.getAllByText(/Histórico · Sin impacto en inventario/).length>0,'Historical badge retained');
+   assert(screen.getAllByText(/^Histórico$/).length>0,'Historical badge retained');
  }else{
    fireEvent.click(await screen.findByRole('button',{name:/Editar/}));
    if(normal){

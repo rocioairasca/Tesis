@@ -20,3 +20,10 @@
 .gs-planning-calendar .ant-picker-calendar-mini .ant-picker-cell-inner {
   display: block; width: 100%; min-width: 0; height: auto; min-height: 30px;
 }
+
+.planning-recipe-preview { min-width: 0; margin-bottom: 16px; overflow-wrap: anywhere; }
+.planning-recipe-item { padding: 12px 0; border-bottom: 1px solid #e5e7eb; overflow-wrap: anywhere; }
+.planning-recipe-item dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 8px 0; }
+.planning-recipe-item dt { font-size: 12px; color: #6b7280; }
+.planning-recipe-item dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .planning-recipe-item dl { grid-template-columns: repeat(2,minmax(0,1fr)); } }

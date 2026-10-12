@@ -1,3 +1,4 @@
+const planningRecipes = require('../services/planningRecipes');
 const {assertSameUnit} = require('../services/inventoryUnits');
 const {normalizeQuantity} = require('../services/inventoryConversion');
 const inventoryStock = require('../services/stock');
@@ -418,7 +419,7 @@ exports.list = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', CASE WHEN to_jsonb(pp)->>'dose_amount' IS NOT NULL THEN to_jsonb(pp.amount::text) ELSE to_jsonb(pp.amount) END, 'unit', pp.unit, 'dose_amount', to_jsonb(pp)->>'dose_amount', 'dose_unit', to_jsonb(pp)->>'dose_unit', 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
@@ -475,7 +476,7 @@ exports.getOne = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', CASE WHEN to_jsonb(pp)->>'dose_amount' IS NOT NULL THEN to_jsonb(pp.amount::text) ELSE to_jsonb(pp.amount) END, 'unit', pp.unit, 'dose_amount', to_jsonb(pp)->>'dose_amount', 'dose_unit', to_jsonb(pp)->>'dose_unit', 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
@@ -536,6 +537,7 @@ const createPlanningRecord = async (
     created_by,
   } = body;
 
+  planningRecipes.rejectClientSnapshot(body);
   const effectiveStatus = forcedStatus || status;
   const creator = created_by || userId || null;
 
@@ -578,6 +580,9 @@ const createPlanningRecord = async (
     }
   }
 
+  const recipeSnapshot = body.recipe_id ? await planningRecipes.build(client, companyId, body.recipe_id,
+    {activity_type, field_context:fieldContext, crop_id:crop_id??null}, resolvedSelections) : null;
+
   const insertSql = `
     INSERT INTO planning(
       title, description, activity_type, start_at, end_at, campaign_id, crop_id,
@@ -603,8 +608,12 @@ const createPlanningRecord = async (
   const id = newPlan[0].id;
 
   await insertPlanningLots(client, id, resolvedSelections);
+  if(recipeSnapshot){
+    await client.query('UPDATE planning SET recipe_id=$3,recipe_name_snapshot=$4 WHERE id=$1 AND company_id=$2',[id,companyId,recipeSnapshot.id,recipeSnapshot.name]);
+    await planningRecipes.persistItems(client,id,recipeSnapshot.items);
+  }
 
-  if (Array.isArray(products) && products.length) {
+  if (!recipeSnapshot && Array.isArray(products) && products.length) {
     await assertProductTenancy(client, products, companyId);
     const tuples = products
       .map((_, i) => `($1, $${i * 3 + 2}, $${i * 3 + 3}, $${i * 3 + 4})`)
@@ -668,6 +677,7 @@ exports.create = async (req, res, next) => {
 exports.registerCompleted = async (req, res, next) => {
   const client = await pool.connect();
   try {
+    if(req.body.recipe_id)throw Object.assign(new Error('Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.'),{status:400});
     const { company_id, id: userId } = req.user;
     if (!company_id) {
       client.release();
@@ -914,10 +924,11 @@ exports.update = async (req, res, next) => {
       return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
+    planningRecipes.rejectClientSnapshot(req.body);
     await client.query('BEGIN');
 
     // Verificar que la planificación pertenezca a la compañía
-    const checkSql = 'SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, field_context, status, enabled FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE';
+    const checkSql = "SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, field_context, status, enabled, (to_jsonb(planning)->>'recipe_id')::uuid AS recipe_id, to_jsonb(planning)->>'inventory_impact_mode' AS inventory_impact_mode FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE";
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
@@ -936,7 +947,8 @@ exports.update = async (req, res, next) => {
     );
     const hasProductCompletions = productCompletionRows.length > 0;
     const updatesProductImpactStructure = (
-      products !== undefined
+      req.body.recipe_id !== undefined
+      || products !== undefined
       || lot_ids !== undefined
       || lot_selections !== undefined
       || start_at !== undefined
@@ -1030,7 +1042,7 @@ exports.update = async (req, res, next) => {
       : [];
     let existingSelections = [];
 
-    if (shouldCheckLotConflicts || activity_type !== undefined) {
+    if (shouldCheckLotConflicts || activity_type !== undefined || checkRows[0].recipe_id || req.body.recipe_id !== undefined) {
       const { rows } = await client.query(
         'SELECT lot_id, sub_lot_id, area_ha, effective_area_ha FROM planning_lots WHERE planning_id = $1',
         [id]
@@ -1162,6 +1174,7 @@ exports.update = async (req, res, next) => {
       if(relationChanged) {
         await client.query('DELETE FROM planning_lots WHERE planning_id = $1', [id]);
         await insertPlanningLots(client, id, resolvedSelections);
+
       } else {
         for(const selection of resolvedSelections) await client.query(
           'UPDATE planning_lots SET effective_area_ha=$1 WHERE planning_id=$2 AND lot_id=$3 AND sub_lot_id IS NOT DISTINCT FROM $4::uuid AND effective_area_ha IS DISTINCT FROM $1::numeric',
@@ -1169,8 +1182,14 @@ exports.update = async (req, res, next) => {
       }
     }
 
+    // Recipe snapshots are resolved by the server; manual planning remains unchanged.
+    const recipeManaged = await planningRecipes.update(client, {
+      companyId:company_id,id,current:checkRows[0],body:req.body,
+      planning:{activity_type:effectiveActivityType,field_context:effectiveActivityType==='siembra'?null:effectiveContext,crop_id:effectiveCropId},
+      selections:shouldUpdateLots?resolvedSelections:existingSelections,
+    });
     // Productos
-    if (Array.isArray(products)) {
+    if (Array.isArray(products) && !recipeManaged) {
       await assertProductTenancy(client, products, company_id);
       await client.query('DELETE FROM planning_products WHERE planning_id = $1', [id]);
       if (products.length) {
@@ -1410,7 +1429,7 @@ exports.listDisabled = async (req, res, next) => {
              ), '[]') AS lots,
              (${plannedAreaSql}) AS planned_area_ha,
              COALESCE((
-               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', pp.amount, 'unit', pp.unit, 'available_quantity', pr.available_quantity))
+               SELECT json_agg(json_build_object('id', pp.id, 'planning_product_id', pp.id, 'actual_amount', pc.actual_amount, 'usage_id', pc.usage_id, 'product_id', pr.id, 'name', pr.name, 'amount', CASE WHEN to_jsonb(pp)->>'dose_amount' IS NOT NULL THEN to_jsonb(pp.amount::text) ELSE to_jsonb(pp.amount) END, 'unit', pp.unit, 'dose_amount', to_jsonb(pp)->>'dose_amount', 'dose_unit', to_jsonb(pp)->>'dose_unit', 'available_quantity', pr.available_quantity))
                FROM planning_products pp
                JOIN products pr ON pr.id = pp.product_id AND pr.company_id = b.company_id
                LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
@@ -1487,3 +1506,7 @@ async function assertProductTenancy(client, products, companyId) {
     } else item.unit=assertSameUnit(product.unit,item.unit);
   }
 }
+
+exports.recipeOptions = async(req,res,next)=>{
+  try{res.json(await planningRecipes.options(pool,req.user.company_id,req.query));}catch(error){next(error);}
+};
