@@ -1,0 +1,17 @@
+.gs-recipes { padding: 24px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.gs-recipes .gs-ui-inline-filters .ant-select { min-width: 160px; max-width: 100%; }
+.recipe-item-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 32px; gap: 8px; align-items: start; }
+.recipe-item-row > .ant-form-item { min-width: 0; }
+.recipe-item-row > button { margin-top: 30px; }
+.recipe-item-row .ant-select { width: 100%; }
+.recipe-products { list-style: none; padding: 0; }
+.recipe-products li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e5e7eb; overflow-wrap: anywhere; }
+.recipe-products li > span { min-width: 0; }
+.recipe-products li > strong { flex-shrink: 0; }
+.recipe-card-detail { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; min-width: 0; background: transparent; border: 0; padding: 8px 0; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .gs-recipes { padding: 16px; }
+  .recipe-item-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 32px; }
+  .recipe-item-row > .ant-form-item:first-child { grid-column: 1 / -1; }
+  .recipe-products li { flex-wrap: wrap; }
+}

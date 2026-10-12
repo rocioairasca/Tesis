@@ -61,7 +61,7 @@ const BottomNavigation = () => {
     },
     {
       key: "usage",
-      label: "Registros de Uso",
+      label: "Recetas",
       icon: <FormOutlined />,
       show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
       onClick: () => {

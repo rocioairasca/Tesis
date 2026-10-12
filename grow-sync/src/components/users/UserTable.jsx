@@ -63,7 +63,7 @@ const PERMISSION_GROUPS = {
     PERMISSIONS.LOTS_ENABLE,
   ],
 
-  Uso: [
+  Recetas: [
     PERMISSIONS.USAGE_VIEW,
     PERMISSIONS.USAGE_VIEW_DISABLED,
     PERMISSIONS.USAGE_CREATE,
@@ -117,12 +117,12 @@ const PERMISSION_LABELS = {
   [PERMISSIONS.LOTS_ENABLE]: "Restaurar lotes",
 
   // Uso
-  [PERMISSIONS.USAGE_VIEW]: "Ver registros de uso",
-  [PERMISSIONS.USAGE_VIEW_DISABLED]: "Ver registros deshabilitados",
-  [PERMISSIONS.USAGE_CREATE]: "Crear registros de uso",
-  [PERMISSIONS.USAGE_EDIT]: "Editar registros de uso",
-  [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar registros de uso",
-  [PERMISSIONS.USAGE_ENABLE]: "Restaurar registros de uso",
+  [PERMISSIONS.USAGE_VIEW]: "Ver recetas",
+  [PERMISSIONS.USAGE_VIEW_DISABLED]: "Ver recetas deshabilitadas",
+  [PERMISSIONS.USAGE_CREATE]: "Crear recetas",
+  [PERMISSIONS.USAGE_EDIT]: "Editar recetas",
+  [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar recetas",
+  [PERMISSIONS.USAGE_ENABLE]: "Restaurar recetas",
 
   // Cosecha
   [PERMISSIONS.HARVEST_VIEW]: "Ver cosechas",

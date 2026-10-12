@@ -46,7 +46,7 @@ const Sidebar = ({ collapsed, onCollapse }) => {
     {
       key: "usage",
       icon: <FormOutlined />,
-      label: <Link to="/usage">Registros de Uso</Link>,
+      label: <Link to="/usage">Recetas</Link>,
       show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
     },
     {

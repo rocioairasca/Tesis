@@ -51,13 +51,7 @@ const DisabledProducts = lazy(() =>
   import("./features/inventory/DisabledInventory.jsx")
 );
 
-const Usage = lazy(() =>
-  import("./features/usages/Usage.jsx")
-);
-
-const DisabledUsages = lazy(() =>
-  import("./features/usages/DisabledUsages.jsx")
-);
+const Recipes = lazy(() => import("./features/recipes/Recipes.jsx"));
 
 const Vehicles = lazy(() =>
   import("./features/vehicles/Vehicles.jsx")
@@ -301,7 +295,7 @@ function App() {
                     PERMISSIONS.USAGE_VIEW
                   }
                 >
-                  <Usage />
+                  <Recipes />
                 </PrivatePage>
               }
             />
@@ -311,10 +305,10 @@ function App() {
               element={
                 <PrivatePage
                   requiredPermission={
-                    PERMISSIONS.USAGE_VIEW_DISABLED
+                    PERMISSIONS.USAGE_VIEW
                   }
                 >
-                  <DisabledUsages />
+                  <Navigate to="/usage" replace />
                 </PrivatePage>
               }
             />

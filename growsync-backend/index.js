@@ -114,6 +114,7 @@ app.use('/api/crop-assignments', ...privateMiddlewares, cropAssignmentRoutes);
 app.use('/api/crops', ...privateMiddlewares, cropRoutes);
 app.use('/api/products', ...privateMiddlewares, productRoutes);
 app.use('/api/usages', ...privateMiddlewares, usageRoutes);
+app.use('/api/recipes', ...privateMiddlewares, require('./routes/recipes')(require('./db/supabaseClient').pool));
 app.use('/api/stats', ...privateMiddlewares, statsRoutes);
 app.use('/api/weather', ...privateMiddlewares, weatherRoutes);
 app.use('/api/history', ...privateMiddlewares, require('./routes/history'));
