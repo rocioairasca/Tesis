@@ -116,8 +116,18 @@ exports.registerCompletedSchema = z.object({
   body: z.object({
     ...baseBodyShape,
     status: EditableStatus.optional(),
+    actual_products: z.array(z.object({
+      product_id:z.string().uuid(),
+      actual_amount:z.union([z.string(),z.number()]).transform((value,ctx)=>{
+        try{return require('../services/inventoryConversion').decimalText(value);}
+        catch(error){ctx.addIssue({code:'custom',message:error.message});return z.NEVER;}
+      }),
+      unit:require('../services/inventoryUnits').inputUnitSchema,
+    }).strict()).optional(),
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
-  }).superRefine((val,ctx)=>{refinePlanningBody(val,ctx);if(val.recipe_id)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.',path:['recipe_id']});}),
+  }).superRefine((val,ctx)=>{refinePlanningBody(val,ctx);if(val.recipe_id&&!val.actual_products?.length)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Confirmá las cantidades reales de todos los productos de la receta.',path:['actual_products']});
+    if(!val.recipe_id&&val.actual_products!==undefined)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Para carga manual usá productos.',path:['actual_products']});
+    if(val.actual_products&&new Set(val.actual_products.map(p=>p.product_id)).size!==val.actual_products.length)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Hay productos repetidos en la confirmación.',path:['actual_products']});}),
 });
 
 exports.updateSchema = z.object({

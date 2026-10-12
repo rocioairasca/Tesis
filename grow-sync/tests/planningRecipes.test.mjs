@@ -60,9 +60,19 @@ test('rendered preview shows original doses, normalized totals and stock warning
   try{
     const {RecipeCalculationPreview}=await server.ssrLoadModule('/src/features/planning/components/PlanningRecipeFields.jsx');
     const html=renderToStaticMarkup(React.createElement(RecipeCalculationPreview,{preview:recipePreview(recipe,[{area_ha:100,effective_area_ha:15}])}));
-    for(const label of ['Barbecho Maíz','2,5 L/ha','37,5 L','15 g/ha','0,225 kg','250 mL/ha','3,75 L','Disponible','Supera disponible','Podés guardar la planificación'])assert.ok(html.includes(label),label);
+    for(const label of ['Barbecho Maíz','2,5 L/ha','37,5 L','15 g/ha','0,225 kg','250 mL/ha','3,75 L','Disponible','Supera disponible','La disponibilidad es informativa'])assert.ok(html.includes(label),label);
     assert.ok(!html.includes('<input'));assert.ok(!html.includes('contenteditable'));
     const source=fs.readFileSync(new URL('../src/features/planning/components/PlanningRecipeFields.jsx',import.meta.url),'utf8');
     assert.match(source,/Sin receta \/ Carga manual/);assert.match(source,/selected===snapshot\?\.id\?snapshot/);assert.match(source,/if\(registerCompleted\)form.setFieldValue\('products',\[\]\)/);
   }finally{await server.close();}
+});
+
+test('real defaults and payload preserve decimals and reset only semantic preview inputs',async()=>{
+ const {realQuantityDefaults,realQuantityKey,registeredRecipeActualProducts}=await import('../src/features/planning/planningRecipe.mjs');
+ const preview=recipePreview(recipe,[{area_ha:10}]),inputs={selected:'recipe',activity:'fumigacion',context:'stubble',crop:'corn',selections:[{lot_id:'lot',area_ha:10}]};
+ const defaults=realQuantityDefaults(preview);assert.equal(defaults.liquid.actual_amount,'25.000000');
+ defaults.liquid={actual_amount:'24000',unit:'mL'};assert.deepEqual(registeredRecipeActualProducts(defaults)[0],{product_id:'liquid',actual_amount:'24000',unit:'mL'});
+ const key=realQuantityKey(preview,inputs);assert.equal(realQuantityKey(preview,{...inputs,responsible:'different',date:'other',description:'changed'}),key);
+ assert.notEqual(realQuantityKey(recipePreview(recipe,[{area_ha:15}]),{...inputs,selections:[{lot_id:'lot',area_ha:15}]}),key);
+ assert.notEqual(realQuantityKey(preview,{...inputs,crop:'other'}),key);assert.notEqual(realQuantityKey(preview,{...inputs,selected:'new'}),key);
 });

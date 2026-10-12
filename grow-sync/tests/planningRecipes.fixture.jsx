@@ -24,7 +24,7 @@ window.__planningRecipeWrites=[];
 api.defaults.adapter=async config=>{
   const response=data=>({data,status:200,statusText:'OK',headers:{},config});
   if(config.method!=='get'){
-    if(config.url!=='/planning'&&!config.url.startsWith('/planning/plan'))throw new Error('Unexpected operational write: '+config.url);
+    if(config.url!=='/planning'&&config.url!=='/planning/register-completed'&&!config.url.startsWith('/planning/plan'))throw new Error('Unexpected operational write: '+config.url);
     window.__planningRecipeWrites.push({path:config.url,method:config.method,body:JSON.parse(config.data)});return response({id:'saved',ok:true});
   }
   if(config.url==='/planning')return response({data:[row],total:1});

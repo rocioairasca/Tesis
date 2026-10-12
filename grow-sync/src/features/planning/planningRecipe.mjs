@@ -21,3 +21,8 @@ export function recipePreview(recipe,selections,{readOnly=false}={}){
   return {name:recipe.name,area,items};
 }
 export const detachRecipeProducts=preview=>preview.items.map(({product_id,amount,unit})=>({product_id,amount,unit}));
+
+// Only semantic preview inputs reset confirmations; metadata is deliberately excluded.
+export const realQuantityDefaults=preview=>Object.fromEntries(preview.items.map(i=>[i.product_id,{actual_amount:i.amount,unit:i.unit}]));
+export const realQuantityKey=(preview,{selected,activity,context,crop,selections})=>JSON.stringify({selected,activity,context,crop,selections:selections.map(i=>[i.lot_id,i.sub_lot_id??null,i.effective_area_ha??i.area_ha]),items:preview.items.map(i=>[i.product_id,i.amount,i.unit])});
+export const registeredRecipeActualProducts=values=>Object.entries(values||{}).map(([product_id,item])=>({product_id,actual_amount:item.actual_amount,unit:item.unit}));

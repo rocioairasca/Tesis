@@ -75,4 +75,19 @@ async function options(pool,companyId,planning){
   const balances=await stock.balances(pool,companyId,[...new Set(items.map(i=>i.product_id))]);
   return recipes.map(r=>({...r,items:items.filter(i=>i.recipe_id===r.id).map(i=>({...i,available_quantity:balances.get(i.product_id)?.available_quantity||'0'}))}));
 }
-module.exports={rejectClientSnapshot,build,persistItems,update,options};
+// Register-completed alone accepts product IDs before planning-product IDs exist.
+async function actualProductsForRegistration(client,planningId,companyId,provided){
+  const planned=(await client.query(`SELECT pp.id,pp.product_id,p.unit AS product_unit FROM planning_products pp
+    JOIN products p ON p.id=pp.product_id AND p.company_id=$2 WHERE pp.planning_id=$1 FOR UPDATE OF pp`,[planningId,companyId])).rows;
+  if(!Array.isArray(provided)||provided.length!==planned.length)throw fail('Confirmá la cantidad realmente utilizada de todos los productos de la receta. Usá cero si no se utilizó.');
+  const byProduct=new Map(planned.map(p=>[p.product_id,p])),seen=new Set();
+  return provided.map(item=>{
+    const product=byProduct.get(item.product_id);
+    if(!product)throw fail('Uno de los productos informados no pertenece a la receta planificada.');
+    if(seen.has(item.product_id))throw fail('Hay productos repetidos en la confirmación.');
+    seen.add(item.product_id);
+    const normalized=require('./inventoryConversion').normalizeQuantity({quantity:item.actual_amount,inputUnit:item.unit,productUnit:product.product_unit,allowZero:true});
+    return {planning_product_id:product.id,actual_amount:normalized.normalized_quantity,unit:product.product_unit};
+  });
+}
+module.exports={rejectClientSnapshot,build,persistItems,update,options,actualProductsForRegistration};

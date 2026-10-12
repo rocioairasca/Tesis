@@ -677,7 +677,7 @@ exports.create = async (req, res, next) => {
 exports.registerCompleted = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    if(req.body.recipe_id)throw Object.assign(new Error('Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.'),{status:400});
+    if(!req.body.recipe_id && req.body.actual_products!==undefined)throw Object.assign(new Error('Las cantidades reales por producto requieren una receta. Para carga manual usá productos.'),{status:400});
     const { company_id, id: userId } = req.user;
     if (!company_id) {
       client.release();
@@ -700,6 +700,8 @@ exports.registerCompleted = async (req, res, next) => {
     });
 
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    const actualProducts=req.body.recipe_id
+      ? await planningRecipes.actualProductsForRegistration(client,id,company_id,req.body.actual_products) : [];
     let completion;
 
     if (planning.activity_type === 'siembra') {
@@ -710,6 +712,7 @@ exports.registerCompleted = async (req, res, next) => {
         companyId: company_id,
         historical: true,
         registeredRetroactively: true,
+        actualProducts,
       });
     } else if (
       planningCompletion.PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type)
@@ -719,12 +722,14 @@ exports.registerCompleted = async (req, res, next) => {
         effectiveDate,
         companyId: company_id,
         registeredRetroactively: true,
+        actualProducts,
       });
     } else {
       completion = await planningCompletion.completeActivityWithoutProductiveEffects(client, planning, {
         effectiveDate,
         companyId: company_id,
         registeredRetroactively: true,
+        actualProducts,
       });
     }
 

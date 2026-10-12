@@ -5,7 +5,7 @@ const recipes=require('../services/recipes'),recipePlanning=require('../services
 let db,pool,controller;
 before(async()=>{
   db=new PGlite();await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
-  for(const f of ['./historySchema.fixture.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql',
+  for(const f of ['./historySchema.fixture.sql','../migrations/20260914_inventory_base_units.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql',
     '../migrations/20261008_planning_field_context.sql','../migrations/20261012_recipes.sql','../migrations/20261012_planning_recipe_snapshots.sql'])
     await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
   await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
@@ -104,7 +104,7 @@ test('completed recipe plans reject productive edits; metadata still editable',a
   for(const body of [{recipe_id:null},{products:[]},{lot_selections:[{lot_id:x.lot,effective_area_ha:15}]}])await assert.rejects(x.call('update',body,id),e=>e.status===409);
   assert.equal((await x.call('update',{description:'Metadata only'},id)).code,200);
 });
-test('register-completed with a recipe is blocked before effects or writes',async()=>{
+test('register-completed with a recipe requires explicit real quantities and rolls back if missing',async()=>{
   const x=await fixture(),before=await all();await assert.rejects(x.call('registerCompleted',{...x.body,effective_date:'2026-10-01'}),e=>e.status===400);
   assert.deepEqual(await all(),before);assert.equal(schema.registerCompletedSchema.safeParse({body:{...x.body,effective_date:'2026-10-01'}}).success,false);
 });
@@ -157,6 +157,11 @@ test('HTTP recipe options accepts Planning custom permissions without usage.view
   permissions=['planning.edit'];assert.equal((await fetch(url)).status,200);
   permissions=['usage.view'];assert.equal((await fetch(url)).status,403);
   permissions=[];assert.equal((await fetch(url)).status,403);
+  const performed={...x.body,effective_date:'2026-10-01',actual_products:[{product_id:x.liquid,actual_amount:0,unit:'L'},{product_id:x.mass,actual_amount:0,unit:'kg'}]};
+  const post=()=>fetch('http://127.0.0.1:'+server.address().port+'/api/planning/register-completed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(performed)});
+  permissions=['planning.create'];assert.equal((await post()).status,403);
+  permissions=['planning.edit'];assert.equal((await post()).status,403);
+  permissions=['planning.create','planning.edit'];assert.equal((await post()).status,201);
 });
 test('persisted six-decimal quantities use half-up rounding and exact decimal area sums',async()=>{
   const x=await fixture(),tiny=await recipes.create(pool,{companyId:x.companyId,actorId:x.actorId,body:{...x.recipeBody,name:'Tiny',items:[{product_id:x.liquid,dose_amount:'0.000001',dose_unit:'L'}]}});
@@ -166,3 +171,70 @@ test('persisted six-decimal quantities use half-up rounding and exact decimal ar
   await x.call('update',{recipe_id:next.id,lot_selections:[{lot_id:x.lot,effective_area_ha:'0.1'},{lot_id:x.lot2,effective_area_ha:'0.2'}]},id);
   const view=(await x.view(id)).data;assert.equal(view.products[0].amount,'0.750000');assert.equal(Number(view.planned_area_ha),0.3);
 });
+async function executionFixture({dose='2.5',doseUnit='L',stockAmount='100',sowing=false}={}){
+  const x=await fixture();
+  await put('stock_batches',{id:uuid(),company_id:x.companyId,product_id:x.liquid,initial_quantity:stockAmount,available_quantity:stockAmount,unit:'L',origin:'purchase',received_date:'2026-01-01',created_by:x.actorId});
+  await recipes.update(pool,{companyId:x.companyId,actorId:x.actorId,id:x.recipe.id,body:{...x.recipeBody,activity_type:sowing?'siembra':'fumigacion',field_context:sowing?null:'stubble',items:[{product_id:x.liquid,dose_amount:dose,dose_unit:doseUnit}]}});
+  if(sowing)await db.query('UPDATE lots SET area=10,area_ha=10 WHERE id=$1',[x.lot]);
+  x.body={...x.body,activity_type:sowing?'siembra':'fumigacion',field_context:sowing?null:'stubble'};
+  x.register=(actual,patch={})=>x.call('registerCompleted',{...x.body,effective_date:'2026-10-01',actual_products:actual,...patch});
+  x.actual=(amount,unit='L')=>[{product_id:x.liquid,actual_amount:amount,unit}];return x;
+}
+async function assertExecution(x,id,planned,real){
+  const view=(await x.view(id)).data;assert.equal(view.status,'completado');assert.equal(view.recipe_name_snapshot,'Barbecho Maíz');assert.equal(view.products[0].amount,planned);
+  const pp=view.products[0];const completions=(await db.query('SELECT * FROM planning_product_completions WHERE planning_id=$1',[id])).rows;
+  assert.equal(completions.length,1);assert.equal(Number(completions[0].actual_amount),Number(real));
+  const usages=(await db.query('SELECT * FROM usage_records WHERE source_planning_id=$1',[id])).rows;
+  assert.equal(usages.length,Number(real)>0?1:0);
+  if(usages.length){assert.equal(Number(usages[0].amount_used),Number(real));assert.equal(usages[0].unit,'L');assert.equal(usages[0].source_planning_product_id,pp.id);assert.equal(usages[0].date.toISOString?.().slice(0,10)||String(usages[0].date).slice(0,10),'2026-10-01');assert.equal((await db.query('SELECT * FROM usage_lots WHERE usage_id=$1',[usages[0].id])).rows[0].lot_id,x.lot);}
+  const movements=(await db.query('SELECT * FROM stock_movements WHERE company_id=$1 AND product_id=$2',[x.companyId,x.liquid])).rows;
+  assert.equal(movements.length,Number(real)>0?1:0);
+}
+test('register recipe preserves 25 planned while consuming 24 real and linking Usage',async()=>{
+  const x=await executionFixture(),result=await x.register(x.actual('24'));assert.equal(result.code,201);await assertExecution(x,result.data.id,'25.000000','24');
+  assert.equal(Number((await db.query('SELECT available_quantity FROM stock_batches WHERE company_id=$1 AND product_id=$2',[x.companyId,x.liquid])).rows[0].available_quantity),76);
+});
+for(const unit of ['mL','L'])test('recipe register converts real '+unit+' to base L',async()=>{
+  const x=await executionFixture({dose:'300',doseUnit:'mL'}),result=await x.register(x.actual(unit==='mL'?'2400':'2.4',unit));await assertExecution(x,result.data.id,'3.000000','2.4');
+});
+test('real below planned can execute when stock only covers real',async()=>{const x=await executionFixture({stockAmount:'22'}),r=await x.register(x.actual('20'));await assertExecution(x,r.data.id,'25.000000','20');});
+test('insufficient real stock rolls back planning, links, Usage, completions and movements',async()=>{
+  const x=await executionFixture({stockAmount:'22'}),before=await all();await assert.rejects(x.register(x.actual('24')),e=>e.status===409);assert.deepEqual(await all(),before);
+});
+for(const [name,actual] of [['foreign',x=>[{product_id:x.mass,actual_amount:1,unit:'kg'}]],['duplicate',x=>[...x.actual(1),...x.actual(2)]],['missing',()=>[]],['negative',x=>x.actual('-1')],['NaN',x=>x.actual('NaN')],['precision',x=>x.actual('1.0000001')],['unit',x=>x.actual(1,'kg')]])test('recipe register rejects '+name+' real payload atomically',async()=>{
+  const x=await executionFixture(),before=await all();await assert.rejects(x.register(actual(x)),e=>e.status===400);assert.deepEqual(await all(),before);
+});
+test('zero real persists completion without Usage or stock movement',async()=>{const x=await executionFixture(),r=await x.register(x.actual('0'));await assertExecution(x,r.data.id,'25.000000','0');});
+test('disabled or foreign source rejects performed registration atomically',async()=>{
+  const x=await executionFixture(),other=await executionFixture();let before=await all();await assert.rejects(x.register(x.actual(1),{recipe_id:other.recipe.id}),e=>e.status===400);assert.deepEqual(await all(),before);
+  await recipes.disable(pool,{companyId:x.companyId,id:x.recipe.id});before=await all();await assert.rejects(x.register(x.actual(1)),e=>e.status===400);assert.deepEqual(await all(),before);
+});
+test('manual register contract remains unchanged',async()=>{
+  const x=await executionFixture(),r=await x.call('registerCompleted',{...x.body,recipe_id:null,effective_date:'2026-10-01',products:[{product_id:x.liquid,amount:'7',unit:'L'}]});
+  const v=(await x.view(r.data.id)).data;assert.equal(v.recipe_id,null);assert.equal(v.status,'completado');assert.equal(v.products[0].amount,7);assert.equal(Number(v.products[0].actual_amount),7);
+});
+test('future recipe execution uses saved snapshot after source edit and disable',async()=>{
+  const x=await executionFixture(),r=await x.call('create',x.body);let before=(await x.view(r.data.id)).data;assert.equal(before.status,'pendiente');assert.equal(Number(before.products[0].amount),25);
+  assert.equal((await db.query('SELECT * FROM usage_records WHERE source_planning_id=$1',[r.data.id])).rows.length,0);
+  await recipes.update(pool,{companyId:x.companyId,actorId:x.actorId,id:x.recipe.id,body:{...x.recipeBody,name:'Changed',items:[{product_id:x.mass,dose_amount:99,dose_unit:'kg'}]}});
+  await recipes.disable(pool,{companyId:x.companyId,id:x.recipe.id});await x.call('completeWork',{effective_date:'2026-10-01',actual_products:[{planning_product_id:before.products[0].id,actual_amount:'24',unit:'L'}]},r.data.id);await assertExecution(x,r.data.id,'25.000000','24');
+});
+test('sowing recipe executes real stock and assignment in one transaction',async()=>{
+  const x=await executionFixture({sowing:true}),r=await x.register(x.actual('24'));await assertExecution(x,r.data.id,'25.000000','24');
+  const ca=(await db.query('SELECT * FROM crop_assignments WHERE source_planning_id=$1',[r.data.id])).rows;assert.equal(ca.length,1);assert.equal(ca[0].crop_id,x.crop);assert.equal(ca[0].lot_id,x.lot);
+});
+test('sowing insufficient stock also rolls back crop assignment',async()=>{const x=await executionFixture({sowing:true,stockAmount:'22'}),before=await all();await assert.rejects(x.register(x.actual('24')),e=>e.status===409);assert.deepEqual(await all(),before);});
+test('register schema differentiates product_id from legacy planning_product_id and accepts zero',async()=>{
+ const x=await executionFixture();const body={...x.body,effective_date:'2026-10-01',actual_products:x.actual('0')};assert.equal(schema.registerCompletedSchema.safeParse({body}).success,true);
+ for(const actual_products of [[{planning_product_id:uuid(),actual_amount:1,unit:'L'}],x.actual('-1'),x.actual('NaN'),x.actual('0.0000001'),[...x.actual(1),...x.actual(1)]])assert.equal(schema.registerCompletedSchema.safeParse({body:{...body,actual_products}}).success,false);
+ assert.equal(schema.completeWorkSchema.safeParse({params:{id:uuid()},body:{effective_date:'2026-10-01',actual_products:x.actual(1)}}).success,false);
+});
+
+test('rollback restores an earlier product consumption when a later product fails',async()=>{
+ const x=await executionFixture();await db.query('UPDATE stock_batches SET available_quantity=0 WHERE company_id=$1 AND product_id=$2',[x.companyId,x.mass]);
+ await recipes.update(pool,{companyId:x.companyId,actorId:x.actorId,id:x.recipe.id,body:x.recipeBody});
+ // Force the liquid first, then the insufficient mass, so rollback undoes an applied movement.
+ await db.query("UPDATE products SET name=CASE WHEN id=$2 THEN 'A liquid' ELSE 'Z mass' END WHERE company_id=$1",[x.companyId,x.liquid]);
+ const before=await all();await assert.rejects(x.register([...x.actual('2'),{product_id:x.mass,actual_amount:'0.15',unit:'kg'}]),e=>e.status===409);assert.deepEqual(await all(),before);
+});
+test('execution preserves six-decimal real precision',async()=>{const x=await executionFixture(),r=await x.register(x.actual('24.123456'));await assertExecution(x,r.data.id,'25.000000','24.123456');});

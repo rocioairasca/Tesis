@@ -1,5 +1,5 @@
 import PlanningRecipeFields from './components/PlanningRecipeFields';
-import {recipeId as getRecipeId,MANUAL_RECIPE,totalLabel} from './planningRecipe.mjs';
+import {recipeId as getRecipeId,MANUAL_RECIPE,totalLabel,registeredRecipeActualProducts} from './planningRecipe.mjs';
 import {doseLabel} from '../recipes/recipeModel.mjs';
 import PlanningRegistrationType from './components/PlanningRegistrationType';
 import PlanningDateFields from './components/PlanningDateFields';
@@ -457,9 +457,10 @@ const Planning = () => {
 
     return (
       <Space direction="vertical" size={10} style={{ width: "100%" }}>
+        {planning.recipe_id&&<div><strong>Receta: {planning.recipe_name_snapshot}</strong></div>}
         {plannedProducts.map((product) => {
           const productId = product.id;
-          const plannedAmount = Number(product.amount || 0);
+          const plannedAmount = product.amount ?? 0;
           const unit = getPlanningProductUnit(product);
           const baseUnit = getCatalogProduct(product)?.unit || unit;
           const available = getPlanningProductAvailable(product);
@@ -479,7 +480,8 @@ const Planning = () => {
                 <Col xs={24} md={10}>
                   <strong>{title}</strong>
                   <div style={{ color: "#6b7280", fontSize: 12 }}>
-                    Planificado: {quantityLabel(plannedAmount,unit)}
+                    {product.dose_amount!=null&&<div>Dosis: {doseLabel(product.dose_amount,product.dose_unit)}</div>}
+                    Planificado: {totalLabel(plannedAmount,unit)}
                   </div>
                 </Col>
                 <Col xs={24} md={7}>
@@ -1152,7 +1154,7 @@ const Planning = () => {
       }
       const shouldRegisterCompleted = !editing && values.register_completed;
       const effectiveRecipeId=getRecipeId(values.recipe_id);
-      if(shouldRegisterCompleted && effectiveRecipeId)throw new Error('Las recetas no están disponibles al registrar actividades realizadas. Usá carga manual.');
+
       const effectiveDate = values.effective_date;
       const [start, end] = shouldRegisterCompleted
         ? [effectiveDate, effectiveDate]
@@ -1175,6 +1177,7 @@ const Planning = () => {
         lot_selections: lotSelections,
       };
       if (payload.status === undefined) delete payload.status;
+      if(shouldRegisterCompleted && effectiveRecipeId)payload.actual_products=registeredRecipeActualProducts(values.recipe_actual_products);
 
       if(!isEditingCompleted){
         if(effectiveRecipeId)payload.recipe_id=effectiveRecipeId;
