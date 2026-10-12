@@ -84,6 +84,20 @@ test('rendered historical form, desktop/mobile permissions, and friendly error i
         const markup = renderToStaticMarkup(React.createElement(View, { list: [{ ...row, id: 'planning' }], rowKey: r => r.id,
           userIx: {}, cropIx: {}, statusTag: () => 'Completado' }));
         assert.ok(markup.includes('Histórico'));
+        if (component === 'PlanningTable') {
+          assert.ok(!markup.includes('Histórico · Sin impacto en inventario'));
+          for (const [field_context, label] of [['growing_crop','Implantado'],['stubble','Rastrojo'],['pre_sowing','Pre-siembra'],['fallow','Barbecho'],['other','Otro']]) {
+            const compact = renderToStaticMarkup(React.createElement(View, { list: [{ ...row, id: 'planning', crop_name: 'Maíz', activity_type: 'fumigacion', field_context }],
+              rowKey: r => r.id, userIx: {}, cropIx: {}, statusTag: () => 'Completado' }));
+            assert.match(compact, /<strong[^>]*>Maíz<\/strong>/);
+            assert.ok(compact.includes(label));
+            assert.ok(!compact.includes('Rastrojo de Maíz'));assert.ok(!compact.includes('Cultivo implantado:'));
+            assert.ok(compact.includes('white-space:nowrap'));
+          }
+          const ordinary = renderToStaticMarkup(React.createElement(View, { list: [{ ...row, id: 'ordinary', inventory_impact_mode: 'NORMAL', field_context: null }],
+            rowKey: r => r.id, userIx: {}, cropIx: {}, statusTag: () => 'Completado' }));
+          assert.ok(!ordinary.includes('Histórico'));assert.ok(!ordinary.includes('Implantado'));assert.ok(!ordinary.includes('Rastrojo'));
+        }
         assert.equal(markup.includes('Editar'), history);
         assert.ok(!markup.includes('Reabrir planificación'));
       }

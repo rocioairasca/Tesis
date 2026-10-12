@@ -52,7 +52,7 @@ test('table uses crop-only label; mobile, calendar popover and detail display co
  const read=file=>fs.readFileSync(new URL('../src/features/planning/'+file,import.meta.url),'utf8');
  const table=read('components/PlanningTable.jsx');
  const cropColumn=table.slice(table.indexOf('title: "Cultivo"'),table.indexOf('title: "Actividad"'));
- assert.match(cropColumn,/getCropDisplayName/);assert.doesNotMatch(cropColumn,/fieldSituation|getPlanningContextLabel/);
+ assert.match(cropColumn,/getCropDisplayName/);assert.doesNotMatch(cropColumn,/fieldSituation/);assert.match(cropColumn,/getPlanningContextLabel\(row\)/);
  const mobile=read('components/PlanningListMobile.jsx');
  assert.match(mobile,/<h3>\{getPlanningDisplayName\(r, cropIx\)\}<\/h3>/);
  assert.match(mobile,/getPlanningContextLabel\(r\) && <p/);
@@ -60,4 +60,16 @@ test('table uses crop-only label; mobile, calendar popover and detail display co
  assert.match(planning,/<Descriptions.Item label="Cultivo">\{getCropDisplayName\(viewing, cropIx\)\}/);
  assert.match(planning,/label="Situación del lote">\{getPlanningContextLabel\(viewing\)\}/);
  assert.match(planning,/getPlanningContextLabel\(ev\) && <div/);
+});
+test('table crop context and historical badges stay secondary and single-line without wider columns',()=>{
+ const table=fs.readFileSync(new URL('../src/features/planning/components/PlanningTable.jsx',import.meta.url),'utf8');
+ const crop=table.slice(table.indexOf('title: "Cultivo"'),table.indexOf('title: "Actividad"'));
+ assert.match(crop,/<strong[^>]*>\{getCropDisplayName\(row, cropIx\)\}/);
+ assert.match(crop,/fontSize: 10/);assert.match(crop,/whiteSpace: "nowrap"/);assert.match(crop,/flexWrap: "wrap"/);
+ assert.match(crop,/<Tag[^>]*>[\s\S]*getPlanningContextLabel\(row\)/);
+ const activity=table.slice(table.indexOf('title: "Actividad"'),table.indexOf('title: "Lote/Sublote"'));
+ assert.match(activity,/row.inventory_impact_mode === "HISTORICAL_NO_STOCK"/);
+ assert.match(activity,/<Tooltip title="Registro histórico · No tuvo impacto en inventario">/);
+ assert.match(activity,/<Tag[^>]*whiteSpace: "nowrap"[^>]*>Histórico<\/Tag>/);
+ assert.doesNotMatch(activity,/Histórico · Sin impacto en inventario/);
 });

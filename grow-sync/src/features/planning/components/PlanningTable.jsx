@@ -19,6 +19,7 @@ import {
     formatPlanningPeriod,
     formatActivity,
     getCropDisplayName,
+    getPlanningContextLabel,
     summarizePlanningLots,
 } from "../planningDisplay";
 
@@ -141,9 +142,16 @@ const PlanningTable = ({
             title: "Cultivo",
             dataIndex: "crop_name",
             render: (_, row) => (
-                <Tooltip title={getCropDisplayName(row, cropIx)}>
-                    <strong>{getCropDisplayName(row, cropIx)}</strong>
-                </Tooltip>
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, minWidth: 0 }}>
+                    <Tooltip title={getCropDisplayName(row, cropIx)}>
+                        <strong style={{ maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getCropDisplayName(row, cropIx)}</strong>
+                    </Tooltip>
+                    {getPlanningContextLabel(row) && (
+                        <Tag style={{ fontSize: 10, lineHeight: "16px", paddingInline: 4, margin: 0, whiteSpace: "nowrap", color: "#6b7280", background: "#f9fafb", borderColor: "#e5e7eb" }}>
+                            {getPlanningContextLabel(row)}
+                        </Tag>
+                    )}
+                </div>
             ),
             ellipsis: true,
             width: columnWidth.crop,
@@ -151,7 +159,7 @@ const PlanningTable = ({
         {
             title: "Actividad",
             dataIndex: "activity_type",
-            render: (t, row) => <><Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>{row.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <Tag color="blue">Histórico · Sin impacto en inventario</Tag>}</>,
+            render: (t, row) => <><Tag style={ACTIVITY_TAG_STYLES[t] || ACTIVITY_TAG_STYLES.otro}>{formatActivity(t)}</Tag>{row.inventory_impact_mode === "HISTORICAL_NO_STOCK" && <Tooltip title="Registro histórico · No tuvo impacto en inventario"><Tag color="blue" style={{ whiteSpace: "nowrap", margin: 0 }}>Histórico</Tag></Tooltip>}</>,
             width: columnWidth.activity,
         },
         {
