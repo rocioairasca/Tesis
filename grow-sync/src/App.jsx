@@ -39,6 +39,8 @@ const Lotes = lazy(() =>
   import("./features/lots/Lotes.jsx")
 );
 
+const SoilAnalysis = lazy(() => import('./features/lots/soilAnalysis/SoilAnalysis.jsx'));
+
 const LotDivisions = lazy(() =>
   import("./features/lots/LotDivisions.jsx")
 );
@@ -274,6 +276,10 @@ function App() {
               }
             />
 
+            <Route
+              path="/lotes/:lotId/analisis-suelo"
+              element={<PrivatePage requiredPermission={PERMISSIONS.SOIL_ANALYSIS_VIEW}><SoilAnalysis /></PrivatePage>}
+            />
             <Route
               path="/lotes/:lotId/divisiones"
               element={

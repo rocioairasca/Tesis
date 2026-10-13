@@ -41,6 +41,7 @@ app.use(cors({
 }));
 
 app.use('/api/history', express.json({ limit: '5mb' }));
+app.use('/api/soil-analysis', express.json({ limit: '2mb' }));
 app.use(express.json());
 
 // ---------------------------------------------------
@@ -109,6 +110,7 @@ app.get(
 
 app.use('/api/users', ...privateMiddlewares, userRoutes);
 app.use('/api/lots', ...privateMiddlewares, lotRoutes);
+app.use('/api/soil-analysis', ...privateMiddlewares, require('./routes/soilAnalysis')({pool:supabase.pool,storage:process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase.storage : null}));
 app.use('/api/campaigns', ...privateMiddlewares, campaignRoutes);
 app.use('/api/crop-assignments', ...privateMiddlewares, cropAssignmentRoutes);
 app.use('/api/crops', ...privateMiddlewares, cropRoutes);

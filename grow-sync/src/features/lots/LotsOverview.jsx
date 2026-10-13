@@ -64,9 +64,10 @@ export default function LotsOverview({ user, source = lotsOverviewSource, initia
   const metrics = overviewMetrics(visible);
   const crops = [...new Set(rows.filter(row => row.productiveAvailable).flatMap(row => row.crops))].sort();
   const campaigns = [...new Map(rows.filter(row=>row.productiveAvailable).flatMap(row=>row.units.map(unitCampaign)).filter(c=>c?.campaign_id || c?.campaign_name).map(c=>[campaignValue(c),c])).values()];
-  const actionFor = row => lotActions(row, access).map(action => ({ ...action, label: action.key === 'edit' && action.disabled ? 'Editar (habilitá el lote primero)' : action.label,
+  const actionFor = row => [...lotActions(row, access),{key:'soil',label:'Análisis de suelo',hidden:!hasPermission(user,PERMISSIONS.SOIL_ANALYSIS_VIEW)}].map(action => ({ ...action, label: action.key === 'edit' && action.disabled ? 'Editar (habilitá el lote primero)' : action.label,
     onClick: () => {
       if (action.hidden || action.disabled) return;
+      if (action.key === 'soil') navigate(`/lotes/${lotId(row.lot)}/analisis-suelo${row.subLot?'?subLotId='+encodeURIComponent(row.subLot.id):''}`);
       if (action.key === 'detail') navigate(`/lotes/${lotId(row.lot)}/divisiones`);
       if (action.key === 'edit') onEdit?.(row.lot);
       if (action.key === 'disable' || action.key === 'enable') setConfirmation({ row, action: action.key });
