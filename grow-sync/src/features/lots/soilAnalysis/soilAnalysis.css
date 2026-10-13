@@ -20,3 +20,4 @@
 .soil-detail-modal .ant-modal-body, .soil-form-drawer .ant-drawer-body { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:1099px){ .soil-detail-grid { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:767px){ .gs-soil-analysis { padding:16px; } .soil-form-grid,.soil-result-form { grid-template-columns:minmax(0,1fr); } .soil-filters > * { width:100%; } .soil-pdf-preview iframe { height:420px; } }
+.gs-soil-analysis .ant-table-pagination.ant-pagination, .gs-soil-analysis .gs-ui-pagination { display:flex; justify-content:center; }

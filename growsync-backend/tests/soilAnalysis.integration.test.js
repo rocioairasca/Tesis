@@ -39,7 +39,7 @@ test('one report accepts several samples with different depths and divisions',as
 test('HTTP list/detail/file URL isolate tenant before accessing Storage',async()=>{
  const x=await fixture(),r=await x.create(),other=await fixture();user=other.owner;const before=storageCalls.length;
  assert.equal((await request('GET','/'+r.id)).status,404);assert.equal((await request('GET','/'+r.id+'/file-url')).status,404);assert.equal((await (await request('GET','?lot_id='+x.lot)).json()).length,0);assert.equal(storageCalls.length,before);
- user=x.owner;const response=await request('GET','/'+r.id+'/file-url');assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const data=await response.json();assert.ok(data.url.startsWith('https://storage.invalid/'));assert.ok(Date.parse(data.expires_at)>Date.now());assert.equal(storageCalls.at(-1).seconds,300);
+ user=x.owner;const response=await request('GET','/'+r.id+'/file-url');assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const data=await response.json();assert.ok(data.url.startsWith('https://storage.invalid/'));assert.ok(Date.parse(data.expires_at)>Date.now());assert.equal(storageCalls.at(-1).seconds,300);assert.equal(storageCalls.at(-1).path,x.companyId+'/'+r.id+'/report.pdf');assert.equal(data.filename,'informe.pdf');assert.deepEqual(Object.keys(data).sort(),['expires_at','filename','url']);
 });
 for(const kind of ['foreign lot','foreign division','wrong parent'])test('reject '+kind+' before upload',async()=>{
  const x=await fixture(),other=await fixture();const sample={...x.body.samples[0],...(kind==='foreign lot'?{lot_id:other.lot}:kind==='foreign division'?{sub_lot_id:other.sub}:{lot_id:x.lot2,sub_lot_id:x.sub})};const before=await snapshot(),calls=storageCalls.length;await assert.rejects(x.create({samples:[sample]}),e=>e.status===400);assert.deepEqual(await snapshot(),before);assert.equal(storageCalls.length,calls);
@@ -102,4 +102,10 @@ test('draft divisions remain editable/deletable; historical divisions can receiv
  await db.query("UPDATE lot_layouts SET status='archived' WHERE lot_id=$1",[x.lot]);const report=await x.create({samples:[{...x.body.samples[0],sub_lot_id:x.sub}]});assert.equal(report.samples[0].sub_lot_id,x.sub);
  const draftLayout=uuid(),draftSub=uuid();await db.query("INSERT INTO lot_layouts VALUES($1,$2,$3,'draft')",[draftLayout,x.companyId,x.lot]);await db.query("INSERT INTO sub_lots VALUES($1,$2,$3,$4,'Draft',true)",[draftSub,x.companyId,x.lot,draftLayout]);
  await db.query('DELETE FROM sub_lots WHERE id=$1',[draftSub]);await db.query('DELETE FROM lot_layouts WHERE id=$1',[draftLayout]);
+});
+
+test('file URL storage error/missing signature returns 503 without leaking provider data',async()=>{
+ const x=await fixture(),r=await x.create(),original=bucket.createSignedUrl;
+ try{for(const result of [{data:null,error:new Error('Synthetic object missing')},{data:{},error:null}]){bucket.createSignedUrl=async()=>result;const response=await request('GET','/'+r.id+'/file-url');assert.equal(response.status,503);assert.equal(response.headers.get('cache-control'),'no-store');assert.deepEqual(await response.json(),{message:'No pudimos abrir el PDF. Intentá nuevamente.'});}}
+ finally{bucket.createSignedUrl=original;}
 });

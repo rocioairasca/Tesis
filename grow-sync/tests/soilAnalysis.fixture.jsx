@@ -10,12 +10,17 @@ Object.entries(cssVariables).forEach(([key,value])=>document.documentElement.sty
 const lot={id:lotId,name:'Lote sintético',enabled:true,area_ha:20,active_layout:{status:'active',sub_lots:[{id:subId,name:'División sintética',enabled:true,area_ha:10}]}},sub={id:subId,lot_id:lotId,name:'División sintética',enabled:true};
 const sample={id:'sample-a',lot_id:lotId,lot_name:lot.name,sub_lot_id:null,sub_lot_name:null,sample_date:'2026-09-22',depth_from_cm:'0.00',depth_to_cm:'20.00',sample_name:'Muestra sintética',sampled_by:'Equipo sintético',results:[{id:'result-a',parameter_name:'pH',method:'Método sintético',unit:'UpH',raw_value:'7,1',numeric_value:'7.100000',result_status:'measured',sort_order:0},{id:'result-b',parameter_name:'Zinc',method:'Método sintético',unit:'ppm',raw_value:'N.R.',numeric_value:null,result_status:'not_requested',sort_order:1}]};
 const report={id:'30000000-0000-4000-8000-000000000001',report_number:'SYN-001',laboratory:'Laboratorio sintético',received_date:'2026-10-01',enabled:true,original_filename:'synthetic.pdf',samples:[sample,{...sample,id:'sample-b',sample_name:'Otra muestra sintética',sub_lot_id:subId,sub_lot_name:sub.name,sample_date:'2026-09-23',depth_from_cm:'20.00',depth_to_cm:'40.00'}]};
-const reports=flags.has('empty')?[]:[report];window.__soilWrites=[];window.__soilReads=[];window.__soilPreviewFail=flags.has('previewError');window.__soilExternalCalls=0;
+const reports=flags.has('empty')?[]:[report];window.__soilWrites=[];window.__soilReads=[];window.__soilPreviewFail=flags.has('previewError');window.__soilExternalCalls=0;window.__soilSigns=[];window.__soilAborts=0;window.__soilPreviewDelay=0;window.__soilPreviewTtl=300000;window.__soilUrlMode="valid";
 api.defaults.adapter=async config=>{
  const response=data=>({data,status:200,statusText:'OK',headers:{},config});window.__soilReads.push({url:config.url,params:config.params});
  if(config.method==='get'){
   if(config.url.startsWith('/soil-analysis/lot-context/'))return response({lot,lots:[{...lot,sub_lots:[sub]}]});
-  if(config.url.endsWith('/file-url')){if(window.__soilPreviewFail)throw new Error('Synthetic preview unavailable');return response({url:location.origin+'/fixture.pdf?temporary=yes',expires_at:new Date(Date.now()+300000).toISOString()});}
+  if(config.url.endsWith('/file-url')){
+   const sequence=window.__soilSigns.length+1;window.__soilSigns.push(sequence);
+   if(window.__soilPreviewDelay)await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,window.__soilPreviewDelay);config.signal.addEventListener('abort',()=>{clearTimeout(timer);window.__soilAborts++;reject(new Error('Synthetic request cancelled'));},{once:true});});
+   if(window.__soilPreviewFail)throw new Error('Synthetic preview unavailable');
+   return response({url:window.__soilUrlMode==='empty'?null:location.origin+'/fixture.pdf?signature='+sequence,expires_at:new Date(Date.now()+(window.__soilUrlMode==='expired'?-1000:window.__soilPreviewTtl)).toISOString(),filename:'synthetic.pdf'});
+  }
   if(config.url==='/soil-analysis')return response(reports.filter(r=>config.params.enabled==='all'||r.enabled===(config.params.enabled!=='false')));
   return response(structuredClone(reports.find(r=>config.url.endsWith('/'+r.id))));
  }

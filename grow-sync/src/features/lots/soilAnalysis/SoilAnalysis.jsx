@@ -79,7 +79,7 @@ export default function SoilAnalysis(){
     <DatePicker.RangePicker aria-label="Período de muestreo" format="DD/MM/YYYY" value={range} onChange={setRange} />
     {canDisabled&&<Select aria-label="Estado de los análisis" value={enabled} onChange={setEnabled} options={[{value:'true',label:'Activos'},{value:'false',label:'Deshabilitados'},{value:'all',label:'Todos'}]} />}
    </div>
-   <DataTable title="Historial de análisis" columns={columns} dataSource={rows} rowKey="key" loading={loading} error={error} onRetry={()=>setRefresh(r=>r+1)} actions={actions} rowLabel={s=>'muestra '+formatCalendarDate(s.sample_date)}
+   <DataTable pagination={{showTotal:false}} title="Historial de análisis" columns={columns} dataSource={rows} rowKey="key" loading={loading} error={error} onRetry={()=>setRefresh(r=>r+1)} actions={actions} rowLabel={s=>'muestra '+formatCalendarDate(s.sample_date)}
     empty={{title:'Todavía no hay análisis de suelo para este lote.',action:canCreate?{label:'Cargar análisis',onClick:()=>openEditor(null)}:undefined}}
     renderMobile={s=><div className="soil-history-card"><p>{s.sample_name||s.sub_lot_name||'Lote completo'} · {depthText(s)}</p><p>Informe {s.report.report_number||'sin número'} · {s.report.laboratory||'Laboratorio no consignado'}</p><div className="soil-highlights">{highlights(s).map(h=><span key={h.name}>{h.name}: {h.text}</span>)}</div><Button onClick={()=>openDetail(s.report.id)}>Ver análisis</Button></div>} />
   </>}
@@ -88,7 +88,7 @@ export default function SoilAnalysis(){
    {saveError&&<Alert type="error" showIcon message={saveError} />}
    {editor&&context&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={setFile} onFinish={save} lotId={lotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
   </FormDrawer>
-  <FocusModal open={Boolean(viewing)} title="Detalle de análisis de suelo" width={1100} rootClassName="soil-detail-modal" onCancel={()=>{detailController.current?.abort();setViewing(null);setShowPdf(false);}}>
+  <FocusModal destroyOnHidden open={Boolean(viewing)} title="Detalle de análisis de suelo" width={1100} rootClassName="soil-detail-modal" onCancel={()=>{detailController.current?.abort();setViewing(null);setShowPdf(false);}}>
    {detailLoading?<LoadingState label="Cargando análisis…" />:detailError?<ErrorState error={detailError} onRetry={()=>openDetail(viewing.id)} />:viewing?.samples&&<div className="soil-detail-grid">
     <section>
      <Descriptions size="small" column={1} bordered><Descriptions.Item label="Informe">{viewing.report_number||'Sin número'}</Descriptions.Item><Descriptions.Item label="Laboratorio">{viewing.laboratory||'No consignado'}</Descriptions.Item><Descriptions.Item label="Recepción">{formatCalendarDate(viewing.received_date)}</Descriptions.Item></Descriptions>
