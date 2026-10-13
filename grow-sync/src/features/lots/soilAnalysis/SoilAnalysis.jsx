@@ -98,7 +98,7 @@ export default function SoilAnalysis(){
       {s.position_description&&<p>Posición: {s.position_description}</p>}{s.sampled_by&&<p>Muestreado / enviado por: {s.sampled_by}</p>}{s.notes&&<p>{s.notes}</p>}
       <div className="soil-results-table"><Table size="small" pagination={false} rowKey="id" columns={resultsColumns} dataSource={s.results} scroll={{x:500}} /></div>
      </section>)}
-     {can('EDIT')&&<Button onClick={()=>openEditor(viewing)}>Editar análisis</Button>}
+     {can('EDIT')&&<Button className="soil-detail-edit" onClick={()=>openEditor(viewing)}>Editar análisis</Button>}
     </section>
     <section>{mobile&&!showPdf?<Button onClick={()=>setShowPdf(true)}>Ver PDF</Button>:<SoilPdfPreview reportId={viewing.id} />}</section>
    </div>}

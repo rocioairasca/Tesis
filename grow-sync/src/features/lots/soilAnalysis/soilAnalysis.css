@@ -9,6 +9,7 @@
 .soil-detail-grid > section, .soil-results-table { min-width:0; }
 .soil-results-table .ant-table-cell { white-space:normal; overflow-wrap:anywhere; }
 .soil-sample-detail { margin-top:20px; }
+.soil-detail-edit { margin-top:16px; }
 .soil-pdf-preview iframe { width:100%; height:620px; border:1px solid var(--gs-border); border-radius:8px; }
 .soil-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
 .soil-file-field { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
