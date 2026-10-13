@@ -47,12 +47,11 @@ export default function Recipes(){
     {key:'enable',label:'Restaurar',hidden:recipe.enabled||!allowed(PERMISSIONS.USAGE_ENABLE),onClick:()=>setConfirmation({recipe,enable:true})},
   ];
   const columns=[
-    {title:'Receta',dataIndex:'name',width:210,render:(name,row)=><EntityLink onClick={()=>setViewing(row)}>{name}</EntityLink>},
-    {title:'Actividad',dataIndex:'activity_type',render:activityLabel},
-    {title:'Contexto',dataIndex:'field_context',render:contextLabel},
-    {title:'Cultivo',dataIndex:'crop_name',render:name=>name||'General'},
-    {title:'Productos',key:'products',width:110,render:(_,row)=>`${row.items.length} productos`},
-    {title:'Estado',dataIndex:'enabled',width:125,render:value=><StatusBadge tone={value?'success':'neutral'}>{value?'Activa':'Deshabilitada'}</StatusBadge>},
+    {title:'Receta',dataIndex:'name',ellipsis:false,render:(name,row)=><div className="recipe-name-cell"><EntityLink onClick={()=>setViewing(row)}>{name}</EntityLink>{!row.enabled&&<span className="recipe-disabled-badge"><StatusBadge tone="neutral">Deshabilitada</StatusBadge></span>}</div>},
+    {title:'Actividad',dataIndex:'activity_type',width:140,render:activityLabel},
+    {title:'Contexto',dataIndex:'field_context',width:120,render:contextLabel},
+    {title:'Cultivo',dataIndex:'crop_name',width:120,render:name=>name||'General'},
+    {title:'Productos',key:'products',width:100,align:'center',render:(_,row)=>row.items.length},
   ];
   const filtered=filterRecipes(rows,{search,activity,crop});
   const activeFilters=[...(activity?[{key:'activity',label:activityLabel(activity),onRemove:()=>setActivity()}]:[]),...(crop?[{key:'crop',label:catalog.crops.find(c=>c.id===crop)?.name||'Cultivo',onRemove:()=>setCrop()}]:[])];
@@ -65,7 +64,7 @@ export default function Recipes(){
         <Select aria-label="Filtrar por cultivo" allowClear showSearch optionFilterProp="label" placeholder="Cultivo" value={crop} options={catalog.crops.map(c=>({value:c.id,label:c.name}))} onChange={setCrop} />
         <Select aria-label="Filtrar por estado" value={enabled} onChange={setEnabled} options={[{value:'true',label:'Activas'},...(canDisabled?[{value:'false',label:'Deshabilitadas'},{value:'all',label:'Todas'}]:[])]} />
       </>} />
-    <DataTable title="Listado de recetas" columns={columns} dataSource={filtered} loading={loading} error={error} onRetry={()=>load()} rowLabel={r=>r.name} actions={actions}
+    <DataTable title="Listado de recetas" columns={columns} dataSource={filtered} loading={loading} error={error} onRetry={()=>load()} rowLabel={r=>r.name} actions={actions} actionsColumnWidth={80} pagination={{showTotal:false}}
       empty={{title:'No encontramos recetas',description:'Creá una mezcla reutilizable o revisá los filtros.'}}
       renderMobile={row=><button className="recipe-card-detail" onClick={()=>setViewing(row)} aria-label={`Ver receta ${row.name}`}>
         <span>{activityLabel(row.activity_type)}{row.field_context?' · '+contextLabel(row.field_context):''}</span>

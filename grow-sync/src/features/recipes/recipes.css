@@ -15,3 +15,10 @@
   .recipe-item-row > .ant-form-item:first-child { grid-column: 1 / -1; }
   .recipe-products li { flex-wrap: wrap; }
 }
+
+/* Keep the recipe name flexible; secondary columns have compact fixed widths. */
+.gs-recipes .recipe-name-cell { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.gs-recipes .recipe-name-cell .gs-ui-entity { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.gs-recipes .recipe-disabled-badge { font-size: 11px; white-space: nowrap; }
+.gs-recipes .recipe-disabled-badge .gs-ui-status { font-size: inherit; padding: 1px 6px; }
+.gs-recipes .ant-table-pagination.ant-pagination, .gs-recipes .gs-ui-pagination { display: flex; justify-content: center; }

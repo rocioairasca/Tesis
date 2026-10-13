@@ -32,6 +32,10 @@ test('patrones compartidos: semántica, callbacks, mobile, paginación y errores
     for(const width of [1280,390]){
       const table=render(ui.DataTable,props,width);assert.ok(table.includes('Fila-6-fin'));assert.ok(!table.includes('Fila-1-fin'));assert.ok(!table.includes('Fila-11-fin'));
       assert.equal(table.includes('<table'),width===1280);
+      assert.ok(table.includes('12 registros'));
+      const compact=render(ui.DataTable,{...props,pagination:{...props.pagination,showTotal:false},actions:()=>[{key:'view',label:'Ver'}],actionsColumnWidth:80},width);
+      assert.ok(!compact.includes('12 registros'));
+      if(width===1280)assert.match(compact,/width:80px/);
       const remote=render(ui.DataTable,{...props,dataSource:data.slice(5,10),paginationMode:'server',pagination:{current:2,pageSize:5,total:12}},width);assert.ok(remote.includes('Fila-6-fin'));
       const empty=render(ui.DataTable,{...props,dataSource:[],empty:{title:'Ningún resultado coincide'}},width);assert.ok(empty.includes('Ningún resultado coincide'));
     }

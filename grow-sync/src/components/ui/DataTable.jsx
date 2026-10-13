@@ -17,7 +17,7 @@ export function RowActions({ label, actions = [] }) {
  * No requests, filtering, permission decisions or business mutations live here.
  */
 export function DataTable({ title, description, columns, dataSource = [], rowKey = 'id', loading = false, error, onRetry, empty,
-  pagination = {}, paginationMode = 'local', actions, rowLabel, renderMobile, mobileColumns,
+  pagination = {}, paginationMode = 'local', actions, actionsColumnWidth = 88, rowLabel, renderMobile, mobileColumns,
   rowSelection, onChange, caption }) {
   const mobile = useIsMobile();
   const [localPage, setLocalPage] = useState(1);
@@ -27,9 +27,9 @@ export function DataTable({ title, description, columns, dataSource = [], rowKey
   const current = Math.min(pagination.current ?? localPage, Math.max(1, Math.ceil(total / pageSize)));
   const pageRows = pagination === false || paginationMode === 'server' ? dataSource : dataSource.slice((current - 1) * pageSize, current * pageSize);
   const changePage = (page, size) => { setLocalPage(page); pagination.onChange?.(page, size); };
-  const paging = pagination === false ? false : { current, pageSize, total, showSizeChanger: false, onChange: changePage, showTotal: n => `${n} registros` };
+  const paging = pagination === false ? false : { current, pageSize, total, showSizeChanger: false, onChange: changePage, showTotal: pagination.showTotal === false ? undefined : pagination.showTotal ?? (n => `${n} registros`) };
   const emptyContent = <EmptyState title={empty?.title || 'No encontramos registros para mostrar'} description={empty?.description} action={empty?.action} />;
-  const tableColumns = [...columns.map(c => ({ ...c, ellipsis: c.ellipsis ?? true })), ...(actions ? [{ key: '__actions', title: 'Acciones', width: 88, render: (_, row) => <RowActions label={`Acciones de ${rowLabel?.(row) || keyOf(row)}`} actions={actions(row)} /> }] : [])];
+  const tableColumns = [...columns.map(c => ({ ...c, ellipsis: c.ellipsis ?? true })), ...(actions ? [{ key: '__actions', title: 'Acciones', width: actionsColumnWidth, render: (_, row) => <RowActions label={`Acciones de ${rowLabel?.(row) || keyOf(row)}`} actions={actions(row)} /> }] : [])];
   const fields = mobileColumns || columns.filter(c => c.dataIndex);
   const selectRow = (row, checked) => {
     const key = keyOf(row), keys = rowSelection.selectedRowKeys || [];

@@ -62,3 +62,25 @@ test('mobile cards, detail, search, filter sheet and product form do not overflo
   await page.getByRole('button',{name:'Nueva receta',exact:true}).click();await select(page,'Producto 1','Glifosato');
   await page.getByRole('textbox',{name:'Dosis 1',exact:true}).fill('2,5');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
 });
+
+test('recipe table prioritizes name, has six compact columns and centered pagination without record count',async t=>{
+ for(const width of [1440,1024,390]){
+  const page=await pageAt(width);t.after(()=>page.close());
+  const longName='Rastrojo de maíz — Glifosato + EHE + Atrazina + MSO siliconado';
+  await page.evaluate(name=>{window.__recipeRows[0].name=name;},longName);
+  if(width===390)await page.getByRole('button',{name:'Filtros',exact:true}).click();
+  await select(page,'Filtrar por estado','Todas');
+  if(width===390)await page.locator('.ant-drawer-open').getByRole('button',{name:/Close|Cerrar/}).click();
+  const table=page.getByRole('region',{name:'Listado de recetas'});
+  assert.equal(await table.locator('.ant-pagination-total-text').count(),0);
+  if(width>767){
+   assert.deepEqual(await table.locator('thead th').allTextContents(),['Receta','Actividad','Contexto','Cultivo','Productos','Acciones']);
+   const widths=await table.locator('thead th').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().width));
+   assert.ok(widths[0]>Math.max(...widths.slice(1)));for(const [i,expected] of [[1,140],[2,120],[3,120],[4,100],[5,80]])assert.ok(Math.abs(widths[i]-expected)<2);
+   await table.getByRole('button',{name:longName,exact:true}).waitFor();await table.locator('.recipe-disabled-badge').getByText('Deshabilitada',{exact:true}).waitFor();
+  }
+  const centered=await table.locator('.ant-pagination').evaluate(el=>getComputedStyle(el).justifyContent);assert.equal(centered,'center');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.equal(await page.evaluate(()=>window.__recipeWrites.length),0);
+ }
+});
