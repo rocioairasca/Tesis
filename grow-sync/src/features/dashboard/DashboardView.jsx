@@ -77,6 +77,7 @@ export function Weather({ request, canViewRain }) {
     timeout: 'Se agotó el tiempo para obtener la ubicación.',
     unsupported: 'Tu navegador no ofrece ubicación en este contexto. Usá una conexión HTTPS compatible.',
     provider_error: 'Se obtuvo tu ubicación, pero no se pudo consultar el clima en Open-Meteo.',
+    rate_limited: 'Se obtuvo tu ubicación. El servicio meteorológico alcanzó temporalmente su límite de consultas.' + (request.data?.retry_after_seconds ? ' Probá nuevamente en ' + Math.ceil(request.data.retry_after_seconds / 60) + ' min.' : ''),
   };
   return <Section id="dashboard-weather" title="Clima" className="gs-dashboard-weather" action={canViewRain && <EntityLink to="/registro-lluvias">Registro de lluvias</EntityLink>}>
     {request.status === 'loading' ? <LoadingState label={request.phase === 'weather' ? 'Obteniendo clima…' : 'Obteniendo ubicación…'} rows={2} /> : request.status === 'error' ? <ErrorState error={request.error} message="No se pudo consultar el clima." onRetry={request.retry} /> : <>

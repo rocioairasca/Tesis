@@ -1,6 +1,7 @@
 require("dotenv").config();
 const axios = require("axios");
 const supabase = require("../db/supabaseClient");
+const { weatherCache } = require("../services/weatherCache");
 
 const OPEN_METEO_CURRENT_FIELDS = [
   "temperature_2m",
@@ -77,69 +78,83 @@ const fetchWeather = async (req, res) => {
       });
     }
 
-    const { data } = await axios.get("https://api.open-meteo.com/v1/forecast", {
-      params: {
+    const result = await weatherCache.getOrLoad(lat, lon, async () => {
+      const { data } = await axios.get("https://api.open-meteo.com/v1/forecast", {
+        params: {
+          latitude: lat,
+          longitude: lon,
+          current: OPEN_METEO_CURRENT_FIELDS,
+          timezone: "auto",
+          timeformat: "unixtime",
+        },
+        timeout: 10000,
+      });
+
+      const current = data?.current || {};
+      const temp = numeric(current.temperature_2m);
+      const humidity = numeric(current.relative_humidity_2m);
+      const windSpeed = numeric(current.wind_speed_10m);
+      const windDeg = numeric(current.wind_direction_10m);
+      const weatherCode = numeric(current.weather_code);
+      const observedSeconds = numeric(current.time);
+      if ([temp, humidity, windSpeed, windDeg, observedSeconds].some(value => value == null) ||
+          humidity < 0 || humidity > 100 || windSpeed < 0 || windDeg < 0 || windDeg > 360 ||
+          !Number.isFinite(new Date(observedSeconds * 1000).getTime())) {
+        throw Object.assign(new Error('Open-Meteo devolvió una lectura incompleta'), { status: 502, code: 'IncompleteWeather' });
+      }
+      const observedAt = new Date(observedSeconds * 1000).toISOString();
+      const when = localISODate(observedSeconds);
+      const presentation = getWeatherPresentation(weatherCode);
+
+      const weatherRow = {
+        temperature: Number.isFinite(temp) ? temp : null,
+        humidity: Number.isFinite(humidity) ? humidity : null,
+        wind_speed: Number.isFinite(windSpeed) ? windSpeed : null,
+        wind_direction: Number.isFinite(windDeg) ? String(windDeg) : null,
+        rainfall: 0,
+        date: when,
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("weather")
+        .insert([weatherRow])
+        .select()
+        .single();
+
+      if (insertError) {
+        throw Object.assign(new Error("No se pudo guardar el clima"), { status: 500, code: "DbError" });
+      }
+
+      return {
+        ...(inserted?.id != null ? { id: inserted.id } : {}),
+        ...(inserted?.created_at != null ? { created_at: inserted.created_at } : {}),
+        ...(inserted?.updated_at != null ? { updated_at: inserted.updated_at } : {}),
+        ...weatherRow,
+        source: "open-meteo",
         latitude: lat,
         longitude: lon,
-        current: OPEN_METEO_CURRENT_FIELDS,
-        timezone: "auto",
-        timeformat: "unixtime",
-      },
-      timeout: 10000,
+        weather_code: Number.isFinite(weatherCode) ? weatherCode : null,
+        condition: presentation.condition,
+        icon: presentation.icon,
+        observed_at: observedAt,
+        current_units: data?.current_units || {},
+      };
     });
-
-    const current = data?.current || {};
-    const temp = numeric(current.temperature_2m);
-    const humidity = numeric(current.relative_humidity_2m);
-    const windSpeed = numeric(current.wind_speed_10m);
-    const windDeg = numeric(current.wind_direction_10m);
-    const weatherCode = numeric(current.weather_code);
-    const observedSeconds = numeric(current.time);
-    if ([temp, humidity, windSpeed, windDeg, observedSeconds].some(value => value == null) ||
-        humidity < 0 || humidity > 100 || windSpeed < 0 || windDeg < 0 || windDeg > 360 ||
-        !Number.isFinite(new Date(observedSeconds * 1000).getTime())) {
-      return res.status(502).json({ error: 'IncompleteWeather', message: 'Open-Meteo devolvió una lectura incompleta' });
-    }
-    const observedAt = new Date(observedSeconds * 1000).toISOString();
-    const when = localISODate(observedSeconds);
-    const presentation = getWeatherPresentation(weatherCode);
-
-    const weatherRow = {
-      temperature: Number.isFinite(temp) ? temp : null,
-      humidity: Number.isFinite(humidity) ? humidity : null,
-      wind_speed: Number.isFinite(windSpeed) ? windSpeed : null,
-      wind_direction: Number.isFinite(windDeg) ? String(windDeg) : null,
-      rainfall: 0,
-      date: when,
-    };
-
-    const { data: inserted, error: insertError } = await supabase
-      .from("weather")
-      .insert([weatherRow])
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("DB insert weather error:", insertError);
-      return res.status(500).json({ error: "DbError", message: "No se pudo guardar el clima" });
-    }
-
-    return res.json({
-      ...inserted,
-      ...weatherRow,
-      source: "open-meteo",
-      latitude: lat,
-      longitude: lon,
-      weather_code: Number.isFinite(weatherCode) ? weatherCode : null,
-      condition: presentation.condition,
-      icon: presentation.icon,
-      observed_at: observedAt,
-      current_units: data?.current_units || {},
-    });
+    return res.json(result);
   } catch (err) {
-    const code = err.response?.status;
-    const payload = err.response?.data;
-    console.error("Open-Meteo error:", { code, payload, msg: err.message });
+    if (err.code === 'WeatherRateLimited') {
+      res.setHeader('Retry-After', String(err.retryAfterSeconds));
+      return res.status(429).json({
+        error: 'WeatherRateLimited',
+        message: err.message,
+        retry_after_seconds: err.retryAfterSeconds,
+      });
+    }
+    if (['IncompleteWeather', 'DbError'].includes(err.code)) {
+      return res.status(err.status).json({ error: err.code, message: err.message });
+    }
+    // Provider payloads/URLs can contain exact coordinates. Log only the status.
+    console.error('Weather request failed', { status: err.response?.status || null });
     return res.status(502).json({
       error: "FetchWeatherError",
       message: "Error al obtener clima en Open-Meteo",

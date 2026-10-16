@@ -20,3 +20,22 @@ test('denied permission has no useless retry; timeout and unavailable can retry'
  const denied=await open(1024,'denied');t.after(()=>denied.close());await denied.getByText(/GrowSync necesita permiso/).waitFor();assert.equal(await denied.getByRole('button',{name:'Reintentar',exact:true}).count(),0);assert.deepEqual(await denied.evaluate(()=>[window.__geoCalls,window.__weatherCalls]),[0,0]);
  for(const mode of ['timeout','unavailable']){const page=await open(1024,mode);t.after(()=>page.close());await page.getByRole('button',{name:'Reintentar',exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__weatherCalls),0);await page.evaluate(()=>window.__mode='success');await page.getByRole('button',{name:'Reintentar',exact:true}).click();await page.getByText('Clima actual',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__geoCalls),2);}
 });
+
+test('StrictMode: one weather POST per mount, unrelated updates do not fetch and there is no polling',async t=>{
+ const page=await open(1440);t.after(()=>page.close());await page.getByText('Clima actual',{exact:true}).waitFor();
+ assert.deepEqual(await page.evaluate(()=>[window.__geoCalls,window.__weatherCalls]),[1,1]);
+ await page.getByRole('button',{name:'Actualizar otras secciones',exact:true}).click();
+ await page.getByRole('heading',{name:'Requiere tu atención',exact:true}).waitFor({state:'hidden'});
+ await page.clock.install();await page.clock.fastForward(30*60*1000);
+ assert.deepEqual(await page.evaluate(()=>[window.__geoCalls,window.__weatherCalls]),[1,1]);
+ await page.getByRole('button',{name:'Volver a montar Dashboard',exact:true}).click();await page.clock.runFor(1000);
+ await page.getByText('Clima actual',{exact:true}).waitFor();
+ assert.deepEqual(await page.evaluate(()=>[window.__geoCalls,window.__weatherCalls]),[2,2]);
+});
+test('429 shows the provider wait time, preserves stale history and permits explicit retry',async t=>{
+ const page=await open(390,'limited');t.after(()=>page.close());await page.getByText(/límite de consultas/).waitFor();await page.getByText(/Probá nuevamente en 15 min/).waitFor();
+ await page.getByText('Último dato disponible · Desactualizado',{exact:true}).waitFor();assert.equal(await page.getByText('Clima actual',{exact:true}).count(),0);
+ assert.equal(await page.evaluate(()=>window.__weatherCalls),1);
+ await page.evaluate(()=>window.__mode='success');await page.getByRole('button',{name:'Reintentar',exact:true}).click();await page.getByText('Clima actual',{exact:true}).waitFor();
+ assert.deepEqual(await page.evaluate(()=>[window.__geoCalls,window.__weatherCalls]),[2,2]);
+});

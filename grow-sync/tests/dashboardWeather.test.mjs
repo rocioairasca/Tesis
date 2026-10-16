@@ -25,6 +25,8 @@ test('weather and notifications: source errors, retry, WMO and persisted text pr
    const result=await createDashboardSource({get:async()=>({data:saved}),post:()=>assert.fail()}, {},()=>({getCurrentPosition:(ok,bad)=>bad({code})})).weather({});
    assert.equal(result.failure,expected);assert.equal(result.retryable,retryable);assert.equal(result.location,null);
   }
+  const limited = await createDashboardSource({post:async()=>{throw Object.assign(Error('provider private payload'),{response:{status:429,data:{error:'WeatherRateLimited',retry_after_seconds:900}}});},get:async()=>({data:saved})},{},()=>({getCurrentPosition:ok=>ok({coords:{latitude:-32,longitude:-63}})})).weather({});
+  assert.equal(limited.failure,'rate_limited');assert.equal(limited.retry_after_seconds,900);assert.equal(limited.fallback,true);assert.equal(limited.reading,saved);assert.equal(limited.location.latitude,-32);assert.equal(limited.retryable,true);
   const noSaved=await createDashboardSource({get:async()=>{throw Error('Offline');}}, {},()=>null).weather({});assert.equal(noSaved.reading,null);assert.equal(noSaved.failure,'unsupported');
   for(const response of [{},{temperature:null},{...current,humidity:null}]){
    const result=await createDashboardSource({post:async()=>({data:response}),get:async()=>({data:saved})},{},()=>({getCurrentPosition:ok=>ok({coords:{latitude:0,longitude:0}})})).weather({});assert.equal(result.failure,'provider_error');assert.equal(result.fallback,true);

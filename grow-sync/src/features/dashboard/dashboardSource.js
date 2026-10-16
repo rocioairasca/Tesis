@@ -68,11 +68,14 @@ export function createDashboardSource(client = api, harvest = { getHarvestFilter
         checkAbort();
         // Existing historical fallback has no saved coordinates or WMO code.
         // Never present this row as current weather for the device location.
+        const rateLimited = stage === 'weather' && error.response?.status === 429 && error.response?.data?.error === 'WeatherRateLimited';
+        const retryAfter = Number(error.response?.data?.retry_after_seconds);
         let data = null;
         try { data = (await client.get('/weather/latest', { signal, timeout: 10000 })).data; }
         catch { checkAbort(); }
         return { reading: data && Object.keys(data).length ? data : null, fallback: true, location,
-          failure: stage === 'location' ? error.code || 'position_unavailable' : 'provider_error',
+          failure: stage === 'location' ? error.code || 'position_unavailable' : rateLimited ? 'rate_limited' : 'provider_error',
+          retry_after_seconds: rateLimited && Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
           retryable: stage !== 'location' || !['permission_denied', 'unsupported'].includes(error.code) };
       }
     },
