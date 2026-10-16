@@ -1,0 +1,12 @@
+// Synthetic laboratory document based on the supplied reference fields. No production PDF/person.
+const lines=['Informe S26-0385','Recepcion: 02/06/2026','Muestreo: 22/05/2026','Profundidad: 0-20 cm','Muestra: MUESTRA SINTETICA RASTROJO SOJA','Posicion: NO CONSIGNA','Enviado por: EQUIPO SINTETICO','Parametro | Metodo | Unidad | Resultado','pH | 1 : 2,5 (suelo:agua) | UpH | 7,1','Materia Orgánica | Vann Bemmelen | % | 3,0','Zinc | DTPA-ICPE | ppm | N.R.','Traza | DTPA-ICPE | ppm | <0,1','N.R.: ANÁLISIS NO REQUERIDO POR EL INTERESADO'];
+const result=(parameter_name,method,unit,raw_value,numeric_value,result_status='measured',sort_order=0)=>({parameter_name,method,unit,raw_value,numeric_value,result_status,sort_order});
+const proposal=()=>({report_number:'S26-0385',laboratory:null,received_date:'2026-06-02',notes:null,samples:[{sample_date:'2026-05-22',depth_from_cm:0,depth_to_cm:20,sample_name:'MUESTRA SINTETICA RASTROJO SOJA',position_description:'NO CONSIGNA',sampled_by:'EQUIPO SINTETICO',notes:null,results:[result('pH','1 : 2,5 (suelo:agua)','UpH','7,1',7.1),result('Materia Orgánica','Vann Bemmelen','%','3,0',3),result('Zinc','DTPA-ICPE','ppm','N.R.',null,'not_requested'),result('Traza','DTPA-ICPE','ppm','<0,1',null,'qualitative')]}],warnings:[]});
+function pdf(textLines=lines){
+ const stream='BT /F1 10 Tf 40 780 Td '+textLines.map((text,i)=>(i?'0 -16 Td ':'')+'('+text.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)')+') Tj').join('\n')+' ET';
+ const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>','<< /Length '+Buffer.byteLength(stream,'latin1')+' >>\nstream\n'+stream+'\nendstream'];
+ let body='%PDF-1.4\n',offsets=[];objects.forEach((object,i)=>{offsets.push(Buffer.byteLength(body,'latin1'));body+=(i+1)+' 0 obj\n'+object+'\nendobj\n';});
+ const start=Buffer.byteLength(body,'latin1');body+='xref\n0 6\n0000000000 65535 f \n'+offsets.map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+start+'\n%%EOF';return Buffer.from(body,'latin1');
+}
+const file=()=>({buffer:pdf(),mimetype:'application/pdf',size:pdf().length,originalname:'synthetic.pdf'});
+module.exports={lines,proposal,pdf,file};

@@ -2,6 +2,7 @@ const express=require('express'),multer=require('multer');
 const requirePermission=require('../middleware/requirePermission');
 const {getEffectivePermissions}=require('../constants/permissions');
 const service=require('../services/soilAnalysis');
+const extraction=require('../services/soilAnalysisExtraction');
 module.exports=dependencies=>{
  const router=express.Router();
  const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:service.MAX_BYTES,files:1,fields:1,fieldSize:2*1024*1024,parts:2}}).single('file');
@@ -13,9 +14,17 @@ module.exports=dependencies=>{
  router.get('/',permission('view'),run(async(req,res)=>res.json(await service.list(dependencies,{...input(req),filters:req.query}))));
  router.get('/:id/file-url',permission('view'),run(async(req,res)=>res.json(await service.fileUrl(dependencies,input(req)))));
  router.get('/:id',permission('view'),run(async(req,res)=>res.json(await service.read(dependencies.pool,req.user.company_id,req.params.id,input(req).includeDisabled))));
- router.post('/',permission('create'),(req,res,next)=>upload(req,res,error=>{
+ const acceptFile=(req,res,next)=>upload(req,res,error=>{
   if(error)return next(Object.assign(new Error(error.code==='LIMIT_FILE_SIZE'?'El PDF no puede superar 10 MB.':'Enviá un único PDF y los datos del informe.'),{status:error.code==='LIMIT_FILE_SIZE'?413:400}));next();
- }),run(async(req,res)=>{
+ });
+ router.post('/extract',permission('create'),acceptFile,run(async(req,res)=>{
+  service.validateFile(req.file);
+  if(Object.keys(req.body||{}).length)throw Object.assign(new Error('Enviá únicamente el PDF para analizar.'),{status:400});
+  const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+  try{const data=await (dependencies.extractor||extraction.extract)({file:req.file,signal:controller.signal});if(!controller.signal.aborted)res.json(data);}
+  finally{res.removeListener('close',abort);}
+ }));
+ router.post('/',permission('create'),acceptFile,run(async(req,res)=>{
   let body;try{body=JSON.parse(req.body?.metadata);}catch{throw Object.assign(new Error('Revisá los datos del informe.'),{status:400});}
   res.status(201).json(await service.create(dependencies,{...input(req),body,file:req.file}));
  }));

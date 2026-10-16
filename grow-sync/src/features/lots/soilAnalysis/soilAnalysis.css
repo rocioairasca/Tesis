@@ -15,10 +15,23 @@
 .soil-file-field { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
 .soil-file-field input { max-width:100%; }
 .soil-sample-form { border-top:1px solid var(--gs-border); margin-top:16px; padding:12px 0; }
-.soil-result-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; background:var(--gs-surface); border:1px solid var(--gs-border); padding:12px; margin-bottom:12px; border-radius:8px; }
-.soil-form-grid > *, .soil-result-form > * { min-width:0; }
-.soil-result-form > button { justify-self:start; }
+.soil-form-grid > * { min-width:0; }
 .soil-detail-modal .ant-modal-body, .soil-form-drawer .ant-drawer-body { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:1099px){ .soil-detail-grid { grid-template-columns:minmax(0,1fr); } }
-@media(max-width:767px){ .gs-soil-analysis { padding:16px; } .soil-form-grid,.soil-result-form { grid-template-columns:minmax(0,1fr); } .soil-filters > * { width:100%; } .soil-pdf-preview iframe { height:420px; } }
+@media(max-width:767px){ .gs-soil-analysis { padding:16px; } .soil-form-grid { grid-template-columns:minmax(0,1fr); } .soil-filters > * { width:100%; } .soil-pdf-preview iframe { height:420px; } }
 .gs-soil-analysis .ant-table-pagination.ant-pagination, .gs-soil-analysis .gs-ui-pagination { display:flex; justify-content:center; }
+
+.soil-extraction-entry { display:flex; flex-direction:column; align-items:flex-start; gap:16px; margin-bottom:24px; }
+.soil-extraction-entry .ant-alert { width:100%; box-sizing:border-box; }
+.soil-results-editor { width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:12px; }
+.soil-results-editor th { text-align:left; font-size:12px; color:var(--gs-text-secondary); padding:8px 4px; }
+.soil-results-editor td { vertical-align:top; padding:4px; border-top:1px solid var(--gs-border); overflow-wrap:anywhere; }
+.soil-results-editor .ant-form-item { margin-bottom:4px; }
+.soil-results-editor .ant-form-item-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.soil-results-editor .ant-select { width:100%; }
+.soil-result-card { border:1px solid var(--gs-border); border-radius:8px; padding:10px; margin-bottom:8px; }
+.soil-result-card summary { cursor:pointer; overflow-wrap:anywhere; font-weight:500; }
+.soil-result-card-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 10px; margin-top:12px; }
+.soil-result-card-fields .ant-form-item { min-width:0; margin-bottom:12px; }
+.soil-form-drawer .ant-drawer-content-wrapper { width:min(1180px,calc(100vw - 48px))!important; }
+@media(max-width:767px){ .soil-form-drawer .ant-drawer-content-wrapper { width:100%!important; } }

@@ -10,8 +10,9 @@ import {PlusOutlined} from '../../../components/AppIcons';
 import useIsMobile from '../../../hooks/useIsMobile';
 import api from '../../../services/apiClient';
 import SoilAnalysisForm from './SoilAnalysisForm';
+import SoilExtractionEntry from './SoilExtractionEntry';
 import SoilPdfPreview from './SoilPdfPreview';
-import {emptySample,historyRows,reportPayload,validatePdf,depthText,highlights} from './soilAnalysisModel.mjs';
+import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights} from './soilAnalysisModel.mjs';
 import './soilAnalysis.css';
 export default function SoilAnalysis(){
  const {lotId}=useParams(),[params]=useSearchParams(),navigate=useNavigate(),mobile=useIsMobile();
@@ -25,6 +26,9 @@ export default function SoilAnalysis(){
  const [reports,setReports]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(null),[refresh,setRefresh]=useState(0);
  const [viewing,setViewing]=useState(null),[detailError,setDetailError]=useState(null),[detailLoading,setDetailLoading]=useState(false),[showPdf,setShowPdf]=useState(false);
  const [editor,setEditor]=useState(null),[file,setFile]=useState(null),[saving,setSaving]=useState(false),[saveError,setSaveError]=useState(null),[confirmation,setConfirmation]=useState(null);
+ const [entryMode,setEntryMode]=useState('pdf'),[extractStatus,setExtractStatus]=useState('idle'),[extractWarnings,setExtractWarnings]=useState([]),[reviewed,setReviewed]=useState(false);
+ const extractController=useRef(null);
+ useEffect(()=>()=>extractController.current?.abort(),[]);
  const [form]=Form.useForm();
  const detailController=useRef(null);
  useEffect(()=>{setLotFilter(undefined);setSub(lotId?querySub||undefined:undefined);},[lotId,querySub]);
@@ -47,16 +51,29 @@ export default function SoilAnalysis(){
   try{const {data}=await api.get('/soil-analysis/'+reportId,{signal:controller.signal});if(!controller.signal.aborted)setViewing(data);}catch(e){if(!controller.signal.aborted)setDetailError(e);}finally{if(!controller.signal.aborted)setDetailLoading(false);}
  },[]);
  const openEditor=async report=>{
+  extractController.current?.abort();setEntryMode(report?'manual':'pdf');setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);
   setSaveError(null);setFile(null);form.resetFields();
   if(report){try{const {data}=await api.get('/soil-analysis/'+report.id);form.setFieldsValue({...data,received_date:parseCalendarDate(data.received_date),samples:data.samples.map(s=>({...s,sample_date:parseCalendarDate(s.sample_date)}))});setEditor({report:data});setViewing(null);}catch(e){setError(e);}}
   else{form.setFieldsValue({samples:[emptySample(selectedLotId,sub&&sub!=='full'?sub:null)]});setEditor({report:null});}
  };
+ const closeEditor=()=>{extractController.current?.abort();setEditor(null);setFile(null);setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);form.resetFields();};
+ const changeEntryMode=mode=>{
+  if(mode===entryMode)return;extractController.current?.abort();setEntryMode(mode);setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);setSaveError(null);form.resetFields();form.setFieldsValue({samples:[emptySample(selectedLotId,sub&&sub!=='full'?sub:null)]});
+ };
+ const changeFile=next=>{extractController.current?.abort();setFile(next);setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);};
+ const analyze=async()=>{
+  extractController.current?.abort();const controller=new AbortController();extractController.current=controller;setSaveError(null);setReviewed(false);setExtractStatus('loading');
+  try{validatePdf(file);const payload=new FormData();payload.append('file',file);const {data}=await api.post('/soil-analysis/extract',payload,{signal:controller.signal,timeout:50000,headers:{'Content-Type':'multipart/form-data'}});
+   if(controller.signal.aborted)return;form.resetFields();form.setFieldsValue(extractionValues(data,parseCalendarDate));setExtractWarnings(data.warnings);setExtractStatus('review');
+  }catch{if(!controller.signal.aborted)setExtractStatus('error');}
+ };
  const save=async values=>{
+  if(!editor.report&&entryMode==='pdf'&&(extractStatus!=='review'||!reviewed)){setSaveError('Revisá los datos extraídos antes de guardar.');return;}
   setSaving(true);setSaveError(null);
   try{const body=reportPayload(values);
    if(editor.report)await api.put('/soil-analysis/'+editor.report.id,body);
    else{validatePdf(file);const data=new FormData();data.append('file',file);data.append('metadata',JSON.stringify(body));await api.post('/soil-analysis',data,{headers:{'Content-Type':'multipart/form-data'}});}
-   setEditor(null);setFile(null);setRefresh(r=>r+1);
+   closeEditor();setRefresh(r=>r+1);
   }catch(e){setSaveError(getUserFriendlyError(e,e.message));}finally{setSaving(false);}
  };
  const rows=historyRows(reports,selectedLotId,sub,isGlobal?search:'').filter(s=>(!from||s.sample_date>=from)&&(!to||s.sample_date<=to));
@@ -94,10 +111,12 @@ export default function SoilAnalysis(){
     empty={{title:isGlobal?'Todavía no hay análisis de suelo cargados.':'Todavía no hay análisis de suelo para este lote.',action:canCreate?{label:'Cargar análisis',onClick:()=>openEditor(null)}:undefined}}
     renderMobile={s=><div className="soil-history-card">{isGlobal&&<p>{s.lot_name} · {s.sub_lot_name||'Lote completo'}</p>}<p>{s.sample_name||s.sub_lot_name||'Lote completo'} · {depthText(s)}</p><p>Informe {s.report.report_number||'sin número'} · {s.report.laboratory||'Laboratorio no consignado'}</p><div className="soil-highlights">{highlights(s).map(h=><span key={h.name}>{h.name}: {h.text}</span>)}</div><Button onClick={()=>openDetail(s.report.id)}>Ver análisis</Button></div>} />
   </>}
-  <FormDrawer open={Boolean(editor)} title={editor?.report?'Editar análisis':'Nuevo análisis'} wide busy={saving} onClose={()=>{setEditor(null);setFile(null);}} rootClassName="soil-form-drawer"
-   footer={<Space wrap><Button disabled={saving} onClick={()=>setEditor(null)}>Cancelar</Button><Button type="primary" loading={saving} onClick={()=>form.submit()}>Guardar análisis</Button></Space>}>
+  <FormDrawer open={Boolean(editor)} title={editor?.report?'Editar análisis':'Nuevo análisis'} wide busy={saving} onClose={closeEditor} rootClassName="soil-form-drawer"
+   footer={<Space wrap><Button disabled={saving} onClick={closeEditor}>Cancelar</Button><Button type="primary" loading={saving} disabled={!editor?.report&&entryMode==='pdf'&&(extractStatus!=='review'||!reviewed)} onClick={()=>form.submit()}>Guardar análisis</Button></Space>}>
    {saveError&&<Alert type="error" showIcon message={saveError} />}
-   {editor&&context&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={setFile} onFinish={save} lotId={selectedLotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
+   {editor&&!editor.report&&entryMode==='pdf'&&extractStatus!=='review'&&<Form form={form} component={false}/>}
+   {editor&&!editor.report&&<SoilExtractionEntry mode={entryMode} onModeChange={changeEntryMode} status={extractStatus} file={file} onFileChange={changeFile} onExtract={analyze} warnings={extractWarnings} reviewed={reviewed} onReviewed={setReviewed}/>}
+   {editor&&context&&(editor.report||entryMode==='manual'||extractStatus==='review')&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={changeFile} onFinish={save} lotId={selectedLotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
   </FormDrawer>
   <FocusModal destroyOnHidden open={Boolean(viewing)} title="Detalle de análisis de suelo" width={1100} rootClassName="soil-detail-modal" onCancel={()=>{detailController.current?.abort();setViewing(null);setShowPdf(false);}}>
    {detailLoading?<LoadingState label="Cargando análisis…" />:detailError?<ErrorState error={detailError} onRetry={()=>openDetail(viewing.id)} />:viewing?.samples&&<div className="soil-detail-grid">
