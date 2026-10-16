@@ -7,7 +7,8 @@ const instructions=[
  'No asignes lotes ni divisiones. No inventes laboratorio, fechas, profundidad, métodos, unidades ni nombres. Campo ausente: null.',
  'Fechas ISO solo si consta una fecha completa inequívoca. No uses metadata del archivo. Conservá literalmente nombres, métodos, unidades y raw_value.',
  'numeric_value solo para igualdad inequívoca. N.R. no es cero; <0,1 es qualitative y numeric_value null.',
- 'N.R. es not_requested solo si la leyenda del propio informe lo define como no requerido; de otro modo qualitative.',
+ 'Omití por completo de samples[].results los parámetros N.R. únicamente cuando la leyenda del propio informe defina N.R. como ANÁLISIS NO REQUERIDO POR EL INTERESADO (no requerido).',
+ 'Si el documento no aclara el significado de N.R., conservalo con raw_value literal, numeric_value null, result_status qualitative y un warning para revisión humana. Conservá otros resultados reales cualitativos, incluidos <0,1, Trazas, Negativo, Positivo y Ausente.',
  'Preservá la asociación entre muestras y resultados. No crees muestras/resultados ausentes: arrays vacíos si no se identifican.',
  'warnings: advertencias breves en español para revisión humana.',
 ].join('\n');
@@ -42,7 +43,9 @@ function adaptProposal(input,text){
  for(const key of ['report_number','laboratory','notes'])data[key]=clean(data[key],key==='laboratory'?'el laboratorio':key==='report_number'?'el número de informe':'las notas');
  data.received_date=cleanDate(data.received_date,'la fecha de recepción');
  const plain=source.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
- const nrDefined=plain.includes('ANALISIS NO REQUERIDO POR EL INTERESADO')||/N\.?\s*R\.?\s*[:=\-]?\s*(?:ANALISIS\s+)?NO REQUERID[OA]/.test(plain);
+ // Require a legend that links the abbreviation to its meaning, not an unrelated phrase.
+ const nrDefined=/\bN\.?\s*R\.?\s*[:=\-–—]?\s*(?:ANALISIS\s+)?NO REQUERID[OA]\b/.test(plain);
+ const isNR=value=>/^N\.?\s*R\.?$/i.test(value?.trim()||'');
  for(const [index,sample] of data.samples.entries()){
   sample.sample_date=cleanDate(sample.sample_date,'la fecha de muestreo');
   for(const key of ['sample_name','position_description','sampled_by','notes'])sample[key]=clean(sample[key],'un dato de la muestra '+(index+1));
@@ -59,9 +62,13 @@ function adaptProposal(input,text){
    for(const key of ['parameter_name','method','unit','raw_value'])result[key]=clean(result[key],'un dato del resultado '+(order+1)+' de la muestra '+(index+1));
    const raw=result.raw_value?.trim()||'';
    result.numeric_value=numericValue(raw);
-   result.result_status=result.numeric_value!=null?'measured':/^N\.?\s*R\.?$/i.test(raw)&&nrDefined?'not_requested':'qualitative';result.sort_order=order;
-   if(/^N\.?\s*R\.?$/i.test(raw)&&!nrDefined)warnings.add('El significado de N.R. no está aclarado en el informe. Revisá su estado.');
+   result.result_status=result.numeric_value!=null?'measured':'qualitative';result.sort_order=order;
+   if(isNR(raw)&&!nrDefined)warnings.add('El significado de N.R. no está aclarado en el informe. Revisá su estado.');
   }
+  // Defensive filtering after document checks, even when the model returns these rows.
+  if(nrDefined)sample.results=sample.results.filter(result=>!isNR(result.raw_value));
+  sample.results.forEach((result,order)=>{result.sort_order=order;});
+  if(!sample.results.length)warnings.add('No quedaron resultados analizados en la muestra '+(index+1)+'. Revisá el PDF y completá los datos si corresponde.');
  }
  if(!data.samples.length)warnings.add('No se identificaron muestras. Completá los datos manualmente.');
  data.warnings=[...new Set([...warnings,...data.warnings])].slice(0,30);return extraction.parse(data);

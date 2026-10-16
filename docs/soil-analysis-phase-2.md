@@ -44,7 +44,7 @@ Las fechas requieren fecha completa documentada; no se usan metadata ni inferenc
 La profundidad requiere un rango explícito verificable; la ausencia queda null.
 numeric_value se deriva conservadoramente de raw_value, nunca de una cifra arbitraria del proveedor:
 7,1 -> 7.1; N.R. y <0,1 -> null. Separadores con tres decimales se consideran ambiguos y quedan sin valor numérico.
-N.R. solo es not_requested cuando la leyenda del propio informe define no requerido; de lo contrario es qualitative.
+N.R. se omite de results solo cuando la leyenda del propio informe lo define como análisis no requerido. El prompt pide omitirlo y el backend filtra defensivamente después de validar la propuesta y su respaldo documental. Sin definición, se conserva como qualitative con advertencia. Otros resultados cualitativos reales se conservan. El texto enviado y el PDF original no se recortan ni modifican. Si una muestra queda sin resultados, se advierte para revisión manual; no se inventan filas.
 Estas verificaciones no garantizan asociación semántica perfecta entre filas: siempre hay revisión humana.
 
 ## UX
@@ -52,7 +52,8 @@ Nuevo análisis ofrece Cargar desde PDF (principal) y Completar manualmente.
 El archivo permanece solo en memoria hasta guardar.
 Tras analizar aparece Datos extraídos del PDF · Revisá antes de guardar y las advertencias.
 Todas las muestras extraídas empiezan sin lote ni división, incluso desde una ruta contextual.
-El usuario selecciona cada lote/división y confirma que revisó los datos contra el PDF.
+El usuario selecciona cada lote/división. Al final de todas las muestras y resultados, después de las advertencias e inmediatamente antes de las acciones, confirma que revisó los datos contra el PDF. La carga manual no muestra esa confirmación.
+Editar valores del informe, muestras o resultados, cambiar el PDF o volver a analizar reinicia la confirmación. Expandir tarjetas no la reinicia.
 Solo entonces puede guardar usando el mismo multipart final con PDF original + metadata confirmada.
 Cambiar archivo invalida la propuesta; cancelar cierra/aborta y descarta datos sin persistir nada.
 Si falla: No pudimos leer automáticamente este PDF. Podés volver a intentarlo o completar el análisis manualmente.
@@ -66,7 +67,7 @@ se genera un PDF válido sintético con campos de referencia S26-0385 / fechas /
 sustituyendo denominaciones personales por texto sintético. No se descargaron documentos productivos.
 Las pruebas ejecutan el parser real sobre este PDF y simulan respuestas/errores/refusal/timeout de OpenAI.
 Las pruebas de navegador cubren carga manual, revisión, corrección, lote manual, confirmación, cancelación
-y 20 resultados a 1440/1024/390 px.
+y 20 resultados a 1440/1024/390 px. Cubren la omisión documental de N.R., la conservación de cualitativos reales y la invalidación de la revisión ante cambios de datos, archivo o reanálisis.
 
 ## Archivos de esta fase
 Modificados:
@@ -99,6 +100,6 @@ https://developers.openai.com/api/docs/models/gpt-4.1-mini
 https://github.com/unjs/unpdf
 
 ## Validación ejecutada
-55 tests relacionados (backend/frontend) y 15 de navegador aprobados con Node 20.20.2.
+55 tests relacionados (backend/frontend) y 17 de navegador aprobados con Node 20.20.2.
 Build frontend correcto (advertencias existentes de Vite/chunks); git diff --check sin errores.
 Sin producción, migraciones en bases reales, commit, push ni deploy.

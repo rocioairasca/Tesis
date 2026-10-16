@@ -17,3 +17,9 @@ test('extraction proposals never preselect lot/division and preserve original ve
  const value=extractionValues({report_number:'SYN',laboratory:null,received_date:null,notes:null,samples:[{lot_id:'guessed',sub_lot_id:'guessed-sub',sample_date:'2026-05-22',results:[{raw_value:'7,1',numeric_value:7.1}]}]},value=>value);
  assert.equal(value.samples[0].lot_id,null);assert.equal(value.samples[0].sub_lot_id,null);assert.equal(value.samples[0].results[0].raw_value,'7,1');assert.equal(value.samples[0].results[0].numeric_value,7.1);
 });
+
+test('manual qualitative raw values survive payload preparation; filtered extraction does not reintroduce rows',()=>{
+ const values=['N.R.','<0,1','Trazas','Negativo','Positivo','Ausente'],results=values.map(raw_value=>({parameter_name:'Ensayo',raw_value,numeric_value:null,result_status:'qualitative'}));
+ const payload=reportPayload({samples:[{...sample,results}]});assert.deepEqual(payload.samples[0].results.map(r=>[r.raw_value,r.result_status]),values.map(v=>[v,'qualitative']));
+ for(const filtered of [[],[results[1]]])assert.deepEqual(extractionValues({samples:[{results:filtered}]},v=>v).samples[0].results,filtered);
+});

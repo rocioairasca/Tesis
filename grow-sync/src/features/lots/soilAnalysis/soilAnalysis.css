@@ -35,3 +35,7 @@
 .soil-result-card-fields .ant-form-item { min-width:0; margin-bottom:12px; }
 .soil-form-drawer .ant-drawer-content-wrapper { width:min(1180px,calc(100vw - 48px))!important; }
 @media(max-width:767px){ .soil-form-drawer .ant-drawer-content-wrapper { width:100%!important; } }
+
+.soil-extraction-review { display:flex; flex-direction:column; gap:16px; margin-top:20px; padding-top:16px; border-top:1px solid var(--gs-border); min-width:0; }
+.soil-extraction-review .ant-checkbox-wrapper { align-self:flex-start; max-width:100%; align-items:flex-start; }
+.soil-extraction-review .ant-checkbox-wrapper > span:last-child { min-width:0; overflow-wrap:anywhere; }

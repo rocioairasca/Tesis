@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {Alert,Button,DatePicker,Descriptions,Form,Select,Space,Table,Tooltip} from 'antd';
+import {Alert,Button,Checkbox,DatePicker,Descriptions,Form,Select,Space,Table,Tooltip} from 'antd';
 import {useNavigate,useParams,useSearchParams} from 'react-router-dom';
 import {PageHeader,FilterBar,DataTable,EntityLink,ErrorState,LoadingState,ConfirmDialog,FormDrawer,FocusModal} from '../../../components/ui';
 import {PERMISSIONS} from '../../../constants/permissions';
@@ -115,8 +115,12 @@ export default function SoilAnalysis(){
    footer={<Space wrap><Button disabled={saving} onClick={closeEditor}>Cancelar</Button><Button type="primary" loading={saving} disabled={!editor?.report&&entryMode==='pdf'&&(extractStatus!=='review'||!reviewed)} onClick={()=>form.submit()}>Guardar análisis</Button></Space>}>
    {saveError&&<Alert type="error" showIcon message={saveError} />}
    {editor&&!editor.report&&entryMode==='pdf'&&extractStatus!=='review'&&<Form form={form} component={false}/>}
-   {editor&&!editor.report&&<SoilExtractionEntry mode={entryMode} onModeChange={changeEntryMode} status={extractStatus} file={file} onFileChange={changeFile} onExtract={analyze} warnings={extractWarnings} reviewed={reviewed} onReviewed={setReviewed}/>}
-   {editor&&context&&(editor.report||entryMode==='manual'||extractStatus==='review')&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={changeFile} onFinish={save} lotId={selectedLotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
+   {editor&&!editor.report&&<SoilExtractionEntry mode={entryMode} onModeChange={changeEntryMode} status={extractStatus} file={file} onFileChange={changeFile} onExtract={analyze}/>}
+   {editor&&context&&(editor.report||entryMode==='manual'||extractStatus==='review')&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={changeFile} onFinish={save} onValuesChange={()=>setReviewed(false)} lotId={selectedLotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
+   {editor&&!editor.report&&entryMode==='pdf'&&extractStatus==='review'&&<section className="soil-extraction-review" aria-label="Revisión final de extracción">
+    {extractWarnings.length>0&&<Alert type="warning" message="Revisá estos datos" description={<ul>{extractWarnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>}/>}
+    <Checkbox checked={reviewed} disabled={saving} onChange={e=>setReviewed(e.target.checked)}>Revisé los datos extraídos y los comparé con el PDF original.</Checkbox>
+   </section>}
   </FormDrawer>
   <FocusModal destroyOnHidden open={Boolean(viewing)} title="Detalle de análisis de suelo" width={1100} rootClassName="soil-detail-modal" onCancel={()=>{detailController.current?.abort();setViewing(null);setShowPdf(false);}}>
    {detailLoading?<LoadingState label="Cargando análisis…" />:detailError?<ErrorState error={detailError} onRetry={()=>openDetail(viewing.id)} />:viewing?.samples&&<div className="soil-detail-grid">

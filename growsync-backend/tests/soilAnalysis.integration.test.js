@@ -118,3 +118,8 @@ test('global catalog/list work with soil view only, scoped to company; multi-lot
  const contextual=await request('GET','/lot-context/'+x.lot);assert.equal((await contextual.json()).lot.id,x.lot);
  user={...x.owner,custom_permissions:[]};assert.equal((await request('GET','/lot-context')).status,403);
 });
+
+test('manual qualitative results including N.R. remain supported without extraction filtering',async()=>{
+ const x=await fixture(),values=['N.R.','<0,1','Trazas','Negativo','Positivo','Ausente'];const results=values.map((raw_value,sort_order)=>({parameter_name:'Parámetro '+sort_order,raw_value,numeric_value:null,result_status:'qualitative',sort_order}));
+ const report=await x.create({samples:[{...x.body.samples[0],results}]});assert.deepEqual(report.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),values.map(v=>[v,null,'qualitative']));
+});

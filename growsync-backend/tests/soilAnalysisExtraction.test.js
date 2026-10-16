@@ -6,13 +6,13 @@ test('real parser reads a valid synthetic PDF text layer, then proposal validate
  const buffer=fixture.pdf(),actual=await readPdfText(buffer);assert.ok(actual.includes('S26-0385'));assert.ok(actual.includes('7,1'));let calls=0;
  const data=await extract({file:fixture.file(),provider:async({text})=>{calls++;assert.ok(text.includes('N.R.'));return fixture.proposal();}});
  assert.equal(calls,1);assert.equal(data.report_number,'S26-0385');assert.equal(data.received_date,'2026-06-02');assert.equal(data.samples[0].sample_date,'2026-05-22');assert.equal(data.samples[0].depth_from_cm,0);assert.equal(data.samples[0].depth_to_cm,20);assert.equal(data.laboratory,null);
- assert.deepEqual(data.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),[['7,1',7.1,'measured'],['3,0',3,'measured'],['N.R.',null,'not_requested'],['<0,1',null,'qualitative']]);assert.ok(!Object.hasOwn(data.samples[0],'lot_id'));
+ assert.deepEqual(data.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),[['7,1',7.1,'measured'],['3,0',3,'measured'],['<0,1',null,'qualitative']]);assert.ok(!Object.hasOwn(data.samples[0],'lot_id'));assert.deepEqual(data.samples[0].results.map(r=>r.parameter_name),['pH','Materia Orgánica','Traza']);assert.deepEqual(data.samples[0].results.map(r=>r.sort_order),[0,1,2]);assert.deepEqual(buffer,fixture.pdf());
 });
 test('multiple samples retained; invented fields removed and missing depth/date warned',()=>{
  const p=fixture.proposal();p.laboratory='Inventado';p.samples.push({...p.samples[0],sample_date:null,depth_from_cm:null,depth_to_cm:null});const data=adaptProposal(p,text);assert.equal(data.samples.length,2);assert.equal(data.laboratory,null);assert.equal(data.samples[1].depth_from_cm,null);assert.ok(data.warnings.some(w=>w.includes('profundidad')));assert.ok(data.warnings.some(w=>w.includes('fecha de muestreo')));
 });
 test('numeric interpretation is conservative and N.R. requires its own report legend',()=>{
- const p=fixture.proposal();p.samples[0].results[0].numeric_value=999;const data=adaptProposal(p,text.replace('N.R.: ANÁLISIS NO REQUERIDO POR EL INTERESADO',''));assert.equal(data.samples[0].results[0].numeric_value,7.1);assert.equal(data.samples[0].results[2].result_status,'qualitative');assert.equal(data.samples[0].results[3].numeric_value,null);
+ const p=fixture.proposal();p.samples[0].results[0].numeric_value=999;const data=adaptProposal(p,text.replace('N.R.: ANÁLISIS NO REQUERIDO POR EL INTERESADO',''));assert.equal(data.samples[0].results[0].numeric_value,7.1);assert.equal(data.samples[0].results[2].result_status,'qualitative');assert.equal(data.samples[0].results[2].numeric_value,null);assert.ok(data.warnings.some(w=>w.includes('significado de N.R.')));assert.equal(data.samples[0].results[3].numeric_value,null);
 });
 for(const [name,patch] of [['MIME',{mimetype:'text/plain'}],['magic',{buffer:Buffer.from('not PDF')}],['oversize',{buffer:Buffer.alloc(10*1024*1024+1)}],['empty',{buffer:Buffer.alloc(0)}]])test('rejects invalid '+name+' before reader/provider',async()=>{
  let called=false;await assert.rejects(extract({file:{...fixture.file(),...patch},readText:async()=>{called=true;},provider:async()=>{called=true;}}),e=>[400,413].includes(e.status));assert.equal(called,false);
@@ -33,7 +33,7 @@ test('provider errors/timeout and cancellation are sanitized and abort work',asy
 test('Responses adapter uses strict schema, no storage/tools, only backend key, and validates provider protocol',async()=>{
  let sent;
  const fetchImpl=async(url,options)=>{sent={url,...options,body:JSON.parse(options.body)};return {ok:true,json:async()=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(fixture.proposal())}]}]})};};
- const actual=await callProvider({text,fetchImpl,env:{OPENAI_API_KEY:'test-only',SOIL_EXTRACTION_MODEL:'test-model'}});assert.equal(actual.report_number,'S26-0385');assert.equal(sent.body.store,false);assert.equal(sent.body.text.format.strict,true);assert.equal(sent.body.text.format.schema.additionalProperties,false);assert.equal(sent.body.model,'test-model');assert.equal(sent.body.tools,undefined);assert.equal(sent.body.input[0].content[0].type,'input_text');
+ const actual=await callProvider({text,fetchImpl,env:{OPENAI_API_KEY:'test-only',SOIL_EXTRACTION_MODEL:'test-model'}});assert.equal(actual.report_number,'S26-0385');assert.equal(sent.body.store,false);assert.equal(sent.body.text.format.strict,true);assert.equal(sent.body.text.format.schema.additionalProperties,false);assert.equal(sent.body.model,'test-model');assert.equal(sent.body.tools,undefined);assert.equal(sent.body.input[0].content[0].type,'input_text');assert.equal(sent.body.input[0].content[0].text,'Contenido documental del PDF:\n'+text);assert.match(sent.body.instructions,/Omití por completo/);assert.match(sent.body.instructions,/Si el documento no aclara el significado de N.R./);
  for(const body of [{status:'incomplete'}, {status:'completed',output:[{type:'message',content:[{type:'refusal',refusal:'no'}]}]}, {status:'completed',output:[{type:'message',content:[{type:'output_text',text:'bad'}]}]}])await assert.rejects(callProvider({text,env:{OPENAI_API_KEY:'test-only'},fetchImpl:async()=>({ok:true,json:async()=>body})}));
  await assert.rejects(callProvider({text,env:{}}),e=>e.status===503);
  await assert.rejects(callProvider({text,env:{OPENAI_API_KEY:'test-only'},fetchImpl:async()=>({ok:false})}));
@@ -50,4 +50,23 @@ test('explicit partial depth is preserved without inventing the missing bound or
 
 test('unit compatibility characters are not silently normalized into different document text',()=>{
  const p=fixture.proposal();p.samples[0].results[0].unit='cm3';const actual=adaptProposal(p,text+' cm³');assert.equal(actual.samples[0].results[0].unit,null);
+});
+
+for(const status of ['measured','qualitative','not_requested'])test('confirmed N.R. is omitted across samples regardless of provider status '+status,()=>{
+ const p=fixture.proposal(),nr={...p.samples[0].results[2],result_status:status,numeric_value:99};p.samples[0].results=[nr,{...nr},p.samples[0].results[0]];p.samples.push(structuredClone(p.samples[0]));const original=structuredClone(p);
+ const data=adaptProposal(p,text);for(const sample of data.samples)assert.deepEqual(sample.results.map(r=>[r.parameter_name,r.raw_value,r.numeric_value,r.sort_order]),[['pH','7,1',7.1,0]]);assert.deepEqual(p,original);
+});
+test('unrelated no requerido phrase is not a definition of N.R.',()=>{
+ const data=adaptProposal(fixture.proposal(),text.replace('N.R.: ANÁLISIS NO REQUERIDO POR EL INTERESADO','Comentario: ANÁLISIS NO REQUERIDO POR EL INTERESADO'));
+ assert.equal(data.samples[0].results[2].raw_value,'N.R.');assert.equal(data.samples[0].results[2].result_status,'qualitative');assert.ok(data.warnings.some(w=>w.includes('significado de N.R.')));
+});
+test('real qualitative results survive a no requerido legend unchanged',()=>{
+ const values=['<0,1','Trazas','Negativo','Positivo','Ausente'],p=fixture.proposal();p.samples[0].results=values.map(raw_value=>({...p.samples[0].results[0],raw_value,numeric_value:0}));
+ const data=adaptProposal(p,text+' '+values.join(' '));assert.deepEqual(data.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),values.map(v=>[v,null,'qualitative']));
+});
+test('all nonrequested rows leave an empty sample with a review warning, without invented results',()=>{
+ const p=fixture.proposal();p.samples[0].results=[p.samples[0].results[2]];const data=adaptProposal(p,text);assert.equal(data.samples.length,1);assert.deepEqual(data.samples[0].results,[]);assert.ok(data.warnings.some(w=>w.includes('No quedaron resultados analizados')));
+});
+test('model omission and defensive omission produce identical proposals',()=>{
+ const p=fixture.proposal();p.samples[0].results.splice(2,1);assert.deepEqual(adaptProposal(p,text),adaptProposal(fixture.proposal(),text));
 });

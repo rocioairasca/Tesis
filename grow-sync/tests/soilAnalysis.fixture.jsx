@@ -20,7 +20,7 @@ api.defaults.adapter=async config=>{
   window.__soilExtracts.push({fields:[...config.data.keys()],filename:config.data.get('file')?.name});
   if(window.__soilExtractDelay)await new Promise((resolve,reject)=>{const abort=()=>{clearTimeout(timer);window.__soilExtractAborts++;reject(new Error('Synthetic abort'));};const timer=setTimeout(()=>{config.signal.removeEventListener('abort',abort);resolve();},window.__soilExtractDelay);config.signal.addEventListener('abort',abort,{once:true});});
   if(window.__soilExtractFail)throw new Error('Synthetic extraction unavailable');
-  const results=flags.has('manyResults')?Array.from({length:20},(_,i)=>({parameter_name:'Parámetro sintético '+i,method:'Método sintético',unit:'ppm',raw_value:'7,1',numeric_value:7.1,result_status:'measured',sort_order:i})):sample.results.map(({id,...r})=>({...r,numeric_value:r.numeric_value==null?null:Number(r.numeric_value)}));
+  const results=flags.has('manyResults')?Array.from({length:20},(_,i)=>({parameter_name:'Parámetro sintético '+i,method:'Método sintético',unit:'ppm',raw_value:'7,1',numeric_value:7.1,result_status:'measured',sort_order:i})):sample.results.filter(r=>r.result_status!=='not_requested').map(({id,...r})=>({...r,numeric_value:r.numeric_value==null?null:Number(r.numeric_value)}));
   return response({report_number:'SYN-EXTRACT',laboratory:null,received_date:'2026-06-02',notes:null,samples:[{sample_date:'2026-05-22',depth_from_cm:0,depth_to_cm:20,sample_name:'Muestra extraída',position_description:null,sampled_by:null,notes:null,results}],warnings:['No se encontró el laboratorio.']});
  }
  if(config.method==='get'){

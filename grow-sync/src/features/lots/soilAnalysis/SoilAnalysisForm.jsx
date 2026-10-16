@@ -2,11 +2,11 @@ import React from 'react';
 import {Button,DatePicker,Form,Input,Select} from 'antd';
 import {emptySample} from './soilAnalysisModel.mjs';
 import SoilResultsEditor from './SoilResultsEditor';
-export default function SoilAnalysisForm({form,lots,editing,file,onFileChange,onFinish,lotId,subLotId,busy=false}){
+export default function SoilAnalysisForm({form,lots,editing,file,onFileChange,onFinish,onValuesChange,lotId,subLotId,busy=false}){
  const watchedSamples=Form.useWatch('samples',form)||[];
- return <Form disabled={busy} form={form} layout="vertical" onFinish={onFinish} onFinishFailed={()=>document.querySelectorAll('.soil-form-drawer details').forEach(el=>{el.open=true;})}>
-  <h3>Datos del informe</h3>
+ return <Form disabled={busy} form={form} layout="vertical" onFinish={onFinish} onValuesChange={onValuesChange} onFinishFailed={()=>document.querySelectorAll('.soil-form-drawer details').forEach(el=>{el.open=true;})}>
   {editing?<p>PDF original: {editing.original_filename}. El archivo no se reemplaza al editar.</p>:<label className="soil-file-field">PDF original (máximo 10 MB)<input type="file" accept="application/pdf,.pdf" aria-label="PDF original" onChange={e=>onFileChange(e.target.files?.[0]??null)} />{file&&<small>{file.name}</small>}</label>}
+  <h3>Datos del informe</h3>
   <div className="soil-form-grid"><Form.Item name="report_number" label="Número de informe"><Input maxLength={200} /></Form.Item>
   <Form.Item name="laboratory" label="Laboratorio"><Input maxLength={200} /></Form.Item>
   <Form.Item name="received_date" label="Fecha de recepción"><DatePicker format="DD/MM/YYYY" /></Form.Item></div>
