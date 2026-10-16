@@ -57,7 +57,7 @@ test('Dashboard: adaptadores existentes, clima simulado, permisos y estados rend
   try {
     const { createDashboardSource } = await server.ssrLoadModule('/src/features/dashboard/dashboardSource.js');
     const calls = [];
-    const client = { get: async (path, config) => { calls.push({ path, config }); return { data: path === '/stats' ? { kpis: { lots: 7 } } : path === '/weather/latest' ? { temperature: null, id: 61 } : { data: [], total: 0, inventory_v1_enabled: true } }; }, post: async (path, body, config) => { calls.push({ path, body, config }); return { data: { temperature: 0, weather_code: 0 } }; } };
+    const client = { get: async (path, config) => { calls.push({ path, config }); return { data: path === '/stats' ? { kpis: { lots: 7 } } : path === '/weather/latest' ? { temperature: null, id: 61 } : { data: [], total: 0, inventory_v1_enabled: true } }; }, post: async (path, body, config) => { calls.push({ path, body, config }); return { data: { temperature: 0, humidity: 60, wind_speed: 10, wind_direction: 90, weather_code: 0 } }; } };
     const harvest = {
       getHarvestFilters: async () => ({ campaigns: [], crops: [] }),
       getHarvestSummary: async params => { calls.push({ summary: params }); return { total_records: 1, total_production_kg: 100 }; },
@@ -96,7 +96,7 @@ test('Dashboard: adaptadores existentes, clima simulado, permisos y estados rend
     const props = { user: { name: 'Ana' }, today: '2026-09-13', access: dashboardAccess({ role: 2 }), delayed: ready(0), inventory: ready({}), work: ready([]), field: ready({ lots: 0 }), options: ready({ campaigns: [], crops: [] }), production: ready({ summary: { total_records: 0 } }), weather: ready(fallback), filters: { unit: 'kg' }, onFiltersChange: () => {} };
     const render = changes => renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(View, { ...props, ...changes })));
     assert.ok(render({ user: { full_name: 'Rocío Airasca' } }).includes('¡Hola, Rocío!'));
-    const empty = render({}); assert.ok(empty.includes('No hay cosechas para esta selección')); assert.ok(empty.includes('ubicación no verificada')); assert.ok(!empty.includes('0 mm')); assert.ok(!empty.includes('Lluvia leve'));
+    const empty = render({}); assert.ok(empty.includes('No hay cosechas para esta selección')); assert.ok(empty.includes('ubicación del registro no informada')); assert.ok(!empty.includes('0 mm')); assert.ok(!empty.includes('Lluvia leve'));
     for (const route of ['/inventario', '/planificaciones', '/lotes', '/harvest', '/registro-lluvias']) { if (route !== '/inventario') assert.ok(empty.includes(`href="${route}"`)); }
     const errored = render({ field: { status: 'error', error: new Error('Network Error') }, production: { status: 'loading' } }); assert.ok(!errored.includes('Todavía no hay lotes activos')); assert.ok(errored.includes('Cargando producción'));
     const noArea = render({ production: ready({ summary: { total_records: 1, total_production_kg: 100, total_area_ha: 0, avg_yield_kg_ha: 0 }, byCrop: [], byCampaign: [] }) }); assert.ok(noArea.includes('Requiere superficie cosechada')); assert.ok(!noArea.includes('>0 kg/ha<'));

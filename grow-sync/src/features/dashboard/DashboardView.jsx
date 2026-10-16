@@ -1,6 +1,6 @@
 import { campaignFilterOptions } from '../../utils/campaigns.mjs';
 import React from 'react';
-import { Select } from 'antd';
+import { Select, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, Metric, StatusBadge, CategoryTag, EntityLink, LoadingState, ErrorState, EmptyState } from '../../components/ui';
 import DashboardChart from './DashboardChart';
@@ -58,21 +58,35 @@ function Work({ request }) {
     </RequestState>
   </Section>;
 }
-function Weather({ request, canViewRain }) {
+export function Weather({ request, canViewRain }) {
   const data = request.data?.reading;
   const fallback = request.data?.fallback;
-  const presentation = fallback ? { kind: 'temperature', label: 'Condición no informada' } : getWeatherPresentation(data);
-  const observed = data?.date || data?.updated_at;
-  const date = observed ? new Date(observed) : null;
-  const timestamp = date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', hour12: false }).format(date) : null;
+  const location = request.data?.location;
+  const failure = request.data?.failure;
+  const presentation = fallback && data?.weather_code == null
+    ? { kind: 'temperature', label: 'Condición no informada' } : getWeatherPresentation(data);
+  const observed = data?.observed_at || data?.updated_at || data?.date;
+  const dateOnly = typeof observed === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(observed);
+  const date = observed ? new Date(dateOnly ? observed + 'T12:00:00' : observed) : null;
+  const timestamp = date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('es-AR', {
+    dateStyle: 'short', ...(dateOnly ? {} : { timeStyle: 'short', hour12: false }),
+  }).format(date) : null;
+  const errors = {
+    permission_denied: 'GrowSync necesita permiso de ubicación. Habilitalo en la configuración del navegador.',
+    position_unavailable: 'No se pudo determinar la ubicación de este dispositivo.',
+    timeout: 'Se agotó el tiempo para obtener la ubicación.',
+    unsupported: 'Tu navegador no ofrece ubicación en este contexto. Usá una conexión HTTPS compatible.',
+    provider_error: 'Se obtuvo tu ubicación, pero no se pudo consultar el clima en Open-Meteo.',
+  };
   return <Section id="dashboard-weather" title="Clima" className="gs-dashboard-weather" action={canViewRain && <EntityLink to="/registro-lluvias">Registro de lluvias</EntityLink>}>
-    <RequestState request={request} label="clima">
-      {!data ? <EmptyState title="No hay un registro climático disponible" /> : <>
+    {request.status === 'loading' ? <LoadingState label={request.phase === 'weather' ? 'Obteniendo clima…' : 'Obteniendo ubicación…'} rows={2} /> : request.status === 'error' ? <ErrorState error={request.error} message="No se pudo consultar el clima." onRetry={request.retry} /> : <>
+      {fallback && <div className="gs-dashboard-weather-status" role="status"><p className="gs-dashboard-note">{errors[failure] || 'No se pudo obtener el clima actual.'}</p>{request.data?.retryable !== false && <Button type="text" size="small" onClick={request.retry}>Reintentar</Button>}</div>}
+      {!data ? <EmptyState title="No hay un registro climático disponible" /> : <div className={fallback ? 'gs-dashboard-weather-stale' : undefined}>
+        <StatusBadge tone={fallback ? 'warning' : 'info'}>{fallback ? 'Último dato disponible · Desactualizado' : 'Clima actual'}</StatusBadge>
         <div className="gs-dashboard-weather-reading"><div className="gs-dashboard-weather-current"><span aria-hidden="true"><WeatherIcon kind={presentation.kind} size={40} /></span><div><strong>{formatNumber(data.temperature, 1)} <small>°C</small></strong><span>{presentation.label}</span></div></div><div className="gs-dashboard-weather-detail"><span><WindIcon size={16} /> Viento</span><strong>{formatNumber(data.wind_speed, 1)}{numberValue(data.wind_speed) != null ? ' km/h' : ''} {numberValue(data.wind_direction) != null ? degToCompass(Number(data.wind_direction)) : ''}</strong></div>{numberValue(data.humidity) != null && <div className="gs-dashboard-weather-detail"><span><DropIcon size={16} /> Humedad</span><strong>{formatNumber(data.humidity, 0)} %</strong></div>}</div>
-        <p className="gs-dashboard-note">{fallback ? 'Último registro guardado · ubicación no verificada.' : 'Open-Meteo · ubicación de este dispositivo.'}{timestamp && ` Lectura: ${timestamp}.`}</p>
-        {fallback && <StatusBadge tone="warning">No se pudo obtener el clima de tu ubicación</StatusBadge>}
-      </>}
-    </RequestState>
+        <p className="gs-dashboard-note">{fallback ? (location ? 'Ubicación actual obtenida. El registro guardado no tiene ubicación asociada.' : 'Último registro guardado · ubicación del registro no informada.') : 'Open-Meteo · ubicación de este dispositivo.'} {timestamp ? 'Lectura: ' + timestamp + (dateOnly ? ' (hora no registrada).' : '.') : 'Fecha y hora de lectura no informadas.'}</p>
+      </div>}
+    </>}
   </Section>;
 }
 function Production({ request, options, filters, onFiltersChange, canViewHarvest }) {

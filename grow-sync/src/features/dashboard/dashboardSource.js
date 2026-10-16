@@ -1,6 +1,7 @@
 import { readLots } from '../lots/lotsOverviewSource';
 import { fieldOverview } from './fieldOverview.mjs';
 import api from '../../services/apiClient';
+import { getCurrentLocation } from '../../utils/geolocation.mjs';
 import { getHarvestFilters, getHarvestSummary, getHarvestByCrop, getHarvestByCampaign } from '../../services/harvestService';
 import { filteredHarvest, inventoryAlerts, readAllPages, workRows, workWindow, numberValue } from './dashboardModel.mjs';
 
@@ -45,23 +46,34 @@ export function createDashboardSource(client = api, harvest = { getHarvestFilter
       if (numberValue(summary?.total_records) == null || !Array.isArray(byCrop) || !Array.isArray(byCampaign)) throw new Error('Cosechas incompletas');
       return filteredHarvest(summary, byCrop, byCampaign, filters);
     },
-    async weather({ signal }) {
+    async weather({ signal, onProgress }) {
       const checkAbort = () => { if (signal?.aborted) throw new DOMException('Aborted', 'AbortError'); };
-      const reading = value => value && Object.keys(value).length ? value : null;
       checkAbort();
+      let location = null;
+      let stage = 'location';
       try {
-        const location = geolocation();
-        if (!location) throw new Error('Ubicación no disponible');
-        const position = await new Promise((resolve, reject) => location.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }));
+        onProgress?.('location');
+        location = await getCurrentLocation({ signal, geolocation: geolocation() });
         checkAbort();
-        const { latitude, longitude } = position.coords;
-        // Existing weather flow: this endpoint stores the reading. Never invoke it
-        // from previews/tests; they inject an in-memory source or a mocked client.
-        const { data } = await client.post('/weather/update', {}, { params: { latitude, longitude }, signal });
-        return { reading: reading(data), fallback: false };
+        stage = 'weather'; onProgress?.('weather');
+        const { latitude, longitude } = location;
+        // Preserve the existing endpoint; tests/previews always inject a mock client.
+        const { data } = await client.post('/weather/update', {}, { params: { latitude, longitude }, signal, timeout: 15000 });
+        checkAbort();
+        if (!data || ['temperature', 'humidity', 'wind_speed', 'wind_direction'].some(key => numberValue(data[key]) == null)) {
+          throw new Error('Respuesta meteorológica incompleta');
+        }
+        return { reading: data, fallback: false, location };
       } catch (error) {
         checkAbort();
-        return { reading: reading(await get('/weather/latest', undefined, signal)), fallback: true };
+        // Existing historical fallback has no saved coordinates or WMO code.
+        // Never present this row as current weather for the device location.
+        let data = null;
+        try { data = (await client.get('/weather/latest', { signal, timeout: 10000 })).data; }
+        catch { checkAbort(); }
+        return { reading: data && Object.keys(data).length ? data : null, fallback: true, location,
+          failure: stage === 'location' ? error.code || 'position_unavailable' : 'provider_error',
+          retryable: stage !== 'location' || !['permission_denied', 'unsupported'].includes(error.code) };
       }
     },
   };

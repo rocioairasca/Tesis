@@ -11,6 +11,7 @@ import {
 } from 'react-leaflet';
 import { Button, Empty } from 'antd';
 import MapViewport from './MapViewport';
+import { getCurrentLocation } from '../utils/geolocation.mjs';
 import { displayGeometry, geometryBounds, leafletBounds } from '../utils/mapGeometry.mjs';
 import { AimOutlined } from './AppIcons';
 import L from '../utils/leafletGeoman';
@@ -120,28 +121,14 @@ const MapSelector = ({
   const geomanReady = useLeafletGeoman(Boolean(onSelect));
 
   useEffect(() => {
-    if (!onSelect || !navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserPosition({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-      },
-      (error) => {
-        if (import.meta.env.DEV) {
-          console.warn('No se pudo obtener la ubicación del navegador:', error?.message || error);
-        }
-        return;
-        console.error('Error al obtener ubicación:', error);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-      }
+    if (!onSelect) return;
+    const controller = new AbortController();
+    getCurrentLocation({ signal: controller.signal }).then(
+      position => setUserPosition({ lat: position.latitude, lng: position.longitude }),
+      () => {}, // Existing geometry/viewport remains usable without device location.
     );
-  }, []);
+    return () => controller.abort();
+  }, [Boolean(onSelect)]);
 
   const roundCoord = useCallback((coord) => ({
     lat: parseFloat(coord.lat.toFixed(6)),

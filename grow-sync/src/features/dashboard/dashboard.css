@@ -187,3 +187,7 @@
 .gs-static-field-texture { stroke:var(--gs-brand-primary); stroke-opacity:.07; stroke-width:1; }
 .gs-static-field-lot { fill:var(--gs-brand-lime); fill-opacity:.35; stroke:var(--gs-brand-primary); stroke-width:2; stroke-linejoin:round; }
 @media (max-width:767px) { .gs-static-field-overview { height:160px; } }
+
+.gs-dashboard-weather-status { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-bottom:12px; }
+.gs-dashboard-weather-status .gs-dashboard-note { flex:1 1 220px; margin:0; }
+.gs-dashboard-weather-stale { border-left:3px solid #e2bb65; padding-left:12px; }

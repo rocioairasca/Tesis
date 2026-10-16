@@ -3,7 +3,7 @@ import { Badge, Dropdown, Button, Empty } from 'antd';
 import { AppIcons } from './AppIcons';
 const BellOutlined = AppIcons.notifications;
 import { useNotifications } from '../context/NotificationsContext';
-import { sanitizeNotification } from '../utils/userFriendlyErrors';
+import { presentNotification } from '../utils/userFriendlyErrors';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es';
@@ -59,7 +59,7 @@ const NotificationBell = ({ onOpenDrawer }) => {
     const dropdownMenu = {
         items: notifications.length > 0 ? [
             ...notifications.slice(0, 5).map(rawNotification => {
-                const notification = sanitizeNotification(rawNotification);
+                const notification = presentNotification(rawNotification);
                 return {
                 key: notification.id,
                 label: (

@@ -44,7 +44,7 @@ const OPEN_METEO_WEATHER_CODES = {
 // Fecha local en Cordoba (YYYY-MM-DD)
 function localISODate(unixSeconds) {
   const timeZone = "America/Argentina/Cordoba";
-  const date = unixSeconds ? new Date(unixSeconds * 1000) : new Date();
+  const date = unixSeconds != null ? new Date(unixSeconds * 1000) : new Date();
 
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -66,10 +66,11 @@ const fetchWeather = async (req, res) => {
   try {
     // Permitimos pasar params por query o body (POST)
     const src = { ...req.query, ...req.body };
-    const lat = src.latitude != null ? Number(src.latitude) : Number(src.lat);
-    const lon = src.longitude != null ? Number(src.longitude) : Number(src.lon);
+    const numeric = value => !['number', 'string'].includes(typeof value) || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+    const lat = numeric(src.latitude ?? src.lat);
+    const lon = numeric(src.longitude ?? src.lon);
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
       return res.status(400).json({
         error: "LocationRequired",
         message: "Se requieren latitude y longitude para obtener el clima actual",
@@ -82,18 +83,25 @@ const fetchWeather = async (req, res) => {
         longitude: lon,
         current: OPEN_METEO_CURRENT_FIELDS,
         timezone: "auto",
+        timeformat: "unixtime",
       },
       timeout: 10000,
     });
 
     const current = data?.current || {};
-    const temp = Number(current.temperature_2m);
-    const humidity = Number(current.relative_humidity_2m);
-    const windSpeed = Number(current.wind_speed_10m);
-    const windDeg = Number(current.wind_direction_10m);
-    const weatherCode = Number(current.weather_code);
-    const observedAt = current.time || null;
-    const when = observedAt ? localISODate(Date.parse(observedAt) / 1000) : localISODate();
+    const temp = numeric(current.temperature_2m);
+    const humidity = numeric(current.relative_humidity_2m);
+    const windSpeed = numeric(current.wind_speed_10m);
+    const windDeg = numeric(current.wind_direction_10m);
+    const weatherCode = numeric(current.weather_code);
+    const observedSeconds = numeric(current.time);
+    if ([temp, humidity, windSpeed, windDeg, observedSeconds].some(value => value == null) ||
+        humidity < 0 || humidity > 100 || windSpeed < 0 || windDeg < 0 || windDeg > 360 ||
+        !Number.isFinite(new Date(observedSeconds * 1000).getTime())) {
+      return res.status(502).json({ error: 'IncompleteWeather', message: 'Open-Meteo devolvió una lectura incompleta' });
+    }
+    const observedAt = new Date(observedSeconds * 1000).toISOString();
+    const when = localISODate(observedSeconds);
     const presentation = getWeatherPresentation(weatherCode);
 
     const weatherRow = {

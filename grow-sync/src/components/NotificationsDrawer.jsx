@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Drawer, List, Button, Segmented, Empty, Tag, Space, Avatar } from 'antd';
+import { Drawer, List, Button, Segmented, Empty } from 'antd';
 import {
-    CheckOutlined,
     CalendarOutlined,
     SyncOutlined,
     AlertOutlined,
@@ -11,7 +10,7 @@ import {
 } from './AppIcons';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationsContext';
-import { sanitizeNotification } from '../utils/userFriendlyErrors';
+import NotificationCard from './NotificationCard';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es';
@@ -44,15 +43,6 @@ const NotificationsDrawer = ({ open, onClose }) => {
     const handleMarkAllAsRead = async () => {
         await markAllAsRead();
         fetchNotifications({ read: filter === 'unread' ? false : undefined });
-    };
-
-    const getPriorityTag = (priority) => {
-        const config = {
-            high: { color: 'red', text: 'Alta' },
-            medium: { color: 'orange', text: 'Media' },
-            low: { color: 'blue', text: 'Baja' },
-        };
-        return <Tag color={config[priority]?.color}>{config[priority]?.text}</Tag>;
     };
 
     const getNotificationIcon = (type) => {
@@ -119,13 +109,6 @@ const NotificationsDrawer = ({ open, onClose }) => {
 
     const groupedNotifications = groupNotificationsByDate(notifications);
 
-    const textWrapStyle = {
-        maxWidth: '100%',
-        minWidth: 0,
-        wordBreak: 'break-word',
-        overflowWrap: 'anywhere',
-    };
-
     const renderNotificationGroup = (title, items) => {
         if (items.length === 0) return null;
 
@@ -137,78 +120,7 @@ const NotificationsDrawer = ({ open, onClose }) => {
                 <List
                     dataSource={items}
                     split={false}
-                    renderItem={rawNotification => {
-                        const notification = sanitizeNotification(rawNotification);
-                        return (
-                        <List.Item
-                            onClick={() => handleNotificationClick(notification)}
-                            style={{
-                                backgroundColor: notification.read ? 'transparent' : '#f0f5ff',
-                                padding: isMobile ? 10 : 12,
-                                borderRadius: 8,
-                                marginBottom: 8,
-                                border: notification.read ? '1px solid #f0f0f0' : '1px solid #d6e4ff',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s',
-                                maxWidth: '100%',
-                                overflow: 'hidden',
-                                alignItems: isMobile ? 'flex-start' : 'center',
-                            }}
-                            className="notification-item"
-                            actions={!isMobile ? [
-                                !notification.read && (
-                                    <Button
-                                        type="link"
-                                        size="small"
-                                        icon={<CheckOutlined />}
-                                        onClick={(e) => handleMarkAsRead(e, notification.id)}
-                                    >
-                                        Marcar leída
-                                    </Button>
-                                ),
-                            ] : undefined}
-                        >
-                            <List.Item.Meta
-                                style={{ maxWidth: '100%', minWidth: 0 }}
-                                avatar={
-                                    <Avatar
-                                        style={{ backgroundColor: notification.read ? '#f5f5f5' : '#fff', flexShrink: 0 }}
-                                        icon={getNotificationIcon(notification.type)}
-                                    />
-                                }
-                                title={
-                                    <Space size={6} wrap style={{ maxWidth: '100%', minWidth: 0 }}>
-                                        <span style={{ fontWeight: notification.read ? 'normal' : 600, ...textWrapStyle }}>
-                                            {notification.title}
-                                        </span>
-                                        {getPriorityTag(notification.priority)}
-                                    </Space>
-                                }
-                                description={
-                                    <div style={{ maxWidth: '100%', minWidth: 0 }}>
-                                        <div style={{ marginBottom: 4, color: '#595959', ...textWrapStyle }}>
-                                            {notification.message}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: '#999', marginBottom: isMobile && !notification.read ? 8 : 0 }}>
-                                            {dayjs(notification.created_at).fromNow()}
-                                        </div>
-                                        {isMobile && !notification.read && (
-                                            <Button
-                                                type="link"
-                                                size="small"
-                                                icon={<CheckOutlined />}
-                                                onClick={(e) => handleMarkAsRead(e, notification.id)}
-                                                style={{ paddingInline: 0, maxWidth: '100%' }}
-                                            >
-                                                Marcar leída
-                                            </Button>
-                                        )}
-                                    </div>
-                                }
-                            />
-                        </List.Item>
-                    );
-                    }}
+                    renderItem={notification => <List.Item key={notification.id}><NotificationCard notification={notification} icon={getNotificationIcon(notification.type)} onOpen={handleNotificationClick} onRead={handleMarkAsRead} /></List.Item>}
                 />
             </div>
         );

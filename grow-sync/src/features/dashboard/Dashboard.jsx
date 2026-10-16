@@ -14,7 +14,7 @@ export function useDashboardRequest(loader) {
     if (!loader) return;
     const controller = new AbortController();
     setResult({ ...pending, loader, attempt });
-    Promise.resolve().then(() => loader(controller.signal)).then(
+    Promise.resolve().then(() => loader(controller.signal, phase => { if (!controller.signal.aborted) setResult({ ...pending, phase, loader, attempt }); })).then(
       data => { if (!controller.signal.aborted) setResult({ status: 'success', data, error: null, loader, attempt }); },
       error => { if (!controller.signal.aborted) setResult({ status: 'error', data: null, error, loader, attempt }); },
     );
@@ -45,7 +45,7 @@ export default function Dashboard({ source = dashboardSource, user: providedUser
     fieldMap: access.field && source.fieldMap ? signal => source.fieldMap({ signal }) : null,
     field: access.field ? signal => source.field({ signal }) : null,
     options: access.production ? signal => source.filters({ signal }) : null,
-    weather: signal => source.weather({ signal }),
+    weather: (signal, onProgress) => source.weather({ signal, onProgress }),
   }), [source, scope, today, access.planning, access.inventory, access.field, access.production]);
   const productionLoader = useMemo(() => access.production ? signal => source.production({ signal, filters }) : null, [source, scope, access.production, filters]);
   const delayed = useDashboardRequest(loaders.delayed);

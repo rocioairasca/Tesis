@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button, Drawer, Form, Input, InputNumber, notification } from 'antd';
 import api from '../../services/apiClient';
 import useIsMobile from '../../hooks/useIsMobile';
@@ -7,6 +7,7 @@ import { PERMISSIONS } from '../../constants/permissions';
 import { hasPermission } from '../../utils/permissions';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 import LotsOverview from './LotsOverview';
+import { getCurrentLocation } from '../../utils/geolocation.mjs';
 
 const getId = (r) => r?.id ?? r?._id;
 
@@ -29,6 +30,8 @@ export default function Lotes({ initialState = 'enabled' }) {
   const [form] = Form.useForm();
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const mapRef = useRef();
+  const locationRequest = useRef(null);
+  useEffect(() => () => locationRequest.current?.abort(), []);
   const isMobile = useIsMobile();
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
   const canCreate = hasPermission(currentUser, PERMISSIONS.LOTS_CREATE);
@@ -36,6 +39,7 @@ export default function Lotes({ initialState = 'enabled' }) {
   // Drawer handlers ---
   const openDrawer = (lot = null) => {
     if (lot ? !canEdit : !canCreate) return;
+    locationRequest.current?.abort();
     setEditingLot(lot);
     if (lot) {
       form.setFieldsValue({
@@ -46,9 +50,12 @@ export default function Lotes({ initialState = 'enabled' }) {
     } else {
       form.resetFields();
 
-      navigator.geolocation?.getCurrentPosition(
+      const controller = new AbortController();
+      locationRequest.current = controller;
+      getCurrentLocation({ signal: controller.signal }).then(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          if (controller.signal.aborted || form.getFieldValue('location')) return;
+          const { latitude, longitude } = position;
 
           const userLocation = {
             type: "Point",
@@ -62,12 +69,7 @@ export default function Lotes({ initialState = 'enabled' }) {
           
         },
         (error) => {
-          console.warn("No se pudo obtener la ubicación del usuario:", error.message);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          if (error.name !== 'AbortError' && import.meta.env.DEV) console.warn("No se pudo obtener la ubicación del usuario:", error.code);
         }
       );
     }
@@ -75,6 +77,7 @@ export default function Lotes({ initialState = 'enabled' }) {
   };
 
   const closeDrawer = () => {
+    locationRequest.current?.abort();
     setIsDrawerOpen(false);
     setEditingLot(null);
     form.resetFields();

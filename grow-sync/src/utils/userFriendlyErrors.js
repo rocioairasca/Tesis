@@ -1,3 +1,5 @@
+import { formatNumber } from './numberFormat';
+
 const DEFAULT_ERROR_MESSAGE = "No se pudo completar la operación. Intentá nuevamente.";
 const NETWORK_ERROR_MESSAGE = "No pudimos conectarnos con GrowSync. Verificá tu conexión e intentá nuevamente.";
 
@@ -108,3 +110,14 @@ export const sanitizeNotification = (notification) => ({
     "Abrí GrowSync para revisar el detalle."
   ),
 });
+
+// Apply only at the rendering boundary. Context keeps the original numeric text,
+// so es-AR thousands separators are never reparsed as decimal points.
+export const presentNotification = notification => {
+  const safe = sanitizeNotification(notification);
+  return {
+    ...safe,
+    message: safe.type === 'low_stock' ? safe.message.replace(/(:\s*)(-?\d+(?:\.\d+)?)(?=\s+\S)/g,
+      (_, prefix, value) => prefix + formatNumber(value, Math.min(20, value.split('.')[1]?.length || 0))) : safe.message,
+  };
+};
