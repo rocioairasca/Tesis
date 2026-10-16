@@ -15,5 +15,8 @@ export function reportPayload(values){
  }))};
 }
 export function validatePdf(file){if(!file)throw new Error('Seleccioná el PDF original.');if(file.type!=='application/pdf')throw new Error('Seleccioná un archivo PDF.');if(!file.size||file.size>MAX_PDF_BYTES)throw new Error('El PDF debe estar entre 1 byte y 10 MB.');}
-export function historyRows(reports,lotId,subLotId){return reports.flatMap(report=>report.samples.filter(sample=>sample.lot_id===lotId&&(!subLotId||(subLotId==='full'?!sample.sub_lot_id:sample.sub_lot_id===subLotId))).map(sample=>({...sample,key:report.id+':'+sample.id,report}))).sort((a,b)=>b.sample_date.localeCompare(a.sample_date));}
+const normalizedSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+export function historyRows(reports,lotId,subLotId,search=''){
+ const query=normalizedSearch(search);
+ return reports.flatMap(report=>report.samples.filter(sample=>(!lotId||sample.lot_id===lotId)&&(!subLotId||(subLotId==='full'?!sample.sub_lot_id:sample.sub_lot_id===subLotId))).filter(sample=>!query||[report.report_number,report.laboratory,sample.sample_name].some(value=>normalizedSearch(value).includes(query))).map(sample=>({...sample,key:report.id+':'+sample.id,report}))).sort((a,b)=>b.sample_date.localeCompare(a.sample_date));}
 export function safePdfUrl(value){try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)?url.href:null;}catch{return null;}}

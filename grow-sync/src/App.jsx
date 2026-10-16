@@ -277,6 +277,10 @@ function App() {
             />
 
             <Route
+              path="/analisis-suelo"
+              element={<PrivatePage requiredPermission={PERMISSIONS.SOIL_ANALYSIS_VIEW}><SoilAnalysis key="global" /></PrivatePage>}
+            />
+            <Route
               path="/lotes/:lotId/analisis-suelo"
               element={<PrivatePage requiredPermission={PERMISSIONS.SOIL_ANALYSIS_VIEW}><SoilAnalysis /></PrivatePage>}
             />

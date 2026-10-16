@@ -9,7 +9,7 @@ module.exports=dependencies=>{
   includeDisabled:getEffectivePermissions(req.user).some(p=>p==='all'||p==='soil_analysis.view_disabled')});
  const run=fn=>async(req,res,next)=>{try{res.set('Cache-Control','no-store');await fn(req,res);}catch(error){next(error);}};
  const permission=action=>requirePermission('soil_analysis.'+action);
- router.get('/lot-context/:lotId',permission('view'),run(async(req,res)=>res.json(await service.lotContext(dependencies,{...input(req),lotId:req.params.lotId}))));
+ router.get(['/lot-context','/lot-context/:lotId'],permission('view'),run(async(req,res)=>res.json(await service.lotContext(dependencies,{...input(req),lotId:req.params.lotId}))));
  router.get('/',permission('view'),run(async(req,res)=>res.json(await service.list(dependencies,{...input(req),filters:req.query}))));
  router.get('/:id/file-url',permission('view'),run(async(req,res)=>res.json(await service.fileUrl(dependencies,input(req)))));
  router.get('/:id',permission('view'),run(async(req,res)=>res.json(await service.read(dependencies.pool,req.user.company_id,req.params.id,input(req).includeDisabled))));

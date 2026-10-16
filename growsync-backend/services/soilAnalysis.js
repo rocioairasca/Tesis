@@ -91,7 +91,7 @@ async function fileUrl({pool,storage},{companyId,reportId,includeDisabled=false}
 }
 async function lotContext({pool},{companyId,lotId}){
  const lots=(await pool.query('SELECT id,name,enabled FROM lots WHERE company_id=$1 ORDER BY name,id',[companyId])).rows;
- const lot=lots.find(l=>l.id===id(lotId));if(!lot)throw fail('No encontramos el lote.',404);
+ const lot=lotId?lots.find(l=>l.id===id(lotId)):null;if(lotId&&!lot)throw fail('No encontramos el lote.',404);
  const subLots=(await pool.query("SELECT sl.id,sl.lot_id,sl.name,sl.enabled FROM sub_lots sl JOIN lot_layouts ll ON ll.id=sl.layout_id AND ll.company_id=sl.company_id AND ll.lot_id=sl.lot_id WHERE sl.company_id=$1 AND ll.status IN ('active','locked','archived') ORDER BY sl.name,sl.id",[companyId])).rows;
  return {lot,lots:lots.map(l=>({...l,sub_lots:subLots.filter(s=>s.lot_id===l.id)}))};
 }

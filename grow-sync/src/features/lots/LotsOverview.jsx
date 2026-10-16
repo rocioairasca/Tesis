@@ -101,7 +101,7 @@ export default function LotsOverview({ user, source = lotsOverviewSource, initia
   const noData = lots.status === 'success' && rows.length === 0;
   const filterUnavailable = productive.status !== 'success' && Boolean(filters.crop || filters.campaign);
   return <div className="gs-lots-overview">
-    <PageHeader title="Lotes" description="Gestioná lotes, divisiones y su contexto productivo." primaryAction={access.create ? { label: 'Nuevo lote', icon: <PlusIcon size={18} />, onClick: onCreate } : undefined} />
+    <PageHeader secondaryActions={hasPermission(user,PERMISSIONS.SOIL_ANALYSIS_VIEW)?[{key:'soil',label:'Análisis de suelo',onClick:()=>navigate('/analisis-suelo')}]:[]} title="Lotes" description="Gestioná lotes, divisiones y su contexto productivo." primaryAction={access.create ? { label: 'Nuevo lote', icon: <PlusIcon size={18} />, onClick: onCreate } : undefined} />
     <div className="gs-lots-toolbar"><FilterBar search={{ label: 'Buscar lotes y divisiones', placeholder: 'Buscar lote o división…', value: filters.search, onChange: value => updateFilter('search', value) }} filters={filterControls} moreFilters={divisionFilter} activeFilters={activeFilters} onClear={clearFilters} />
     {access.viewDisabled && filters.state === 'disabled' && <p className="gs-lots-secondary">Cultivo y campaña no están disponibles para lotes deshabilitados.</p>}
     <div className="gs-lots-view-heading"><ViewSwitcher label="Vista de lotes" value={view} onChange={setView} options={[{ value: 'map', label: 'Mapa' }, { value: 'list', label: 'Lista' }]} />{lots.status === 'success' && <span className="gs-lots-secondary">{formatNumber(visible.length, 0)} {visible.length === 1 ? "lote" : "lotes"} en esta vista</span>}</div></div>

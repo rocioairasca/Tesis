@@ -109,3 +109,12 @@ test('file URL storage error/missing signature returns 503 without leaking provi
  try{for(const result of [{data:null,error:new Error('Synthetic object missing')},{data:{},error:null}]){bucket.createSignedUrl=async()=>result;const response=await request('GET','/'+r.id+'/file-url');assert.equal(response.status,503);assert.equal(response.headers.get('cache-control'),'no-store');assert.deepEqual(await response.json(),{message:'No pudimos abrir el PDF. Intentá nuevamente.'});}}
  finally{bucket.createSignedUrl=original;}
 });
+
+test('global catalog/list work with soil view only, scoped to company; multi-lot report remains intact',async()=>{
+ const x=await fixture(),other=await fixture();await other.create();const r=await x.create({samples:[x.body.samples[0],{...x.body.samples[0],lot_id:x.lot2,sample_date:'2026-09-25'}]});user={...x.owner,custom_permissions:['soil_analysis.view']};
+ const catalog=await request('GET','/lot-context');assert.equal(catalog.status,200);assert.equal(catalog.headers.get('cache-control'),'no-store');const data=await catalog.json();assert.equal(data.lot,null);assert.deepEqual(data.lots.map(l=>l.id).sort(),[x.lot,x.lot2].sort());assert.ok(data.lots.find(l=>l.id===x.lot).sub_lots.some(d=>d.id===x.sub));
+ const all=await (await request('GET')).json();assert.deepEqual(all.map(row=>row.id),[r.id]);assert.deepEqual(all[0].samples.map(s=>s.lot_id).sort(),[x.lot,x.lot2].sort());assert.ok(all[0].samples.every(s=>s.lot_name==='Lote sintético'));
+ assert.equal((await (await request('GET','?lot_id='+x.lot2)).json())[0].samples.length,2);
+ const contextual=await request('GET','/lot-context/'+x.lot);assert.equal((await contextual.json()).lot.id,x.lot);
+ user={...x.owner,custom_permissions:[]};assert.equal((await request('GET','/lot-context')).status,403);
+});
