@@ -2,7 +2,10 @@
 
 ## Alcance y configuración
 La carga manual de Fase 1 y el POST/PUT definitivo no cambian. No hay migraciones.
-La extracción requiere **Node.js 22 o superior** (dependencia unpdf 1.9.0); las pruebas usan Node 24.
+La extracción está verificada con **Node.js 20.20.2**. Se fija unpdf 1.7.0 (PDF.js 5.6.205 incluido).
+La versión anterior unpdf 1.9.0 declaraba engines.node >=22; esa era la causa del requisito, no un SDK de OpenAI.
+unpdf 1.7.0 no declara engines ni dependencias transitivas; no se presupone compatibilidad por esa ausencia: el worker y el parser real se ejecutaron con Node 20.20.2.
+El peer opcional @napi-rs/canvas no está instalado ni se necesita para leer texto. No se agregó el paquete openai: la integración usa fetch y AbortController nativos del servidor.
 Variables exclusivamente del backend:
 - OPENAI_API_KEY: clave del proyecto autorizado de OpenAI. No usar prefijo VITE_ ni exponerla al navegador.
 - SOIL_EXTRACTION_MODEL: opcional, por defecto gpt-4.1-mini; debe admitir Responses + Structured Outputs.
@@ -96,6 +99,6 @@ https://developers.openai.com/api/docs/models/gpt-4.1-mini
 https://github.com/unjs/unpdf
 
 ## Validación ejecutada
-55 tests relacionados (backend/frontend) y 15 de navegador aprobados con Node 24.
+55 tests relacionados (backend/frontend) y 15 de navegador aprobados con Node 20.20.2.
 Build frontend correcto (advertencias existentes de Vite/chunks); git diff --check sin errores.
 Sin producción, migraciones en bases reales, commit, push ni deploy.
