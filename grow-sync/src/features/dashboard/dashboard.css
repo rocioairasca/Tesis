@@ -177,7 +177,6 @@
 .gs-dashboard-weather-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px 16px; margin-left:auto; }
 .gs-dashboard-weather-actions .gs-ui-entity { display:inline-flex; align-items:center; box-sizing:border-box; min-height:32px; font-size:12px; line-height:20px; white-space:nowrap; }
 @media(max-width:767px){ .gs-dashboard-weather-actions .gs-ui-entity { min-height:44px; } }
-.gs-dashboard-weather-stale { border-left:3px solid #e2bb65; padding-left:12px; }
 
 /* Personal assignments stay compact without changing the team list. */
 .gs-dashboard-my-tasks { list-style:none; padding:0 12px; margin:0; border:1px solid var(--gs-border); border-radius:12px; }
@@ -209,9 +208,13 @@
 .gs-dashboard-row .gs-dashboard-alerts { grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); }
 .gs-dashboard-weather .gs-dashboard-section-heading { flex-direction:row; align-items:flex-start; flex-wrap:nowrap; }
 .gs-dashboard-weather-body { display:flex; flex-direction:column; flex:1; min-width:0; gap:12px; }
-.gs-dashboard-weather-body > .gs-ui-status { align-self:flex-start; max-width:100%; white-space:normal; }
+.gs-dashboard-weather-summary { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-width:0; gap:16px; padding:8px 0; }
+.gs-dashboard-weather-summary > .gs-ui-status { margin:0; max-width:100%; white-space:normal; text-align:center; }
+.gs-dashboard-weather-summary .gs-dashboard-weather-reading { justify-content:center; width:100%; max-width:420px; gap:16px 24px; }
+.gs-dashboard-weather-summary .gs-dashboard-weather-current { flex-basis:100%; justify-content:center; }
+.gs-dashboard-weather-summary .gs-dashboard-weather-detail { align-items:center; text-align:center; }
 .gs-dashboard-weather-current { min-width:0; }
-.gs-dashboard-weather .gs-dashboard-weather-updated { margin:auto 0 0; padding-top:8px; text-align:right; align-self:flex-end; }
+.gs-dashboard-weather .gs-dashboard-weather-updated { margin:0; text-align:right; align-self:flex-end; }
 @media (max-width:767px) {
   .gs-dashboard-row { grid-template-columns:minmax(0,1fr); gap:12px; width:100%; }
   .gs-dashboard-row .gs-dashboard-alerts { grid-template-columns:minmax(0,1fr); }

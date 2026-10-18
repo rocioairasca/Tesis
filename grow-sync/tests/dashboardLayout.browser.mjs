@@ -28,6 +28,16 @@ for(const width of [1440,1024,390])for(const mode of ['normal','single','empty',
  if(mode!=='error'){
   const stamp=panel(page,'weather').locator('.gs-dashboard-weather-updated');assert.equal(await stamp.evaluate(el=>getComputedStyle(el).textAlign),'right');const box=await stamp.boundingBox();assert.ok(weather.x+weather.width-box.x-box.width<=20,'reading at right edge');
   const title=await panel(page,'weather').getByRole('heading',{name:'Clima',exact:true}).boundingBox(),actions=await panel(page,'weather').locator('.gs-dashboard-weather-actions').boundingBox();assert.ok(actions.x>title.x+title.width,'weather links stay at top right');assert.ok(Math.abs(actions.y-title.y)<5);
+  const centered=await panel(page,'weather').locator('.gs-dashboard-weather-summary').evaluate(el=>{
+   const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+   return {area:rect(el),groups:[...el.children].map(rect),current:rect(el.querySelector('.gs-dashboard-weather-current')),details:[...el.querySelectorAll('.gs-dashboard-weather-detail')].map(rect)};
+  });
+  const centerX=(centered.area.left+centered.area.right)/2;
+  for(const group of [...centered.groups,centered.current])assert.ok(Math.abs((group.left+group.right)/2-centerX)<2,'weather content centered horizontally');
+  assert.ok(Math.abs((centered.groups[0].top-centered.area.top)-(centered.area.bottom-centered.groups.at(-1).bottom))<2,'balanced vertical space around weather content');
+  assert.ok(centered.groups.at(-1).bottom<=box.y,'reading stays above timestamp');
+  for(const detail of centered.details){assert.ok(detail.top>=centered.current.bottom,'details do not overlap temperature');assert.ok(detail.left>=centered.area.left&&detail.right<=centered.area.right,'details fit weather card');}
+  for(let i=1;i<centered.details.length;i++)assert.ok(centered.details[i].left>=centered.details[i-1].right||centered.details[i].top>=centered.details[i-1].bottom,'weather details do not overlap');
  }
  const operational=await page.locator('.gs-dashboard-operational').evaluateAll(nodes=>nodes.map(el=>({height:el.getBoundingClientRect().height,minHeight:getComputedStyle(el).minHeight})));
  if(width>=768){assert.ok(operational.every(r=>r.minHeight==='208px'&&r.height>=208));assert.ok((await panel(page,'weather').locator('.gs-dashboard-section-heading').boundingBox()).height<90,'compact weather header');}

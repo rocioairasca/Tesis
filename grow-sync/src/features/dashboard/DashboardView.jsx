@@ -102,9 +102,11 @@ export function Weather({ request, canViewRain }) {
     {canRetry && <EntityLink onClick={request.retry}>Reintentar</EntityLink>}
   </div>}>
     {request.status === 'loading' ? <LoadingState label="Consultando clima…" rows={2} /> : request.status === 'error' ? <ErrorState message="No se pudo consultar el clima." /> : <>
-      {!data ? <EmptyState title="No hay un registro climático disponible" description={failure === 'permission_denied' ? 'Habilitá el permiso de ubicación para consultar el clima.' : undefined} /> : <div className={`gs-dashboard-weather-body${fallback ? ' gs-dashboard-weather-stale' : ''}`}>
-        {fallback && <StatusBadge tone="warning">Último dato disponible · Desactualizado</StatusBadge>}
-        <div className="gs-dashboard-weather-reading"><div className="gs-dashboard-weather-current"><span aria-hidden="true"><WeatherIcon kind={presentation.kind} size={40} /></span><div><strong>{formatNumber(data.temperature, 1)} <small>°C</small></strong><span>{presentation.label}</span></div></div><div className="gs-dashboard-weather-detail"><span><WindIcon size={16} /> Viento</span><strong>{formatNumber(data.wind_speed, 1)}{numberValue(data.wind_speed) != null ? ' km/h' : ''} {numberValue(data.wind_direction) != null ? degToCompass(Number(data.wind_direction)) : ''}</strong></div>{numberValue(data.humidity) != null && <div className="gs-dashboard-weather-detail"><span><DropIcon size={16} /> Humedad</span><strong>{formatNumber(data.humidity, 0)} %</strong></div>}</div>
+      {!data ? <EmptyState title="No hay un registro climático disponible" description={failure === 'permission_denied' ? 'Habilitá el permiso de ubicación para consultar el clima.' : undefined} /> : <div className="gs-dashboard-weather-body">
+        <div className="gs-dashboard-weather-summary">
+          {fallback && <StatusBadge tone="warning">Último dato disponible · Desactualizado</StatusBadge>}
+          <div className="gs-dashboard-weather-reading"><div className="gs-dashboard-weather-current"><span aria-hidden="true"><WeatherIcon kind={presentation.kind} size={40} /></span><div><strong>{formatNumber(data.temperature, 1)} <small>°C</small></strong><span>{presentation.label}</span></div></div><div className="gs-dashboard-weather-detail"><span><WindIcon size={16} /> Viento</span><strong>{formatNumber(data.wind_speed, 1)}{numberValue(data.wind_speed) != null ? ' km/h' : ''} {numberValue(data.wind_direction) != null ? degToCompass(Number(data.wind_direction)) : ''}</strong></div>{numberValue(data.humidity) != null && <div className="gs-dashboard-weather-detail"><span><DropIcon size={16} /> Humedad</span><strong>{formatNumber(data.humidity, 0)} %</strong></div>}</div>
+        </div>
         {timestamp && <p className="gs-dashboard-note gs-dashboard-weather-updated">Última lectura: {timestamp}</p>}
       </div>}
     </>}
