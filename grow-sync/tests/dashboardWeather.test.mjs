@@ -16,6 +16,15 @@ test('weather and notifications: source errors, retry, WMO and persisted text pr
   assert.equal(sanitizeNotification({type:'planning_assigned',message:'Aplicar 1.000000 L'}).message,'Aplicar 1.000000 L');
   for(const [code,label] of [[0,'Despejado'],[2,'Parcialmente nublado'],[3,'Nublado'],[45,'Niebla'],[61,'Lluvia leve'],[95,'Tormenta']]) assert.equal(getWeatherPresentation({source:'open-meteo',weather_code:code}).label,label);
   for(const code of [undefined,null,999]) assert.equal(getWeatherPresentation({source:'open-meteo',weather_code:code,humidity:90,temperature:35}).label,'Condición no informada');
+  const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server'),{MemoryRouter}=await import('react-router-dom');
+  const {Weather}=await server.ssrLoadModule('/src/features/dashboard/DashboardView.jsx');
+  const render=request=>renderToStaticMarkup(React.createElement(MemoryRouter,null,React.createElement(Weather,{request,canViewRain:true})));
+  const reading={temperature:16.7,humidity:51,wind_speed:12.5,date:'2026-10-17'};
+  const stale=render({status:'success',data:{reading,fallback:true,failure:'rate_limited',retry_after_seconds:900,retryable:true},retry:()=>{}});
+  assert.ok(stale.includes('Último dato disponible · Desactualizado'));assert.ok(stale.includes('Última lectura: 17/10/26'));assert.ok(stale.includes('Condición no informada'));assert.doesNotMatch(stale,/Open-Meteo|límite de consultas|hora no registrada|Ubicación actual|15 min/);assert.equal((stale.match(/>Reintentar</g)||[]).length,1);
+  const currentView=render({status:'success',data:{reading:{...reading,weather_code:0},fallback:false}});assert.ok(currentView.includes('Despejado'));assert.doesNotMatch(currentView,/Desactualizado|Clima actual|ubicación|Reintentar/);
+  const empty=render({status:'success',data:{reading:null,fallback:true,failure:'permission_denied',retryable:false}});assert.ok(empty.includes('Habilitá el permiso'));assert.doesNotMatch(empty,/Reintentar|Última lectura/);
+  const failed=render({status:'error',error:new Error('Open-Meteo rate limit'),retry:()=>{}});assert.ok(failed.includes('No se pudo consultar el clima.'));assert.doesNotMatch(failed,/Open-Meteo|rate limit/);assert.equal((failed.match(/>Reintentar</g)||[]).length,1);
   const saved={temperature:18,humidity:70,wind_speed:8,date:'2026-01-01'};const current={temperature:20,humidity:65,wind_speed:10,wind_direction:90,weather_code:2,source:'open-meteo',observed_at:'2026-10-16T12:00:00Z'};
   let geoCalls=0,postCalls=0,fail=true;const phases=[];
   const source=createDashboardSource({get:async()=>({data:saved}),post:async(path,body,config)=>{postCalls++;assert.equal(config.timeout,15000);if(fail)throw Object.assign(Error('HTTP'),{response:{status:502}});return {data:current};}}, {},()=>({getCurrentPosition:ok=>{geoCalls++;ok({coords:{latitude:-32,longitude:-63}});}}));

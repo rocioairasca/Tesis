@@ -188,6 +188,7 @@
 .gs-static-field-lot { fill:var(--gs-brand-lime); fill-opacity:.35; stroke:var(--gs-brand-primary); stroke-width:2; stroke-linejoin:round; }
 @media (max-width:767px) { .gs-static-field-overview { height:160px; } }
 
-.gs-dashboard-weather-status { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-bottom:12px; }
-.gs-dashboard-weather-status .gs-dashboard-note { flex:1 1 220px; margin:0; }
+.gs-dashboard-weather-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px 16px; margin-left:auto; }
+.gs-dashboard-weather-actions .gs-ui-entity { display:inline-flex; align-items:center; box-sizing:border-box; min-height:32px; font-size:12px; line-height:20px; white-space:nowrap; }
+@media(max-width:767px){ .gs-dashboard-weather-actions .gs-ui-entity { min-height:44px; } }
 .gs-dashboard-weather-stale { border-left:3px solid #e2bb65; padding-left:12px; }
