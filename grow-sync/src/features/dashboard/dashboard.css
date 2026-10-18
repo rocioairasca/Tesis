@@ -121,19 +121,11 @@
 .gs-dashboard .gs-ui-empty .ant-empty-image { display:none; }
 .gs-dashboard-context-row .gs-ui-empty { border:0; background:transparent; padding:var(--gs-space-4) 0; }
 .gs-dashboard .gs-ui-page-header h1 { overflow-wrap:anywhere; }
-/* Final reference: independent operational panels on a soft canvas. */
+/* Panels follow DOM order; each occupies its own row without conditional gaps. */
 .gs-workspace-surface:has(> .gs-dashboard), .gs-workspace-surface:has(> div > .gs-dashboard) { background:transparent; border:0; }
-.gs-dashboard { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; padding:0; align-items:start; }
-.gs-dashboard > .gs-ui-page-header { grid-column:1/-1; order:0; padding:4px 8px; }
+.gs-dashboard { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; padding:0; align-items:start; }
+.gs-dashboard > .gs-ui-page-header { padding:4px 8px; }
 .gs-dashboard > .gs-dashboard-section { padding:16px; border:1px solid var(--gs-border); border-radius:12px; background:var(--gs-surface); }
-.gs-dashboard > [aria-labelledby="dashboard-attention"] { grid-column:1/-1; order:1; }
-.gs-dashboard > [aria-labelledby="dashboard-weather"] { grid-column:span 4; order:4; }
-.gs-dashboard > [aria-labelledby="dashboard-work"] { grid-column:1/-1; order:3; }
-.gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 8; order:5; }
-.gs-dashboard > [aria-labelledby="dashboard-production"] { grid-column:1/-1; order:6; }
-.gs-dashboard > [aria-labelledby="dashboard-my-tasks"] { grid-column:1/-1; order:2; }
-.gs-dashboard:not(:has(#dashboard-attention)):not(:has(#dashboard-work)) > [aria-labelledby="dashboard-weather"] { grid-column:span 5; }
-.gs-dashboard:not(:has(#dashboard-field)) > [aria-labelledby="dashboard-work"] { grid-column:1/-1; }
 .gs-dashboard-section-heading { flex-wrap:wrap; }
 .gs-dashboard-section-heading > .gs-ui-entity { font-size:12px; }
 .gs-dashboard-alerts { grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr)); gap:10px; }
@@ -157,7 +149,6 @@
 .gs-dashboard-chart-canvas { height:210px; }
 .gs-dashboard .gs-ui-empty { border:0; background:var(--gs-background); padding:12px; }
 @media (min-width:768px) and (max-width:1150px) {
-  .gs-dashboard > [aria-labelledby="dashboard-weather"], .gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 6; }
   .gs-dashboard-metrics .gs-ui-metric { padding:12px; }
   .gs-dashboard-metrics .gs-ui-metric-label > span { position:static; padding:4px; }
 }
@@ -165,11 +156,6 @@
   .gs-dashboard { display:flex; flex-direction:column; gap:12px; }
   .gs-dashboard > .gs-ui-page-header,.gs-dashboard > .gs-dashboard-section { width:100%; box-sizing:border-box; }
   .gs-dashboard > .gs-dashboard-section { padding:12px; }
-  .gs-dashboard > [aria-labelledby="dashboard-attention"] { order:1; }
-  .gs-dashboard > [aria-labelledby="dashboard-work"] { order:3; }
-  .gs-dashboard > [aria-labelledby="dashboard-weather"] { order:4; }
-  .gs-dashboard > [aria-labelledby="dashboard-field"] { order:5; }
-  .gs-dashboard > [aria-labelledby="dashboard-production"] { order:6; }
   .gs-dashboard-alerts { grid-template-columns:minmax(0,1fr); }
   .gs-dashboard-field-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .gs-dashboard-metrics .gs-ui-metric-value { font-size:22px; }
@@ -207,4 +193,12 @@
   .gs-dashboard-my-tasks li { flex-direction:column; align-items:stretch; gap:8px; }
   .gs-dashboard-my-task-action { align-items:flex-start; flex-wrap:wrap; flex-direction:row; column-gap:12px; }
   .gs-dashboard-my-task-action a { flex-basis:100%; }
+}
+
+/* A shared minimum for operational panels; content can always grow. */
+.gs-dashboard-operational { display:flex; flex-direction:column; box-sizing:border-box; }
+@media (min-width:768px) {
+  .gs-dashboard-operational { min-height:208px; }
+  .gs-dashboard-operational > .gs-ui-empty { flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .gs-dashboard-weather-current { flex-basis:auto; }
 }

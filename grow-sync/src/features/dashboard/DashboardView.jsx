@@ -36,7 +36,7 @@ function Attention({ access, delayed, inventory }) {
   const allLoaded = (!access.planning || delayed.status === 'success') && (!access.inventory || inventory.status === 'success');
   const clear = allLoaded && !(delayed.data > 0) && !metrics.length && !counts.unknown;
   if (clear) return null;
-  return <Section id="dashboard-attention" title="Requiere tu atención" description="Excepciones para revisar antes de empezar.">
+  return <Section className="gs-dashboard-operational" id="dashboard-attention" title="Requiere tu atención" description="Excepciones para revisar antes de empezar.">
     <div className="gs-dashboard-alerts">
       {access.planning && <RequestState request={delayed} label="demoras">{delayed.data > 0 && <Metric icon={<span data-alert-tone="danger"><CalendarOutlined size={24} /></span>} helper="Revisar planificaciones →" compact label="Planificaciones en demora" value={formatNumber(delayed.data, 0)} status={{ tone: 'danger', label: 'Requieren revisión' }} onClick={() => navigate('/planificaciones')} />}</RequestState>}
       {access.inventory && <RequestState request={inventory} label="alertas de inventario">{metrics.map(([key, label, tone, helper]) => <Metric key={key} icon={<span data-alert-tone={tone}><AppstoreOutlined size={24} /></span>} helper="Ver inventario →" compact label={label} value={formatNumber(counts[key], 0)} status={{ tone, label: helper }} onClick={() => navigate('/inventario')} />)}{counts.unknown > 0 && <p className="gs-dashboard-note">Hay productos sin saldo informado. <EntityLink to="/inventario">Revisar inventario</EntityLink></p>}</RequestState>}
@@ -46,7 +46,7 @@ function Attention({ access, delayed, inventory }) {
 }
 function MyTasks({ request }) {
   const { rows = [], total = 0 } = request.data || {};
-  return <Section id="dashboard-my-tasks" title="Mis tareas" description="Trabajos que tenés asignados." action={<EntityLink to={MY_TASKS_URL}>Ver todas mis tareas</EntityLink>}>
+  return <Section className="gs-dashboard-operational" id="dashboard-my-tasks" title="Mis tareas" description="Trabajos que tenés asignados." action={<EntityLink to={MY_TASKS_URL}>Ver todas mis tareas</EntityLink>}>
     <RequestState request={request} label="tus tareas">
       {!rows.length ? <EmptyState title="No tenés tareas para hoy ni para los próximos 7 días." description="Podés consultar otras fechas en Ver todas mis tareas." /> : <>
         <p className="gs-dashboard-note gs-dashboard-my-tasks-count">{total} {total === 1 ? 'tarea abierta' : 'tareas abiertas'} · En demora, hoy y próximos 7 días</p>
@@ -70,7 +70,7 @@ function MyTasks({ request }) {
 }
 function Work({ request }) {
   const rows = request.data || [];
-  return <Section id="dashboard-work" title="Trabajo del equipo" description="Planificaciones abiertas de hoy y los próximos 7 días." action={<EntityLink to="/planificaciones">Ver planificaciones</EntityLink>}>
+  return <Section className="gs-dashboard-operational" id="dashboard-work" title="Trabajo del equipo" description="Planificaciones abiertas de hoy y los próximos 7 días." action={<EntityLink to="/planificaciones">Ver planificaciones</EntityLink>}>
     <RequestState request={request} label="planificaciones">
       {!rows.length ? <EmptyState title="No hay trabajo programado en este período" description="Consultá Planificaciones para ver otras fechas y estados." /> : <>
         <ul className="gs-dashboard-work-list">{rows.slice(0, 6).map(row => {
@@ -97,7 +97,7 @@ export function Weather({ request, canViewRain }) {
     day: '2-digit', month: '2-digit', year: '2-digit',
   }).format(date) + (dateOnly ? '' : ' · ' + new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)) : null;
   const canRetry = request.status === 'error' || (request.status !== 'loading' && fallback && request.data?.retryable !== false);
-  return <Section id="dashboard-weather" title="Clima" className="gs-dashboard-weather" action={<div className="gs-dashboard-weather-actions">
+  return <Section id="dashboard-weather" title="Clima" className="gs-dashboard-weather gs-dashboard-operational" action={<div className="gs-dashboard-weather-actions">
     {canViewRain && <EntityLink to="/registro-lluvias">Registro de lluvias</EntityLink>}
     {canRetry && <EntityLink onClick={request.retry}>Reintentar</EntityLink>}
   </div>}>
@@ -136,10 +136,10 @@ export default function DashboardView({ user, today, access, delayed, myTasks = 
   const dateKey = calendarDateKey(today);
   const dateLabel = dateKey ? new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${dateKey}T12:00:00Z`)) : '';
   return <div className="gs-dashboard"><PageHeader title={name ? `¡Hola, ${name}!` : '¡Hola!'} description={dateLabel} />
+    <Weather request={weather} canViewRain={access.rain} />
     {(access.planning || access.inventory) && <Attention access={access} delayed={delayed} inventory={inventory} />}
     {access.planning && <MyTasks request={myTasks} />}
     {access.teamWork && <Work request={work} />}
-    <Weather request={weather} canViewRain={access.rain} />
     {access.field && <Section id="dashboard-field" title="Resumen del campo" action={<EntityLink to="/lotes">Ver lotes</EntityLink>}>
       <RequestState request={field} label="resumen del campo">{field.data?.lots === 0 ? <EmptyState title="Todavía no hay lotes activos" /> : <div className="gs-dashboard-field-kpis"><Metric compact icon={<EnvironmentOutlined size={24} />} label="Lotes activos" value={formatNumber(field.data?.lots, 0)} />{fieldMap.status === 'success' && <><Metric compact icon={<EnvironmentOutlined size={22} />} label="Superficie total" value={fieldMap.data.area == null ? '—' : `${formatNumber(fieldMap.data.area)} ha`} helper={fieldMap.data.area == null ? 'Superficie incompleta' : undefined} /><Metric compact icon={<DivisionsIcon size={22} />} label="Divisiones vigentes" value={formatNumber(fieldMap.data.divisions, 0)} /></>}</div>}</RequestState>
       <RequestState request={fieldMap} label="vista del establecimiento">{fieldMap.status === 'success' && <><StaticFieldOverview geometries={fieldMap.data?.geometries || []} />{fieldMap.data?.missing > 0 && <p className="gs-dashboard-note">{formatNumber(fieldMap.data.missing, 0)} {fieldMap.data.missing === 1 ? 'lote sin geometría utilizable no se muestra' : 'lotes sin geometría utilizable no se muestran'} en la vista.</p>}</>}</RequestState>

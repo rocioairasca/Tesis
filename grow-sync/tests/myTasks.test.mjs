@@ -44,7 +44,7 @@ test('dashboard source requests six own tasks with full horizon count; permissio
   assert.equal(dashboardAccess(viewer).teamWork,false);assert.equal(dashboardAccess(manager).teamWork,true);
   const props={user:viewer,today:'2026-10-18',access:dashboardAccess(viewer),myTasks:ready(result),work:ready([]),delayed:ready(1),inventory:ready({}),weather:ready({}),filters:{}};
   const render=changes=>renderToStaticMarkup(React.createElement(MemoryRouter,null,React.createElement(View,{...props,...changes})));
-  const html=render({});assert.ok(html.indexOf('dashboard-attention')<html.indexOf('dashboard-my-tasks'));assert.ok(html.indexOf('dashboard-my-tasks')<html.indexOf('dashboard-weather'));
+  const html=render({});assert.ok(html.indexOf('dashboard-attention')<html.indexOf('dashboard-my-tasks'));assert.ok(html.indexOf('dashboard-weather')<html.indexOf('dashboard-attention'));
   assert.match(html,/Asignado por Juan Pérez/);assert.equal((html.match(/Asignado por/g)||[]).length,1);assert.match(html,/Se muestran 2 de 12/);assert.match(html,/mine=1&amp;planningId=a/);assert.doesNotMatch(html,/Trabajo del equipo/);
   assert.match(render({access:dashboardAccess(manager)}),/Trabajo del equipo/);
   assert.doesNotMatch(render({access:dashboardAccess({role:0,custom_permissions:[]})}),/Mis tareas|Trabajo del equipo/);

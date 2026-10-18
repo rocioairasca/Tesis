@@ -101,5 +101,13 @@ test('Dashboard: adaptadores existentes, clima simulado, permisos y estados rend
     const errored = render({ field: { status: 'error', error: new Error('Network Error') }, production: { status: 'loading' } }); assert.ok(!errored.includes('Todavía no hay lotes activos')); assert.ok(errored.includes('Cargando producción'));
     const noArea = render({ production: ready({ summary: { total_records: 1, total_production_kg: 100, total_area_ha: 0, avg_yield_kg_ha: 0 }, byCrop: [], byCampaign: [] }) }); assert.ok(noArea.includes('Requiere superficie cosechada')); assert.ok(!noArea.includes('>0 kg/ha<'));
     const restricted = render({ access: dashboardAccess({ role: 0, custom_permissions: ['inventory.view'] }) }); assert.ok(!restricted.includes('Trabajo del equipo')); assert.ok(!restricted.includes('Mis tareas')); assert.ok(!restricted.includes('Producción y cosecha')); assert.ok(!restricted.includes('href="/lotes"'));
+    const sectionOrder = html => [...html.matchAll(/<section aria-labelledby="(dashboard-[^"]+)"/g)].map(match => match[1]);
+    const task={id:'own',title:'Tarea propia',activity_type:'riego',status:'pendiente',start_at:'2026-09-13',end_at:'2026-09-13',lots:[],taskGroup:'today'};
+    for(const attention of [false,true])for(const teamWork of [false,true])for(const hasTasks of [false,true])for(const weatherState of [ready({reading:{temperature:20,weather_code:0}}),ready(fallback),{status:'error',error:new Error('offline')}]){
+      const html=render({access:{...props.access,teamWork},delayed:ready(attention?1:0),myTasks:ready({rows:hasTasks?[task]:[],total:hasTasks?1:0}),weather:weatherState});
+      assert.deepEqual(sectionOrder(html),['dashboard-weather',...(attention?['dashboard-attention']:[]),'dashboard-my-tasks',...(teamWork?['dashboard-work']:[]),'dashboard-field','dashboard-production']);
+      assert.equal(html.includes('No tenés tareas para hoy ni para los próximos 7 días.'),!hasTasks);
+      if(hasTasks)assert.ok(html.includes('planningId=own'));
+    }
   } finally { await server.close(); }
 });
