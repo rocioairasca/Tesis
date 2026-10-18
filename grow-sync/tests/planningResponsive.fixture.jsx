@@ -37,6 +37,7 @@ api.defaults.adapter = async config => {
   }
   if (config.method !== 'get') throw new Error('Read-only layout test: unexpected mutation');
   let data = [];
+  if (config.url.startsWith('/planning/planning-')) data = rows.find(row => '/planning/' + row.id === config.url);
   if (config.url === '/planning') data = { data: rows };
   if (config.url === '/users/planning-responsibles') data = [{ id: 'user', full_name: 'Responsable de prueba' },
     { id: 'colleague', full_name: 'Compañero habilitado' }, { id: 'supervisor', full_name: 'Supervisor habilitado' },

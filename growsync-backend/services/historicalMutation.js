@@ -1,3 +1,4 @@
+const {resolvePlanningResponsible}=require('./planningNotifications');
 const {protectPlanning,planningGraph,planningMembership}=require('./historicalPlanningGuard');
 const stock=require('./stock');
 const {isHistorical,assertModeUnchanged,fail}=require('./inventoryImpact');
@@ -41,6 +42,13 @@ async function mutate(pool,{companyId,actorId,table,id,body={},enabled}){
     if(changes.amount_used!==undefined && stock.decimal(changes.amount_used)<=0n) throw fail('Cantidad inválida.',400);
     if(changes.date!==undefined) stock.calendarDate(changes.date);
     if(changes.effective_date!==undefined) stock.calendarDate(changes.effective_date);
+    // Public historical corrections still validate current assignees. Internal imports
+    // retain their independent provenance contract and never use this reassignment path.
+    if(table==='planning' && changes.responsible_user!==undefined && String(changes.responsible_user).toLowerCase()!==current.responsible_user){
+      await resolvePlanningResponsible(client,changes.responsible_user,companyId);
+      changes.assigned_by=actorId;
+      changes.assigned_at=(await client.query('SELECT now() AS assigned_at')).rows[0].assigned_at;
+    }
     const next={...current,...changes};
     if(table==='planning') {
       if(!Number.isFinite(Date.parse(next.start_at)) || !Number.isFinite(Date.parse(next.end_at)) || Date.parse(next.start_at)>Date.parse(next.end_at)) throw fail('Período inválido.',400);

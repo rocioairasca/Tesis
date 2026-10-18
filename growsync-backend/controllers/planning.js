@@ -1,3 +1,4 @@
+const planningNotifications = require('../services/planningNotifications');
 const planningRecipes = require('../services/planningRecipes');
 const {assertSameUnit} = require('../services/inventoryUnits');
 const {normalizeQuantity} = require('../services/inventoryConversion');
@@ -41,7 +42,7 @@ const plannedAreaSql = `
   WHERE pl.planning_id = b.id
 `;
 
-const {validateFieldContext,cropDescription} = require('../services/planningFieldContext');
+const {validateFieldContext} = require('../services/planningFieldContext');
 
 const resolveCrop = async (client, cropId, companyId, options = {}) => {
   if (!cropId) return null;
@@ -146,28 +147,6 @@ const PLANNING_STATUS_TRANSITIONS = {
   completado: new Set(['pendiente']),
   cancelado: new Set([]),
 };
-
-const PLANNING_STATUS_LABELS = {
-  planificado: 'planificado',
-  pendiente: 'pendiente',
-  en_progreso: 'en progreso',
-  completado: 'completado',
-  cancelado: 'cancelado',
-};
-
-const planningStatusLabel = (status) => PLANNING_STATUS_LABELS[status] || 'otro estado';
-
-const ACTIVITY_LABELS = {
-  siembra: 'siembra',
-  fumigacion: 'fumigación',
-  cosecha: 'cosecha',
-  fertilizacion: 'fertilización',
-  riego: 'riego',
-  mantenimiento: 'mantenimiento',
-  otro: 'actividad',
-};
-
-const activityLabel = (activityType) => ACTIVITY_LABELS[activityType] || 'actividad';
 
 const assertPlanningStatusTransition = (currentStatus, nextStatus) => {
   if (!nextStatus) return;
@@ -387,7 +366,7 @@ exports.list = async (req, res, next) => {
     const countSql = `
       SELECT COUNT(*)::int AS total
       FROM planning p
-      JOIN users u ON u.id = p.responsible_user
+      JOIN users u ON u.id = p.responsible_user AND u.company_id = p.company_id
       ${whereSql};
     `;
     const { rows: countRows } = await pool.query(countSql, p.slice());
@@ -403,10 +382,12 @@ exports.list = async (req, res, next) => {
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
                COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
+               COALESCE(NULLIF(BTRIM(assigner.full_name), ''), NULLIF(BTRIM(assigner.email), ''), CASE WHEN assigner.id IS NOT NULL THEN 'Usuario' END) AS assigned_by_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
-        JOIN users u ON u.id = p.responsible_user
+        JOIN users u ON u.id = p.responsible_user AND u.company_id = p.company_id
+        LEFT JOIN users assigner ON assigner.id = p.assigned_by AND assigner.company_id = p.company_id
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
         LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         ${whereSql}
@@ -461,10 +442,12 @@ exports.getOne = async (req, res, next) => {
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
                COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
+               COALESCE(NULLIF(BTRIM(assigner.full_name), ''), NULLIF(BTRIM(assigner.email), ''), CASE WHEN assigner.id IS NOT NULL THEN 'Usuario' END) AS assigned_by_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
-        JOIN users u ON u.id = p.responsible_user
+        JOIN users u ON u.id = p.responsible_user AND u.company_id = p.company_id
+        LEFT JOIN users assigner ON assigner.id = p.assigned_by AND assigner.company_id = p.company_id
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
         LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         WHERE p.id = $1 AND p.company_id = $2
@@ -534,12 +517,14 @@ const createPlanningRecord = async (
     lot_ids = [],
     lot_selections,
     products = [],
-    created_by,
   } = body;
 
   planningRecipes.rejectClientSnapshot(body);
   const effectiveStatus = forcedStatus || status;
-  const creator = created_by || userId || null;
+  planningNotifications.rejectClientAuthorship(body);
+  await planningNotifications.resolvePlanningResponsible(client, responsible_user, companyId);
+  await planningNotifications.resolvePlanningResponsible(client, userId, companyId);
+  const creator = userId;
 
   await resolveCampaign(client, campaign_id, companyId, {
     startAt: start_at,
@@ -586,8 +571,8 @@ const createPlanningRecord = async (
   const insertSql = `
     INSERT INTO planning(
       title, description, activity_type, start_at, end_at, campaign_id, crop_id,
-      responsible_user, status, vehicle_id, created_by, company_id, field_context
-    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      responsible_user, status, vehicle_id, created_by, company_id, field_context, assigned_by, assigned_at
+    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $11, now())
     RETURNING id;
   `;
   const { rows: newPlan } = await client.query(insertSql, [
@@ -641,27 +626,20 @@ exports.create = async (req, res, next) => {
     }
 
     await client.query('BEGIN');
-    const { id, resolvedCrop } = await createPlanningRecord(client, {
+    const { id } = await createPlanningRecord(client, {
       body: req.body,
       companyId: company_id,
       userId,
       allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
     });
 
+    const notificationEvents = await planningNotifications.prepare(client, {
+      after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'create',
+    });
     await client.query('COMMIT');
 
-    // [NOTIFICACIÓN] Nueva asignación
-    if (req.body.responsible_user) {
-      createNotification(
-        req.body.responsible_user,
-        'planning_assigned',
-        'low',
-        'Nueva planificación asignada',
-        `Se te asignó una planificación de ${activityLabel(req.body.activity_type)}${cropDescription(req.body.activity_type,req.body.field_context,resolvedCrop?.name)}.`,
-        { planning_id: id, activity_type: req.body.activity_type },
-        company_id
-      ).catch(err => console.error('Error enviando notificación:', err));
-    }
+    await planningNotifications.dispatch(notificationEvents, createNotification);
 
     client.release();
     return res.status(201).json({ id });
@@ -690,7 +668,7 @@ exports.registerCompleted = async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    const { id, resolvedCrop } = await createPlanningRecord(client, {
+    const { id } = await createPlanningRecord(client, {
       body: req.body,
       companyId: company_id,
       userId,
@@ -735,18 +713,6 @@ exports.registerCompleted = async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    if (req.body.responsible_user) {
-      createNotification(
-        req.body.responsible_user,
-        'planning_assigned',
-        'low',
-        'Actividad registrada como realizada',
-        `Se registró como realizada una actividad de ${activityLabel(req.body.activity_type)}${cropDescription(req.body.activity_type,req.body.field_context,resolvedCrop?.name)}.`,
-        { planning_id: id, activity_type: req.body.activity_type, new_status: 'completado' },
-        company_id
-      ).catch(err => console.error('Error enviando notificación:', err));
-    }
-
     return res.status(201).json({
       ok: true,
       id,
@@ -774,6 +740,7 @@ exports.completeSowing = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
+    planningNotifications.rejectClientAuthorship(req.body);
     const { actual_products = [] } = req.body;
     const { company_id } = req.user;
     const effectiveDate = planningCompletion.getEffectiveSowingDate(req.body.effective_date);
@@ -794,6 +761,10 @@ exports.completeSowing = async (req, res, next) => {
       registeredRetroactively: false,
     });
 
+    const notificationEvents = completion.already_applied ? [] : await planningNotifications.prepare(client, {
+      after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'completion',
+    });
     await client.query('COMMIT');
 
     if (completion.already_applied) {
@@ -804,20 +775,7 @@ exports.completeSowing = async (req, res, next) => {
       });
     }
 
-    if (planning.responsible_user) {
-      const locationText = completion.selections
-        .map(selection => selection.sub_lot_name || selection.lot_name)
-        .join(', ');
-      createNotification(
-        planning.responsible_user,
-        'state_change',
-        'low',
-        'Siembra completada',
-        `Se completó la siembra de ${planning.crop_name || 'cultivo'} en ${locationText}.`,
-        { planning_id: id, new_status: 'completado' },
-        company_id
-      ).catch(err => console.error('Error enviando notificación:', err));
-    }
+    await planningNotifications.dispatch(notificationEvents, createNotification);
 
     return res.json({
       ok: true,
@@ -845,6 +803,7 @@ exports.completeWork = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
+    planningNotifications.rejectClientAuthorship(req.body);
     const { actual_products = [] } = req.body;
     const effectiveDate = planningCompletion.getEffectiveWorkDate(req.body.effective_date);
     const { company_id } = req.user;
@@ -864,6 +823,10 @@ exports.completeWork = async (req, res, next) => {
       registeredRetroactively: false,
     });
 
+    const notificationEvents = completion.already_applied ? [] : await planningNotifications.prepare(client, {
+      after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'completion',
+    });
     await client.query('COMMIT');
 
     if (completion.already_applied) {
@@ -874,20 +837,7 @@ exports.completeWork = async (req, res, next) => {
       });
     }
 
-    if (planning.responsible_user) {
-      const locationText = completion.selections
-        .map(selection => selection.sub_lot_name || selection.lot_name)
-        .join(', ');
-      createNotification(
-        planning.responsible_user,
-        'state_change',
-        'low',
-        'Trabajo completado',
-        `Se completó la ${activityLabel(planning.activity_type)}${cropDescription(planning.activity_type,planning.field_context,planning.crop_name)} en ${locationText}.`,
-        { planning_id: id, new_status: 'completado' },
-        company_id
-      ).catch(err => console.error('Error enviando notificación:', err));
-    }
+    await planningNotifications.dispatch(notificationEvents, createNotification);
 
     return res.json({
       ok: true,
@@ -929,16 +879,24 @@ exports.update = async (req, res, next) => {
       return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
 
+    planningNotifications.rejectClientAuthorship(req.body);
     planningRecipes.rejectClientSnapshot(req.body);
     await client.query('BEGIN');
 
     // Verificar que la planificación pertenezca a la compañía
-    const checkSql = "SELECT id, start_at, end_at, activity_type, campaign_id, crop_id, field_context, status, enabled, (to_jsonb(planning)->>'recipe_id')::uuid AS recipe_id, to_jsonb(planning)->>'inventory_impact_mode' AS inventory_impact_mode FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE";
+    const checkSql = "SELECT * FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE";
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
       client.release();
       return res.status(404).json({ message: 'No encontramos la planificación solicitada.' });
+    }
+
+    const beforeNotification = await planningNotifications.snapshot(client, id, company_id);
+    const reassigned = responsible_user !== undefined && String(responsible_user).toLowerCase() !== checkRows[0].responsible_user;
+    if (reassigned) {
+      await planningNotifications.resolvePlanningResponsible(client, responsible_user, company_id);
+      await planningNotifications.resolvePlanningResponsible(client, req.user.id, company_id);
     }
 
     const { rows: productCompletionRows } = await client.query(
@@ -1158,6 +1116,10 @@ exports.update = async (req, res, next) => {
     if (start_at !== undefined) push(start_at, 'start_at');
     if (end_at !== undefined) push(end_at, 'end_at');
     if (responsible_user !== undefined) push(responsible_user, 'responsible_user');
+    if (reassigned) {
+      push(req.user.id, 'assigned_by');
+      sets.push('assigned_at = now()');
+    }
     if (status !== undefined) push(status, 'status');
     if (vehicle_id !== undefined) push(vehicle_id, 'vehicle_id');
     if (campaign_id !== undefined) push(campaign_id, 'campaign_id');
@@ -1212,31 +1174,13 @@ exports.update = async (req, res, next) => {
       }
     }
 
+    const notificationEvents = await planningNotifications.prepare(client, {
+      before: beforeNotification, after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'update',
+    });
     await client.query('COMMIT');
 
-    // [NOTIFICACIÓN] Cambio de estado
-    if (status) {
-      let targetUser = responsible_user;
-      if (!targetUser) {
-        const { rows: current } = await client.query(
-          'SELECT responsible_user, title FROM planning WHERE id = $1',
-          [id]
-        );
-        targetUser = current[0]?.responsible_user;
-      }
-
-      if (targetUser) {
-        createNotification(
-          targetUser,
-          'state_change',
-          'low',
-          'Cambio de estado en planificación',
-          `La planificación cambió a ${planningStatusLabel(status)}.`,
-          { planning_id: id, new_status: status },
-          company_id
-        ).catch(err => console.error('Error enviando notificación:', err));
-      }
-    }
+    await planningNotifications.dispatch(notificationEvents, createNotification);
 
     client.release();
     res.json({ ok: true });
@@ -1266,7 +1210,7 @@ exports.remove = async (req, res, next) => {
     await client.query('BEGIN');
 
     // Verificar existencia y compañía
-    const checkSql = 'SELECT id, status, enabled FROM planning WHERE id = $1 AND company_id = $2';
+    const checkSql = 'SELECT * FROM planning WHERE id = $1 AND company_id = $2 FOR UPDATE';
     const { rows: checkRows } = await client.query(checkSql, [id, company_id]);
     if (checkRows.length === 0) {
       await client.query('ROLLBACK');
@@ -1311,7 +1255,12 @@ exports.remove = async (req, res, next) => {
     `;
     await client.query(updateSql, [id, company_id]);
 
+    const notificationEvents = await planningNotifications.prepare(client, {
+      before: current, after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'cancel',
+    });
     await client.query('COMMIT');
+    await planningNotifications.dispatch(notificationEvents, createNotification);
     client.release();
     res.json({ ok: true });
   } catch (e) {
@@ -1402,7 +1351,7 @@ exports.listDisabled = async (req, res, next) => {
     const countSql = `
       SELECT COUNT(*)::int AS total
       FROM planning p
-      JOIN users u ON u.id = p.responsible_user
+      JOIN users u ON u.id = p.responsible_user AND u.company_id = p.company_id
       ${whereSql};
     `;
     const { rows: countRows } = await pool.query(countSql, p.slice());
@@ -1418,10 +1367,12 @@ exports.listDisabled = async (req, res, next) => {
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
                COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
+               COALESCE(NULLIF(BTRIM(assigner.full_name), ''), NULLIF(BTRIM(assigner.email), ''), CASE WHEN assigner.id IS NOT NULL THEN 'Usuario' END) AS assigned_by_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
-        JOIN users u ON u.id = p.responsible_user
+        JOIN users u ON u.id = p.responsible_user AND u.company_id = p.company_id
+        LEFT JOIN users assigner ON assigner.id = p.assigned_by AND assigner.company_id = p.company_id
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
         LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         ${whereSql}

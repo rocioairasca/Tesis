@@ -50,7 +50,7 @@ import {
 } from '../../components/AppIcons';
 import api from "../../services/apiClient";
 import useIsMobile from "../../hooks/useIsMobile";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
@@ -291,6 +291,9 @@ const Planning = () => {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null); // Estado para el detalle
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(null);
+  const [detailRevision, setDetailRevision] = useState(0);
   const [form] = Form.useForm();
   const [cropForm] = Form.useForm();
   const [campaignForm] = Form.useForm();
@@ -328,6 +331,8 @@ const Planning = () => {
   const isMobile = useIsMobile();
   const { containerRef, useCompactPlanningList } = usePlanningLayout();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailId = searchParams.get("planningId");
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
   const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
@@ -346,6 +351,36 @@ const Planning = () => {
     ? [{key:'adopt-history',label:'Marcar como registro histórico',onClick:()=>setAdopting(row)}] : [];
   const canDisable = hasPermission(currentUser, PERMISSIONS.PLANNING_DISABLE);
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
+
+  const canView = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setViewing(null);
+    setDetailError(null);
+    setIsDetailOpen(Boolean(detailId));
+    setDetailLoading(Boolean(detailId) && canView);
+    if (detailId) {
+      if (!canView) setDetailError('No tenés permiso para ver esta planificación.');
+      else api.get('/planning/' + encodeURIComponent(detailId), {signal: controller.signal})
+        .then(({data}) => {
+          if (!active) return;
+          if (!data?.id) throw new Error('Missing planning');
+          setViewing(data);
+        })
+        .catch(error => {
+          if (!active || controller.signal.aborted) return;
+          const status = error.response?.status;
+          setDetailError(status === 403
+            ? 'No tenés permiso para ver esta planificación.'
+            : status === 404 || status === 400
+              ? 'La planificación no existe o no está disponible para tu empresa.'
+              : 'No pudimos cargar la planificación. Cerrá el detalle e intentá nuevamente.');
+        })
+        .finally(() => { if (active) setDetailLoading(false); });
+    }
+    return () => { active = false; controller.abort(); };
+  }, [detailId, canView, currentUser?.company_id, detailRevision]);
 
   const selectedAreaRows = selectedLotKeys.map(key=>{
     const parsed=parseSelectionKey(key);
@@ -1106,13 +1141,21 @@ const Planning = () => {
   };
 
   const openDetail = (row) => {
-    setViewing(row);
-    setIsDetailOpen(true);
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.set("planningId", getId(row));
+      return next;
+    });
   };
 
   const closeDetail = () => {
     setIsDetailOpen(false);
     setViewing(null);
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.delete("planningId");
+      return next;
+    });
   };
 
   const handleSubmit = async (values) => {
@@ -1397,6 +1440,7 @@ const Planning = () => {
         ),
       });
       closeCompleteSowingModal();
+      setDetailRevision(value => value + 1);
       closeCalendarSelection();
       fetchPlanning();
     } catch (e) {
@@ -1435,6 +1479,7 @@ const Planning = () => {
         message: data?.message || "El trabajo fue completado y los productos utilizados quedaron registrados.",
       });
       closeCompleteWorkModal();
+      setDetailRevision(value => value + 1);
       closeCalendarSelection();
       fetchPlanning();
     } catch (e) {
@@ -1462,6 +1507,7 @@ const Planning = () => {
     try {
       setStatusActionLoading(actionKey);
       await api.patch(`/planning/${getId(row)}`, { status });
+      setDetailRevision(value => value + 1);
       fetchPlanning();
     } catch (e) {
       notification.error({ message: getUserFriendlyError(e, "No se pudo actualizar el estado.") });
@@ -1837,7 +1883,7 @@ const Planning = () => {
       )}
 
       {adopting && <AdoptExistingModal key={adopting.id} planning={adopting} onClose={()=>setAdopting(null)}
-        onAdopted={async()=>{await fetchPlanning();setViewing(null);notification.success({message:'La planificación quedó marcada como registro histórico. Las existencias no se modificaron.'});}} />}
+        onAdopted={async()=>{await fetchPlanning();closeDetail();notification.success({message:'La planificación quedó marcada como registro histórico. Las existencias no se modificaron.'});}} />}
       {/* Drawer crear/editar */}
       <Drawer
         title={isEditingHistorical ? "Corrección de antecedente" : editing ? "Editar Planificación" : "Nueva Planificación"}
@@ -2201,6 +2247,7 @@ const Planning = () => {
 
       {/* Drawer Detalle (Read-only) */}
       <Drawer
+        className="planning-detail-drawer"
         title="Detalle de Planificación"
         placement={isMobile ? "bottom" : "right"}
         onClose={closeDetail}
@@ -2209,6 +2256,8 @@ const Planning = () => {
         width={isMobile ? "100%" : 500}
         destroyOnHidden
       >
+        {detailLoading && <p role="status">Cargando planificación…</p>}
+        {detailError && <Alert type="warning" showIcon message={detailError} />}
         {viewing && (
           <Space direction="vertical" style={{ width: "100%" }} size="large">
             <Descriptions column={1} bordered size="small">
@@ -2242,6 +2291,8 @@ const Planning = () => {
               <Descriptions.Item label="Responsable">
                 {(userIx[viewing.responsible_user] || viewing.responsible_name) || "—"}
               </Descriptions.Item>
+              <Descriptions.Item label="Asignado por">{viewing.assigned_by_name || "No documentado"}</Descriptions.Item>
+              <Descriptions.Item label="Asignado">{viewing.assigned_at && dayjs(viewing.assigned_at).isValid() ? dayjs(viewing.assigned_at).format("DD/MM/YYYY · HH:mm") : "No documentado"}</Descriptions.Item>
               <Descriptions.Item label="Vehículo">
                 {vehIx[viewing.vehicle_id] || "—"}
               </Descriptions.Item>
@@ -2738,7 +2789,7 @@ const Planning = () => {
       </Modal>
 
       {
-        isMobile && !isDrawerOpen && canCreate && (
+        isMobile && !isDrawerOpen && !isDetailOpen && canCreate && (
           <button
             type="button"
             className="fab-button"

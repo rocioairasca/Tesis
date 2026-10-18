@@ -36,7 +36,7 @@ async function planningGraph(client,id){
 }
 async function planningMembership(client,id){
   return (await client.query(`SELECT jsonb_build_object(
-    'planning',to_jsonb(p)-ARRAY['title','description','responsible_user','updated_at','enabled'],
+    'planning',to_jsonb(p)-ARRAY['title','description','responsible_user','assigned_by','assigned_at','updated_at','enabled'],
     'lots',(SELECT COALESCE(jsonb_agg(to_jsonb(x)-'area_ha' ORDER BY lot_id,sub_lot_id),'[]') FROM planning_lots x WHERE planning_id=p.id),
     'products',(SELECT COALESCE(jsonb_agg(to_jsonb(x)-'amount' ORDER BY id),'[]') FROM planning_products x WHERE planning_id=p.id),
     'completions',(SELECT COALESCE(jsonb_agg(to_jsonb(x)-'actual_amount' ORDER BY planning_product_id),'[]') FROM planning_product_completions x WHERE planning_id=p.id),

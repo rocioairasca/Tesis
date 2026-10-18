@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+import { notificationTarget } from '../utils/notificationTarget.mjs';
 import React, { useState } from 'react';
 import { Badge, Dropdown, Button, Empty } from 'antd';
 import { AppIcons } from './AppIcons';
@@ -16,6 +18,7 @@ const NotificationBell = ({ onOpenDrawer }) => {
     const { notifications, unreadCount, markAsRead, fetchNotifications } = useNotifications();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const isMobile = useIsMobile();
+    const navigate = useNavigate();
 
     const handleDropdownOpenChange = async (open) => {
         setDropdownOpen(open);
@@ -29,6 +32,8 @@ const NotificationBell = ({ onOpenDrawer }) => {
             await markAsRead(notification.id);
         }
         setDropdownOpen(false);
+        const target = notificationTarget(notification);
+        if (target) navigate(target);
     };
 
     const getPriorityColor = (priority) => {

@@ -27,3 +27,7 @@
 .planning-recipe-item dt { font-size: 12px; color: #6b7280; }
 .planning-recipe-item dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 767px) { .planning-recipe-item dl { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.planning-detail-drawer .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

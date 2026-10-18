@@ -81,7 +81,10 @@ const baseBodyShape = {
   lot_ids: uuidArrayNoDup('Lotes').optional(),
   lot_selections: lotSelectionArrayNoDup.optional(),
   products: z.array(ProductItem).optional(),
-  created_by: z.string().uuid().optional().nullable(),
+  created_by: z.never().optional(),
+  assigned_by: z.never().optional(),
+  assigned_at: z.never().optional(),
+  actor_user_id: z.never().optional(),
 };
 
 const refinePlanningBody = (val, ctx) => {
@@ -168,6 +171,10 @@ exports.completeSowingSchema = z.object({
   body: z.object({
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
     actual_products: z.array(ActualProductItem).optional(),
+    created_by: z.never().optional(),
+    assigned_by: z.never().optional(),
+    assigned_at: z.never().optional(),
+    actor_user_id: z.never().optional(),
   }),
 });
 
@@ -176,6 +183,10 @@ exports.completeWorkSchema = z.object({
   body: z.object({
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
     actual_products: z.array(ActualProductItem).optional(),
+    created_by: z.never().optional(),
+    assigned_by: z.never().optional(),
+    assigned_at: z.never().optional(),
+    actor_user_id: z.never().optional(),
   }),
 });
 

@@ -27,6 +27,7 @@ api.defaults.adapter=async config=>{
     if(config.url!=='/planning'&&config.url!=='/planning/register-completed'&&!config.url.startsWith('/planning/plan'))throw new Error('Unexpected operational write: '+config.url);
     window.__planningRecipeWrites.push({path:config.url,method:config.method,body:JSON.parse(config.data)});return response({id:'saved',ok:true});
   }
+  if(config.url==='/planning/plan')return response(row);
   if(config.url==='/planning')return response({data:[row],total:1});
   if(config.url==='/planning/recipe-options')return response(recipes.filter(r=>r.activity_type===config.params.activity_type&&r.field_context===config.params.field_context&&r.crop_id===config.params.crop_id));
   if(config.url==='/users/planning-responsibles')return response([{id:'user',full_name:'Responsable'}]);

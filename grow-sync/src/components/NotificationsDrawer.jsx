@@ -1,3 +1,4 @@
+import { notificationTarget } from '../utils/notificationTarget.mjs';
 import React, { useEffect, useState } from 'react';
 import { Drawer, List, Button, Segmented, Empty } from 'antd';
 import {
@@ -49,6 +50,10 @@ const NotificationsDrawer = ({ open, onClose }) => {
         switch (type) {
             case 'planning_assigned':
                 return <CalendarOutlined style={{ color: '#1890ff' }} />;
+            case 'planning_updated':
+            case 'planning_unassigned':
+            case 'planning_cancelled':
+            case 'planning_completed':
             case 'state_change':
                 return <SyncOutlined style={{ color: '#52c41a' }} />;
             case 'low_stock':
@@ -64,18 +69,11 @@ const NotificationsDrawer = ({ open, onClose }) => {
 
     const handleNotificationClick = async (notification) => {
         if (!notification.read) {
-            markAsRead(notification.id);
+            await markAsRead(notification.id);
         }
 
-        const { type } = notification;
-        if (type.startsWith('planning_') || type === 'state_change') {
-            navigate('/planificaciones');
-        } else if (type === 'low_stock') {
-            navigate('/inventario');
-        } else if (type === 'new_user') {
-            navigate('/usuarios');
-        }
-
+        const target = notificationTarget(notification);
+        if (target) navigate(target);
         onClose();
     };
 

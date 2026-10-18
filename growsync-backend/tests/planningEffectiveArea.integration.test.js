@@ -4,7 +4,7 @@ const selections=require('../services/planningSelections'),stock=require('../ser
 let db,controller,client;
 before(async()=>{
  db=new PGlite();await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
- for(const f of ['./historySchema.fixture.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql','../migrations/20261008_planning_field_context.sql'])await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
+ for(const f of ['./historySchema.fixture.sql','../migrations/20261018_planning_assignment.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql','../migrations/20261008_planning_field_context.sql'])await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
  await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
  client={async query(s,a){
   // No PostGIS in PGlite: with a NULL selected geometry the real spatial query returns no intersections.
