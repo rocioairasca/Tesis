@@ -45,12 +45,14 @@ La profundidad requiere un rango explícito verificable; la ausencia queda null.
 numeric_value se deriva conservadoramente de raw_value, nunca de una cifra arbitraria del proveedor:
 7,1 -> 7.1; N.R. y <0,1 -> null. Separadores con tres decimales se consideran ambiguos y quedan sin valor numérico.
 N.R. se omite de results solo cuando la leyenda del propio informe lo define como análisis no requerido. El prompt pide omitirlo y el backend filtra defensivamente después de validar la propuesta y su respaldo documental. Sin definición, se conserva como qualitative con advertencia. Otros resultados cualitativos reales se conservan. El texto enviado y el PDF original no se recortan ni modifican. Si una muestra queda sin resultados, se advierte para revisión manual; no se inventan filas.
+Los campos opcionales ausentes no generan advertencias. Profundidad NO CONSIGNA / NO CONSIGNADO / NO INFORMADO queda vacía y se explica como información solo cuando puede asociarse al campo y a la muestra. En documentos con varias muestras se usan secciones identificadas; si no se puede asociar con seguridad, se pide revisión. Un valor propuesto que contradice esa ausencia se descarta y requiere revisión. Los textos del modelo se normalizan para no exponer nombres internos.
+El contrato warnings sigue siendo string[] y el schema del proveedor no cambia: el backend identifica sus avisos informativos con el prefijo legible Información:; la UI lo retira al agruparlos. Todo aviso sin esa marca, incluidos mensajes anteriores, exige revisión. Nunca se acepta una marca de información del modelo sin validación documental.
 Estas verificaciones no garantizan asociación semántica perfecta entre filas: siempre hay revisión humana.
 
 ## UX
 Nuevo análisis ofrece Cargar desde PDF (principal) y Completar manualmente.
 El archivo permanece solo en memoria hasta guardar.
-Tras analizar aparece Datos extraídos del PDF · Revisá antes de guardar y las advertencias.
+Tras analizar aparece Datos extraídos del PDF · Revisá antes de guardar. Al final, Información detectada en el PDF presenta ausencias documentadas y N.R. omitidos en tono informativo; Revisá estos datos antes de guardar presenta ambigüedades y valores no confirmados.
 Todas las muestras extraídas empiezan sin lote ni división, incluso desde una ruta contextual.
 El usuario selecciona cada lote/división. Al final de todas las muestras y resultados, después de las advertencias e inmediatamente antes de las acciones, confirma que revisó los datos contra el PDF. La carga manual no muestra esa confirmación.
 Editar valores del informe, muestras o resultados, cambiar el PDF o volver a analizar reinicia la confirmación. Expandir tarjetas no la reinicia.
@@ -86,6 +88,7 @@ Creados:
 - growsync-backend/services/soilAnalysisExtraction.js
 - growsync-backend/services/soilPdfText.js
 - growsync-backend/services/soilPdfText.worker.js
+- growsync-backend/services/soilExtractionMessages.js
 - growsync-backend/validations/soilAnalysisExtraction.schema.js
 - growsync-backend/tests/soilExtraction.fixture.js
 - growsync-backend/tests/soilAnalysisExtraction.test.js
@@ -100,6 +103,6 @@ https://developers.openai.com/api/docs/models/gpt-4.1-mini
 https://github.com/unjs/unpdf
 
 ## Validación ejecutada
-59 tests relacionados (backend/frontend) y 19 de navegador aprobados con Node 20.20.2.
+66 tests relacionados (55 backend / 11 frontend) y 20 de navegador aprobados con Node 20.20.2. Responsive comprobado en 1440, 1024 y 390 px.
 Build frontend correcto (advertencias existentes de Vite/chunks); git diff --check sin errores.
 Sin producción, migraciones en bases reales, commit, push ni deploy.

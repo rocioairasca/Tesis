@@ -12,7 +12,7 @@ import api from '../../../services/apiClient';
 import SoilAnalysisForm from './SoilAnalysisForm';
 import SoilExtractionEntry from './SoilExtractionEntry';
 import SoilPdfPreview from './SoilPdfPreview';
-import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights,resultText} from './soilAnalysisModel.mjs';
+import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights,resultText,extractionMessages} from './soilAnalysisModel.mjs';
 import './soilAnalysis.css';
 export default function SoilAnalysis(){
  const {lotId}=useParams(),[params]=useSearchParams(),navigate=useNavigate(),mobile=useIsMobile();
@@ -30,6 +30,7 @@ export default function SoilAnalysis(){
  const extractController=useRef(null);
  useEffect(()=>()=>extractController.current?.abort(),[]);
  const [form]=Form.useForm();
+ const extractionNotices=extractionMessages(extractWarnings);
  const detailController=useRef(null);
  useEffect(()=>{setLotFilter(undefined);setSub(lotId?querySub||undefined:undefined);},[lotId,querySub]);
  useEffect(()=>()=>detailController.current?.abort(),[]);
@@ -118,7 +119,8 @@ export default function SoilAnalysis(){
    {editor&&!editor.report&&<SoilExtractionEntry mode={entryMode} onModeChange={changeEntryMode} status={extractStatus} file={file} onFileChange={changeFile} onExtract={analyze}/>}
    {editor&&context&&(editor.report||entryMode==='manual'||extractStatus==='review')&&<SoilAnalysisForm form={form} lots={context.lots} editing={editor.report} file={file} onFileChange={changeFile} onFinish={save} onValuesChange={()=>setReviewed(false)} lotId={selectedLotId} subLotId={sub&&sub!=='full'?sub:null} busy={saving} />}
    {editor&&!editor.report&&entryMode==='pdf'&&extractStatus==='review'&&<section className="soil-extraction-review" aria-label="Revisión final de extracción">
-    {extractWarnings.length>0&&<Alert type="warning" message="Revisá estos datos" description={<ul>{extractWarnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>}/>}
+    {extractionNotices.info.length>0&&<Alert type="info" showIcon message="Información detectada en el PDF" description={<ul>{extractionNotices.info.map((message,index)=><li key={index}>{message}</li>)}</ul>}/>}
+    {extractionNotices.review.length>0&&<Alert type="warning" showIcon message="Revisá estos datos antes de guardar" description={<ul>{extractionNotices.review.map((message,index)=><li key={index}>{message}</li>)}</ul>}/>}
     <Checkbox checked={reviewed} disabled={saving} onChange={e=>setReviewed(e.target.checked)}>Revisé los datos extraídos y los comparé con el PDF original.</Checkbox>
    </section>}
   </FormDrawer>

@@ -47,3 +47,11 @@ export function safePdfUrl(value){try{const url=new URL(value);return ['https:',
 export function extractionValues(data,parseDate){
  return {report_number:data.report_number,laboratory:data.laboratory,received_date:parseDate(data.received_date),notes:data.notes,samples:data.samples.length?data.samples.map(s=>({...s,lot_id:null,sub_lot_id:null,sample_date:parseDate(s.sample_date)})):[emptySample(null)]};
 }
+
+// Informational entries are explicitly marked by the backend; legacy/unclassified
+// warnings remain review items. The API continues to return string[].
+export function extractionMessages(warnings=[]){
+ const info=[],review=[];
+ for(const warning of warnings){if(warning.startsWith('Información: '))info.push(warning.slice('Información: '.length));else review.push(warning);}
+ return {info,review};
+}

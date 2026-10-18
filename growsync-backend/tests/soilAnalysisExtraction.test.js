@@ -9,7 +9,7 @@ test('real parser reads a valid synthetic PDF text layer, then proposal validate
  assert.deepEqual(data.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),[['7,1',7.1,'measured'],['3,0',3,'measured'],['<0,1',null,'qualitative']]);assert.ok(!Object.hasOwn(data.samples[0],'lot_id'));assert.deepEqual(data.samples[0].results.map(r=>r.parameter_name),['pH','Materia Orgánica','Traza']);assert.deepEqual(data.samples[0].results.map(r=>r.sort_order),[0,1,2]);assert.deepEqual(buffer,fixture.pdf());
 });
 test('multiple samples retained; invented fields removed and missing depth/date warned',()=>{
- const p=fixture.proposal();p.laboratory='Inventado';p.samples.push({...p.samples[0],sample_date:null,depth_from_cm:null,depth_to_cm:null});const data=adaptProposal(p,text);assert.equal(data.samples.length,2);assert.equal(data.laboratory,null);assert.equal(data.samples[1].depth_from_cm,null);assert.ok(data.warnings.some(w=>w.includes('profundidad')));assert.ok(data.warnings.some(w=>w.includes('fecha de muestreo')));
+ const p=fixture.proposal();p.laboratory='Inventado';p.samples.push({...p.samples[0],sample_date:null,depth_from_cm:null,depth_to_cm:null});const data=adaptProposal(p,text);assert.equal(data.samples.length,2);assert.equal(data.laboratory,null);assert.equal(data.samples[1].depth_from_cm,null);assert.ok(data.warnings.some(w=>/profundidad/i.test(w)));assert.ok(data.warnings.some(w=>/fecha de muestreo/i.test(w)));
 });
 test('numeric interpretation is conservative and N.R. requires its own report legend',()=>{
  const p=fixture.proposal();p.samples[0].results[0].numeric_value=999;const data=adaptProposal(p,text.replace('N.R.: ANÁLISIS NO REQUERIDO POR EL INTERESADO',''));assert.equal(data.samples[0].results[0].numeric_value,7.1);assert.equal(data.samples[0].results[2].result_status,'qualitative');assert.equal(data.samples[0].results[2].numeric_value,null);assert.ok(data.warnings.some(w=>w.includes('significado de N.R.')));assert.equal(data.samples[0].results[3].numeric_value,null);
@@ -65,8 +65,39 @@ test('real qualitative results survive a no requerido legend unchanged',()=>{
  const data=adaptProposal(p,text+' '+values.join(' '));assert.deepEqual(data.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),values.map(v=>[v,null,'qualitative']));
 });
 test('all nonrequested rows leave an empty sample with a review warning, without invented results',()=>{
- const p=fixture.proposal();p.samples[0].results=[p.samples[0].results[2]];const data=adaptProposal(p,text);assert.equal(data.samples.length,1);assert.deepEqual(data.samples[0].results,[]);assert.ok(data.warnings.some(w=>w.includes('No quedaron resultados analizados')));
+ const p=fixture.proposal();p.samples[0].results=[p.samples[0].results[2]];const data=adaptProposal(p,text);assert.equal(data.samples.length,1);assert.deepEqual(data.samples[0].results,[]);assert.ok(data.warnings.some(w=>w.includes('no quedaron resultados analizados')));
 });
 test('model omission and defensive omission produce identical proposals',()=>{
  const p=fixture.proposal();p.samples[0].results.splice(2,1);assert.deepEqual(adaptProposal(p,text),adaptProposal(fixture.proposal(),text));
+});
+
+test('optional missing fields do not produce model or backend review noise',()=>{
+ const p=fixture.proposal();p.warnings=['No se pudo verificar las notas en el PDF. Completalo al revisar.','No se encontró el laboratorio.','Notas: no consignadas en el informe.'];const data=adaptProposal(p,text);
+ assert.equal(data.notes,null);assert.equal(data.samples[0].notes,null);assert.ok(!data.warnings.some(w=>/notas|laboratorio/i.test(w)));assert.ok(data.warnings.every(w=>w.startsWith('Información: ')));
+});
+for(const marker of ['NO CONSIGNA','NO CONSIGNADO','NO INFORMADO'])test('S26-0389 synthetic PDF explains '+marker+' and omitted N.R. as information',async()=>{
+ const p=fixture.proposal();p.report_number='S26-0389';p.samples[0].sample_name='LOTE 44 HAS';p.samples[0].depth_from_cm=null;p.samples[0].depth_to_cm=null;p.warnings=['Contiene resultados N.R. definidos como ANALISIS NO REQUERIDO POR EL INTERESADO, omitidos según indicación.'];
+ const lines=fixture.lines.map(line=>line.replace('S26-0385','S26-0389').replace('MUESTRA SINTETICA RASTROJO SOJA','LOTE 44 HAS').replace('Profundidad: 0-20 cm','Profundidad: '+marker));
+ const buffer=fixture.pdf(lines),copy=Buffer.from(buffer),data=await extract({file:{...fixture.file(),buffer},provider:async()=>p});
+ assert.equal(data.samples[0].depth_from_cm,null);assert.equal(data.samples[0].depth_to_cm,null);assert.equal(data.samples[0].results.length,3);assert.deepEqual(buffer,copy);assert.ok(data.warnings.every(w=>w.startsWith('Información: ')));assert.ok(data.warnings.some(w=>w.includes('Profundidad · LOTE 44 HAS')&&w.includes(marker)));assert.ok(data.warnings.some(w=>w.includes('no corresponden a análisis realizados')));assert.ok(!data.warnings.some(w=>/según indicación|ANALISIS NO|notas/i.test(w)));
+});
+test('missing depth is optional information; another field NO CONSIGNA is not attributed to depth',()=>{
+ const p=fixture.proposal();p.samples[0].depth_from_cm=null;p.samples[0].depth_to_cm=null;const data=adaptProposal(p,text.replace('Profundidad: 0-20 cm',''));
+ const depth=data.warnings.find(w=>w.includes('Profundidad'));assert.ok(depth.startsWith('Información: '));assert.ok(depth.includes('Podés dejar el campo vacío'));assert.ok(!depth.includes('NO CONSIGNA'));
+});
+test('unconfirmed proposed notes remain a review issue even when model calls them absent',()=>{
+ const p=fixture.proposal();p.notes='Inventadas';p.warnings=['No se pudo verificar las notas en el PDF.'];const data=adaptProposal(p,text);assert.equal(data.notes,null);assert.equal(data.warnings.filter(w=>w.startsWith('Notas del informe:')).length,1);assert.ok(data.warnings.find(w=>w.startsWith('Notas del informe:')).includes('Revisalo antes de guardar'));
+});
+test('multiple samples receive scoped depth messages; no global attribution or invented depth',()=>{
+ const p=fixture.proposal();p.samples[0].sample_name='NORTE';p.samples[0].depth_from_cm=null;p.samples[0].depth_to_cm=null;p.samples.push({...structuredClone(p.samples[0]),sample_name:'SUR'});
+ const doc=text.replace('Profundidad: 0-20 cm','').replace('Muestra: MUESTRA SINTETICA RASTROJO SOJA','Muestra: NORTE\nProfundidad: NO CONSIGNA')+'\nMuestra: SUR\nProfundidad: 10-30 cm';
+ const data=adaptProposal(p,doc),north=data.warnings.find(w=>w.includes('Profundidad · NORTE')),south=data.warnings.find(w=>w.includes('Profundidad · SUR'));assert.ok(north.startsWith('Información: '));assert.ok(north.includes('NO CONSIGNA'));assert.ok(!south.startsWith('Información: '));assert.ok(!south.includes('NO CONSIGNA'));assert.equal(data.samples[1].depth_from_cm,null);
+ p.samples[1].sample_name=null;assert.ok(adaptProposal(p,doc).warnings.some(w=>w.startsWith('Profundidad de la muestra 2:')));
+});
+test('explicit absence never accepts a proposed depth from another part of the document',()=>{
+ const data=adaptProposal(fixture.proposal(),text.replace('Profundidad: 0-20 cm','Profundidad: NO CONSIGNA')+'\nReferencia de otro ensayo: 0-20 cm');assert.equal(data.samples[0].depth_from_cm,null);assert.ok(data.warnings.some(w=>w.includes('Profundidad')&&!w.startsWith('Información: ')));assert.ok(data.warnings.some(w=>w.includes('NO CONSIGNA')));
+});
+test('provider ambiguity stays review, named samples remain identifiable and internal terms are not exposed',()=>{
+ const p=fixture.proposal();p.warnings=['Muestra 1: dos posibles fechas para sample_date según parser.','raw_value no verificable contra source text, result_status según adaptación.'];const data=adaptProposal(p,text);
+ assert.ok(data.warnings.some(w=>w.startsWith('Fechas · MUESTRA SINTETICA RASTROJO SOJA:')));assert.ok(data.warnings.some(w=>w.startsWith('Resultados:')));assert.ok(data.warnings.every(w=>!/sample_date|raw_value|result_status|parser|source text|adaptación/.test(w)));
 });
