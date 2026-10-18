@@ -24,6 +24,24 @@ test('missing names show email and suggestion without auto-opening; cancel write
 test('load and save errors keep modal open with retry; cancel while loading aborts UI updates',async t=>{
  const page=await open(1024,'loadError');t.after(()=>page.close());let modal=await edit(page);await modal.getByRole('button',{name:'Reintentar',exact:true}).waitFor();assert.equal(await modal.getByRole('button',{name:'Guardar cambios',exact:true}).isDisabled(),true);await page.evaluate(()=>{window.__profileFailGet=false;});await modal.getByRole('button',{name:'Reintentar',exact:true}).click();await modal.getByRole('textbox',{name:'Nombre y apellido',exact:true}).fill('Nuevo nombre');await page.evaluate(()=>{window.__profileFailSave=true;});await modal.getByRole('button',{name:'Guardar cambios',exact:true}).click();await modal.getByRole('alert').waitFor();assert.equal(await modal.isVisible(),true);assert.equal(await page.locator('.gs-user-menu-trigger .ant-avatar').innerText(),'RA');assert.equal(await modal.getByRole('textbox',{name:'Nombre y apellido',exact:true}).inputValue(),'Nuevo nombre');await modal.getByRole('button',{name:'Cancelar',exact:true}).click();await page.evaluate(()=>{window.__profileDelay=1500;});modal=await edit(page);await modal.getByRole('status').waitFor();await modal.getByRole('button',{name:'Cancelar',exact:true}).click();await modal.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('user')).full_name),'Rocío Airasca');
 });
-test('shared responsible options show full names, email fallback and retain user ID as selected value',async t=>{
- const page=await open();t.after(()=>page.close());const select=page.getByRole('combobox',{name:'Responsable de prueba'});await select.focus();await select.press('ArrowDown');await page.getByText('juan@example.test',{exact:true}).waitFor();await page.getByText('Juan Pérez',{exact:true}).click();assert.equal(await page.evaluate(()=>window.__responsible),'named');assert.equal(await select.evaluate(el=>el.closest('.ant-select').querySelector('.ant-select-selection-item').textContent),'Juan Pérez');await select.focus();await select.press('ArrowDown');await page.getByText('sin-nombre@example.test',{exact:true}).click();assert.equal(await page.evaluate(()=>window.__responsible),'unnamed');
+test('person selector shows only name or email fallback, preserves ID and fits 1440/1024/390',async t=>{
+ for(const width of [1440,1024,390]){
+  const page=await open(width);t.after(()=>page.close());
+  const select=page.getByRole('combobox',{name:'Responsable de prueba'});
+  await select.focus();await select.press('ArrowDown');
+  const dropdown=page.locator('.ant-select-dropdown:visible');
+  await dropdown.getByText('Juan Pérez',{exact:true}).waitFor();
+  assert.deepEqual(await dropdown.locator('.ant-select-item-option-content').allTextContents(),['Juan Pérez','sin-nombre@example.test']);
+  assert.equal(await dropdown.getByText('juan@example.test',{exact:true}).count(),0);
+  assert.equal(await dropdown.locator('.gs-ui-helper').count(),0);
+  assert.ok(await dropdown.evaluate(el=>el.scrollWidth<=el.clientWidth));
+  await dropdown.getByText('Juan Pérez',{exact:true}).click();
+  assert.equal(await page.evaluate(()=>window.__responsible),'named');
+  assert.equal(await select.evaluate(el=>el.closest('.ant-select').querySelector('.ant-select-selection-item').textContent),'Juan Pérez');
+  await select.focus();await select.press('ArrowDown');
+  await dropdown.getByText('sin-nombre@example.test',{exact:true}).click();
+  assert.equal(await page.evaluate(()=>window.__responsible),'unnamed');
+  assert.equal(await select.evaluate(el=>el.closest('.ant-select').querySelector('.ant-select-selection-item').textContent),'sin-nombre@example.test');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ }
 });

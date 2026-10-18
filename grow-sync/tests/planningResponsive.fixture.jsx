@@ -39,9 +39,10 @@ api.defaults.adapter = async config => {
   let data = [];
   if (config.url.startsWith('/planning/planning-')) data = rows.find(row => '/planning/' + row.id === config.url);
   if (config.url === '/planning') data = { data: rows };
-  if (config.url === '/users/planning-responsibles') data = [{ id: 'user', full_name: 'Responsable de prueba' },
-    { id: 'colleague', full_name: 'Compañero habilitado' }, { id: 'supervisor', full_name: 'Supervisor habilitado' },
-    { id: 'admin', full_name: 'Admin habilitado' }];
+  if (config.url === '/users/planning-responsibles') data = [{ id: 'user', full_name: 'Responsable de prueba', email: 'responsable@example.test' },
+    { id: 'colleague', full_name: 'Compañero habilitado', email: 'colleague@example.test' }, { id: 'supervisor', full_name: 'Supervisor habilitado', email: 'supervisor@example.test' },
+    { id: 'admin', full_name: 'Admin habilitado', email: 'admin@example.test' },
+    { id: 'unnamed', full_name: null, email: 'sin-nombre@example.test' }];
   if (config.url === '/crops') data = [{ id: 'crop', name: 'Cultivo de prueba' }];
   if (config.url === '/lots') data = [{ id: 'lot', name: 'Lote de prueba', area_ha: 25 }];
   return { data, status: 200, statusText: 'OK', headers: {}, config };

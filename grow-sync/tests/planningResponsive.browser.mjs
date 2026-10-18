@@ -92,6 +92,12 @@ for (const [width, height] of [[1600,900],[1366,768],[1280,720],[1106,700],[1024
         await popover.waitFor();
         const box = await popover.boundingBox();
         assert.ok(box.x >= 0 && box.x + box.width <= width);
+        await popover.locator('.ant-select').filter({hasText:'Todos los responsables'}).click();
+        const responsibleDropdown=page.locator('.ant-select-dropdown:visible');
+        await responsibleDropdown.getByText('Responsable de prueba',{exact:true}).waitFor();
+        assert.deepEqual((await responsibleDropdown.locator('.ant-select-item-option-content').allTextContents()).sort(),['Responsable de prueba','Compañero habilitado','Supervisor habilitado','Admin habilitado','sin-nombre@example.test'].sort());
+        assert.equal(await responsibleDropdown.locator('.gs-ui-helper').count(),0);
+        await page.keyboard.press('Escape');
         await assertFits(page);
         await page.getByRole('heading', { name: 'Planificaciones', exact: true }).click();
         await page.getByText('Calendario', { exact: true }).click();
@@ -155,15 +161,17 @@ test('non-Admin with planning permissions can select self and every returned res
   try {
     await assertLayout(page);
     let sent = 0;
-    for (const [id, name] of [['colleague', 'Compañero habilitado'], ['supervisor', 'Supervisor habilitado'], ['admin', 'Admin habilitado'], ['user', 'Responsable de prueba']]) {
+    for (const [id, name] of [['colleague', 'Compañero habilitado'], ['supervisor', 'Supervisor habilitado'], ['admin', 'Admin habilitado'], ['user', 'Responsable de prueba'], ['unnamed', 'sin-nombre@example.test']]) {
       await page.locator('.gs-planning button[aria-label^="Editar"]').first().click();
       const drawer = page.locator('.ant-drawer-open');
       await drawer.waitFor();
       await drawer.locator('.ant-select-selector').filter({ has: page.locator('#responsible_user') }).click();
       const options = page.locator('.ant-select-dropdown:visible .ant-select-item-option-content');
       await options.first().waitFor();
-      assert.deepEqual((await options.allTextContents()).sort(), ['Responsable de prueba', 'Compañero habilitado', 'Supervisor habilitado', 'Admin habilitado'].sort());
+      assert.deepEqual((await options.allTextContents()).sort(), ['Responsable de prueba', 'Compañero habilitado', 'Supervisor habilitado', 'Admin habilitado', 'sin-nombre@example.test'].sort());
+      assert.equal(await page.locator('.ant-select-dropdown:visible .gs-ui-helper').count(),0);
       await page.locator('.ant-select-dropdown:visible').getByText(name, { exact: true }).click();
+      assert.equal(await drawer.locator('#responsible_user').evaluate(el=>el.closest('.ant-select').querySelector('.ant-select-selection-item').textContent),name);
       await drawer.getByRole('button', { name: 'Actualizar', exact: true }).click();
       sent += 1;
       await page.waitForFunction(count => window.__planningPatches.length === count, sent);

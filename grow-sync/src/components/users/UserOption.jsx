@@ -1,5 +1,5 @@
-import React from 'react';
-// The option label stays a plain display name after selection. Email only disambiguates the dropdown.
+// userOptions already resolves full_name, then email as fallback.
+// Use the same plain label in the dropdown and the selected value.
 export function renderUserOption(option){
- return <div><div>{option.label}</div>{option.data.email && option.data.email!==option.label && <div className="gs-ui-helper">{option.data.email}</div>}</div>;
+ return option.label;
 }
