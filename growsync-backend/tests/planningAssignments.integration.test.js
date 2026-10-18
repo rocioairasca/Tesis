@@ -42,8 +42,8 @@ async function fixture(){
   await put('products',{id:product,company_id:company,name:'Producto sintético',unit:'L',total_quantity:0,available_quantity:0});
   const body={title:'Fumigación lote T4',activity_type:'fumigacion',field_context:'stubble',crop_id:crop,campaign_id:campaign,
     start_at:'2026-10-21T00:00:00.000Z',end_at:'2026-10-21T00:00:00.000Z',responsible_user:responsible,status:'pendiente',lot_selections:[{lot_id:lot,effective_area_ha:10}]};
-  const call=async(method,body={},id,actorId=actor)=>{
-    let data,code=200;await controller[method]({body,params:{id},query:{},user:{id:actorId,company_id:company,role:3}},
+  const call=async(method,body={},id,actorId=actor,query={})=>{
+    let data,code=200;await controller[method]({body,params:{id},query,user:{id:actorId,company_id:company,role:3}},
       {status(value){code=value;return this;},json(value){data=value;return this;}},error=>{throw error;});return {code,data};
   };
   return {company,actor,responsible,third,lot,lot2,crop,campaign,product,body,call,create:async(patch={})=>(await call('create',{...body,...patch})).data.id,
@@ -214,6 +214,15 @@ test('HTTP public routes preserve view/edit/create/complete permissions and reje
   assert.equal((await send('/'+id,'PATCH',{title:'Denied'})).status,403);
   assert.equal((await send('/'+id+'/complete-work','POST',{effective_date:'2026-10-21'})).status,403);
   permissions=['planning.view'];assert.equal((await fetch(url+'/'+id)).status,200);assert.equal((await send('','POST',x.body)).status,403);
+  for(const mine of ['true','1']){
+    const response=await fetch(url+'?mine='+mine+'&user_id='+x.responsible);
+    assert.equal(response.status,200);assert.equal((await response.json()).total,0);
+  }
+  const conflict=await fetch(url+'?mine=true&responsible='+x.responsible);
+  assert.equal(conflict.status,400);assert.match((await conflict.json()).message,/No se puede combinar/);
+  for(const mine of ['false','0'])assert.equal((await (await fetch(url+'?mine='+mine)).json()).total,1);
+  assert.equal((await fetch(url+'?mine=invalid')).status,400);
+  permissions=[];assert.equal((await fetch(url+'?mine=true')).status,403);permissions=['planning.view'];
   await x.call('remove',{},id);assert.equal((await fetch(url+'/'+id)).status,403);
   permissions=['planning.view','planning.view_disabled'];assert.equal((await fetch(url+'/'+id)).status,200);
 });
@@ -224,4 +233,54 @@ test('completeWork already_applied retry does not send another completion notice
   const body={effective_date:'2026-10-21',actual_products:[{planning_product_id:pp,actual_amount:0,unit:'L'}]};
   await x.call('completeWork',body,id,x.responsible);assert.equal(events.length,1);events=[];
   const retry=await x.call('completeWork',body,id,x.responsible);assert.equal(retry.data.already_applied,true);assert.equal(events.length,0);
+});
+
+test('mine uses authenticated identity and company; ignores injected user_id and rejects missing identity',async()=>{
+  const x=await fixture(),y=await fixture(),mine=await x.create(),other=await x.create({responsible_user:x.third,lot_selections:[{lot_id:x.lot2,effective_area_ha:10}]}),foreign=await y.create();
+  // Even inconsistent legacy data that names the authenticated user cannot escape company scope.
+  await db.query('UPDATE planning SET responsible_user=$1 WHERE id=$2',[x.responsible,foreign]);
+  const result=await x.call('list',{},null,x.responsible,{mine:true,user_id:x.third,company_id:y.company});
+  assert.equal(result.code,200);assert.deepEqual(result.data.data.map(r=>r.id),[mine]);assert.equal(result.data.total,1);
+  assert.ok(!result.data.data.some(r=>[other,foreign].includes(r.id)));assert.equal(result.data.data[0].company_id,x.company);
+  assert.equal((await x.call('list',{},null,null,{mine:true})).code,401);
+});
+test('mine rejects responsible conflict and parses explicit true/false flags safely',async()=>{
+  const x=await fixture();
+  for(const mine of [true,'true','1']){
+    const response=await x.call('list',{},null,x.responsible,{mine,responsible:x.third});
+    assert.equal(response.code,400);assert.match(response.data.message,/No se puede combinar 'Mis tareas'/);
+    assert.equal(schema.listQuery.parse({query:{mine}}).query.mine,true);
+  }
+  for(const mine of [false,'false','0'])assert.equal(schema.listQuery.parse({query:{mine}}).query.mine,false);
+  assert.equal(schema.listQuery.safeParse({query:{mine:'someone'}}).success,false);
+});
+test('mine excludes completed, cancelled and disabled even with include flags; normal history remains available',async()=>{
+  const x=await fixture(),open=await x.create();
+  let day=22; for(const status of ['completado','cancelado']){const date='2026-10-'+day++;const id=await x.create({start_at:date+'T00:00:00Z',end_at:date+'T00:00:00Z'});await db.query('UPDATE planning SET status=$1 WHERE id=$2',[status,id]);}
+  const disabled=await x.create({start_at:'2026-10-24T00:00:00Z',end_at:'2026-10-24T00:00:00Z'});await db.query('UPDATE planning SET enabled=false WHERE id=$1',[disabled]);
+  const result=await x.call('list',{},null,x.responsible,{mine:true,includeDisabled:true,includeCanceled:true});
+  assert.deepEqual(result.data.data.map(r=>r.id),[open]);
+  assert.equal((await x.call('list',{},null,x.responsible,{responsible:x.responsible,status:'completado'})).data.total,1);
+});
+test('mine preserves effective delay, bounded horizon, ascending priority and stable pagination/count',async()=>{
+  const x=await fixture(),ids=[];
+  for(const date of ['2026-10-21','2026-10-22','2026-10-23','2026-10-24'])ids.push(await x.create({start_at:date+'T00:00:00Z',end_at:date+'T00:00:00Z'}));
+  // Synthetic dates relative to DB time keep this test independent of the runner date.
+  await db.query("UPDATE planning SET start_at=now()-interval '300 days',end_at=now()-interval '299 days' WHERE id=$1",[ids[0]]);
+  for(let i=1;i<4;i++)await db.query("UPDATE planning SET start_at=now()+($1||' days')::interval,end_at=now()+($1||' days')::interval WHERE id=$2",[String(i*3),ids[i]]);
+  const until=(await db.query("SELECT to_char(now()+interval '7 days','YYYY-MM-DD') AS horizon_date")).rows[0].horizon_date+'T23:59:59.999Z';
+  const query={mine:true,to:until,pageSize:1};
+  const all=[];
+  for(let page=1;page<=3;page++){
+    const {data}=await x.call('list',{},null,x.responsible,{...query,page});assert.equal(data.total,3);assert.equal(data.page,page);assert.equal(data.pageSize,1);all.push(data.data[0]);
+  }
+  assert.deepEqual(all.map(r=>r.id),ids.slice(0,3));assert.equal(all[0].status_effective,'en_demora');assert.equal(all[1].status_effective,'pendiente');
+  assert.equal((await x.call('list',{},null,x.responsible,{...query,status:'en_demora'})).data.total,1);
+});
+test('mine intersects campaign, crop, lot, type, search and dates without widening tenancy',async()=>{
+  const x=await fixture(),y=await fixture(),id=await x.create();await x.create({title:'Otra tarea',activity_type:'riego',lot_selections:[{lot_id:x.lot2,effective_area_ha:10}]});
+  const query={mine:true,campaignId:x.campaign,cropId:x.crop,lotId:x.lot,type:'fumigacion',search:'T4',from:x.body.start_at,to:'2026-10-22T00:00:00Z'};
+  assert.deepEqual((await x.call('list',{},null,x.responsible,query)).data.data.map(r=>r.id),[id]);
+  assert.equal((await x.call('list',{},null,x.responsible,{...query,search:'No existe'})).data.total,0);
+  await assert.rejects(x.call('list',{},null,x.responsible,{...query,lotId:y.lot}),e=>e.status===400 || e.status===404);
 });

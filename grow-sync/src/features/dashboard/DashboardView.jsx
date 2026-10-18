@@ -1,3 +1,4 @@
+import { MY_TASKS_URL, myTaskUrl, TASK_GROUP_LABELS, taskAssignerName } from '../planning/myTasks.mjs';
 import {userDisplayName} from '../../utils/userDisplay.mjs';
 import { campaignFilterOptions } from '../../utils/campaigns.mjs';
 import React from 'react';
@@ -43,9 +44,33 @@ function Attention({ access, delayed, inventory }) {
     {access.inventory && metrics.length > 0 && <p className="gs-dashboard-note">Un producto puede tener más de una alerta. Los vencimientos consideran productos con stock.</p>}
   </Section>;
 }
+function MyTasks({ request }) {
+  const { rows = [], total = 0 } = request.data || {};
+  return <Section id="dashboard-my-tasks" title="Mis tareas" description="Trabajos que tenés asignados." action={<EntityLink to={MY_TASKS_URL}>Ver todas mis tareas</EntityLink>}>
+    <RequestState request={request} label="tus tareas">
+      {!rows.length ? <EmptyState title="No tenés tareas para hoy ni para los próximos 7 días." description="Podés consultar otras fechas en Ver todas mis tareas." /> : <>
+        <p className="gs-dashboard-note gs-dashboard-my-tasks-count">{total} {total === 1 ? 'tarea abierta' : 'tareas abiertas'} · En demora, hoy y próximos 7 días</p>
+        <ul className="gs-dashboard-my-tasks">{rows.map(row => {
+          const state = row.status_effective || row.status, lots = summarizePlanningLots(row.lots || []);
+          const ActivityIcon = activityIcons[row.activity_type] || AppIcons.more;
+          const title = row.title?.trim() || formatActivity(row.activity_type), assigner = taskAssignerName(row);
+          return <li key={row.id}>
+            <div className="gs-dashboard-my-task-main">
+              <div className="gs-dashboard-tags"><CategoryTag icon={<ActivityIcon size={18} />}>{formatActivity(row.activity_type)}</CategoryTag><StatusBadge tone={state === 'en_demora' ? 'warning' : state === 'en_progreso' ? 'info' : 'neutral'}>{statusLabel(state)}</StatusBadge></div>
+              <strong>{title}</strong><span title={lots.tooltip}>{lots.text === '—' ? 'Sin lote asignado' : lots.text}{row.crop_name ? ' · ' + row.crop_name : ''}</span>
+              {assigner && <span className="gs-dashboard-note">Asignado por {assigner}</span>}
+            </div>
+            <div className="gs-dashboard-my-task-action"><span>{TASK_GROUP_LABELS[row.taskGroup]}</span><span>{formatPlanningPeriod(row)}</span><EntityLink to={myTaskUrl(row.id)} ariaLabel={`Ver tarea: ${title} · ${lots.text}`}>Ver tarea</EntityLink></div>
+          </li>;
+        })}</ul>
+        {total > rows.length && <p className="gs-dashboard-note">Se muestran {rows.length} de {total} tareas. Consultá el listado completo en Ver todas mis tareas.</p>}
+      </>}
+    </RequestState>
+  </Section>;
+}
 function Work({ request }) {
   const rows = request.data || [];
-  return <Section id="dashboard-work" title="Trabajo de hoy" description="Planificaciones abiertas de hoy y los próximos 7 días." action={<EntityLink to="/planificaciones">Ver planificaciones</EntityLink>}>
+  return <Section id="dashboard-work" title="Trabajo del equipo" description="Planificaciones abiertas de hoy y los próximos 7 días." action={<EntityLink to="/planificaciones">Ver planificaciones</EntityLink>}>
     <RequestState request={request} label="planificaciones">
       {!rows.length ? <EmptyState title="No hay trabajo programado en este período" description="Consultá Planificaciones para ver otras fechas y estados." /> : <>
         <ul className="gs-dashboard-work-list">{rows.slice(0, 6).map(row => {
@@ -106,13 +131,14 @@ function Production({ request, options, filters, onFiltersChange, canViewHarvest
     </RequestState>
   </Section>;
 }
-export default function DashboardView({ user, today, access, delayed, work, inventory, weather, field, fieldMap = { status: 'hidden' }, production, options, filters, onFiltersChange }) {
+export default function DashboardView({ user, today, access, delayed, myTasks = { status: 'loading' }, work, inventory, weather, field, fieldMap = { status: 'hidden' }, production, options, filters, onFiltersChange }) {
   const name = userDisplayName(user).split(/\s+/)[0];
   const dateKey = calendarDateKey(today);
   const dateLabel = dateKey ? new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${dateKey}T12:00:00Z`)) : '';
   return <div className="gs-dashboard"><PageHeader title={name ? `¡Hola, ${name}!` : '¡Hola!'} description={dateLabel} />
     {(access.planning || access.inventory) && <Attention access={access} delayed={delayed} inventory={inventory} />}
-    {access.planning && <Work request={work} />}
+    {access.planning && <MyTasks request={myTasks} />}
+    {access.teamWork && <Work request={work} />}
     <Weather request={weather} canViewRain={access.rain} />
     {access.field && <Section id="dashboard-field" title="Resumen del campo" action={<EntityLink to="/lotes">Ver lotes</EntityLink>}>
       <RequestState request={field} label="resumen del campo">{field.data?.lots === 0 ? <EmptyState title="Todavía no hay lotes activos" /> : <div className="gs-dashboard-field-kpis"><Metric compact icon={<EnvironmentOutlined size={24} />} label="Lotes activos" value={formatNumber(field.data?.lots, 0)} />{fieldMap.status === 'success' && <><Metric compact icon={<EnvironmentOutlined size={22} />} label="Superficie total" value={fieldMap.data.area == null ? '—' : `${formatNumber(fieldMap.data.area)} ha`} helper={fieldMap.data.area == null ? 'Superficie incompleta' : undefined} /><Metric compact icon={<DivisionsIcon size={22} />} label="Divisiones vigentes" value={formatNumber(fieldMap.data.divisions, 0)} /></>}</div>}</RequestState>

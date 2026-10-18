@@ -1,3 +1,4 @@
+import { myTasksPreview } from '../src/features/planning/myTasks.mjs';
 import { fieldOverview } from '../src/features/dashboard/fieldOverview.mjs';
 import { fixtureLots as fieldLots } from './lotsOverview.fixtures.mjs';
 // Development fixture. No session/storage changes, no geolocation or API calls.
@@ -39,6 +40,7 @@ function fixture(mode) {
     inventory: () => result(['empty', 'single'].includes(mode) ? {} : { low: 2, empty: 1, expired: 1, expiring: 0 }),
     fieldMap: () => result({ ...fieldOverview(mode === 'empty' ? [] : fieldLots), tiles:false }),
     field: () => result({ lots: mode === 'empty' ? 0 : 3 }),
+    myTasks: ({ today }) => result(myTasksPreview(['empty', 'single'].includes(mode) ? [] : planning, today)),
     work: ({ today }) => result(['empty', 'single'].includes(mode) ? [] : workRows(planning, today)),
     weather: () => result({ reading: mode === 'empty' ? null : { temperature: 21.4, humidity: 64, wind_speed: 12.8, wind_direction: '45', weather_code: 2, date: '2026-09-13T12:00:00Z', rainfall: 0 }, fallback: mode === 'fallback' }, 'weather'),
     filters: () => result({ campaigns: ['2025/26', '2024/25', '2023/24'], crops: ['Soja', 'Maíz'] }),

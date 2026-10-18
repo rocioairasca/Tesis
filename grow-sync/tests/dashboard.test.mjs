@@ -85,7 +85,7 @@ test('Dashboard: adaptadores existentes, clima simulado, permisos y estados rend
     const aborted = new AbortController(); aborted.abort(); const before = calls.length;
     await assert.rejects(source.weather({ signal: aborted.signal }), { name: 'AbortError' }); assert.equal(calls.length, before);
     const { dashboardAccess } = await server.ssrLoadModule('/src/features/dashboard/Dashboard.jsx');
-    assert.deepEqual(dashboardAccess({ role: 0, custom_permissions: ['inventory.view'] }), { planning: false, inventory: true, field: false, production: false, harvest: false, rain: false });
+    assert.deepEqual(dashboardAccess({ role: 0, custom_permissions: ['inventory.view'] }), { planning: false, teamWork: false, inventory: true, field: false, production: false, harvest: false, rain: false });
     assert.equal(dashboardAccess({ role: 1, custom_permissions: [] }).production, true); // Existing stats role rule.
     const { getWeatherPresentation } = await server.ssrLoadModule('/src/features/dashboard/weatherPresentation.jsx');
     assert.equal(getWeatherPresentation({ weather_code: 0, temperature: null }).label, 'Despejado');
@@ -93,13 +93,13 @@ test('Dashboard: adaptadores existentes, clima simulado, permisos y estados rend
     const { default: View } = await server.ssrLoadModule('/src/features/dashboard/DashboardView.jsx');
     const { MemoryRouter } = await server.ssrLoadModule('/node_modules/react-router-dom/dist/index.mjs');
     const ready = data => ({ status: 'success', data });
-    const props = { user: { name: 'Ana' }, today: '2026-09-13', access: dashboardAccess({ role: 2 }), delayed: ready(0), inventory: ready({}), work: ready([]), field: ready({ lots: 0 }), options: ready({ campaigns: [], crops: [] }), production: ready({ summary: { total_records: 0 } }), weather: ready(fallback), filters: { unit: 'kg' }, onFiltersChange: () => {} };
+    const props = { user: { name: 'Ana' }, today: '2026-09-13', access: dashboardAccess({ role: 2 }), delayed: ready(0), inventory: ready({}), work: ready([]), myTasks: ready({rows:[],total:0}), field: ready({ lots: 0 }), options: ready({ campaigns: [], crops: [] }), production: ready({ summary: { total_records: 0 } }), weather: ready(fallback), filters: { unit: 'kg' }, onFiltersChange: () => {} };
     const render = changes => renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(View, { ...props, ...changes })));
     assert.ok(render({ user: { full_name: 'Rocío Airasca' } }).includes('¡Hola, Rocío!'));
     const empty = render({}); assert.ok(empty.includes('No hay cosechas para esta selección')); assert.ok(empty.includes('Último dato disponible · Desactualizado')); assert.ok(!empty.includes('ubicación del registro no informada')); assert.ok(!empty.includes('0 mm')); assert.ok(!empty.includes('Lluvia leve'));
     for (const route of ['/inventario', '/planificaciones', '/lotes', '/harvest', '/registro-lluvias']) { if (route !== '/inventario') assert.ok(empty.includes(`href="${route}"`)); }
     const errored = render({ field: { status: 'error', error: new Error('Network Error') }, production: { status: 'loading' } }); assert.ok(!errored.includes('Todavía no hay lotes activos')); assert.ok(errored.includes('Cargando producción'));
     const noArea = render({ production: ready({ summary: { total_records: 1, total_production_kg: 100, total_area_ha: 0, avg_yield_kg_ha: 0 }, byCrop: [], byCampaign: [] }) }); assert.ok(noArea.includes('Requiere superficie cosechada')); assert.ok(!noArea.includes('>0 kg/ha<'));
-    const restricted = render({ access: dashboardAccess({ role: 0, custom_permissions: ['inventory.view'] }) }); assert.ok(!restricted.includes('Trabajo de hoy')); assert.ok(!restricted.includes('Producción y cosecha')); assert.ok(!restricted.includes('href="/lotes"'));
+    const restricted = render({ access: dashboardAccess({ role: 0, custom_permissions: ['inventory.view'] }) }); assert.ok(!restricted.includes('Trabajo del equipo')); assert.ok(!restricted.includes('Mis tareas')); assert.ok(!restricted.includes('Producción y cosecha')); assert.ok(!restricted.includes('href="/lotes"'));
   } finally { await server.close(); }
 });

@@ -1,3 +1,5 @@
+import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters } from './planningFilters.mjs';
+import { readAllPages } from '../dashboard/dashboardModel.mjs';
 import {renderUserOption} from '../../components/users/UserOption';
 import {userDisplayName,userOptions} from '../../utils/userDisplay.mjs';
 import PlanningRecipeFields from './components/PlanningRecipeFields';
@@ -245,16 +247,12 @@ const Planning = () => {
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'calendar'
   const [calendarSelection, setCalendarSelection] = useState(null); // { type: 'day' | 'month', date: dayjs() }
 
-  // filtros
-  const [filters, setFilters] = useState({
-    status: null,
-    responsible: null,
-    cropId: null,
-    type: null,
-    campaignId: null,
-    lotSelectionKey: null,
-    dateRange: null,
-  });
+  // URL is the single source of truth, including browser back/forward.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => readPlanningFilters(searchParams), [searchParams]);
+  useEffect(() => {
+    if (filters.mine && searchParams.has('responsible')) setSearchParams(previous => updatePlanningFilters(previous, 'mine', true), { replace: true });
+  }, [filters.mine, searchParams, setSearchParams]);
 
   // catálogos para nombres legibles
   const [users, setUsers] = useState([]);
@@ -331,7 +329,6 @@ const Planning = () => {
   const isMobile = useIsMobile();
   const { containerRef, useCompactPlanningList } = usePlanningLayout();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const detailId = searchParams.get("planningId");
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
@@ -995,10 +992,15 @@ const Planning = () => {
 
 
   // ---------- fetchers ----------
+  const listRequest = useRef(0);
   const fetchPlanning = useCallback(async () => {
+    const request = ++listRequest.current;
+    setList([]);
     setLoading(true);
     try {
       const params = {};
+      if (filters.mine) params.mine = true;
+      if (filters.search) params.search = filters.search;
       if (filters.status) params.status = filters.status;
       if (filters.responsible) params.responsible = filters.responsible;
       if (filters.cropId) params.cropId = filters.cropId;
@@ -1014,18 +1016,23 @@ const Planning = () => {
         params.to = filters.dateRange[1].format("YYYY-MM-DD[T]23:59:59.999[Z]");
       }
 
-      const { data } = await api.get("/planning", { params }); // ?includeDisabled=0&includeCanceled=0 por default
+      const data = filters.mine
+        ? await readAllPages(async pageParams => (await api.get('/planning', { params: pageParams })).data, params)
+        : (await api.get('/planning', { params })).data;
       const items = Array.isArray(data) ? data : data?.items || data?.data || [];
-      setList(items);
+      if (request === listRequest.current) setList(items);
     } catch (e) {
+      if (request !== listRequest.current) return;
       console.error("→ planning list error:", e);
       notification.error({ message: "Error al cargar planificaciones" });
     } finally {
-      setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
   }, [filters]);
 
   const fetchUsers = useCallback(async () => {
+    // The assignment catalog requires planning.create/edit; read-only users use row metadata.
+    if (!canCreate && !canEdit) { setUsers([]); return; }
     try {
       const { data } = await api.get("/users/planning-responsibles");
       setUsers(Array.isArray(data) ? data : data?.items || data?.data || []);
@@ -1033,7 +1040,7 @@ const Planning = () => {
       setUsers([]);
       notification.error({ message: "No se pudieron cargar los responsables." });
     }
-  }, []);
+  }, [canCreate, canEdit]);
   const fetchLots = useCallback(async () => {
     try {
       const { data } = await api.get("/lots", { params: { includeActiveLayout: true } });
@@ -1074,13 +1081,17 @@ const Planning = () => {
 
   useEffect(() => {
     fetchPlanning();
+    return () => { listRequest.current++; };
+  }, [fetchPlanning]);
+
+  useEffect(() => {
     fetchUsers();
     fetchLots();
     fetchCampaigns();
     fetchCrops();
     fetchProducts();
     fetchVehicles();
-  }, [fetchPlanning, fetchUsers, fetchLots, fetchCampaigns, fetchCrops, fetchProducts, fetchVehicles]);
+  }, [fetchUsers, fetchLots, fetchCampaigns, fetchCrops, fetchProducts, fetchVehicles]);
 
   // ---------- drawer handlers ----------
   const openDrawer = (row = null) => {
@@ -1677,21 +1688,8 @@ const Planning = () => {
     );
   };
 
-  const handleFilterChange = (key, val) => {
-    setFilters(prev => ({ ...prev, [key]: val }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      status: null,
-      responsible: null,
-      cropId: null,
-      type: null,
-      campaignId: null,
-      lotSelectionKey: null,
-      dateRange: null,
-    });
-  };
+  const handleFilterChange = (key, val) => setSearchParams(previous => updatePlanningFilters(previous, key, val));
+  const clearFilters = () => setSearchParams(previous => clearPlanningFilters(previous));
 
   const disabledMenu = [
     (canCreate || canEdit) && { key: "campaigns", label: <span onClick={() => setIsCampaignModalOpen(true)}>Campañas</span> },
@@ -1773,6 +1771,7 @@ const Planning = () => {
       {/* Filtros adaptables al espacio disponible */}
       {viewMode === "table" && (
         <div className="gs-planning-filters">
+          {canView && <Button icon={<UserOutlined />} type={filters.mine ? 'primary' : 'default'} aria-pressed={filters.mine} onClick={() => handleFilterChange('mine', !filters.mine)}>Mis tareas</Button>}
           <div className="gs-planning-filter" style={{ '--planning-filter-width': '180px' }}>
             <Select
               style={{ width: "100%" }}

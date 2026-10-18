@@ -28,6 +28,7 @@ export function useDashboardRequest(loader) {
 export function dashboardAccess(user) {
   return {
     planning: hasPermission(user, PERMISSIONS.PLANNING_VIEW),
+    teamWork: hasPermission(user, PERMISSIONS.PLANNING_VIEW) && (hasPermission(user, PERMISSIONS.PLANNING_CREATE) || hasPermission(user, PERMISSIONS.PLANNING_EDIT)),
     inventory: hasPermission(user, PERMISSIONS.INVENTORY_VIEW),
     field: hasPermission(user, PERMISSIONS.LOTS_VIEW),
     production: user != null && Number(user.role) >= 1,
@@ -43,16 +44,18 @@ export default function Dashboard({ source = dashboardSource, user: providedUser
   const scope = `${user?.id || ''}:${user?.company_id || ''}`;
   const loaders = useMemo(() => ({
     delayed: access.planning ? signal => source.delayed({ signal }) : null,
-    work: access.planning ? signal => source.work({ signal, today }) : null,
+    myTasks: access.planning ? signal => source.myTasks({ signal, today }) : null,
+    work: access.teamWork ? signal => source.work({ signal, today }) : null,
     inventory: access.inventory ? signal => source.inventory({ signal, today }) : null,
     fieldMap: access.field && source.fieldMap ? signal => source.fieldMap({ signal }) : null,
     field: access.field ? signal => source.field({ signal }) : null,
     options: access.production ? signal => source.filters({ signal }) : null,
-  }), [source, scope, today, access.planning, access.inventory, access.field, access.production]);
+  }), [source, scope, today, access.planning, access.teamWork, access.inventory, access.field, access.production]);
   // Weather does not depend on permissions, planning dates or production filters.
   const weatherLoader = useMemo(() => (signal, onProgress) => source.weather({ signal, onProgress }), [source, scope]);
   const productionLoader = useMemo(() => access.production ? signal => source.production({ signal, filters }) : null, [source, scope, access.production, filters]);
   const delayed = useDashboardRequest(loaders.delayed);
+  const myTasks = useDashboardRequest(loaders.myTasks);
   const work = useDashboardRequest(loaders.work);
   const inventory = useDashboardRequest(loaders.inventory);
   const field = useDashboardRequest(loaders.field);
@@ -60,5 +63,5 @@ export default function Dashboard({ source = dashboardSource, user: providedUser
   const options = useDashboardRequest(loaders.options);
   const weather = useDashboardRequest(weatherLoader);
   const production = useDashboardRequest(productionLoader);
-  return <DashboardView user={user} today={today} access={access} delayed={delayed} work={work} inventory={inventory} field={field} fieldMap={fieldMap} options={options} weather={weather} production={production} filters={filters} onFiltersChange={setFilters} />;
+  return <DashboardView user={user} today={today} access={access} delayed={delayed} myTasks={myTasks} work={work} inventory={inventory} field={field} fieldMap={fieldMap} options={options} weather={weather} production={production} filters={filters} onFiltersChange={setFilters} />;
 }

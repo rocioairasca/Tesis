@@ -1,3 +1,4 @@
+import { MY_TASKS_LIMIT, myTasksPreview } from '../planning/myTasks.mjs';
 import { readLots } from '../lots/lotsOverviewSource';
 import { fieldOverview } from './fieldOverview.mjs';
 import api from '../../services/apiClient';
@@ -20,6 +21,14 @@ export function createDashboardSource(client = api, harvest = { getHarvestFilter
       const total = numberValue(result?.total);
       if (total == null) throw new Error('Planificaciones incompletas');
       return total;
+    },
+    async myTasks({ signal, today }) {
+      const { to, end } = workWindow(today);
+      // No lower date bound: overdue work remains visible regardless of age.
+      // Backend sorts before LIMIT and counts the full horizon, without fetching it all.
+      const result = await get('/planning', { mine: true, to, page: 1, pageSize: MY_TASKS_LIMIT }, signal);
+      if (!Array.isArray(result?.data) || numberValue(result.total) == null) throw new Error('Tareas incompletas');
+      return myTasksPreview(result.data, today, end, Number(result.total));
     },
     async work({ signal, today }) {
       const { from, to } = workWindow(today);

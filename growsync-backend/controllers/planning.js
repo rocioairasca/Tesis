@@ -274,7 +274,7 @@ const {normalizeLotSelections,resolveLotSelections,selectionKey,haveSameSelectio
 exports.list = async (req, res, next) => {
   try {
     const {
-      from, to, type, status, responsible, lotId, search,
+      from, to, type, status, responsible, lotId, search, mine,
       cropId, campaignId, subLotId,
       includeDisabled = false, includeCanceled = false,
       page = 1, pageSize = 20
@@ -284,6 +284,11 @@ exports.list = async (req, res, next) => {
     if (!company_id) {
       return res.status(400).json({ message: 'No pudimos identificar tu empresa. Cerrá sesión e ingresá nuevamente.' });
     }
+    const onlyMine = mine === true || mine === 'true' || mine === '1';
+    if (onlyMine && responsible) {
+      return res.status(400).json({ message: "No se puede combinar 'Mis tareas' con otro responsable." });
+    }
+    if (onlyMine && !req.user.id) return res.status(401).json({ message: 'No pudimos identificar tu usuario.' });
     await assertCropFilterBelongsToCompany(cropId, company_id);
     await assertCampaignFilterBelongsToCompany(campaignId, company_id);
     await assertLotFilterBelongsToCompany(lotId, company_id);
@@ -294,12 +299,24 @@ exports.list = async (req, res, next) => {
     const w = [`p.company_id = $1`];
 
     // Soft delete / cancelados (por defecto se ocultan)
-    if (!includeDisabled) w.push(`p.enabled IS TRUE`);
+    if (onlyMine || !includeDisabled) w.push(`p.enabled IS TRUE`);
     if (!includeCanceled) w.push(`p.status <> 'cancelado'`);
+    if (onlyMine) {
+      p.push(req.user.id);
+      w.push(`p.responsible_user = $${p.length}`);
+      w.push(`p.status IN ('pendiente', 'planificado', 'en_progreso')`);
+    }
 
     if (from && to) {
       p.push(from, to);
       w.push(`p.date_range && tstzrange($${p.length - 1}, $${p.length}, '[]')`);
+    } else if (to) {
+      // Upper horizon without a lower bound retains every overdue assignment.
+      p.push(to);
+      w.push(`p.start_at <= $${p.length}`);
+    } else if (from) {
+      p.push(from);
+      w.push(`p.end_at >= $${p.length}`);
     }
 
     if (type) {
@@ -372,6 +389,8 @@ exports.list = async (req, res, next) => {
     const { rows: countRows } = await pool.query(countSql, p.slice());
     const total = countRows?.[0]?.total ?? 0;
 
+    // Stable ordering across pages: overdue first, then current/upcoming by date.
+    const taskOrder = alias => `CASE WHEN ${alias}.status NOT IN ('completado','cancelado') AND now() > ${alias}.end_at THEN 0 ELSE 1 END, ${alias}.start_at ASC, ${alias}.id ASC`;
     // 2) DATA con LIMIT/OFFSET
     p.push(limit, offset);
     const dataSql = `
@@ -391,7 +410,7 @@ exports.list = async (req, res, next) => {
         LEFT JOIN crops c ON c.id = p.crop_id AND c.company_id = p.company_id
         LEFT JOIN campaigns cp ON cp.id = p.campaign_id AND cp.company_id = p.company_id
         ${whereSql}
-        ORDER BY p.start_at DESC
+        ORDER BY ${onlyMine ? taskOrder('p') : 'p.start_at DESC, p.id ASC'}
         LIMIT $${p.length - 1} OFFSET $${p.length}
       )
       SELECT b.*,
@@ -406,7 +425,8 @@ exports.list = async (req, res, next) => {
                LEFT JOIN planning_product_completions pc ON pc.planning_product_id = pp.id AND pc.planning_id = pp.planning_id
                WHERE pp.planning_id = b.id
              ), '[]') AS products
-      FROM base b;
+      FROM base b
+      ORDER BY ${onlyMine ? taskOrder('b') : 'b.start_at DESC, b.id ASC'};
     `;
     const { rows } = await pool.query(dataSql, p);
     await decoratePlanningProducts(rows, company_id);

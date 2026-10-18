@@ -126,12 +126,12 @@
 .gs-dashboard { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; padding:0; align-items:start; }
 .gs-dashboard > .gs-ui-page-header { grid-column:1/-1; order:0; padding:4px 8px; }
 .gs-dashboard > .gs-dashboard-section { padding:16px; border:1px solid var(--gs-border); border-radius:12px; background:var(--gs-surface); }
-.gs-dashboard > [aria-labelledby="dashboard-attention"] { grid-column:span 8; order:1; }
-.gs-dashboard > [aria-labelledby="dashboard-weather"] { grid-column:span 4; order:2; }
-.gs-dashboard > [aria-labelledby="dashboard-work"] { grid-column:span 5; order:3; }
-.gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 7; order:4; }
-.gs-dashboard > [aria-labelledby="dashboard-production"] { grid-column:1/-1; order:5; }
-.gs-dashboard:not(:has(#dashboard-attention)) > [aria-labelledby="dashboard-work"] { grid-column:span 8; order:1; }
+.gs-dashboard > [aria-labelledby="dashboard-attention"] { grid-column:1/-1; order:1; }
+.gs-dashboard > [aria-labelledby="dashboard-weather"] { grid-column:span 4; order:4; }
+.gs-dashboard > [aria-labelledby="dashboard-work"] { grid-column:1/-1; order:3; }
+.gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 8; order:5; }
+.gs-dashboard > [aria-labelledby="dashboard-production"] { grid-column:1/-1; order:6; }
+.gs-dashboard > [aria-labelledby="dashboard-my-tasks"] { grid-column:1/-1; order:2; }
 .gs-dashboard:not(:has(#dashboard-attention)):not(:has(#dashboard-work)) > [aria-labelledby="dashboard-weather"] { grid-column:span 5; }
 .gs-dashboard:not(:has(#dashboard-field)) > [aria-labelledby="dashboard-work"] { grid-column:1/-1; }
 .gs-dashboard-section-heading { flex-wrap:wrap; }
@@ -157,7 +157,7 @@
 .gs-dashboard-chart-canvas { height:210px; }
 .gs-dashboard .gs-ui-empty { border:0; background:var(--gs-background); padding:12px; }
 @media (min-width:768px) and (max-width:1150px) {
-  .gs-dashboard > [aria-labelledby="dashboard-attention"], .gs-dashboard > [aria-labelledby="dashboard-weather"], .gs-dashboard > [aria-labelledby="dashboard-work"], .gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 6; }
+  .gs-dashboard > [aria-labelledby="dashboard-weather"], .gs-dashboard > [aria-labelledby="dashboard-field"] { grid-column:span 6; }
   .gs-dashboard-metrics .gs-ui-metric { padding:12px; }
   .gs-dashboard-metrics .gs-ui-metric-label > span { position:static; padding:4px; }
 }
@@ -166,10 +166,10 @@
   .gs-dashboard > .gs-ui-page-header,.gs-dashboard > .gs-dashboard-section { width:100%; box-sizing:border-box; }
   .gs-dashboard > .gs-dashboard-section { padding:12px; }
   .gs-dashboard > [aria-labelledby="dashboard-attention"] { order:1; }
-  .gs-dashboard > [aria-labelledby="dashboard-work"] { order:2 !important; }
-  .gs-dashboard > [aria-labelledby="dashboard-weather"] { order:3; }
-  .gs-dashboard > [aria-labelledby="dashboard-field"] { order:4; }
-  .gs-dashboard > [aria-labelledby="dashboard-production"] { order:5; }
+  .gs-dashboard > [aria-labelledby="dashboard-work"] { order:3; }
+  .gs-dashboard > [aria-labelledby="dashboard-weather"] { order:4; }
+  .gs-dashboard > [aria-labelledby="dashboard-field"] { order:5; }
+  .gs-dashboard > [aria-labelledby="dashboard-production"] { order:6; }
   .gs-dashboard-alerts { grid-template-columns:minmax(0,1fr); }
   .gs-dashboard-field-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .gs-dashboard-metrics .gs-ui-metric-value { font-size:22px; }
@@ -192,3 +192,19 @@
 .gs-dashboard-weather-actions .gs-ui-entity { display:inline-flex; align-items:center; box-sizing:border-box; min-height:32px; font-size:12px; line-height:20px; white-space:nowrap; }
 @media(max-width:767px){ .gs-dashboard-weather-actions .gs-ui-entity { min-height:44px; } }
 .gs-dashboard-weather-stale { border-left:3px solid #e2bb65; padding-left:12px; }
+
+/* Personal assignments stay compact without changing the team list. */
+.gs-dashboard-my-tasks { list-style:none; padding:0 12px; margin:0; border:1px solid var(--gs-border); border-radius:12px; }
+.gs-dashboard-my-tasks li { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid var(--gs-border); }
+.gs-dashboard-my-tasks li:last-child { border-bottom:0; }
+.gs-dashboard-my-task-main { display:flex; flex-direction:column; gap:4px; min-width:0; overflow-wrap:anywhere; font-size:13px; }
+.gs-dashboard-my-task-main .gs-dashboard-note { margin:0; font-size:12px; }
+.gs-dashboard-my-task-action { display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:13px; flex-shrink:0; }
+.gs-dashboard-my-task-action > span:first-child { font-weight:600; }
+.gs-dashboard-my-task-action a { display:inline-flex; align-items:center; min-height:40px; }
+.gs-dashboard-my-tasks-count { margin:0 0 8px; }
+@media (max-width:767px) {
+  .gs-dashboard-my-tasks li { flex-direction:column; align-items:stretch; gap:8px; }
+  .gs-dashboard-my-task-action { align-items:flex-start; flex-wrap:wrap; flex-direction:row; column-gap:12px; }
+  .gs-dashboard-my-task-action a { flex-basis:100%; }
+}

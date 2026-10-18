@@ -196,6 +196,8 @@ exports.listQuery = z.object({
     to: z.string().datetime().optional(),
     type: ActivityType.optional(),
     status: StatusFilter.optional(),
+    mine: z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+      .transform(value => value === true || value === 'true' || value === '1').optional(),
     responsible: z.string().uuid().optional(),
     lotId: z.string().uuid().optional(),
     subLotId: z.string().uuid().optional(),
