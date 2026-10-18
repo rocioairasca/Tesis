@@ -402,7 +402,7 @@ exports.list = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name,
+               COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
@@ -460,7 +460,7 @@ exports.getOne = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado','cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name,
+               COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p
@@ -1417,7 +1417,7 @@ exports.listDisabled = async (req, res, next) => {
                  WHEN p.status NOT IN ('completado', 'cancelado') AND now() > p.end_at
                  THEN 'en_demora' ELSE p.status
                END AS status_effective,
-               u.name AS responsible_name,
+               COALESCE(NULLIF(BTRIM(u.full_name), ''), NULLIF(BTRIM(u.email), ''), 'Usuario') AS responsible_name,
                c.name AS crop_name,
                cp.name AS campaign_name, cp.start_date AS campaign_start_date, cp.end_date AS campaign_end_date
         FROM planning p

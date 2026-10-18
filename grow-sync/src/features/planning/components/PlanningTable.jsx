@@ -195,7 +195,7 @@ const PlanningTable = ({
         {
             title: "Responsable",
             dataIndex: "responsible_user",
-            render: (id) => userIx[id] || "—",
+            render: (id,row) => userIx[id] || row.responsible_name || "—",
             ellipsis: true,
             width: columnWidth.responsible,
         },

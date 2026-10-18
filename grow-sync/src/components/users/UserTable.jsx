@@ -1,3 +1,4 @@
+import {userDisplayName} from '../../utils/userDisplay.mjs';
 /**
  * Componente: Tabla de Usuarios
  * Ubicación: src/components/users/UserTable.jsx
@@ -28,12 +29,7 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from '../../constants/permissions';
 import { hasPermission } from "../../utils/permissions";
 import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
-const ROLE_OPTIONS = [
-  { value: 0, label: "Empleado" },
-  { value: 1, label: "Supervisor" },
-  { value: 2, label: "Dueño de Campo" },
-  { value: 3, label: "Admin" },
-];
+import {ROLE_OPTIONS} from '../../constants/roles.mjs';
 
 const PERMISSION_GROUPS = {
   "Análisis de suelo": [PERMISSIONS.SOIL_ANALYSIS_VIEW,PERMISSIONS.SOIL_ANALYSIS_CREATE,PERMISSIONS.SOIL_ANALYSIS_EDIT,PERMISSIONS.SOIL_ANALYSIS_DISABLE,PERMISSIONS.SOIL_ANALYSIS_ENABLE,PERMISSIONS.SOIL_ANALYSIS_VIEW_DISABLED],
@@ -255,7 +251,7 @@ const UserTable = () => {
       
 
   const columns = [
-    { title: "Email", dataIndex: "email", key: "email" },
+    { title: "Usuario", key: "identity", render: (_,user) => <div>{userDisplayName(user)}{user.full_name?.trim() && <div style={{fontSize:12}}>{user.email}</div>}</div> },
     {
       title: "Rol",
       dataIndex: "role",

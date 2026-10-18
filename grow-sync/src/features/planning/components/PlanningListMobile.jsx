@@ -172,7 +172,7 @@ const PlanningListMobile = ({
                         <p className="flex-row"><MapPin size={18} /> <strong>Lotes:</strong> {lotsText}</p>
                         <p className="flex-row"><MapPin size={18} /> <strong>Superficie:</strong> {formatHa(getPlanningArea(r))}</p>
                         <p className="flex-row"><CalIcon size={18} /> <strong>Período:</strong> {period}</p>
-                        <p className="flex-row"><UserIcon size={18} /> <strong>Resp.:</strong> {userIx[r.responsible_user] || "-"}</p>
+                        <p className="flex-row"><UserIcon size={18} /> <strong>Resp.:</strong> {userIx[r.responsible_user] || r.responsible_name || "-"}</p>
                         {primaryAction && (
                             <div style={{ marginTop: 12 }} onClick={(event) => event.stopPropagation()}>
                                 <Button

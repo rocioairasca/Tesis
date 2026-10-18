@@ -1,3 +1,4 @@
+import {userDisplayName} from '../../utils/userDisplay.mjs';
 import { campaignFilterOptions } from '../../utils/campaigns.mjs';
 import React from 'react';
 import { Select } from 'antd';
@@ -106,7 +107,7 @@ function Production({ request, options, filters, onFiltersChange, canViewHarvest
   </Section>;
 }
 export default function DashboardView({ user, today, access, delayed, work, inventory, weather, field, fieldMap = { status: 'hidden' }, production, options, filters, onFiltersChange }) {
-  const name = [user?.full_name, user?.first_name, user?.name, user?.nickname].find(value => typeof value === 'string' && value.trim() && !value.includes('@'))?.trim().split(/\s+/)[0];
+  const name = userDisplayName(user).split(/\s+/)[0];
   const dateKey = calendarDateKey(today);
   const dateLabel = dateKey ? new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${dateKey}T12:00:00Z`)) : '';
   return <div className="gs-dashboard"><PageHeader title={name ? `¡Hola, ${name}!` : '¡Hola!'} description={dateLabel} />

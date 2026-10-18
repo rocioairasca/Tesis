@@ -1,3 +1,4 @@
+import {renderUserOption} from '../../../components/users/UserOption';
 import AddHistoricalProduct from './AddHistoricalProduct';
 import React from 'react';
 import { Alert, DatePicker, Form, Input, InputNumber, Select } from 'antd';
@@ -16,7 +17,7 @@ export default function HistoricalPlanningFields({ editing, responsibleOptions, 
     <Form.Item name="title" label="Título"><Input /></Form.Item>
     <Form.Item name="description" label="Descripción"><Input.TextArea rows={3} /></Form.Item>
     <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: 'Seleccioná un responsable.' }]}>
-      <Select options={responsibleOptions} />
+      <Select options={responsibleOptions} optionRender={renderUserOption} />
     </Form.Item>
     <Form.Item name="date_range" label="Período" rules={[{ required: true, message: 'Seleccioná el período.' }]}>
       <DatePicker.RangePicker format="DD/MM/YYYY" allowClear={false} style={{ width: '100%' }} />

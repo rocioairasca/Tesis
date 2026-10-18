@@ -1,3 +1,4 @@
+import {userDisplayName} from '../../utils/userDisplay.mjs';
 import {quantityLabel as formatQuantity,normalizeUnit} from '../../utils/inventoryUnits';
 import QuantityUnitFields from '../../components/QuantityUnitFields';
 import {usageQuantityPayload} from '../../utils/inventoryConversion';
@@ -65,11 +66,7 @@ const Usage = () => {
     }
     return "-";
   };
-  const registeredBy = (usage) => (
-    usage?.user?.full_name
-    || usage?.user?.email
-    || "-"
-  );
+  const registeredBy = usage => usage?.user ? userDisplayName(usage.user) : '-';
   const usageOrigin = (usage) => usage?.origin || (usage?.source_planning_id ? "Planificación" : "Registro manual");
   const isPlanningUsage = (usage) => Boolean(usage?.source_planning_id);
   const hasDetailValue = (value) => value !== undefined && value !== null && value !== "" && value !== "—" && value !== "-";

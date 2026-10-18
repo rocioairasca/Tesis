@@ -1,3 +1,5 @@
+import {renderUserOption} from '../../components/users/UserOption';
+import {userDisplayName,userOptions} from '../../utils/userDisplay.mjs';
 import PlanningRecipeFields from './components/PlanningRecipeFields';
 import {recipeId as getRecipeId,MANUAL_RECIPE,totalLabel,registeredRecipeActualProducts} from './planningRecipe.mjs';
 import {doseLabel} from '../recipes/recipeModel.mjs';
@@ -265,7 +267,7 @@ const Planning = () => {
 
   // índices id -> nombre
   const userIx = useMemo(
-    () => Object.fromEntries(users.map(u => [u.id ?? u._id, u.full_name || u.nickname || u.username || u.email])),
+    () => Object.fromEntries(users.map(u => [u.id ?? u._id, userDisplayName(u)])),
     [users]
   );
   const lotIx = useMemo(
@@ -570,29 +572,7 @@ const Planning = () => {
     })
   ), [lots]);
 
-  const responsibleOptions = useMemo(() => {
-    const nameCounts = users.reduce((acc, user) => {
-      const name = user.full_name || user.nickname || user.username || user.email || "Sin nombre";
-      acc.set(name, (acc.get(name) || 0) + 1);
-      return acc;
-    }, new Map());
-
-    return users.map((user) => {
-      const id = user.id ?? user._id;
-      const name = user.full_name || user.nickname || user.username || user.email || "Sin nombre";
-      const showEmail = Boolean(user.email && nameCounts.get(name) > 1);
-
-      return {
-        value: id,
-        label: showEmail ? (
-          <div>
-            <div>{name}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>{user.email}</div>
-          </div>
-        ) : name,
-      };
-    });
-  }, [users]);
+  const responsibleOptions = useMemo(() => userOptions(users), [users]);
 
   const cropOptions = useMemo(() => {
     const currentCropId = editing?.crop_id;
@@ -890,7 +870,7 @@ const Planning = () => {
         <div>{formatHa(getPlanningArea(ev))}</div>
         <div>{formatPeriod(ev)}</div>
         <div>Estado: {statusLabel(status)}</div>
-        <div>Responsable: {userIx[ev.responsible_user] || "—"}</div>
+        <div>Responsable: {(userIx[ev.responsible_user] || ev.responsible_name) || "—"}</div>
       </div>
     );
   };
@@ -1605,9 +1585,9 @@ const Planning = () => {
           {item.campaign_name && (
             <span className="planning-month-card__line">Campaña {item.campaign_name}</span>
           )}
-          {userIx[item.responsible_user] && (
+          {(userIx[item.responsible_user] || item.responsible_name) && (
             <span className="planning-month-card__line planning-month-card__responsible">
-              <UserOutlined /> {userIx[item.responsible_user]}
+              <UserOutlined /> {(userIx[item.responsible_user] || item.responsible_name)}
             </span>
           )}
         </div>
@@ -1688,7 +1668,7 @@ const Planning = () => {
         allowClear
         value={filters.responsible}
         onChange={(v) => handleFilterChange("responsible", v)}
-        options={responsibleOptions}
+        options={responsibleOptions} optionRender={renderUserOption}
         notFoundContent="No hay usuarios disponibles para asignar como responsables."
       />
       <Select
@@ -2015,7 +1995,7 @@ const Planning = () => {
             <Select
               allowClear
               placeholder="Seleccioná un usuario"
-              options={responsibleOptions}
+              options={responsibleOptions} optionRender={renderUserOption}
               notFoundContent="No hay usuarios disponibles para asignar como responsables."
             />
           </Form.Item>
@@ -2260,7 +2240,7 @@ const Planning = () => {
                 </Descriptions.Item>
               )}
               <Descriptions.Item label="Responsable">
-                {userIx[viewing.responsible_user] || "—"}
+                {(userIx[viewing.responsible_user] || viewing.responsible_name) || "—"}
               </Descriptions.Item>
               <Descriptions.Item label="Vehículo">
                 {vehIx[viewing.vehicle_id] || "—"}

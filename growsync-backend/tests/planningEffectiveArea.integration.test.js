@@ -173,3 +173,9 @@ test('field context migration leaves existing records untouched including histor
  const after=(await isolated.query('SELECT * FROM planning ORDER BY id')).rows;assert.deepEqual(after.map(({field_context,...r})=>r),before);assert.ok(after.every(r=>r.field_context===null));
  }finally{await isolated.close();}
 });
+
+test('planning detail and list resolve full_name before email, independent of Auth0 name',async()=>{
+ const x=await fixture();await db.query("UPDATE users SET full_name='Rocío Airasca',name='Auth0 alias' WHERE id=$1",[x.actorId]);
+ const {data:{id}}=await x.call('create',x.body);assert.equal((await x.call('getOne',{},id)).data.responsible_name,'Rocío Airasca');assert.equal((await x.call('list')).data.data.find(row=>row.id===id).responsible_name,'Rocío Airasca');
+ await db.query("UPDATE users SET full_name='   ' WHERE id=$1",[x.actorId]);assert.equal((await x.call('getOne',{},id)).data.responsible_name,x.actorId+'@example.test');
+});

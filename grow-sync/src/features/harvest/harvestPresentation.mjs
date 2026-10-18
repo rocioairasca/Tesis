@@ -1,10 +1,11 @@
+import {userDisplayName} from '../../utils/userDisplay.mjs';
 export const cropLabel = row => row?.crop_name || row?.crop || 'Sin cultivo informado';
 import { campaignLabel } from '../../utils/campaigns.mjs';
 export { campaignLabel } from '../../utils/campaigns.mjs';
 export const surfaceLabel = row => row?.sub_lot_name || row?.lot_name || 'No informado';
 export function authorLabel(record, users = []) {
   const author = users.find(user => user?.id && String(user.id) === String(record?.created_by));
-  return author?.full_name?.trim() || author?.email?.trim() || 'No informado';
+  return author ? userDisplayName(author) : 'No informado';
 }
 export function filterHarvestRows(rows, { search = '', surface, origin } = {}) {
   const normalized = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

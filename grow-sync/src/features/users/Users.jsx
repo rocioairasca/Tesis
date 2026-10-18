@@ -14,11 +14,8 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { hasPermission } from "../../utils/permissions";
 import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
 
-const ROLE_OPTIONS = [
-  { value: 0, label: "Empleado" },
-  { value: 1, label: "Supervisor" },
-  { value: 2, label: "Dueño de Campo" },
-];
+import {ROLE_OPTIONS as ALL_ROLE_OPTIONS} from '../../constants/roles.mjs';
+const ROLE_OPTIONS = ALL_ROLE_OPTIONS.filter(option=>option.value!==3);
 
 const Users = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);

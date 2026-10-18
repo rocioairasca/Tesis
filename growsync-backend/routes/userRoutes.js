@@ -19,6 +19,12 @@ const schema = require('../validations/users.schema');
 
 const supabase = require('../db/supabaseClient');
 const updateRole = require('../controllers/users/updateRole');
+const profile = require('../controllers/users/profile')(supabase);
+const {validateProfile} = require('../validations/userProfile.schema');
+// Self-service: authenticated identity only, no administrative permission required.
+router.get('/me', checkJwt, userData, validateProfile, profile);
+router.patch('/me/profile', checkJwt, userData, validateProfile, profile);
+
 
 const requirePermission = require('../middleware/requirePermission');
 const requireAnyPermission = require('../middleware/requireAnyPermission');
