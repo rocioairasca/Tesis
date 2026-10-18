@@ -12,7 +12,7 @@ import api from '../../../services/apiClient';
 import SoilAnalysisForm from './SoilAnalysisForm';
 import SoilExtractionEntry from './SoilExtractionEntry';
 import SoilPdfPreview from './SoilPdfPreview';
-import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights} from './soilAnalysisModel.mjs';
+import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights,resultText} from './soilAnalysisModel.mjs';
 import './soilAnalysis.css';
 export default function SoilAnalysis(){
  const {lotId}=useParams(),[params]=useSearchParams(),navigate=useNavigate(),mobile=useIsMobile();
@@ -95,7 +95,7 @@ export default function SoilAnalysis(){
   {title:'Muestra',key:'sample',render:(_,row)=>row.sample_name||'Muestra'},columns[3],
  ]:columns;
  const resultsColumns=[{title:'Parámetro',dataIndex:'parameter_name'},{title:'Método',dataIndex:'method',render:v=>v||'—'},{title:'Unidad',dataIndex:'unit',render:v=>v||'—'},
-  {title:'Resultado',key:'result',render:(_,r)=>r.result_status==='not_requested'?<Tooltip title={r.raw_value}><span>No requerido</span></Tooltip>:r.raw_value}];
+  {title:'Resultado',key:'result',render:(_,r)=>resultText(r)||'—'}];
  if(!canView)return <ErrorState message="No tenés permiso para ver análisis de suelo." />;
  const invalidSub=Boolean(sub&&sub!=='full'&&context&&!context.lots.find(l=>l.id===selectedLotId)?.sub_lots.some(s=>s.id===sub));
  return <main className="gs-soil-analysis">

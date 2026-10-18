@@ -1,7 +1,29 @@
+import {formatNumber} from '../../../utils/numberFormat.js';
 export const MAX_PDF_BYTES=10*1024*1024;
 export const RESULT_STATUSES=[{value:'measured',label:'Medido'},{value:'not_requested',label:'No requerido'},{value:'qualitative',label:'Cualitativo'}];
 export const HIGHLIGHT_PARAMETERS=['pH','Materia Orgánica','Fósforo','N-NO3'];
-export const resultText=result=>result.result_status==='not_requested'?'No requerido':result.raw_value;
+// Keep decimal strings exact when their precision exceeds JavaScript Number.
+const decimalText=value=>String(value).replace(/^\+/, '').replace(',', '.').replace(/^(-?)0+(?=\d)/,'$1').replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'');
+export function resultText(result={}){
+ const numeric=result.numeric_value;
+ if(numeric!=null&&numeric!==''&&Number.isFinite(Number(numeric))){
+  const canonical=decimalText(numeric);
+  if(/^-?\d{1,14}(?:\.\d{1,6})?$/.test(canonical)&&decimalText(Number(canonical))!==canonical){
+   const [whole,fraction]=canonical.split('.');return formatNumber(whole,0)+(fraction?','+fraction:'');
+  }
+  return formatNumber(numeric,6);
+ }
+ return typeof result.raw_value==='string'?result.raw_value:'';
+}
+export function editedResult(raw_value){
+ const text=raw_value.trim();let numeric_value=null;
+ // Decimal separator only: no grouping, comparisons, exponents or partial parsing.
+ if(/^[+-]?\d{1,14}(?:[.,]\d{1,6})?$/.test(text)){
+  const canonical=decimalText(text),number=Number(canonical);
+  numeric_value=decimalText(number)===canonical?number:canonical;
+ }
+ return {raw_value,numeric_value,result_status:numeric_value==null?'qualitative':'measured'};
+}
 export const highlights=sample=>HIGHLIGHT_PARAMETERS.flatMap(name=>{const result=sample.results.find(r=>r.parameter_name===name);return result?[{name,text:resultText(result),raw:result.raw_value}]:[];});
 export function depthText(sample){const from=sample.depth_from_cm,to=sample.depth_to_cm;if(from!=null&&to!=null)return 'Profundidad '+String(from).replace(/\.0+$/,'')+'–'+String(to).replace(/\.0+$/,'')+' cm';if(from!=null)return 'Desde '+from+' cm';if(to!=null)return 'Hasta '+to+' cm';return 'Profundidad no consignada';}
 export const emptySample=(lot_id,sub_lot_id=null)=>({lot_id,sub_lot_id,results:[{result_status:'measured'}]});

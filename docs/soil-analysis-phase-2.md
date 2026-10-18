@@ -57,8 +57,8 @@ Editar valores del informe, muestras o resultados, cambiar el PDF o volver a ana
 Solo entonces puede guardar usando el mismo multipart final con PDF original + metadata confirmada.
 Cambiar archivo invalida la propuesta; cancelar cierra/aborta y descarta datos sin persistir nada.
 Si falla: No pudimos leer automáticamente este PDF. Podés volver a intentarlo o completar el análisis manualmente.
-Desktop/tablet usan tabla editable; mobile usa tarjetas expandibles. La edición de raw_value no modifica numeric_value.
-El cambio explícito a not_requested conserva el comportamiento previo: numeric_value se limpia y deshabilita.
+Desktop/tablet usan una tabla de Parámetro, Método, Unidad, Resultado y Acción; mobile usa tarjetas expandibles con los mismos datos. Resultado muestra numeric_value en es-AR sin ceros sobrantes, o raw_value cuando no hay valor numérico. El detalle y los destacados usan la misma presentación.
+La edición de Resultado conserva el texto escrito en raw_value y actualiza numeric_value/result_status: decimal completo con coma o punto → measured; texto/comparaciones → qualitative, numeric_value null. Los decimales que exceden la precisión de Number se conservan como string decimal en el payload admitido por el backend. Al enfocar no se alteran datos; al editar se invalida la revisión. No hay selector de estado ni campo numérico adicional. Los registros históricos no editados conservan sus tres valores internos, incluido not_requested.
 Se mantienen validaciones de parámetros/resultados mínimos; errores de validación expanden las tarjetas mobile.
 
 ## Pruebas y fixtures
@@ -100,6 +100,6 @@ https://developers.openai.com/api/docs/models/gpt-4.1-mini
 https://github.com/unjs/unpdf
 
 ## Validación ejecutada
-55 tests relacionados (backend/frontend) y 17 de navegador aprobados con Node 20.20.2.
+59 tests relacionados (backend/frontend) y 19 de navegador aprobados con Node 20.20.2.
 Build frontend correcto (advertencias existentes de Vite/chunks); git diff --check sin errores.
 Sin producción, migraciones en bases reales, commit, push ni deploy.
