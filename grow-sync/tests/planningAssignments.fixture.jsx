@@ -21,6 +21,9 @@ const row={id,status:'pendiente',activity_type:'fumigacion',field_context:'stubb
   lots:[{id:'lot',lot_id:'lot',name:'Lote de prueba',area_ha:25,effective_area_ha:10}],planned_area_ha:10,products:[]};
 window.__events=[];window.__gets=[];window.__aborted=[];
 api.defaults.adapter=async config=>{
+  if(config.method==='post' && config.url==='/planning/'+id+'/start'){
+    row.status='en_progreso'; return {data:{ok:true},status:200,statusText:'OK',headers:{},config};
+  }
   if(config.method==='patch' && config.url==='/planning/'+id){
     row.status=JSON.parse(config.data).status;
     return {data:{ok:true},status:200,statusText:'OK',headers:{},config};

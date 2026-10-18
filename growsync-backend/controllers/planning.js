@@ -1,3 +1,4 @@
+const { assertCanExecutePlanning } = require('../services/planningExecution');
 const planningNotifications = require('../services/planningNotifications');
 const planningRecipes = require('../services/planningRecipes');
 const {assertSameUnit} = require('../services/inventoryUnits');
@@ -756,6 +757,52 @@ exports.registerCompleted = async (req, res, next) => {
   }
 };
 
+exports.start = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const planning = await planningCompletion.getPlanningForCompletion(client, req.params.id, req.user.company_id);
+    assertCanExecutePlanning(req.user, planning);
+    if (!['planificado', 'pendiente', 'en_progreso'].includes(planning.status)) {
+      throw Object.assign(new Error('No se puede iniciar una tarea completada.'), { status: 409 });
+    }
+    const alreadyStarted = planning.status === 'en_progreso';
+    if (!alreadyStarted) await client.query("UPDATE planning SET status='en_progreso', updated_at=now() WHERE id=$1 AND company_id=$2", [planning.id, req.user.company_id]);
+    await client.query('COMMIT');
+    return res.json({ ok: true, status: 'en_progreso', already_applied: alreadyStarted });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    next(error);
+  } finally { client.release(); }
+};
+
+exports.completeActivity = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { company_id } = req.user, { id } = req.params;
+    const effectiveDate = planningCompletion.getEffectiveWorkDate(req.body.effective_date);
+    await client.query('BEGIN');
+    const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    assertCanExecutePlanning(req.user, planning);
+    if (!['riego', 'mantenimiento', 'otro', 'cosecha'].includes(planning.activity_type)) {
+      throw Object.assign(new Error('Esta actividad requiere su flujo de completion con productos.'), { status: 400 });
+    }
+    await planningCompletion.completeActivityWithoutProductiveEffects(client, planning, {
+      effectiveDate, companyId: company_id, registeredRetroactively: false,
+    });
+    const notificationEvents = await planningNotifications.prepare(client, {
+      after: await planningNotifications.snapshot(client, id, company_id),
+      actorId: req.user.id, companyId: company_id, operation: 'completion',
+    });
+    await client.query('COMMIT');
+    await planningNotifications.dispatch(notificationEvents, createNotification);
+    return res.json({ ok: true, message: 'La tarea fue completada.' });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    next(error);
+  } finally { client.release(); }
+};
+
 exports.completeSowing = async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -772,6 +819,7 @@ exports.completeSowing = async (req, res, next) => {
     await client.query('BEGIN');
 
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    assertCanExecutePlanning(req.user, planning);
     await resolveCrop(client, planning.crop_id, company_id);
     const completion = await planningCompletion.completeSowingPlanning(client, planning, {
         actorId: req.user.id,
@@ -835,6 +883,7 @@ exports.completeWork = async (req, res, next) => {
     await client.query('BEGIN');
 
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
+    assertCanExecutePlanning(req.user, planning);
     const completion = await planningCompletion.completeWorkPlanning(client, planning, {
         actorId: req.user.id,
       actualProducts: actual_products,

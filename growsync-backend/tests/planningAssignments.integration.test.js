@@ -42,8 +42,8 @@ async function fixture(){
   await put('products',{id:product,company_id:company,name:'Producto sintético',unit:'L',total_quantity:0,available_quantity:0});
   const body={title:'Fumigación lote T4',activity_type:'fumigacion',field_context:'stubble',crop_id:crop,campaign_id:campaign,
     start_at:'2026-10-21T00:00:00.000Z',end_at:'2026-10-21T00:00:00.000Z',responsible_user:responsible,status:'pendiente',lot_selections:[{lot_id:lot,effective_area_ha:10}]};
-  const call=async(method,body={},id,actorId=actor,query={})=>{
-    let data,code=200;await controller[method]({body,params:{id},query,user:{id:actorId,company_id:company,role:3}},
+  const call=async(method,body={},id,actorId=actor,query={},permissions)=>{
+    let data,code=200;await controller[method]({body,params:{id},query,user:{id:actorId,company_id:company,role:3,...(permissions?{custom_permissions:permissions}:{})}},
       {status(value){code=value;return this;},json(value){data=value;return this;}},error=>{throw error;});return {code,data};
   };
   return {company,actor,responsible,third,lot,lot2,crop,campaign,product,body,call,create:async(patch={})=>(await call('create',{...body,...patch})).data.id,
@@ -283,4 +283,92 @@ test('mine intersects campaign, crop, lot, type, search and dates without wideni
   assert.deepEqual((await x.call('list',{},null,x.responsible,query)).data.data.map(r=>r.id),[id]);
   assert.equal((await x.call('list',{},null,x.responsible,{...query,search:'No existe'})).data.total,0);
   await assert.rejects(x.call('list',{},null,x.responsible,{...query,lotId:y.lot}),e=>e.status===400 || e.status===404);
+});
+
+const executePermissions=['planning.execute'];
+const executeCall=(x,method,id,body={},actor=x.responsible,permissions=executePermissions)=>x.call(method,body,id,actor,{},permissions);
+const sideEffects=async company=>{
+ const result={};for(const table of ['stock_movements','usage_records','crop_assignments','harvest_records','planning_product_completions']){
+  const sql=table==='planning_product_completions'?'SELECT x.* FROM planning_product_completions x JOIN planning p ON p.id=x.planning_id WHERE p.company_id=$1': 'SELECT * FROM '+table+' WHERE company_id=$1';
+  result[table]=(await db.query(sql,[company])).rows;
+ }return result;
+};
+for(const status of ['pendiente','planificado'])test('execute-only starts '+status+' once; no effects or notifications',async()=>{
+ const x=await fixture(),id=await x.create({status}),before=await x.row(id),effects=await sideEffects(x.company);events=[];
+ const first=await executeCall(x,'start',id);assert.equal(first.data.status,'en_progreso');assert.equal(first.data.already_applied,false);
+ const after=await x.row(id);assert.equal(after.status,'en_progreso');for(const key of Object.keys(before).filter(k=>!['status','updated_at'].includes(k)))assert.deepEqual(after[key],before[key],key);
+ const second=await executeCall(x,'start',id);assert.equal(second.data.already_applied,true);assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,0);
+});
+for(const activity of ['siembra','fumigacion','fertilizacion','riego','mantenimiento','otro','cosecha'])test('execute ownership and reassignment checked under lock for '+activity,async()=>{
+ const x=await fixture(),id=await x.create({activity_type:activity,field_context:activity==='siembra'?null:'stubble',lot_selections:[{lot_id:x.lot}]}),method=activity==='siembra'?'completeSowing':['fumigacion','fertilizacion'].includes(activity)?'completeWork':'completeActivity';
+ const effects=await sideEffects(x.company);events=[];
+ for(const target of ['start',method])await assert.rejects(executeCall(x,target,id,{effective_date:'2026-10-21'},x.third),e=>e.status===403 && /No tenés permiso/.test(e.message));
+ await x.call('update',{responsible_user:x.third},id);events=[];
+ for(const target of ['start',method])await assert.rejects(executeCall(x,target,id,{effective_date:'2026-10-21'}),e=>e.status===403);
+ assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,0);
+});
+for(const state of ['disabled','cancelado','completado','historical'])test('execute rejects '+state+' and never reopens or produces effects',async()=>{
+ const x=await fixture(),id=state==='historical'?uuid():await x.create({activity_type:'riego'});
+ if(state==='historical')await put('planning',{id,company_id:x.company,title:'Antecedente',activity_type:'riego',start_at:'2020-01-01',end_at:'2020-01-01',responsible_user:x.responsible,created_by:x.actor,status:'completado',inventory_impact_mode:'HISTORICAL_NO_STOCK'});
+ else await db.query(state==='disabled'?'UPDATE planning SET enabled=false WHERE id=$1':'UPDATE planning SET status=$2 WHERE id=$1',state==='disabled'?[id]:[id,state]);
+ const before=await x.row(id),effects=await sideEffects(x.company);events=[];
+ for(const method of ['start','completeActivity'])await assert.rejects(executeCall(x,method,id,{effective_date:'2026-10-21'}),e=>[400,403,409].includes(e.status));
+ assert.deepEqual(await x.row(id),before);assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,0);
+});
+for(const activity of ['siembra','fumigacion','fertilizacion'])test('execute '+activity+' consumes real converted quantity exactly once and notifies only assigner',async()=>{
+ const x=await fixture(),stock=require('../services/stock');
+ await db.query("UPDATE products SET unit='litros' WHERE id=$1",[x.product]);
+ await stock.transaction({...client,connect:async()=>client},c=>stock.receiveStock(c,{companyId:x.company,actorId:x.actor,productId:x.product,unit:'litros',quantity:'10',received_date:'2026-10-01',origin:'purchase',key:uuid()}));
+ const id=await x.create({activity_type:activity,field_context:activity==='siembra'?null:'stubble',lot_selections:[{lot_id:x.lot}],products:[{product_id:x.product,amount:'1',unit:'L'}]});
+ const pp=(await db.query('SELECT id FROM planning_products WHERE planning_id=$1',[id])).rows[0].id;
+ const method=activity==='siembra'?'completeSowing':'completeWork',body={effective_date:'2026-10-21',actual_products:[{planning_product_id:pp,actual_amount:'500',unit:'mL'}]};
+ events=[];await executeCall(x,method,id,body);assert.equal((await x.row(id)).status,'completado');
+ assert.equal((await db.query('SELECT sum(available_quantity)::text n FROM stock_batches WHERE company_id=$1',[x.company])).rows[0].n,'9.500000');
+ const effects=await sideEffects(x.company);assert.equal(effects.usage_records.length,1);assert.equal(Number(effects.usage_records[0].amount_used),0.5);assert.equal(effects.usage_records[0].created_by,x.responsible);
+ assert.equal(effects.planning_product_completions.length,1);assert.equal(effects.crop_assignments.length,activity==='siembra'?1:0);
+ assert.equal(events.length,1);assert.equal(events[0][0],x.actor);assert.equal(events[0][1],'planning_completed');
+ events=[];assert.equal((await executeCall(x,method,id,body)).data.already_applied,true);assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,0);
+});
+for(const activity of ['riego','mantenimiento','otro','cosecha'])test('execute completes '+activity+' with effective date and no productive effects',async()=>{
+ const x=await fixture(),id=await x.create({activity_type:activity,lot_selections:[{lot_id:x.lot}]}),effects=await sideEffects(x.company);events=[];
+ await executeCall(x,'completeActivity',id,{effective_date:'2026-10-21'});const row=await x.row(id);assert.equal(row.status,'completado');assert.ok(String(row.effective_date).includes('2026'));
+ assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,1);assert.equal(events[0][0],x.actor);
+ events=[];await assert.rejects(executeCall(x,'completeActivity',id,{effective_date:'2026-10-21'}),e=>e.status===409);assert.equal(events.length,0);
+});
+test('execute completion rollback preserves stock, status and notices; simple route cannot bypass productive completion',async()=>{
+ const x=await fixture(),id=await x.create({products:[{product_id:x.product,amount:1,unit:'L'}]}),effects=await sideEffects(x.company);events=[];
+ await assert.rejects(executeCall(x,'completeWork',id,{effective_date:'2026-10-21'}),e=>e.status===409);
+ await assert.rejects(executeCall(x,'completeActivity',id,{effective_date:'2026-10-21'}),e=>e.status===400);
+ assert.equal((await x.row(id)).status,'pendiente');assert.deepEqual(await sideEffects(x.company),effects);assert.equal(events.length,0);
+ const y=await fixture(),simple=await y.create({activity_type:'riego'});events=[];
+ await assert.rejects(executeCall(y,'completeActivity',simple,{effective_date:'2027-01-01'}),e=>e.status===400);
+ failCommit=true;await assert.rejects(executeCall(y,'completeActivity',simple,{effective_date:'2026-10-21'}),/Synthetic failed commit/);assert.equal((await y.row(simple)).status,'pendiente');assert.equal(events.length,0);
+});
+test('execute preserves tenant isolation; editors and combined permissions may execute other users tasks',async()=>{
+ const x=await fixture(),y=await fixture(),foreign=await y.create();events=[];
+ for(const method of ['start','completeSowing','completeWork','completeActivity'])await assert.rejects(executeCall(x,method,foreign,{effective_date:'2026-10-21'}),e=>e.status===404);
+ for(const permissions of [['planning.edit'],['planning.edit','planning.execute']]){
+  const z=await fixture(),id=await z.create({activity_type:'riego'});events=[];
+  await executeCall(z,'start',id,{},z.third,permissions);await executeCall(z,'completeActivity',id,{effective_date:'2026-10-21'},z.third,permissions);assert.equal((await z.row(id)).status,'completado');
+ }
+ const self=await fixture(),id=await self.create({activity_type:'riego',responsible_user:self.actor});events=[];
+ await executeCall(self,'completeActivity',id,{effective_date:'2026-10-21'},self.actor);assert.equal(events.length,0);
+});
+test('HTTP execute-only works without view but never grants PATCH, DELETE, restore or historical load',async t=>{
+ const x=await fixture(),id=await x.create({activity_type:'riego'}),express=require('express'),app=express();let actor=x.responsible,permissions=['planning.execute'];
+ const filename=require.resolve('../routes/planning'),actual=createRequire(filename),module={exports:{}};
+ const pass=(req,res,next)=>next();
+ vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>name==='../controllers/planning'?controller:name==='../middleware/historicalOperations'?{rejectModeInput:pass,historical:()=>pass,blockHistorical:()=>pass}:actual(name)},{filename});
+ app.use(express.json());app.use((req,res,next)=>{req.user={id:actor,company_id:x.company,role:0,custom_permissions:permissions};next();});app.use('/api/planning',module.exports);app.use((e,req,res,next)=>res.status(e.status||500).json({message:e.message}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+ const url='http://127.0.0.1:'+server.address().port+'/api/planning',send=(path,method='POST',body={})=>fetch(url+path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ assert.equal((await fetch(url+'/'+id)).status,403);
+ for(const body of [{responsible_user:x.third},{title:'No'},{products:[]},{status:'completado'}])assert.equal((await send('/'+id,'PATCH',body)).status,403);
+ assert.equal((await send('/'+id,'DELETE')).status,403);assert.equal((await send('/enable/'+id,'PUT')).status,403);
+ assert.equal((await send('/register-completed','POST',{...x.body,effective_date:'2026-10-21'})).status,403);
+ assert.equal((await send('/'+id+'/start','POST',{status:'completado'})).status,400);
+ actor=x.third;assert.equal((await send('/'+id+'/start')).status,403);actor=x.responsible;
+ assert.equal((await send('/'+id+'/start')).status,200);assert.equal((await send('/'+id+'/start')).status,200);
+ assert.equal((await send('/'+id+'/complete-activity','POST',{effective_date:'2026-10-21'})).status,200);
+ permissions=['planning.view'];assert.equal((await send('/'+id+'/start')).status,403);
 });

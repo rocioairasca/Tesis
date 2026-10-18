@@ -84,6 +84,7 @@ const getPlanningForCompletion = async (client, planningId, companyId) => {
     `
     SELECT
       p.id,
+      p.company_id,
       p.activity_type,
       p.inventory_impact_mode,
       p.historical_import_id,

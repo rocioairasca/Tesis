@@ -37,6 +37,7 @@ const PERMISSION_GROUPS = {
     PERMISSIONS.PLANNING_VIEW,
     PERMISSIONS.PLANNING_CREATE,
     PERMISSIONS.PLANNING_EDIT,
+    PERMISSIONS.PLANNING_EXECUTE,
     PERMISSIONS.PLANNING_DISABLE,
     PERMISSIONS.PLANNING_ENABLE,
     PERMISSIONS.PLANNING_VIEW_DISABLED,
@@ -100,6 +101,7 @@ const PERMISSION_LABELS = {
   [PERMISSIONS.PLANNING_VIEW_DISABLED]: "Ver planificaciones deshabilitadas",
   [PERMISSIONS.PLANNING_CREATE]: "Crear planificaciones",
   [PERMISSIONS.PLANNING_EDIT]: "Editar planificaciones",
+  [PERMISSIONS.PLANNING_EXECUTE]: "Ejecutar tareas asignadas",
   [PERMISSIONS.PLANNING_DISABLE]: "Deshabilitar planificaciones",
   [PERMISSIONS.PLANNING_ENABLE]: "Restaurar planificaciones",
 
@@ -303,6 +305,9 @@ const UserTable = () => {
         onClose={() => setPermissionsDrawerOpen(false)}
         width={420}
       >
+        {selectedPermissions.includes(PERMISSIONS.PLANNING_EXECUTE) && !selectedPermissions.includes(PERMISSIONS.PLANNING_VIEW) && (
+          <p role="status">Para ver Planning y Mis tareas, agregá también “Ver planificaciones”. Ejecutar tareas asignadas no concede permiso de edición.</p>
+        )}
         {Object.entries(PERMISSION_GROUPS).map(
           ([groupName, permissions]) => (
             <div key={groupName}>

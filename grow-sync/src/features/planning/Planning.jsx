@@ -1,3 +1,4 @@
+import { canExecutePlanning, completionEndpoint, primaryExecutionAction, executionDeniedMessage } from './planningExecution.mjs';
 import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters } from './planningFilters.mjs';
 import { readAllPages } from '../dashboard/dashboardModel.mjs';
 import {renderUserOption} from '../../components/users/UserOption';
@@ -333,6 +334,8 @@ const Planning = () => {
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.PLANNING_CREATE);
   const canEdit = hasPermission(currentUser, PERMISSIONS.PLANNING_EDIT);
+  const executionCapabilities = { canEdit, canExecute: hasPermission(currentUser, PERMISSIONS.PLANNING_EXECUTE), userId: currentUser?.id, companyId: currentUser?.company_id };
+  const executionError = (error, fallback) => error.response?.status === 403 ? executionDeniedMessage : getUserFriendlyError(error, fallback);
   const canImportHistory = hasPermission(currentUser, PERMISSIONS.HISTORY_IMPORT);
   const [adopting,setAdopting]=useState(null);
   const [adoptionCutoff,setAdoptionCutoff]=useState(null);
@@ -996,6 +999,7 @@ const Planning = () => {
   const fetchPlanning = useCallback(async () => {
     const request = ++listRequest.current;
     setList([]);
+    if (!canView) { setLoading(false); return; }
     setLoading(true);
     try {
       const params = {};
@@ -1028,7 +1032,7 @@ const Planning = () => {
     } finally {
       if (request === listRequest.current) setLoading(false);
     }
-  }, [filters]);
+  }, [filters, canView]);
 
   const fetchUsers = useCallback(async () => {
     // The assignment catalog requires planning.create/edit; read-only users use row metadata.
@@ -1456,7 +1460,7 @@ const Planning = () => {
       fetchPlanning();
     } catch (e) {
       notification.error({
-        message: getUserFriendlyError(e, "No se pudo completar la siembra."),
+        message: executionError(e, "No se pudo completar la siembra."),
       });
     } finally {
       setCompletingSowing(false);
@@ -1482,9 +1486,9 @@ const Planning = () => {
 
     setCompletingWork(true);
     try {
-      const { data } = await api.post(`/planning/${getId(planning)}/complete-work`, {
+      const { data } = await api.post(`/planning/${getId(planning)}/${completionEndpoint(planning.activity_type)}`, {
         effective_date: values.effective_date.format("YYYY-MM-DD"),
-        actual_products: buildActualProductsPayload(planning, values),
+        ...(completionEndpoint(planning.activity_type) === 'complete-work' ? { actual_products: buildActualProductsPayload(planning, values) } : {}),
       });
       notification.success({
         message: data?.message || "El trabajo fue completado y los productos utilizados quedaron registrados.",
@@ -1495,7 +1499,7 @@ const Planning = () => {
       fetchPlanning();
     } catch (e) {
       notification.error({
-        message: getUserFriendlyError(e, "No se pudo completar la planificación."),
+        message: executionError(e, "No se pudo completar la planificación."),
       });
     } finally {
       setCompletingWork(false);
@@ -1505,8 +1509,10 @@ const Planning = () => {
   const updateStatus = async (row, status) => {
     if (statusActionLoading || isHistoricalPlanning(row)) return;
 
-    if (status === "completado" && PRODUCT_CONSUMING_ACTIVITIES.has(row?.activity_type)) {
-      if (row?.activity_type === "siembra") {
+    if (!canExecutePlanning(row, executionCapabilities)) return;
+    if (status === "completado") {
+      if (!completionEndpoint(row?.activity_type)) return;
+      if (completionEndpoint(row?.activity_type) === 'complete-sowing') {
         openCompleteSowingModal(row);
         return;
       }
@@ -1517,11 +1523,13 @@ const Planning = () => {
     const actionKey = `${getId(row)}:${status}`;
     try {
       setStatusActionLoading(actionKey);
-      await api.patch(`/planning/${getId(row)}`, { status });
+      if (status === 'en_progreso') await api.post(`/planning/${getId(row)}/start`, {});
+      else if (canEdit) await api.patch(`/planning/${getId(row)}`, { status });
+      else return;
       setDetailRevision(value => value + 1);
       fetchPlanning();
     } catch (e) {
-      notification.error({ message: getUserFriendlyError(e, "No se pudo actualizar el estado.") });
+      notification.error({ message: executionError(e, "No se pudo actualizar el estado.") });
     } finally {
       setStatusActionLoading(null);
     }
@@ -1533,7 +1541,8 @@ const Planning = () => {
 
   const getStatusTransitionActions = (item) => {
     const status = item?.status;
-    if (!canEdit || isHistoricalPlanning(item)) return [];
+    if (isHistoricalPlanning(item) || item?.enabled === false || item?.status === 'cancelado') return [];
+    if (!canEdit) { const action = primaryExecutionAction(item, executionCapabilities); return action ? [action] : []; }
 
     if (status === "planificado" || status === "pendiente") {
       return [
@@ -1558,18 +1567,7 @@ const Planning = () => {
     return [];
   };
 
-  const getPrimaryStatusAction = (item) => {
-    if (item?.inventory_impact_mode === 'HISTORICAL_NO_STOCK') return null;
-    const status = item?.status;
-    if (!canEdit) return null;
-    if (status === "planificado" || status === "pendiente") {
-      return { key: "progress", label: "Iniciar trabajo", ctaLabel: "Iniciar", status: "en_progreso" };
-    }
-    if (status === "en_progreso") {
-      return { key: "done", label: "Completar trabajo", ctaLabel: "Completar", status: "completado" };
-    }
-    return null;
-  };
+  const getPrimaryStatusAction = item => primaryExecutionAction(item, executionCapabilities);
 
   const getMonthlyMenuItems = (item, secondaryActions) => [
     ...getAdoptionActions(item),
@@ -2469,7 +2467,7 @@ const Planning = () => {
             <Alert
               type="info"
               showIcon
-              message="Confirmá la fecha real del trabajo y las cantidades efectivamente utilizadas."
+              message={completionEndpoint(workCompletion.planning?.activity_type) === 'complete-activity' ? 'Confirmá la fecha real de la tarea. Esta acción no registra consumos, cultivos ni cosechas.' : 'Confirmá la fecha real del trabajo y las cantidades efectivamente utilizadas.'}
             />
 
             <Descriptions column={1} size="small" bordered>
@@ -2520,9 +2518,9 @@ const Planning = () => {
                 <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
               </Form.Item>
 
-              <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
+              {completionEndpoint(workCompletion.planning.activity_type) === 'complete-work' && <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
                 {renderActualProductsForm(workCompletion.planning)}
-              </Form.Item>
+              </Form.Item>}
             </Form>
           </Space>
         )}

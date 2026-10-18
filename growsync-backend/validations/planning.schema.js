@@ -166,6 +166,15 @@ exports.updateSchema = z.object({
 });
 
 exports.idParam = z.object({ params: z.object({ id: z.string().uuid() }) });
+exports.startSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({}).strict(),
+});
+exports.completeActivitySchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({ effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD') }).strict(),
+});
+
 exports.completeSowingSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({

@@ -12,6 +12,7 @@ const ctrl = require('../controllers/planning');
 const validate = require('../middleware/validate');
 const checkRole = require('../middleware/checkRole');
 const requirePermission = require('../middleware/requirePermission');
+const requireAnyPermission = require('../middleware/requireAnyPermission');
 const requireDisabledRead = require('../middleware/requireDisabledRead');
 const { PERMISSIONS } = require('../constants/permissions');
 const schema = require('../validations/planning.schema');
@@ -61,10 +62,18 @@ router.post('/register-completed',
   ctrl.registerCompleted
 );
 
+// Dedicated execution endpoints never expose the general editing contract.
+router.post('/:id/start', validate(schema.startSchema),
+  requireAnyPermission(PERMISSIONS.PLANNING_EDIT, PERMISSIONS.PLANNING_EXECUTE),
+  blockHistorical('planning'), ctrl.start);
+router.post('/:id/complete-activity', validate(schema.completeActivitySchema),
+  requireAnyPermission(PERMISSIONS.PLANNING_EDIT, PERMISSIONS.PLANNING_EXECUTE),
+  blockHistorical('planning'), ctrl.completeActivity);
+
 // Completar siembra y registrar estado productivo
 router.post('/:id/complete-sowing',
   validate(schema.completeSowingSchema),
-  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  requireAnyPermission(PERMISSIONS.PLANNING_EDIT, PERMISSIONS.PLANNING_EXECUTE),
   blockHistorical('planning'),
   ctrl.completeSowing
 );
@@ -72,7 +81,7 @@ router.post('/:id/complete-sowing',
 // Completar trabajo con consumos reales de productos
 router.post('/:id/complete-work',
   validate(schema.completeWorkSchema),
-  requirePermission(PERMISSIONS.PLANNING_EDIT),
+  requireAnyPermission(PERMISSIONS.PLANNING_EDIT, PERMISSIONS.PLANNING_EXECUTE),
   blockHistorical('planning'),
   ctrl.completeWork
 );

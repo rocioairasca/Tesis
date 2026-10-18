@@ -10,9 +10,9 @@ Una tarea es una Planning asignada; no se crea otra entidad ni se cambian permis
 - Las URLs /planificaciones?mine=1 y &planningId=<id> usan el detalle existente. Los filtros viven en la URL y soportan back/forward. mine limpia responsible; elegir responsable desactiva mine. Cerrar el detalle solo elimina planningId.
 - No se infiere asignador desde creador. Solo se muestra assigned_by_name cuando está documentado. El vacío se refiere al horizonte y mantiene el enlace al listado completo.
 
-## Pendiente de diseño: planning.execute
+## Ejecución de tareas propias: planning.execute
 
-Evaluar un permiso separado para completar únicamente una tarea propia sin permitir editar planificaciones ajenas. Antes de implementarlo, definir acciones y transiciones permitidas, validaciones de responsable/empresa y estado al ejecutar, consumos y completions, reasignación concurrente, auditoría e idempotencia. Ser responsable no concede planning.edit. Esta fase no incorpora el permiso ni cambia acciones autorizadas.
+La fase posterior [planning.execute](planning-execute.md) permite iniciar y completar tareas propias mediante endpoints específicos, sin conceder edición. Mis tareas conserva su filtro y navegación al detalle; los formularios de completion permanecen en Planning.
 
 ## Validación local
 
