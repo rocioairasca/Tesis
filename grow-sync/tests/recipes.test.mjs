@@ -40,13 +40,14 @@ test('disabled existing products remain in edit/detail data without duplicating 
     {product_id:'old',product_name:'Producto anterior',product_unit:'L',product_enabled:false}]});
   assert.equal(merged.length,3);assert.equal(merged.find(p=>p.id==='old').enabled,false);
 });
-test('navigation uses Recipes on /usage, redirects disabled Usage, and retains legacy permission keys and sources',()=>{
+test('navigation uses Recipes on /usage, redirects disabled Usage, and uses recipe permissions while retaining usage sources',()=>{
   const read=path=>fs.readFileSync(new URL('../src/'+path,import.meta.url),'utf8');
   const app=read('App.jsx');assert.match(app,/features\/recipes\/Recipes.jsx/);assert.match(app,/<Recipes \/>/);
+  assert.match(app,/path="\/usage"[\s\S]*?PERMISSIONS.RECIPES_VIEW/);
   assert.doesNotMatch(app,/features\/usages\/Usage.jsx|<Usage \/>|<DisabledUsages \/>/);
   assert.match(app,/path="\/usages-disabled"[\s\S]*?<Navigate to="\/usage" replace \/>/);
-  for(const file of ['layout/Sidebar.jsx','components/NavbarBottom.jsx']){const source=read(file);assert.ok(source.includes('Recetas'));assert.ok(source.includes('/usage'));assert.ok(source.includes('PERMISSIONS.USAGE_VIEW'));assert.ok(!source.includes('Registros de Uso'));}
-  const permissions=read('components/users/UserTable.jsx');assert.ok(permissions.includes('Recetas: ['));assert.ok(permissions.includes('Ver recetas deshabilitadas'));assert.ok(permissions.includes('PERMISSIONS.USAGE_CREATE'));
+  for(const file of ['layout/Sidebar.jsx','components/NavbarBottom.jsx']){const source=read(file);assert.ok(source.includes('Recetas'));assert.ok(source.includes('/usage'));assert.ok(source.includes('PERMISSIONS.RECIPES_VIEW'));assert.ok(!source.includes('Registros de Uso'));}
+  const permissions=read('components/users/UserTable.jsx');assert.ok(permissions.includes('Recetas: ['));assert.ok(permissions.includes('Ver deshabilitadas'));assert.ok(permissions.includes('PERMISSIONS.RECIPES_CREATE'));
   for(const file of ['features/usages/Usage.jsx','features/usages/DisabledUsages.jsx'])assert.ok(fs.existsSync(new URL('../src/'+file,import.meta.url)));
 });
 test('form, list, errors, disabled states and mobile use the shared design system',async()=>{
@@ -56,7 +57,7 @@ test('form, list, errors, disabled states and mobile use the shared design syste
   const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),configFile:false,plugins:[conversion()],optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
   const prior=globalThis.localStorage;
   try{
-    globalThis.localStorage={getItem:()=>JSON.stringify({custom_permissions:['usage.view','usage.create','usage.edit','usage.view_disabled']})};
+    globalThis.localStorage={getItem:()=>JSON.stringify({custom_permissions:['recipes.view','recipes.create','recipes.edit','recipes.view_disabled']})};
     const {default:Page}=await server.ssrLoadModule('/src/features/recipes/Recipes.jsx');
     const {default:RecipeForm}=await server.ssrLoadModule('/src/features/recipes/components/RecipeForm.jsx');
     const {Form}=await import('antd');

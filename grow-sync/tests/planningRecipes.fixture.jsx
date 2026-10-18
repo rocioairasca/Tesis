@@ -9,7 +9,7 @@ import {cssVariables} from '../src/theme/tokens';
 import api from '../src/services/apiClient';
 import '../src/index.css';
 import '../src/App.css';
-localStorage.clear();localStorage.setItem('user',JSON.stringify({id:'user',role:0,custom_permissions:['planning.view','planning.create','planning.edit']}));
+localStorage.clear();localStorage.setItem('user',JSON.stringify({id:'user',role:0,custom_permissions:new URLSearchParams(location.search).has('recipeReader')?['planning.create','recipes.view']:['planning.view','planning.create','planning.edit']}));
 Object.entries(cssVariables).forEach(([key,value])=>document.documentElement.style.setProperty(key,value));
 const items=[{product_id:'glifo',product_name:'Glifosato',product_unit:'L',dose_amount:'2.5',dose_unit:'L',available_quantity:'5'},
   {product_id:'finesse',product_name:'Finesse',product_unit:'kg',dose_amount:'15',dose_unit:'g',available_quantity:'100'},

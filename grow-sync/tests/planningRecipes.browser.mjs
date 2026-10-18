@@ -16,11 +16,12 @@ before(async()=>{
   await server.listen();origin=`http://127.0.0.1:${server.httpServer.address().port}`;browser=await chromium.launch({channel:'msedge',headless:true});
 });
 after(async()=>{await browser?.close();await server?.close();});
-async function open(width=1440){
+async function open(width=1440,recipeReader=false){
   const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
   page.on('pageerror',e=>console.error('Fixture error:',e.message));
-  await page.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());await page.goto(origin);
-  try{await page.locator('.gs-planning button[aria-label^="Editar"]').first().waitFor({timeout:12000});}catch{await page.reload();await page.locator('.gs-planning button[aria-label^="Editar"]').first().waitFor({timeout:60000});}return page;
+  await page.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());await page.goto(origin+(recipeReader?'/?recipeReader=1':''));
+  const ready=recipeReader?page.getByRole('button',{name:'Nueva Planificación',exact:true}):page.locator('.gs-planning button[aria-label^="Editar"]').first();
+  try{await ready.waitFor({timeout:12000});}catch{await page.reload();await ready.waitFor({timeout:60000});}return page;
 }
 async function choose(page,id,label){const input=page.locator('#'+id);await input.scrollIntoViewIfNeeded();await input.focus();await input.press('ArrowDown');await page.locator('.ant-select-dropdown:visible').getByText(label,{exact:true}).click();}
 test('existing snapshot preview resizes independently of mutable source, detach preserves manual totals',async t=>{
@@ -35,8 +36,8 @@ test('existing snapshot preview resizes independently of mutable source, detach 
   assert.ok(await page.evaluate(()=>document.querySelector('input[id="products_0_amount"]')?.value.includes('37')));
   assert.equal(await page.evaluate(()=>window.__planningRecipeWrites.length),0);
 });
-test('normal create posts only origin, low stock warning does not block; preview reacts to area and mL/g units',async t=>{
-  const page=await open();t.after(()=>page.close());await page.getByRole('button',{name:'Nueva Planificación',exact:true}).click();
+test('planning.create + recipes.view can select and apply a recipe without recipe edit or usage permissions',async t=>{
+  const page=await open(1440,true);t.after(()=>page.close());await page.getByRole('button',{name:'Nueva Planificación',exact:true}).click();
   await choose(page,'activity_type','Fumigación');await choose(page,'field_context','Rastrojo');await choose(page,'crop_id','Maíz');
   await choose(page,'lot_selection_keys','Lote de prueba · 25 ha');await page.locator('.ant-drawer-open').getByText('Ubicación',{exact:true}).click();
   const drawer=page.locator('.ant-drawer-open');const area=drawer.getByRole('spinbutton');await area.fill('10');await area.press('Tab');

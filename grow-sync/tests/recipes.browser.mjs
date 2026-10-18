@@ -18,10 +18,12 @@ before(async()=>{
   browser=await chromium.launch({channel:'msedge',headless:true});
 });
 after(async()=>{await browser?.close();await server?.close();});
-async function pageAt(width){
+async function pageAt(width,mode){
   const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
   await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
-  await page.goto(origin);await page.getByRole('button',{name:'Nueva receta',exact:true}).waitFor({timeout:60000});
+  await page.goto(origin+(mode?'/?mode='+mode:''));
+  if(['editor','none','view'].includes(mode))return page;
+  await page.getByRole('button',{name:'Nueva receta',exact:true}).waitFor({timeout:60000});
   await page.getByRole('button',{name:'Nueva receta',exact:true}).isEnabled();
   await page.locator('.gs-ui-loading').waitFor({state:'hidden',timeout:60000});return page;
 }
@@ -83,4 +85,33 @@ test('recipe table prioritizes name, has six compact columns and centered pagina
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.equal(await page.evaluate(()=>window.__recipeWrites.length),0);
  }
+});
+
+test('legacy usage custom permissions retain recipe access; view-only hides mutations and disabled recipes',async t=>{
+ const legacy=await pageAt(1440,'legacy');t.after(()=>legacy.close());await legacy.getByRole('button',{name:'Nueva receta',exact:true}).click();await legacy.getByLabel('Nombre',{exact:true}).waitFor();
+ const view=await pageAt(1440,'view');t.after(()=>view.close());await view.getByRole('button',{name:'Barbecho Maíz',exact:true}).waitFor({timeout:60000});
+ assert.equal(await view.getByRole('button',{name:'Nueva receta',exact:true}).count(),0);const states=view.getByRole('combobox',{name:'Filtrar por estado'});await states.focus();await states.press('ArrowDown');
+ assert.deepEqual(await view.locator('.ant-select-dropdown:visible .ant-select-item-option-content').allTextContents(),['Activas']);await states.press('Escape');
+ await view.getByRole('button',{name:'Barbecho Maíz',exact:true}).click();await view.getByText('2,5 L/ha',{exact:true}).waitFor();assert.equal(await view.getByRole('button',{name:'Editar receta',exact:true}).count(),0);
+});
+
+test('recipe-only permissions expose sidebar/mobile navigation and GuardedRoute denies users without view',async t=>{
+ for(const width of [1440,390]){
+  const page=await pageAt(width,'nav');t.after(()=>page.close());
+  if(width>767)assert.equal(await page.getByRole('link',{name:'Recetas',exact:true}).getAttribute('href'),'/usage');
+  else {await page.getByRole('button',{name:'Más opciones',exact:true}).click();await page.locator('.ant-drawer-open').getByText('Recetas',{exact:true}).waitFor();}
+  const denied=await pageAt(width,'none');t.after(()=>denied.close());await denied.getByText('Sin acceso a Recetas',{exact:true}).waitFor({timeout:60000});
+  assert.equal(await denied.getByRole('link',{name:'Recetas',exact:true}).count(),0);assert.equal(await denied.getByRole('button',{name:'Nueva receta',exact:true}).count(),0);
+ }
+});
+
+test('permission editor separates Recipes from usage and saves recipe-only permissions without adding usage',async t=>{
+ const page=await pageAt(1024,'editor');t.after(()=>page.close());await page.getByRole('button',{name:'Permisos',exact:true}).click();
+ const drawer=page.locator('.ant-drawer-open'),recipes=drawer.getByRole('group',{name:'Recetas',exact:true}),usage=drawer.getByRole('group',{name:'Registros de uso',exact:true});
+ assert.equal(await recipes.getByRole('checkbox').count(),6);assert.equal(await usage.getByRole('checkbox').count(),6);
+ for(const label of ['Ver','Crear','Editar','Deshabilitar','Habilitar','Ver deshabilitadas'])await recipes.getByRole('checkbox',{name:label,exact:true}).waitFor();
+ for(const label of ['Ver','Crear','Editar'])await recipes.getByRole('checkbox',{name:label,exact:true}).check();
+ assert.equal(await usage.locator('input:checked').count(),0);
+ await drawer.getByRole('button',{name:'Guardar Permisos',exact:true}).click();await drawer.waitFor({state:'hidden'});
+ assert.deepEqual((await page.evaluate(()=>window.__permissionWrites))[0].custom_permissions,['recipes.view','recipes.create','recipes.edit']);
 });

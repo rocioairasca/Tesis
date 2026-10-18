@@ -102,8 +102,8 @@ test('filters by name, activity, crop and invalid state',async()=>{
   assert.equal((await service.list(pool,{...x.input,cropId:x.crop})).length,1);
   await assert.rejects(service.list(pool,{...x.input,enabled:'bad'}),e=>e.status===400);
 });
-test('HTTP uses legacy custom permissions, protects disabled reads, and rejects tenant in body',async t=>{
-  const x=await fixture(),express=require('express'),app=express();let permissions=['usage.view','usage.create','usage.edit','usage.disable','usage.enable','usage.view_disabled'];
+for(const prefix of ['recipes','usage'])test('HTTP '+prefix+' custom permissions support recipe CRUD and protect disabled reads',async t=>{
+  const x=await fixture(),express=require('express'),app=express();let permissions=[`${prefix}.view`,`${prefix}.create`,`${prefix}.edit`];
   app.use(express.json());app.use((req,res,next)=>{req.user={id:x.input.actorId,company_id:x.input.companyId,role:0,custom_permissions:permissions};next();});
   app.use('/api/recipes',require('../routes/recipes')(pool));app.use((e,req,res,next)=>res.status(e.status||500).json({message:e.message}));
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
@@ -111,13 +111,17 @@ test('HTTP uses legacy custom permissions, protects disabled reads, and rejects 
   const request=(method,path='',body)=>fetch(url+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
   assert.equal((await request('POST','',{...x.body,company_id:x.other})).status,400);
   const created=await request('POST','',x.body);assert.equal(created.status,201);const r=await created.json();
+  assert.equal((await request('PUT','/'+r.id,{...x.body,name:'Editada por permiso'})).status,200);
   assert.equal((await request('GET')).status,200);assert.equal((await request('GET','/options')).status,200);
-  for(const [method,path,key,body] of [['GET','','usage.view'],['POST','','usage.create',x.body],['PUT','/'+r.id,'usage.edit',x.body],['DELETE','/'+r.id,'usage.disable'],['POST','/'+r.id+'/enable','usage.enable']]){
+  permissions.push(`${prefix}.disable`,`${prefix}.enable`,`${prefix}.view_disabled`);
+  for(const [method,path,key,body] of [['GET','',`${prefix}.view`],['POST','',`${prefix}.create`,x.body],['PUT','/'+r.id,`${prefix}.edit`,x.body],['DELETE','/'+r.id,`${prefix}.disable`],['POST','/'+r.id+'/enable',`${prefix}.enable`]]){
     const prior=permissions;permissions=prior.filter(p=>p!==key);assert.equal((await request(method,path,body)).status,403);permissions=prior;
   }
-  assert.equal((await request('DELETE','/'+r.id)).status,200);permissions=['usage.view'];
+  permissions=[`${prefix}.disable`];assert.equal((await request('DELETE','/'+r.id)).status,200);permissions=[`${prefix}.view`];
   for(const path of ['?enabled=false','?enabled=all','/'+r.id])assert.equal((await request('GET',path)).status,403);
-  permissions.push('usage.view_disabled');assert.equal((await request('GET','/'+r.id)).status,200);
+  permissions.push(`${prefix}.view_disabled`);
+  for(const path of ['?enabled=false','?enabled=all','/'+r.id])assert.equal((await request('GET',path)).status,200);
+  permissions=[`${prefix}.enable`];assert.equal((await request('POST','/'+r.id+'/enable')).status,200);
 });
 
 test('complete CRUD lifecycle leaves Usage, stock, inventory and all unrelated tables unchanged',async()=>{

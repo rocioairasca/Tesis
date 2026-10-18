@@ -302,7 +302,7 @@ function App() {
               element={
                 <PrivatePage
                   requiredPermission={
-                    PERMISSIONS.USAGE_VIEW
+                    PERMISSIONS.RECIPES_VIEW
                   }
                 >
                   <Recipes />
@@ -315,7 +315,7 @@ function App() {
               element={
                 <PrivatePage
                   requiredPermission={
-                    PERMISSIONS.USAGE_VIEW
+                    PERMISSIONS.RECIPES_VIEW
                   }
                 >
                   <Navigate to="/usage" replace />

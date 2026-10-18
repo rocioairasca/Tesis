@@ -48,7 +48,10 @@ for(const [file,method,url,permissions] of routes) {
       assert.equal(granted.reached,true,'custom permission must override base role');
       const defaults=invoke(file,method,url,{role});
       const actual=getEffectivePermissions({role});
-      assert.equal(defaults.reached,actual.includes('all')||permissions.every(p=>actual.includes(p)));
+      // Completion routes also accept execution; ownership is enforced by the real controller.
+      const completion=file==='planning'&&method==='post'&&['/:id/complete-work','/:id/complete-sowing'].includes(url);
+      assert.equal(defaults.reached,actual.includes('all')||permissions.every(p=>actual.includes(p))||(completion&&actual.includes('planning.execute')));
+      if(completion)assert.equal(invoke(file,method,url,{role,custom_permissions:['planning.execute']}).reached,true);
     }
     if(file==='harvestRecords'&&method==='post'&&url==='/') {
       const denied=invoke(file,method,url,{role:0,custom_permissions:[]});

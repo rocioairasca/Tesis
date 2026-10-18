@@ -62,6 +62,15 @@ const PERMISSION_GROUPS = {
   ],
 
   Recetas: [
+    PERMISSIONS.RECIPES_VIEW,
+    PERMISSIONS.RECIPES_CREATE,
+    PERMISSIONS.RECIPES_EDIT,
+    PERMISSIONS.RECIPES_DISABLE,
+    PERMISSIONS.RECIPES_ENABLE,
+    PERMISSIONS.RECIPES_VIEW_DISABLED,
+  ],
+
+  "Registros de uso": [
     PERMISSIONS.USAGE_VIEW,
     PERMISSIONS.USAGE_VIEW_DISABLED,
     PERMISSIONS.USAGE_CREATE,
@@ -121,13 +130,21 @@ const PERMISSION_LABELS = {
   [PERMISSIONS.LOTS_DISABLE]: "Deshabilitar lotes",
   [PERMISSIONS.LOTS_ENABLE]: "Restaurar lotes",
 
-  // Uso
-  [PERMISSIONS.USAGE_VIEW]: "Ver recetas",
-  [PERMISSIONS.USAGE_VIEW_DISABLED]: "Ver recetas deshabilitadas",
-  [PERMISSIONS.USAGE_CREATE]: "Crear recetas",
-  [PERMISSIONS.USAGE_EDIT]: "Editar recetas",
-  [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar recetas",
-  [PERMISSIONS.USAGE_ENABLE]: "Restaurar recetas",
+  // Recetas
+  [PERMISSIONS.RECIPES_VIEW]: "Ver",
+  [PERMISSIONS.RECIPES_CREATE]: "Crear",
+  [PERMISSIONS.RECIPES_EDIT]: "Editar",
+  [PERMISSIONS.RECIPES_DISABLE]: "Deshabilitar",
+  [PERMISSIONS.RECIPES_ENABLE]: "Habilitar",
+  [PERMISSIONS.RECIPES_VIEW_DISABLED]: "Ver deshabilitadas",
+
+  // Registros de uso
+  [PERMISSIONS.USAGE_VIEW]: "Ver registros de uso",
+  [PERMISSIONS.USAGE_VIEW_DISABLED]: "Ver registros de uso deshabilitados",
+  [PERMISSIONS.USAGE_CREATE]: "Crear registros de uso",
+  [PERMISSIONS.USAGE_EDIT]: "Editar registros de uso",
+  [PERMISSIONS.USAGE_DISABLE]: "Deshabilitar registros de uso",
+  [PERMISSIONS.USAGE_ENABLE]: "Habilitar registros de uso",
 
   // Cosecha
   [PERMISSIONS.HARVEST_VIEW]: "Ver cosechas",
@@ -308,9 +325,10 @@ const UserTable = () => {
         {selectedPermissions.includes(PERMISSIONS.PLANNING_EXECUTE) && !selectedPermissions.includes(PERMISSIONS.PLANNING_VIEW) && (
           <p role="status">Para ver Planning y Mis tareas, agregá también “Ver planificaciones”. Ejecutar tareas asignadas no concede permiso de edición.</p>
         )}
+        <p>Por compatibilidad temporal, los permisos de Registros de uso también habilitan las acciones equivalentes en Recetas. Para dar acceso solo a Recetas, seleccioná únicamente permisos de Recetas.</p>
         {Object.entries(PERMISSION_GROUPS).map(
           ([groupName, permissions]) => (
-            <div key={groupName}>
+            <div key={groupName} role="group" aria-label={groupName}>
               <Divider orientation="left">
                 {groupName}
               </Divider>

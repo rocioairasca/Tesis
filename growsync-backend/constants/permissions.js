@@ -31,6 +31,14 @@ const PERMISSIONS = {
   LOTS_ENABLE: "lots.enable",
   LOTS_VIEW_DISABLED: "lots.view_disabled",
 
+  // Recetas
+  RECIPES_VIEW: "recipes.view",
+  RECIPES_CREATE: "recipes.create",
+  RECIPES_EDIT: "recipes.edit",
+  RECIPES_DISABLE: "recipes.disable",
+  RECIPES_ENABLE: "recipes.enable",
+  RECIPES_VIEW_DISABLED: "recipes.view_disabled",
+
   // Registros de uso
   USAGE_VIEW: "usage.view",
   USAGE_CREATE: "usage.create",
@@ -80,6 +88,7 @@ const ROLE_PERMISSIONS = {
       PERMISSIONS.LOTS_VIEW,
   
       PERMISSIONS.USAGE_CREATE,
+      PERMISSIONS.RECIPES_CREATE,
   
       PERMISSIONS.VEHICLES_VIEW,
     ],
@@ -95,8 +104,11 @@ const ROLE_PERMISSIONS = {
       PERMISSIONS.LOTS_VIEW,
   
       PERMISSIONS.USAGE_VIEW,
+      PERMISSIONS.RECIPES_VIEW,
       PERMISSIONS.USAGE_CREATE,
+      PERMISSIONS.RECIPES_CREATE,
       PERMISSIONS.USAGE_EDIT,
+      PERMISSIONS.RECIPES_EDIT,
   
       PERMISSIONS.HARVEST_VIEW,
       PERMISSIONS.HARVEST_CREATE,
@@ -137,11 +149,17 @@ const ROLE_PERMISSIONS = {
       PERMISSIONS.LOTS_VIEW_DISABLED,
   
       PERMISSIONS.USAGE_VIEW,
+      PERMISSIONS.RECIPES_VIEW,
       PERMISSIONS.USAGE_CREATE,
+      PERMISSIONS.RECIPES_CREATE,
       PERMISSIONS.USAGE_EDIT,
+      PERMISSIONS.RECIPES_EDIT,
       PERMISSIONS.USAGE_DISABLE,
+      PERMISSIONS.RECIPES_DISABLE,
       PERMISSIONS.USAGE_ENABLE,
+      PERMISSIONS.RECIPES_ENABLE,
       PERMISSIONS.USAGE_VIEW_DISABLED,
+      PERMISSIONS.RECIPES_VIEW_DISABLED,
   
       PERMISSIONS.HARVEST_VIEW,
       PERMISSIONS.HARVEST_CREATE,
@@ -172,12 +190,14 @@ const getDefaultPermissionsByRole = (role) => {
   return ROLE_PERMISSIONS[Number(role)] || [];
 };
 
+// Transitional legacy compatibility: usage.* grants the equivalent recipes.* only.
+// Do not mutate stored custom permissions or grant usage access from recipe permissions.
 const getEffectivePermissions = (user) => {
-  if (Array.isArray(user.custom_permissions)) {
-    return user.custom_permissions;
-  }
-
-  return getDefaultPermissionsByRole(user.role);
+  if (!user) return [];
+  const permissions = Array.isArray(user.custom_permissions)
+    ? user.custom_permissions : getDefaultPermissionsByRole(user.role);
+  return [...new Set([...permissions, ...['view', 'create', 'edit', 'disable', 'enable', 'view_disabled']
+    .filter(action => permissions.includes('usage.' + action)).map(action => 'recipes.' + action)])];
 };
 
 module.exports = {

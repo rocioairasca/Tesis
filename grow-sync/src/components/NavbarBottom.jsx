@@ -63,7 +63,7 @@ const BottomNavigation = () => {
       key: "usage",
       label: "Recetas",
       icon: <FormOutlined />,
-      show: hasPermission(currentUser, PERMISSIONS.USAGE_VIEW),
+      show: hasPermission(currentUser, PERMISSIONS.RECIPES_VIEW),
       onClick: () => {
         navigate("/usage");
         setDrawerVisible(false);

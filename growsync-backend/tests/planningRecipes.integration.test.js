@@ -154,7 +154,9 @@ test('HTTP recipe options accepts Planning custom permissions without usage.view
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
   const url='http://127.0.0.1:'+server.address().port+'/api/planning/recipe-options?activity_type=fumigacion&field_context=stubble&crop_id='+x.crop;
   let result=await fetch(url);assert.equal(result.status,200);assert.equal((await result.json())[0].id,x.recipe.id);
+  permissions=['planning.create','recipes.view'];assert.equal((await fetch(url)).status,200);
   permissions=['planning.edit'];assert.equal((await fetch(url)).status,200);
+  permissions=['recipes.view'];assert.equal((await fetch(url)).status,403);
   permissions=['usage.view'];assert.equal((await fetch(url)).status,403);
   permissions=[];assert.equal((await fetch(url)).status,403);
   const performed={...x.body,effective_date:'2026-10-01',actual_products:[{product_id:x.liquid,actual_amount:0,unit:'L'},{product_id:x.mass,actual_amount:0,unit:'kg'}]};

@@ -12,7 +12,7 @@ import './recipes.css';
 export default function Recipes(){
   const user=JSON.parse(localStorage.getItem('user')||'null');
   const allowed=key=>hasPermission(user,key);
-  const canDisabled=allowed(PERMISSIONS.USAGE_VIEW_DISABLED);
+  const canDisabled=allowed(PERMISSIONS.RECIPES_VIEW_DISABLED);
   const [rows,setRows]=useState([]),[catalog,setCatalog]=useState({products:[],crops:[]});
   const [loading,setLoading]=useState(true),[error,setError]=useState(null);
   const [enabled,setEnabled]=useState('true'),[search,setSearch]=useState(''),[activity,setActivity]=useState(),[crop,setCrop]=useState();
@@ -42,9 +42,9 @@ export default function Recipes(){
   };
   const actions=recipe=>[
     {key:'view',label:'Ver receta',onClick:()=>setViewing(recipe)},
-    {key:'edit',label:'Editar',hidden:!allowed(PERMISSIONS.USAGE_EDIT),onClick:()=>openEditor(recipe)},
-    {key:'disable',label:'Deshabilitar',danger:true,hidden:!recipe.enabled||!allowed(PERMISSIONS.USAGE_DISABLE),onClick:()=>setConfirmation({recipe,enable:false})},
-    {key:'enable',label:'Restaurar',hidden:recipe.enabled||!allowed(PERMISSIONS.USAGE_ENABLE),onClick:()=>setConfirmation({recipe,enable:true})},
+    {key:'edit',label:'Editar',hidden:!allowed(PERMISSIONS.RECIPES_EDIT),onClick:()=>openEditor(recipe)},
+    {key:'disable',label:'Deshabilitar',danger:true,hidden:!recipe.enabled||!allowed(PERMISSIONS.RECIPES_DISABLE),onClick:()=>setConfirmation({recipe,enable:false})},
+    {key:'enable',label:'Restaurar',hidden:recipe.enabled||!allowed(PERMISSIONS.RECIPES_ENABLE),onClick:()=>setConfirmation({recipe,enable:true})},
   ];
   const columns=[
     {title:'Receta',dataIndex:'name',ellipsis:false,render:(name,row)=><div className="recipe-name-cell"><EntityLink onClick={()=>setViewing(row)}>{name}</EntityLink>{!row.enabled&&<span className="recipe-disabled-badge"><StatusBadge tone="neutral">Deshabilitada</StatusBadge></span>}</div>},
@@ -56,7 +56,7 @@ export default function Recipes(){
   const filtered=filterRecipes(rows,{search,activity,crop});
   const activeFilters=[...(activity?[{key:'activity',label:activityLabel(activity),onRemove:()=>setActivity()}]:[]),...(crop?[{key:'crop',label:catalog.crops.find(c=>c.id===crop)?.name||'Cultivo',onRemove:()=>setCrop()}]:[])];
   return <main className="gs-recipes">
-    <PageHeader title="Recetas" description="Mezclas y dosis por hectárea" primaryAction={{label:'Nueva receta',icon:<PlusOutlined />,hidden:!allowed(PERMISSIONS.USAGE_CREATE),disabled:loading,onClick:()=>openEditor(null)}} />
+    <PageHeader title="Recetas" description="Mezclas y dosis por hectárea" primaryAction={{label:'Nueva receta',icon:<PlusOutlined />,hidden:!allowed(PERMISSIONS.RECIPES_CREATE),disabled:loading,onClick:()=>openEditor(null)}} />
     <FilterBar search={{label:'Buscar recetas por nombre',placeholder:'Buscar por nombre',value:search,onChange:setSearch}}
       activeFilters={activeFilters} onClear={()=>{setSearch('');setActivity();setCrop();}}
       filters={<>
@@ -77,7 +77,7 @@ export default function Recipes(){
       {editor&&<RecipeForm form={form} products={products} crops={catalog.crops} busy={saving} onFinish={save} />}
     </FormDrawer>
     <FormDrawer title={viewing?.name||'Detalle de receta'} open={Boolean(viewing)} onClose={()=>setViewing(null)}
-      footer={viewing&&allowed(PERMISSIONS.USAGE_EDIT)&&<Button onClick={()=>{openEditor(viewing);setViewing(null);}}>Editar receta</Button>}>
+      footer={viewing&&allowed(PERMISSIONS.RECIPES_EDIT)&&<Button onClick={()=>{openEditor(viewing);setViewing(null);}}>Editar receta</Button>}>
       {viewing&&<>
         <p>{[activityLabel(viewing.activity_type),viewing.field_context&&contextLabel(viewing.field_context),viewing.crop_name].filter(Boolean).join(' · ')}</p>
         <StatusBadge tone={viewing.enabled?'success':'neutral'}>{viewing.enabled?'Activa':'Deshabilitada'}</StatusBadge>
