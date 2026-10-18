@@ -38,6 +38,7 @@ import {
   SyncOutlined,
 } from '../../components/AppIcons';
 import SubLotEditor from './components/SubLotEditor';
+import LotSoilAnalysisSummary from './soilAnalysis/LotSoilAnalysisSummary';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
 const { Text, Title } = Typography;
@@ -923,6 +924,14 @@ const LotDivisions = () => {
 
         <Col xs={24} lg={17} order={isMobile ? 1 : 2}>
           {renderProductiveState()}
+          {lot && getId(lot) === lotId && hasPermission(currentUser, PERMISSIONS.SOIL_ANALYSIS_VIEW) && (
+            <LotSoilAnalysisSummary
+              key={lotId}
+              lotId={lotId}
+              canCreate={hasPermission(currentUser, PERMISSIONS.SOIL_ANALYSIS_CREATE)}
+              onNavigate={path => confirmDiscardSubLotChanges(() => navigate(path))}
+            />
+          )}
 
           <Card
             size="small"

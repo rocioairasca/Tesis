@@ -40,7 +40,7 @@ export function validatePdf(file){if(!file)throw new Error('Seleccioná el PDF o
 const normalizedSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 export function historyRows(reports,lotId,subLotId,search=''){
  const query=normalizedSearch(search);
- return reports.flatMap(report=>report.samples.filter(sample=>(!lotId||sample.lot_id===lotId)&&(!subLotId||(subLotId==='full'?!sample.sub_lot_id:sample.sub_lot_id===subLotId))).filter(sample=>!query||[report.report_number,report.laboratory,sample.sample_name].some(value=>normalizedSearch(value).includes(query))).map(sample=>({...sample,key:report.id+':'+sample.id,report}))).sort((a,b)=>b.sample_date.localeCompare(a.sample_date));}
+ return reports.flatMap(report=>report.samples.filter(sample=>(!lotId||sample.lot_id===lotId)&&(!subLotId||(subLotId==='full'?!sample.sub_lot_id:sample.sub_lot_id===subLotId))).filter(sample=>!query||[report.report_number,report.laboratory,sample.sample_name].some(value=>normalizedSearch(value).includes(query))).map(sample=>({...sample,key:report.id+':'+sample.id,report}))).sort((a,b)=>String(b.sample_date||'').localeCompare(String(a.sample_date||'')));}
 export function safePdfUrl(value){try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)?url.href:null;}catch{return null;}}
 
 // Extraction is a proposal. Even in a contextual view, lot/division must be selected manually.

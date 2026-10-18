@@ -2,6 +2,7 @@
 import '@ant-design/v5-patch-for-react-19';
 import React,{useEffect} from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Route,Routes,useLocation} from 'react-router-dom';import {ConfigProvider} from 'antd';
 import api from '../src/services/apiClient';import {appTheme} from '../src/theme/theme';import {cssVariables} from '../src/theme/tokens';
+import LotDivisions from '../src/features/lots/LotDivisions';
 import SoilAnalysis from '../src/features/lots/soilAnalysis/SoilAnalysis';import LotsOverview from '../src/features/lots/LotsOverview';
 import '../src/index.css';import '../src/App.css';
 const flags=new URLSearchParams(location.search),lotId='10000000-0000-4000-8000-000000000001',subId='20000000-0000-4000-8000-000000000001';
@@ -13,6 +14,12 @@ const catalog=[{...lot,sub_lots:[sub]},{...lot2,sub_lots:[sub2]}];
 const sample={id:'sample-a',lot_id:lotId,lot_name:lot.name,sub_lot_id:null,sub_lot_name:null,sample_date:'2026-09-22',depth_from_cm:'0.00',depth_to_cm:'20.00',sample_name:'Muestra sintética',sampled_by:'Equipo sintético',results:[{id:'result-a',parameter_name:'pH',method:'Método sintético',unit:'UpH',raw_value:'7,1',numeric_value:'7.100000',result_status:'measured',sort_order:0},{id:'result-b',parameter_name:'Zinc',method:'Método sintético',unit:'ppm',raw_value:'N.R.',numeric_value:null,result_status:'not_requested',sort_order:1}]};
 const report={id:'30000000-0000-4000-8000-000000000001',report_number:'SYN-001',laboratory:'Laboratorio sintético',received_date:'2026-10-01',enabled:true,original_filename:'synthetic.pdf',samples:[sample,{...sample,id:'sample-b',sample_name:'Otra muestra sintética',sub_lot_id:subId,sub_lot_name:sub.name,sample_date:'2026-09-23',depth_from_cm:'20.00',depth_to_cm:'40.00'}]};
 if(flags.has('multi'))Object.assign(report.samples[1],{lot_id:lot2.id,lot_name:lot2.name,sub_lot_id:sub2.id,sub_lot_name:sub2.name});
+if(flags.has('summaryMany'))report.samples.push(
+ {...sample,id:'recent',sample_name:'Muestra reciente',sample_date:'2026-09-24',depth_from_cm:null,depth_to_cm:null},
+ {...sample,id:'undated',sample_name:'Muestra sin fecha',sample_date:null},
+ {...sample,id:'foreign',lot_id:lot2.id,lot_name:lot2.name,sample_name:'Muestra de otro lote',sample_date:'2099-01-01'}
+);
+window.__soilListFail=flags.has('soilListError');window.__soilListDelay=flags.has('soilListSlow')?1000:0;
 const reports=flags.has('empty')?[]:[report];window.__soilExtracts=[];window.__soilExtractFail=false;window.__soilExtractDelay=0;window.__soilExtractAborts=0;window.__soilWrites=[];window.__soilReads=[];window.__soilPreviewFail=flags.has('previewError');window.__soilExternalCalls=0;window.__soilSigns=[];window.__soilAborts=0;window.__soilPreviewDelay=0;window.__soilPreviewTtl=300000;window.__soilUrlMode="valid";
 api.defaults.adapter=async config=>{
  const response=data=>({data,status:200,statusText:'OK',headers:{},config});window.__soilReads.push({url:config.url,params:config.params});
@@ -28,6 +35,13 @@ api.defaults.adapter=async config=>{
  }
  if(config.method==='get'){
 
+  if(config.url==='/lots')return response([lot,lot2]);
+  if(config.url.endsWith('/layouts')||config.url.endsWith('/history'))return response([]);
+  if(config.url.endsWith('/productive-state'))return response({units:[]});
+  if(config.url==='/soil-analysis'){
+   if(window.__soilListDelay)await new Promise(resolve=>setTimeout(resolve,window.__soilListDelay));
+   if(window.__soilListFail)throw new Error('Synthetic soil list failure');
+  }
   if(config.url==='/soil-analysis/lot-context'||config.url.startsWith('/soil-analysis/lot-context/'))return response({lot:config.url.endsWith('/lot-context')?null:catalog.find(l=>config.url.endsWith('/'+l.id)),lots:catalog});
   if(config.url.endsWith('/file-url')){
    const sequence=window.__soilSigns.length+1;window.__soilSigns.push(sequence);
@@ -48,4 +62,4 @@ api.defaults.adapter=async config=>{
 function Debug(){const route=useLocation();useEffect(()=>{window.__soilRoute=route.pathname+route.search;},[route]);return null;}
 function MapStub({rows,onSelect}){return <div>{rows.flatMap(row=>[row,...row.children]).map(row=><button key={row.key} onClick={()=>onSelect(row.key)}>Seleccionar {row.name}</button>)}</div>;}
 const source={lots:async()=>[lot],productive:async()=>({})};
-createRoot(document.getElementById('root')).render(<ConfigProvider theme={appTheme}><MemoryRouter initialEntries={[flags.has('lots')?'/lotes':flags.has('global')?'/analisis-suelo':'/lotes/'+lotId+'/analisis-suelo'+(flags.has('sub')?'?subLotId='+subId:'')]}><Debug/><Routes><Route path="/analisis-suelo" element={<SoilAnalysis key="global"/>} /><Route path="/lotes" element={<LotsOverview user={user} source={source} MapView={MapStub} tiles={false} />} /><Route path="/lotes/:lotId/analisis-suelo" element={<SoilAnalysis/>} /></Routes></MemoryRouter></ConfigProvider>);
+createRoot(document.getElementById('root')).render(<ConfigProvider theme={appTheme}><MemoryRouter initialEntries={[flags.has('divisions')?'/lotes/'+lotId+'/divisiones':flags.has('lots')?'/lotes':flags.has('global')?'/analisis-suelo':'/lotes/'+lotId+'/analisis-suelo'+(flags.has('sub')?'?subLotId='+subId:'')]}><Debug/><Routes><Route path="/lotes/:lotId/divisiones" element={<LotDivisions/>} /><Route path="/analisis-suelo" element={<SoilAnalysis key="global"/>} /><Route path="/lotes" element={<LotsOverview user={user} source={source} MapView={MapStub} tiles={false} />} /><Route path="/lotes/:lotId/analisis-suelo" element={<SoilAnalysis/>} /></Routes></MemoryRouter></ConfigProvider>);

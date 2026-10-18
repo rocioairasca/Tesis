@@ -106,3 +106,10 @@ https://github.com/unjs/unpdf
 66 tests relacionados (55 backend / 11 frontend) y 20 de navegador aprobados con Node 20.20.2. Responsive comprobado en 1440, 1024 y 390 px.
 Build frontend correcto (advertencias existentes de Vite/chunks); git diff --check sin errores.
 Sin producción, migraciones en bases reales, commit, push ni deploy.
+
+## Resumen en el detalle del lote
+En /lotes/:lotId/divisiones, Análisis de suelo aparece después del estado productivo y antes del editor. LotSoilAnalysisSummary consulta una sola vez GET /soil-analysis con lot_id y enabled=true; historyRows filtra las muestras del lote (también dentro de informes compartidos), ordena por fecha y limita la presentación a tres. Las fechas ausentes quedan al final; los empates conservan el orden estable del endpoint. Se reutilizan depthText y highlights, que usa resultText. No hay interpretaciones agronómicas.
+El endpoint actual devuelve los informes completos y sus resultados en una consulta: no se agregaron paginación, endpoints ni llamadas por muestra. El límite de tres es de presentación, no de descarga.
+La sección solo se monta con soil_analysis.view y muestra carga, error con reintento, vacío o resultados. Nuevo análisis/Cargar análisis exige soil_analysis.create. Su carga es independiente del estado productivo y las divisiones. La navegación respeta los cambios pendientes del editor.
+Ver todos abre el historial contextual. Ver análisis usa ?reportId para abrir el modal ya existente, verificando que el informe esté en el historial del lote. Nuevo análisis usa ?new=true y el editor existente con contexto de lote; la carga manual lo preselecciona y la extracción conserva su revisión de ubicación explícita. Los parámetros de entrada se consumen sin persistirlos ni reabrir el modal al cerrarlo.
+Validación de esta integración con Node 20.20.2: 21 tests frontend relacionados (soilAnalysis, lotsOverview y lotsMapViewport) y 24 tests de navegador aprobados; responsive 1440/1024/390. Build correcto con aviso de tamaño de bundles; git diff --check sin errores. Backend sin cambios.

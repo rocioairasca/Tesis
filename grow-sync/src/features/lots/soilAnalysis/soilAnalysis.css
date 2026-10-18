@@ -43,3 +43,11 @@
 .soil-sample-actions, .soil-add-sample { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; min-width:0; }
 .soil-sample-actions { margin-top:12px; }
 .soil-add-sample { margin-top:16px; }
+
+.soil-lot-summary { margin-bottom:16px; min-width:0; }
+.soil-lot-summary-heading, .soil-lot-summary-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.soil-lot-summary-heading { justify-content:space-between; padding:8px 0; white-space:normal; }
+.soil-lot-summary-sample { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; width:100%; min-width:0; }
+.soil-lot-summary-content { min-width:0; overflow-wrap:anywhere; }
+.soil-lot-summary .ant-alert { flex-wrap:wrap; gap:8px; }
+@media(max-width:767px){ .soil-lot-summary-sample { flex-direction:column; } }

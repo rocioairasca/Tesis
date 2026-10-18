@@ -38,3 +38,9 @@ test('single-result editing synchronizes metadata without changing the meaning o
 test('extraction messages separate explicit information from review while keeping legacy string warnings compatible',()=>{
  assert.deepEqual(extractionMessages(['Información: Profundidad: el informe indica NO CONSIGNA.','Fecha de muestreo: revisala antes de guardar.','Advertencia anterior']),{info:['Profundidad: el informe indica NO CONSIGNA.'],review:['Fecha de muestreo: revisala antes de guardar.','Advertencia anterior']});assert.deepEqual(extractionMessages(),{info:[],review:[]});
 });
+
+test('sample chronology preserves report tie order and places absent dates last without inventing dates',()=>{
+ const reports=[{id:'r1',samples:[{...sample,id:'missing',sample_date:null},{...sample,id:'first',sample_date:'2026-09-23'},{...sample,id:'older',sample_date:'2026-09-22'}]},{id:'r2',samples:[{...sample,id:'second',sample_date:'2026-09-23'},{...sample,id:'foreign',lot_id:'other',sample_date:'2099-01-01'}]}];
+ assert.deepEqual(historyRows(reports,'lot').map(row=>row.id),['first','second','older','missing']);
+ assert.equal(historyRows(reports,'lot').at(-1).sample_date,null);
+});

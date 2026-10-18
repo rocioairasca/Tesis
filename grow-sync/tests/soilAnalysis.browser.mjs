@@ -10,7 +10,8 @@ before(async()=>{const root=fileURLToPath(new URL('..',import.meta.url));server=
 after(async()=>{await browser?.close();await server?.close();});
 async function open(width=1440,flags=''){
  const page=await browser.newPage({viewport:{width,height:1000},reducedMotion:'reduce'});page.setDefaultTimeout(15000);page.setDefaultNavigationTimeout(60000);page.on('pageerror',e=>console.error('Synthetic UI error:',e.message));await page.context().route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());await page.goto(origin+'/'+flags,{waitUntil:'domcontentloaded'});
- try{await page.getByRole('heading',{level:1,name:flags.includes('lots')?'Lotes':/^Análisis de suelo/}).waitFor({timeout:15000});}catch{await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('heading',{level:1,name:flags.includes('lots')?'Lotes':/^Análisis de suelo/}).waitFor({timeout:60000});}
+ const heading={level:flags.includes('divisions')?3:1,name:flags.includes('divisions')?'Lote sintético':flags.includes('lots')?'Lotes':/^Análisis de suelo/};
+ try{await page.getByRole('heading',heading).waitFor({timeout:15000});}catch{await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('heading',heading).waitFor({timeout:60000});}
  return page;
 }
 async function select(page,input,label){await input.scrollIntoViewIfNeeded();await input.focus();await input.press('ArrowDown');await page.locator('.ant-select-dropdown:visible').getByText(label,{exact:true}).click();}
@@ -179,4 +180,36 @@ test('document information and real review issues have distinct tones before fin
   const notices=await drawer.locator('.soil-extraction-review').innerText();assert.doesNotMatch(notices,/result_status|source text|parser|según indicación|adaptación|notas|Información:/i);assert.ok(notices.includes('no corresponden a análisis realizados'));
   await assertReviewOrder(drawer);const save=drawer.getByRole('button',{name:'Guardar análisis',exact:true}),review=drawer.getByRole('checkbox',{name:/Revisé los datos extraídos/});assert.equal(await save.isDisabled(),true);await review.check();assert.equal(await save.isDisabled(),false);assert.ok(await drawer.locator('.ant-drawer-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1));assert.equal(await page.evaluate(()=>window.__soilWrites.length),0);await drawer.getByRole('button',{name:'Cancelar',exact:true}).click();await drawer.waitFor({state:'hidden'});
  }
+});
+
+const lotPath='/lotes/10000000-0000-4000-8000-000000000001/analisis-suelo';
+test('lot detail displays three recent local samples, existing formatting and detail link at every viewport',async t=>{
+ for(const width of [1440,1024,390]){
+  const page=await open(width,'?divisions&summaryMany');t.after(()=>page.close());const section=page.getByRole('region',{name:'Análisis de suelo del lote'});
+  await section.getByText('Muestra reciente',{exact:true}).waitFor();assert.equal(await section.locator('article').count(),3);
+  const articles=await section.locator('article').allTextContents();assert.ok(articles[0].includes('24/09/2026'));assert.ok(articles[1].includes('23/09/2026'));assert.ok(articles[2].includes('22/09/2026'));
+  assert.ok(articles[0].includes('Profundidad no consignada'));assert.ok(articles[0].includes('Lote completo'));assert.ok(articles[1].includes('División sintética'));assert.ok(articles.every(text=>text.includes('Informe SYN-001')&&text.includes('Laboratorio sintético')&&text.includes('pH: 7,1')));assert.equal(await section.getByText('Muestra de otro lote',{exact:true}).count(),0);assert.equal(await section.getByText('Muestra sin fecha',{exact:true}).count(),0);
+  const reads=await page.evaluate(()=>window.__soilReads.filter(r=>r.url.startsWith('/soil-analysis')));assert.equal(reads.length,1);assert.deepEqual(reads[0],{url:'/soil-analysis',params:{lot_id:'10000000-0000-4000-8000-000000000001',enabled:'true'}});
+  assert.ok(await section.evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&el.scrollWidth<=el.clientWidth+1;}));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.ok(await section.evaluate(el=>{const headers=[...document.querySelectorAll('.ant-card-head-title')];const state=headers.find(h=>h.textContent==='Estado productivo'),editor=headers.find(h=>h.textContent==='Editor'),history=headers.find(h=>h.textContent==='Historial del lote');const before=(a,b)=>Boolean(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING);return before(state,el)&&before(el,editor)&&before(editor,history);}));
+  await section.getByRole('button',{name:'Ver análisis',exact:true}).first().click();const modal=page.getByRole('dialog');await modal.getByText('Laboratorio sintético',{exact:true}).waitFor();await page.waitForFunction(path=>window.__soilRoute===path,lotPath);assert.equal(await page.evaluate(()=>window.__soilReads.filter(r=>r.url==='/soil-analysis/30000000-0000-4000-8000-000000000001').length),1);
+ }
+});
+test('lot summary navigation reuses contextual history and preselected manual creation',async t=>{
+ for(const action of ['Ver todos','Nuevo análisis','Cargar análisis']){
+  const page=await open(1440,'?divisions'+(action==='Cargar análisis'?'&empty':''));t.after(()=>page.close());const section=page.getByRole('region',{name:'Análisis de suelo del lote'});await section.getByRole('button',{name:action,exact:true}).waitFor();await section.getByRole('button',{name:action,exact:true}).click();await page.getByRole('heading',{name:'Análisis de suelo · Lote sintético',exact:true}).waitFor();
+  if(action==='Ver todos'){await page.getByRole('button',{name:'23/09/2026',exact:true}).waitFor();assert.equal(await page.locator('.ant-drawer-open').count(),0);}
+  else{const drawer=page.locator('.ant-drawer-open');await drawer.getByRole('button',{name:'Completar manualmente',exact:true}).click();await drawer.getByRole('combobox',{name:'Lote de muestra 1',exact:true}).waitFor();assert.equal(await drawer.locator('#samples_0_lot_id').evaluate(el=>el.closest('.ant-select').textContent),'Lote sintético');}
+  await page.waitForFunction(path=>window.__soilRoute===path,lotPath);assert.equal(await page.evaluate(()=>window.__soilWrites.length),0);
+ }
+});
+test('lot soil section enforces view/create and exposes empty state to read-only users',async t=>{
+ for(const flags of ['readOnly','readOnly&empty','denied']){
+  const page=await open(1024,'?divisions&'+flags);t.after(()=>page.close());await page.getByText('Historial del lote',{exact:true}).waitFor();const section=page.getByRole('region',{name:'Análisis de suelo del lote'});
+  if(flags==='denied'){assert.equal(await section.count(),0);assert.equal(await page.evaluate(()=>window.__soilReads.filter(r=>r.url.startsWith('/soil-analysis')).length),0);}
+  else{if(flags.includes('empty'))await section.getByText('Este lote todavía no tiene análisis de suelo cargados.',{exact:true}).waitFor();else await section.getByText('Otra muestra sintética',{exact:true}).waitFor();assert.equal(await section.getByRole('button',{name:/Nuevo análisis|Cargar análisis/}).count(),0);await section.getByRole('button',{name:'Ver todos',exact:true}).waitFor();}
+ }
+});
+test('soil loading and retry stay local to the section and leave lot detail operational',async t=>{
+ const page=await open(390,'?divisions&soilListError&soilListSlow');t.after(()=>page.close());const section=page.getByRole('region',{name:'Análisis de suelo del lote'});await section.getByRole('status').waitFor();await section.getByText('No pudimos cargar los análisis de suelo.',{exact:true}).waitFor();await page.getByText('Estado productivo',{exact:true}).waitFor();await page.getByText('Historial del lote',{exact:true}).waitFor();await page.getByText('Seleccioná o creá una división',{exact:true}).waitFor();await page.evaluate(()=>{window.__soilListFail=false;});await section.getByRole('button',{name:'Reintentar',exact:true}).click();await section.getByRole('status').waitFor();await section.getByText('Otra muestra sintética',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__soilWrites.length),0);
 });

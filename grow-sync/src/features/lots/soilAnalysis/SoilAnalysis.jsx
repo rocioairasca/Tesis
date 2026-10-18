@@ -15,7 +15,7 @@ import SoilPdfPreview from './SoilPdfPreview';
 import {extractionValues,emptySample,historyRows,reportPayload,validatePdf,depthText,highlights,resultText,extractionMessages} from './soilAnalysisModel.mjs';
 import './soilAnalysis.css';
 export default function SoilAnalysis(){
- const {lotId}=useParams(),[params]=useSearchParams(),navigate=useNavigate(),mobile=useIsMobile();
+ const {lotId}=useParams(),[params,setParams]=useSearchParams(),navigate=useNavigate(),mobile=useIsMobile();
  const user=JSON.parse(localStorage.getItem('user')||'null'),can=key=>hasPermission(user,PERMISSIONS['SOIL_ANALYSIS_'+key]);
  const canView=can('VIEW'),canCreate=can('CREATE'),canDisabled=can('VIEW_DISABLED');
  const [context,setContext]=useState(null),[contextError,setContextError]=useState(null),[contextRetry,setContextRetry]=useState(0);
@@ -51,12 +51,23 @@ export default function SoilAnalysis(){
   setDetailLoading(true);setDetailError(null);setViewing({id:reportId});setShowPdf(false);
   try{const {data}=await api.get('/soil-analysis/'+reportId,{signal:controller.signal});if(!controller.signal.aborted)setViewing(data);}catch(e){if(!controller.signal.aborted)setDetailError(e);}finally{if(!controller.signal.aborted)setDetailLoading(false);}
  },[]);
- const openEditor=async report=>{
+ const openEditor=useCallback(async report=>{
   extractController.current?.abort();setEntryMode(report?'manual':'pdf');setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);
   setSaveError(null);setFile(null);form.resetFields();
   if(report){try{const {data}=await api.get('/soil-analysis/'+report.id);form.setFieldsValue({...data,received_date:parseCalendarDate(data.received_date),samples:data.samples.map(s=>({...s,sample_date:parseCalendarDate(s.sample_date)}))});setEditor({report:data});setViewing(null);}catch(e){setError(e);}}
   else{form.setFieldsValue({samples:[emptySample(selectedLotId,sub&&sub!=='full'?sub:null)]});setEditor({report:null});}
- };
+ },[form,selectedLotId,sub]);
+ // Entry links reuse the existing detail and editor after permissions/context load.
+ useEffect(()=>{
+  if(!canView||!context||loading||error)return;
+  const reportId=params.get('reportId'),create=params.get('new')==='true';
+  if(!reportId&&!create)return;
+  const next=new URLSearchParams(params);next.delete('reportId');next.delete('new');setParams(next,{replace:true});
+  if(reportId){
+   if(reports.some(report=>report.id===reportId&&(!lotId||report.samples.some(sample=>sample.lot_id===lotId))))openDetail(reportId);
+   else setError(new Error('El análisis solicitado no está disponible en este historial.'));
+  }else if(canCreate)openEditor(null);
+ },[canView,canCreate,context,loading,error,params,setParams,reports,lotId,openDetail,openEditor]);
  const closeEditor=()=>{extractController.current?.abort();setEditor(null);setFile(null);setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);form.resetFields();};
  const changeEntryMode=mode=>{
   if(mode===entryMode)return;extractController.current?.abort();setEntryMode(mode);setExtractStatus('idle');setExtractWarnings([]);setReviewed(false);setSaveError(null);form.resetFields();form.setFieldsValue({samples:[emptySample(selectedLotId,sub&&sub!=='full'?sub:null)]});
