@@ -29,11 +29,10 @@ export default function SoilAnalysisForm({form,lots,editing,file,onFileChange,on
       </div>
       <Form.Item name={[sample.name,'notes']} label="Notas de la muestra"><Input.TextArea /></Form.Item>
       <h4>Resultados</h4>
-      <SoilResultsEditor sample={sample} values={watchedSamples[sample.name]?.results} busy={busy}/>
-      <Button danger onClick={()=>remove(sample.name)}>Quitar muestra</Button>
+      <SoilResultsEditor sample={sample} values={watchedSamples[sample.name]?.results} busy={busy} sampleAction={<Button danger onClick={()=>remove(sample.name)}>Quitar muestra</Button>}/>
      </section>;
     })}
-    <Form.ErrorList errors={meta.errors} /><Button onClick={()=>add(emptySample(lotId,subLotId))} disabled={samples.length>=20}>Agregar muestra</Button>
+    <Form.ErrorList errors={meta.errors} /><div className="soil-add-sample"><Button onClick={()=>add(emptySample(lotId,subLotId))} disabled={samples.length>=20}>Agregar muestra</Button></div>
    </>}
   </Form.List>
  </Form>;

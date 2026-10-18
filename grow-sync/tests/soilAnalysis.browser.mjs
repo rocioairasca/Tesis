@@ -31,7 +31,7 @@ test('history/detail keep multiple samples, one documentary result and PDF fallb
 test('empty history offers upload; dynamic multiple samples submit multipart with original PDF and exact raw values',async t=>{
  const page=await open(1440,'?empty');t.after(()=>page.close());await page.getByText('Todavía no hay análisis de suelo para este lote.',{exact:true}).waitFor();await page.getByRole('button',{name:'Cargar análisis',exact:true}).click();await page.getByRole('button',{name:'Completar manualmente',exact:true}).click();const drawer=page.locator('.ant-drawer-open');
  await drawer.getByLabel('PDF original',{exact:true}).setInputFiles({name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.7\nSynthetic fixture')});
- await drawer.getByRole('button',{name:'Agregar muestra',exact:true}).click();assert.equal(await drawer.getByRole('region',{name:/Muestra [12]/}).count(),2);assert.equal(await drawer.getByRole('checkbox',{name:/Revisé los datos extraídos/}).count(),0);
+ await drawer.getByRole('button',{name:'Agregar muestra',exact:true}).click();assert.equal(await drawer.getByRole('region',{name:/Muestra [12]/}).count(),2);assert.equal(await drawer.getByRole('checkbox',{name:/Revisé los datos extraídos/}).count(),0);await assertSoilActions(drawer);
  for(const n of [0,1]){
   const date=drawer.locator('#samples_'+n+'_sample_date');await date.fill('22/09/2026');await date.press('Tab');await drawer.locator('#samples_'+n+'_results_0_parameter_name').fill(n?'Zinc':'pH');await drawer.locator('#samples_'+n+'_results_0').fill(n?'N.R.':' 7,1 ');
  }
@@ -101,9 +101,11 @@ test('20 proposed results use compact editable table or mobile cards; add/remove
 });
 
 async function assertReviewOrder(drawer){
+ await assertSoilActions(drawer);
  const order=await drawer.evaluate(el=>{
   const checkbox=el.querySelector('.soil-extraction-review input[type=checkbox]'),warning=el.querySelector('.soil-extraction-review .ant-alert'),footer=el.querySelector('.ant-drawer-footer');
   const before=(a,b)=>Boolean(a&&b&&(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
+  if(![...el.querySelectorAll('.soil-sample-actions,.soil-add-sample')].every(action=>before(action,checkbox)))throw new Error('Sample actions must precede final review');
   return {results:[...el.querySelectorAll('.soil-results-editor,.soil-result-card')].every(result=>before(result,checkbox)),warning:before(warning,checkbox),footer:before(checkbox,footer),count:el.querySelectorAll('.soil-extraction-review input[type=checkbox]').length};
  });assert.deepEqual(order,{results:true,warning:true,footer:true,count:1});
  const review=drawer.locator('.soil-extraction-review');await review.scrollIntoViewIfNeeded();assert.ok(await review.evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1;}));
@@ -158,3 +160,11 @@ test('opening and saving an existing result without editing preserves raw, numer
  const page=await open();t.after(()=>page.close());await page.getByRole('button',{name:'Acciones de muestra 23/09/2026',exact:true}).click();await page.getByRole('menuitem',{name:'Editar',exact:true}).click();const drawer=page.locator('.ant-drawer-open');await drawer.getByText(/El archivo no se reemplaza al editar/).waitFor();await drawer.locator('#samples_0_results_0').focus();await drawer.locator('#samples_0_results_0').press('Tab');await drawer.getByRole('button',{name:'Guardar análisis',exact:true}).click();await drawer.waitFor({state:'hidden'});const [write]=await page.evaluate(()=>window.__soilWrites);
  assert.deepEqual(write.body.samples[0].results.map(r=>[r.raw_value,r.numeric_value,r.result_status]),[['7,1','7.100000','measured'],['N.R.',null,'not_requested']]);
 });
+
+async function assertSoilActions(drawer){
+ for(const group of await drawer.locator('.soil-sample-actions').all()){
+  assert.deepEqual(await group.getByRole('button').allTextContents(),['Agregar resultado','Quitar muestra']);assert.ok((await group.getByRole('button',{name:'Quitar muestra',exact:true}).getAttribute('class')).includes('ant-btn-dangerous'));
+  assert.ok(await group.evaluate(el=>{const box=el.getBoundingClientRect(),buttons=[...el.querySelectorAll('button')].map(b=>b.getBoundingClientRect());return getComputedStyle(el).justifyContent==='flex-end'&&Math.abs(buttons.at(-1).right-box.right)<2&&buttons.every(b=>b.left>=box.left-1&&b.right<=box.right+1);}));
+ }
+ const add=drawer.locator('.soil-add-sample');assert.ok(await add.evaluate(el=>{const box=el.getBoundingClientRect(),button=el.querySelector('button').getBoundingClientRect();return getComputedStyle(el).justifyContent==='flex-end'&&Math.abs(button.right-box.right)<2&&getComputedStyle(el).marginTop==='16px';}));
+}

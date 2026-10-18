@@ -14,7 +14,7 @@ function ResultInput({value={},onChange,...props}){
   const text=event.target.value;setDraft(text);onChange({...value,...editedResult(text)});
  }}/>;
 }
-export default function SoilResultsEditor({sample,values=[],busy}){
+export default function SoilResultsEditor({sample,values=[],busy,sampleAction}){
  const mobile=useIsMobile();
  const cells=result=>[
   <Form.Item key="parameter" name={[result.name,'parameter_name']} label="Parámetro" rules={[{required:true,message:'Ingresá el parámetro.'}]}><Input maxLength={200}/></Form.Item>,
@@ -34,7 +34,7 @@ export default function SoilResultsEditor({sample,values=[],busy}){
      <thead><tr>{['Parámetro','Método','Unidad','Resultado','Acción'].map(label=><th scope="col" key={label}>{label}</th>)}</tr></thead>
      <tbody>{results.map(result=><tr key={result.key}>{cells(result).map((cell,i)=><td key={i}>{cell}</td>)}<td>{remove(result)}</td></tr>)}</tbody>
     </table>}
-    <Form.ErrorList errors={meta.errors}/><Button icon={<PlusOutlined/>} onClick={()=>operations.add({result_status:'measured'})} disabled={results.length>=100}>Agregar resultado</Button>
+    <Form.ErrorList errors={meta.errors}/><div className="soil-sample-actions"><Button icon={<PlusOutlined/>} onClick={()=>operations.add({result_status:'measured'})} disabled={results.length>=100}>Agregar resultado</Button>{sampleAction}</div>
    </>;
   }}
  </Form.List>;
