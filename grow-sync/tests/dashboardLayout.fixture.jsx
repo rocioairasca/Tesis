@@ -12,8 +12,8 @@ const result=(key,data)=>{window.__calls.push(key);return Promise.resolve(data);
 const source={
  delayed:()=>result('delayed',['empty','single','personal'].includes(mode)?0:1),
  inventory:()=>result('inventory',mode==='empty'?{}:mode==='single'?{low:1}:{low:2,empty:1,expired:1}),
- myTasks:()=>result('myTasks',{rows:empty?[]:tasks,total:empty?0:tasks.length}),
- work:()=>result('work',empty?[]:tasks),
+ myTasks:()=>result('myTasks',{rows:empty||mode==='empty-personal'?[]:tasks,total:empty||mode==='empty-personal'?0:tasks.length}),
+ work:()=>result('work',empty||mode==='empty-team'?[]:tasks),
  weather:()=>{window.__calls.push('weather');if(mode==='error'&&!window.__weatherRetry)return Promise.reject(Error('Synthetic weather failure'));return Promise.resolve({reading:{temperature:21.4,humidity:64,wind_speed:12.8,wind_direction:45,weather_code:2,observed_at:'2026-10-18T12:00:00Z'},fallback:mode==='fallback',retryable:true});},
  field:()=>result('field',{lots:3}),fieldMap:()=>result('fieldMap',{area:120,divisions:2,geometries:[],missing:0}),
  filters:()=>result('filters',{campaigns:[],crops:[]}),production:()=>result('production',{summary:{total_records:0},byCrop:[],byCampaign:[]}),

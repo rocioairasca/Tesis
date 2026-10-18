@@ -21,7 +21,8 @@ for(const width of [1440,1024,390])test('Mis tareas dashboard → exact drawer, 
  assert.equal(await personal.locator('li').count(),6);assert.match(await personal.innerText(),/Se muestran 6 de 7 tareas/);assert.equal(await page.getByText('Trabajo del equipo',{exact:true}).count(),0);
  const titles=await personal.locator('li strong').allTextContents();assert.equal(titles[0],'Trabajo personal 1');assert.match(await personal.locator('li').first().innerText(),/En demora/);assert.doesNotMatch(await personal.locator('li').nth(1).innerText(),/Asignado por/);
  const attention=await page.locator('section[aria-labelledby="dashboard-attention"]').boundingBox(),tasks=await personal.boundingBox(),weather=await page.locator('section[aria-labelledby="dashboard-weather"]').boundingBox();
- assert.ok(weather.y+weather.height<=attention.y && attention.y+attention.height<=tasks.y,'visual order: weather, attention, personal tasks');
+ if(width>=768){assert.ok(Math.abs(weather.y-attention.y)<1 && attention.x>=weather.x+weather.width,'weather and attention share a row');assert.ok(tasks.y>=weather.y+weather.height && tasks.y>=attention.y+attention.height);}
+ else assert.ok(weather.y+weather.height<=attention.y && attention.y+attention.height<=tasks.y,'mobile order: weather, attention, personal tasks');
  if(process.env.MY_TASKS_SCREENSHOTS){mkdirSync(process.env.MY_TASKS_SCREENSHOTS,{recursive:true});await page.screenshot({path:process.env.MY_TASKS_SCREENSHOTS+'/my-tasks-'+width+'.png',fullPage:true});}
  await fits(page);await personal.getByRole('link',{name:/Ver tarea:/}).first().click();await readyDetail(page);
  let query=new URL(page.url()).searchParams;assert.equal(query.get('mine'),'1');assert.equal(query.get('planningId'),id);assert.equal(await page.getByRole('button',{name:'Mis tareas',exact:true}).getAttribute('aria-pressed'),'true');

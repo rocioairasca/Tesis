@@ -102,10 +102,10 @@ export function Weather({ request, canViewRain }) {
     {canRetry && <EntityLink onClick={request.retry}>Reintentar</EntityLink>}
   </div>}>
     {request.status === 'loading' ? <LoadingState label="Consultando clima…" rows={2} /> : request.status === 'error' ? <ErrorState message="No se pudo consultar el clima." /> : <>
-      {!data ? <EmptyState title="No hay un registro climático disponible" description={failure === 'permission_denied' ? 'Habilitá el permiso de ubicación para consultar el clima.' : undefined} /> : <div className={fallback ? 'gs-dashboard-weather-stale' : undefined}>
+      {!data ? <EmptyState title="No hay un registro climático disponible" description={failure === 'permission_denied' ? 'Habilitá el permiso de ubicación para consultar el clima.' : undefined} /> : <div className={`gs-dashboard-weather-body${fallback ? ' gs-dashboard-weather-stale' : ''}`}>
         {fallback && <StatusBadge tone="warning">Último dato disponible · Desactualizado</StatusBadge>}
         <div className="gs-dashboard-weather-reading"><div className="gs-dashboard-weather-current"><span aria-hidden="true"><WeatherIcon kind={presentation.kind} size={40} /></span><div><strong>{formatNumber(data.temperature, 1)} <small>°C</small></strong><span>{presentation.label}</span></div></div><div className="gs-dashboard-weather-detail"><span><WindIcon size={16} /> Viento</span><strong>{formatNumber(data.wind_speed, 1)}{numberValue(data.wind_speed) != null ? ' km/h' : ''} {numberValue(data.wind_direction) != null ? degToCompass(Number(data.wind_direction)) : ''}</strong></div>{numberValue(data.humidity) != null && <div className="gs-dashboard-weather-detail"><span><DropIcon size={16} /> Humedad</span><strong>{formatNumber(data.humidity, 0)} %</strong></div>}</div>
-        {timestamp && <p className="gs-dashboard-note">Última lectura: {timestamp}</p>}
+        {timestamp && <p className="gs-dashboard-note gs-dashboard-weather-updated">Última lectura: {timestamp}</p>}
       </div>}
     </>}
   </Section>;
@@ -136,10 +136,14 @@ export default function DashboardView({ user, today, access, delayed, myTasks = 
   const dateKey = calendarDateKey(today);
   const dateLabel = dateKey ? new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${dateKey}T12:00:00Z`)) : '';
   return <div className="gs-dashboard"><PageHeader title={name ? `¡Hola, ${name}!` : '¡Hola!'} description={dateLabel} />
-    <Weather request={weather} canViewRain={access.rain} />
-    {(access.planning || access.inventory) && <Attention access={access} delayed={delayed} inventory={inventory} />}
-    {access.planning && <MyTasks request={myTasks} />}
-    {access.teamWork && <Work request={work} />}
+    <div className="gs-dashboard-row">
+      <Weather request={weather} canViewRain={access.rain} />
+      {(access.planning || access.inventory) && <Attention access={access} delayed={delayed} inventory={inventory} />}
+    </div>
+    {(access.planning || access.teamWork) && <div className="gs-dashboard-row">
+      {access.planning && <MyTasks request={myTasks} />}
+      {access.teamWork && <Work request={work} />}
+    </div>}
     {access.field && <Section id="dashboard-field" title="Resumen del campo" action={<EntityLink to="/lotes">Ver lotes</EntityLink>}>
       <RequestState request={field} label="resumen del campo">{field.data?.lots === 0 ? <EmptyState title="Todavía no hay lotes activos" /> : <div className="gs-dashboard-field-kpis"><Metric compact icon={<EnvironmentOutlined size={24} />} label="Lotes activos" value={formatNumber(field.data?.lots, 0)} />{fieldMap.status === 'success' && <><Metric compact icon={<EnvironmentOutlined size={22} />} label="Superficie total" value={fieldMap.data.area == null ? '—' : `${formatNumber(fieldMap.data.area)} ha`} helper={fieldMap.data.area == null ? 'Superficie incompleta' : undefined} /><Metric compact icon={<DivisionsIcon size={22} />} label="Divisiones vigentes" value={formatNumber(fieldMap.data.divisions, 0)} /></>}</div>}</RequestState>
       <RequestState request={fieldMap} label="vista del establecimiento">{fieldMap.status === 'success' && <><StaticFieldOverview geometries={fieldMap.data?.geometries || []} />{fieldMap.data?.missing > 0 && <p className="gs-dashboard-note">{formatNumber(fieldMap.data.missing, 0)} {fieldMap.data.missing === 1 ? 'lote sin geometría utilizable no se muestra' : 'lotes sin geometría utilizable no se muestran'} en la vista.</p>}</>}</RequestState>

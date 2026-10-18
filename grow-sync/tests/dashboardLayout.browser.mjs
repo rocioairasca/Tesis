@@ -10,17 +10,29 @@ async function open(width,mode){const page=await browser.newPage({viewport:{widt
  await page.getByText(mode==='error'?'No se pudo consultar el clima.':'Parcialmente nublado',{exact:true}).waitFor();await page.locator('.gs-ui-loading').waitFor({state:'hidden'});return page;
 }
 const panel=(page,id)=>page.locator('section[aria-labelledby="dashboard-'+id+'"]');
-for(const width of [1440,1024,390])for(const mode of ['normal','single','empty','personal','restricted','fallback','error'])test('Dashboard semantic order and natural panel heights: '+mode+' at '+width,async t=>{
+for(const width of [1440,1024,390])for(const mode of ['normal','single','empty','empty-personal','empty-team','personal','restricted','fallback','error'])test('Dashboard semantic order and natural panel heights: '+mode+' at '+width,async t=>{
  const page=await open(width,mode);t.after(()=>page.close());
  const expected=['weather',...(!['empty','personal','restricted'].includes(mode)?['attention']:[]),...(mode!=='restricted'?['my-tasks']:[]),...(!['personal','restricted'].includes(mode)?['work','field','production']:[])].map(id=>'dashboard-'+id);
- const layout=await page.locator('.gs-dashboard > section').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {id:el.getAttribute('aria-labelledby'),x:r.x,y:r.y,width:r.width,height:r.height,minHeight:s.minHeight,order:s.order,scroll:el.scrollHeight,client:el.clientHeight};}));
- assert.deepEqual(layout.map(r=>r.id),expected);for(let i=1;i<layout.length;i++)assert.ok(layout[i].y>=layout[i-1].y+layout[i-1].height,'visual order follows DOM');assert.ok(layout.every(r=>r.order==='0'));
+ const layout=await page.locator('.gs-dashboard section[aria-labelledby^="dashboard-"]').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {id:el.getAttribute('aria-labelledby'),x:r.x,y:r.y,width:r.width,height:r.height,minHeight:s.minHeight,order:s.order,scroll:el.scrollHeight,client:el.clientHeight};}));
+ assert.deepEqual(layout.map(r=>r.id),expected);assert.ok(layout.every(r=>r.order==='0'));
  const header=await page.locator('.gs-dashboard > .gs-ui-page-header').boundingBox(),weather=layout[0];assert.ok(weather.y>=header.y+header.height);assert.ok(weather.y+weather.height<950,'weather visible without scrolling');assert.ok(weather.y-header.y-header.height<=20,'no empty row before weather');
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');assert.ok(layout.every(r=>Math.abs(r.width-weather.width)<1),'panels fill their row');assert.ok(layout.every(r=>r.scroll<=r.client+1),'content is not clipped');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');assert.ok(layout.every(r=>r.scroll<=r.client+1),'content is not clipped');
+ const rows=await page.locator('.gs-dashboard > .gs-dashboard-row').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return {y:r.y,bottom:r.bottom,width:r.width,panels:[...el.children].map(child=>{const p=child.getBoundingClientRect();return {x:p.x,y:p.y,width:p.width,height:p.height};})};}));
+ for(let i=0;i<rows.length;i++){
+  const row=rows[i],panels=row.panels;assert.ok(panels.length>0,'no empty row');if(i)assert.ok(row.y>=rows[i-1].bottom);
+  if(width>=768&&panels.length===2){assert.ok(Math.abs(panels[0].y-panels[1].y)<1,'pair shares a row');assert.ok(panels[1].x>=panels[0].x+panels[0].width,'left then right');assert.ok(Math.abs(panels[0].width-panels[1].width)<1);assert.ok(Math.abs(panels[0].height-panels[1].height)<1,'balanced heights');}
+  else {assert.ok(panels.every(p=>Math.abs(p.width-row.width)<1));for(let j=1;j<panels.length;j++)assert.ok(panels[j].y>=panels[j-1].y+panels[j-1].height);}
+ }
+ if(width<768)for(let i=1;i<layout.length;i++)assert.ok(layout[i].y>=layout[i-1].y+layout[i-1].height,'mobile DOM order');
+ const field=layout.find(p=>p.id==='dashboard-field');if(field)assert.ok(field.y>=rows.at(-1).bottom,'field follows operational rows');
+ if(mode!=='error'){
+  const stamp=panel(page,'weather').locator('.gs-dashboard-weather-updated');assert.equal(await stamp.evaluate(el=>getComputedStyle(el).textAlign),'right');const box=await stamp.boundingBox();assert.ok(weather.x+weather.width-box.x-box.width<=20,'reading at right edge');
+  const title=await panel(page,'weather').getByRole('heading',{name:'Clima',exact:true}).boundingBox(),actions=await panel(page,'weather').locator('.gs-dashboard-weather-actions').boundingBox();assert.ok(actions.x>title.x+title.width,'weather links stay at top right');assert.ok(Math.abs(actions.y-title.y)<5);
+ }
  const operational=await page.locator('.gs-dashboard-operational').evaluateAll(nodes=>nodes.map(el=>({height:el.getBoundingClientRect().height,minHeight:getComputedStyle(el).minHeight})));
- if(width>=768){assert.ok(operational.every(r=>r.minHeight==='208px'&&r.height>=208));assert.ok(weather.height<260,'compact weather');}
+ if(width>=768){assert.ok(operational.every(r=>r.minHeight==='208px'&&r.height>=208));assert.ok((await panel(page,'weather').locator('.gs-dashboard-section-heading').boundingBox()).height<90,'compact weather header');}
  else assert.ok(operational.every(r=>['auto','0px'].includes(r.minHeight)),'mobile keeps natural height');
- if(['single','empty'].includes(mode)){
+ if(['single','empty','empty-personal'].includes(mode)){
   const tasks=panel(page,'my-tasks');await tasks.getByText('No tenés tareas para hoy ni para los próximos 7 días.',{exact:true}).waitFor();assert.equal(await tasks.getByRole('link',{name:'Ver todas mis tareas'}).getAttribute('href'),'/planificaciones?mine=1');
   if(width>=768){const empty=tasks.locator('.gs-ui-empty');assert.equal(await empty.evaluate(el=>getComputedStyle(el).flexGrow),'1');assert.ok(Math.abs((await tasks.boundingBox()).height-(await panel(page,'work').boundingBox()).height)<2);}
  }
@@ -28,6 +40,6 @@ for(const width of [1440,1024,390])for(const mode of ['normal','single','empty',
  if(mode==='personal')assert.equal((await page.evaluate(()=>window.__calls)).includes('work'),false);
  if(mode==='fallback'){await panel(page,'weather').getByText('Último dato disponible · Desactualizado',{exact:true}).waitFor();await panel(page,'weather').getByRole('button',{name:'Reintentar',exact:true}).waitFor();}
  if(mode==='normal')assert.ok((await panel(page,'my-tasks').boundingBox()).height>208,'content can grow beyond the minimum');
- if(process.env.DASHBOARD_LAYOUT_SCREENSHOTS&&['normal','single','empty','fallback','error'].includes(mode)){mkdirSync(process.env.DASHBOARD_LAYOUT_SCREENSHOTS,{recursive:true});await page.screenshot({path:process.env.DASHBOARD_LAYOUT_SCREENSHOTS+'/'+mode+'-'+width+'.png',fullPage:true,animations:'disabled'});}
- if(mode==='error'){await page.evaluate(()=>{window.__weatherRetry=true;});await panel(page,'weather').getByRole('button',{name:'Reintentar',exact:true}).click();await panel(page,'weather').getByText('Parcialmente nublado',{exact:true}).waitFor();assert.equal(await page.locator('.gs-dashboard > section').first().getAttribute('aria-labelledby'),'dashboard-weather');}
+ if(process.env.DASHBOARD_LAYOUT_SCREENSHOTS&&['normal','single','empty','empty-personal','empty-team','fallback','error'].includes(mode)){mkdirSync(process.env.DASHBOARD_LAYOUT_SCREENSHOTS,{recursive:true});await page.screenshot({path:process.env.DASHBOARD_LAYOUT_SCREENSHOTS+'/'+mode+'-'+width+'.png',fullPage:true,animations:'disabled'});}
+ if(mode==='error'){await page.evaluate(()=>{window.__weatherRetry=true;});await panel(page,'weather').getByRole('button',{name:'Reintentar',exact:true}).click();await panel(page,'weather').getByText('Parcialmente nublado',{exact:true}).waitFor();assert.equal(await page.locator('.gs-dashboard section[aria-labelledby^="dashboard-"]').first().getAttribute('aria-labelledby'),'dashboard-weather');}
 });
