@@ -34,7 +34,7 @@ for(const width of [1440,1024,390])for(const mode of ['normal','single','empty',
   });
   const centerX=(centered.area.left+centered.area.right)/2;
   for(const group of [...centered.groups,centered.current])assert.ok(Math.abs((group.left+group.right)/2-centerX)<2,'weather content centered horizontally');
-  assert.ok(Math.abs((centered.groups[0].top-centered.area.top)-(centered.area.bottom-centered.groups.at(-1).bottom))<2,'balanced vertical space around weather content');
+  assert.ok(centered.groups[0].top-centered.area.top>=0&&centered.groups[0].top-centered.area.top<=10,'weather content starts at the top with compact padding');
   assert.ok(centered.groups.at(-1).bottom<=box.y,'reading stays above timestamp');
   for(const detail of centered.details){assert.ok(detail.top>=centered.current.bottom,'details do not overlap temperature');assert.ok(detail.left>=centered.area.left&&detail.right<=centered.area.right,'details fit weather card');}
   for(let i=1;i<centered.details.length;i++)assert.ok(centered.details[i].left>=centered.details[i-1].right||centered.details[i].top>=centered.details[i-1].bottom,'weather details do not overlap');
