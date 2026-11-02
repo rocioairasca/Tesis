@@ -170,8 +170,8 @@ const createNotification = async (userId, type, priority, title, message, data =
 
         // Emitir evento Socket.io
         try {
-            const io = require('../socket').getIO();
-            io.to(userId).emit('new_notification', notification);
+            const { emitNotification } = require('../socket');
+            await emitNotification(notification);
         } catch (socketError) {
             console.error('Error emitiendo socket:', socketError.message);
         }

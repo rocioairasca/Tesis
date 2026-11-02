@@ -372,3 +372,37 @@ test('HTTP execute-only works without view but never grants PATCH, DELETE, resto
  assert.equal((await send('/'+id+'/complete-activity','POST',{effective_date:'2026-10-21'})).status,200);
  permissions=['planning.view'];assert.equal((await send('/'+id+'/start')).status,403);
 });
+
+
+test('active and mine pagination covers 45 rows beyond the default 20, with full counts and filtered totals', async () => {
+  const x = await fixture(), ids = [];
+  for (let i = 1; i <= 47; i++) {
+    const date = new Date(Date.UTC(2026, 0, i)).toISOString();
+    ids.push(await x.create({ title: 'Serie ' + String(i).padStart(2, '0'), start_at: date, end_at: date }));
+  }
+  await db.query('UPDATE planning SET enabled=false WHERE id=$1', [ids[45]]);
+  await db.query("UPDATE planning SET status='cancelado' WHERE id=$1", [ids[46]]);
+  const foreign = await fixture(); await foreign.create({ title: 'Serie externa' });
+  for (const mine of [false, true]) {
+    const all = [];
+    for (let page = 1; page <= 6; page++) {
+      const { data } = await x.call('list', {}, null, x.responsible, { mine, page, pageSize: 8 });
+      assert.equal(data.total, 45); assert.equal(data.page, page); assert.equal(data.pageSize, 8);
+      assert.equal(data.data.length, page === 6 ? 5 : 8);
+      all.push(...data.data.map(row => row.id));
+    }
+    assert.equal(new Set(all).size, 45);
+    assert.deepEqual(new Set(all), new Set(ids.slice(0, 45)));
+    const larger = await x.call('list', {}, null, x.responsible, { mine, page: 3, pageSize: 16 });
+    assert.equal(larger.data.data.length, 13); assert.equal(larger.data.total, 45);
+    const filtered = await x.call('list', {}, null, x.responsible, { mine, search: 'Serie 4', type: 'fumigacion', page: 2, pageSize: 4 });
+    assert.equal(filtered.data.total, 6); assert.equal(filtered.data.data.length, 2);
+  }
+  const defaults = await x.call('list'); assert.equal(defaults.data.data.length, 20); assert.equal(defaults.data.total, 45);
+  // The client clamps using the existing total; the endpoint's contract stays unchanged.
+  await db.query('UPDATE planning SET enabled=false WHERE id=$1', [ids[44]]);
+  const emptyLast = await x.call('list', {}, null, x.responsible, { page: 5, pageSize: 11 });
+  assert.equal(emptyLast.data.total, 44); assert.equal(emptyLast.data.data.length, 0);
+  const clamped = await x.call('list', {}, null, x.responsible, { page: 4, pageSize: 11 });
+  assert.equal(clamped.data.data.length, 11);
+});

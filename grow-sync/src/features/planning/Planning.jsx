@@ -1,6 +1,6 @@
 import { canExecutePlanning, completionEndpoint, primaryExecutionAction, executionDeniedMessage } from './planningExecution.mjs';
-import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters } from './planningFilters.mjs';
-import { readAllPages } from '../dashboard/dashboardModel.mjs';
+import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters, planningFilterKey, readPlanningListState, updatePlanningPage } from './planningFilters.mjs';
+import usePlanningList from './usePlanningList';
 import {renderUserOption} from '../../components/users/UserOption';
 import {userDisplayName,userOptions} from '../../utils/userDisplay.mjs';
 import PlanningRecipeFields from './components/PlanningRecipeFields';
@@ -38,7 +38,7 @@ import { parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate'
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Alert,
+  Alert, Pagination, Spin,
   Button, Card, Drawer, Form, Input, Select, DatePicker,
   Dropdown, Space, Row, Col, Tag, notification,
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
@@ -242,15 +242,21 @@ const getMonthText = (date) => {
 };
 
 const Planning = () => {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const [viewMode, setViewMode] = useState("table"); // 'table' | 'calendar'
   const [calendarSelection, setCalendarSelection] = useState(null); // { type: 'day' | 'month', date: dayjs() }
 
   // URL is the single source of truth, including browser back/forward.
   const [searchParams, setSearchParams] = useSearchParams();
-  const filters = useMemo(() => readPlanningFilters(searchParams), [searchParams]);
+  const filterKey = planningFilterKey(searchParams);
+  const filters = useMemo(() => readPlanningFilters(new URLSearchParams(filterKey)), [filterKey]);
+  const { page, pageSize, view: viewMode } = readPlanningListState(searchParams);
+  const setViewMode = view => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (view === 'calendar') next.set('view', view); else next.delete('view');
+    return next;
+  });
+  const changePage = useCallback((nextPage, nextSize, replace = false) => {
+    setSearchParams(previous => updatePlanningPage(previous, nextPage, nextSize), { replace });
+  }, [setSearchParams]);
   useEffect(() => {
     if (filters.mine && searchParams.has('responsible')) setSearchParams(previous => updatePlanningFilters(previous, 'mine', true), { replace: true });
   }, [filters.mine, searchParams, setSearchParams]);
@@ -353,6 +359,10 @@ const Planning = () => {
   const canViewDisabled = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW_DISABLED);
 
   const canView = hasPermission(currentUser, PERMISSIONS.PLANNING_VIEW);
+  const listScope = JSON.stringify([currentUser?.company_id, currentUser?.id, currentUser?.role, currentUser?.custom_permissions, canView]);
+  const { list, total, loading, refresh: fetchPlanning } = usePlanningList({
+    filters, page, pageSize, viewMode, scope: listScope, canView, changePage,
+  });
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -995,45 +1005,6 @@ const Planning = () => {
 
 
   // ---------- fetchers ----------
-  const listRequest = useRef(0);
-  const fetchPlanning = useCallback(async () => {
-    const request = ++listRequest.current;
-    setList([]);
-    if (!canView) { setLoading(false); return; }
-    setLoading(true);
-    try {
-      const params = {};
-      if (filters.mine) params.mine = true;
-      if (filters.search) params.search = filters.search;
-      if (filters.status) params.status = filters.status;
-      if (filters.responsible) params.responsible = filters.responsible;
-      if (filters.cropId) params.cropId = filters.cropId;
-      if (filters.type) params.type = filters.type;
-      if (filters.campaignId) params.campaignId = filters.campaignId;
-      if (filters.lotSelectionKey) {
-        const parsed = parseSelectionKey(filters.lotSelectionKey);
-        if (parsed?.sub_lot_id) params.subLotId = parsed.sub_lot_id;
-        else if (parsed?.lot_id) params.lotId = parsed.lot_id;
-      }
-      if (filters.dateRange?.[0] && filters.dateRange?.[1]) {
-        params.from = filters.dateRange[0].format("YYYY-MM-DD[T]00:00:00.000[Z]");
-        params.to = filters.dateRange[1].format("YYYY-MM-DD[T]23:59:59.999[Z]");
-      }
-
-      const data = filters.mine
-        ? await readAllPages(async pageParams => (await api.get('/planning', { params: pageParams })).data, params)
-        : (await api.get('/planning', { params })).data;
-      const items = Array.isArray(data) ? data : data?.items || data?.data || [];
-      if (request === listRequest.current) setList(items);
-    } catch (e) {
-      if (request !== listRequest.current) return;
-      console.error("→ planning list error:", e);
-      notification.error({ message: "Error al cargar planificaciones" });
-    } finally {
-      if (request === listRequest.current) setLoading(false);
-    }
-  }, [filters, canView]);
-
   const fetchUsers = useCallback(async () => {
     // The assignment catalog requires planning.create/edit; read-only users use row metadata.
     if (!canCreate && !canEdit) { setUsers([]); return; }
@@ -1082,11 +1053,6 @@ const Planning = () => {
       setVehicles(Array.isArray(data) ? data : data?.items || data?.data || []);
     } catch { }
   }, []);
-
-  useEffect(() => {
-    fetchPlanning();
-    return () => { listRequest.current++; };
-  }, [fetchPlanning]);
 
   useEffect(() => {
     fetchUsers();
@@ -1823,11 +1789,14 @@ const Planning = () => {
         </div>
       )}
 
+      <div aria-busy={loading} className="gs-planning-results">
+      <Spin spinning={loading}>
       {/* Tabla cuando caben sus columnas completas */}
       {viewMode === "table" && !useCompactPlanningList && (
         <PlanningTable
           list={list}
-          loading={loading}
+          loading={false}
+          pagination={false}
           onEdit={openDrawer}
           onView={openDetail}
           onUpdateStatus={updateStatus}
@@ -1878,6 +1847,23 @@ const Planning = () => {
           getAdoptionActions={getAdoptionActions}
         />
       )}
+
+      </Spin>
+      {viewMode === 'table' && canView && (
+        <Pagination
+          className="gs-planning-pagination"
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          showSizeChanger
+          pageSizeOptions={[8, 16, 24, 48]}
+          showLessItems
+          size={isMobile ? 'small' : 'default'}
+          showTotal={count => `${count} planificaciones`}
+          onChange={(nextPage, nextSize) => changePage(nextSize === pageSize ? nextPage : 1, nextSize)}
+        />
+      )}
+      </div>
 
       {adopting && <AdoptExistingModal key={adopting.id} planning={adopting} onClose={()=>setAdopting(null)}
         onAdopted={async()=>{await fetchPlanning();closeDetail();notification.success({message:'La planificación quedó marcada como registro histórico. Las existencias no se modificaron.'});}} />}

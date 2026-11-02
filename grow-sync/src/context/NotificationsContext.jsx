@@ -8,7 +8,7 @@ import React, {
 import { notification as antNotification } from "antd";
 import io from "socket.io-client";
 import api from "../services/apiClient";
-import { getUserDataByEmail } from "../services/authService";
+import { startNotificationSocket } from "../services/notificationSocket.mjs";
 import { getApiOrigin } from "../services/apiBase";
 import { sanitizeNotification } from "../utils/userFriendlyErrors";
 
@@ -164,80 +164,21 @@ export const NotificationsProvider = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => {
-    let newSocket;
-
-    const initSocket = async () => {
-      const token = localStorage.getItem("access_token");
-      const email = localStorage.getItem("auth_email");
-
-      if (!token || !email) {
-        return;
-      }
-
-      try {
-        const userData = await getUserDataByEmail(email);
-        const userId = userData?.id;
-
-        if (!userId) {
-          return;
-        }
-
-        newSocket = io(getApiOrigin());
-
-        newSocket.on("connect", () => {
-          console.log(
-            "Conectado al servidor de notificaciones"
-          );
-
-          newSocket.emit("join_room", userId);
-        });
-
-        newSocket.on(
-          "new_notification",
-          (notification) => {
-            const safeNotification = sanitizeNotification(notification);
-
-            setNotifications((prev) => [
-              safeNotification,
-              ...prev,
-            ]);
-
-            setUnreadCount((prev) => prev + 1);
-
-            antNotification.info({
-              message: safeNotification.title,
-              description: safeNotification.message,
-              placement: "topRight",
-              duration: 4,
-            });
-          }
-        );
-
-        newSocket.on("connect_error", (error) => {
-          console.error(
-            "Error conectando al socket de notificaciones:",
-            error
-          );
-        });
-      } catch (error) {
-        if (error?.response?.status !== 401) {
-          console.error(
-            "Error inicializando socket:",
-            error
-          );
-        }
-      }
-    };
-
-    initSocket();
-
-    return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
-    };
-  }, []);
+  useEffect(() => startNotificationSocket({
+    io,
+    origin: getApiOrigin(),
+    onNotification: notification => {
+      const safeNotification = sanitizeNotification(notification);
+      setNotifications(prev => [safeNotification, ...prev]);
+      setUnreadCount(prev => prev + 1);
+      antNotification.info({
+        message: safeNotification.title,
+        description: safeNotification.message,
+        placement: "topRight",
+        duration: 4,
+      });
+    },
+  }), []);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");

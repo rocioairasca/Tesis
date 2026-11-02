@@ -31,3 +31,7 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+
+.gs-planning-results { min-width: 0; }
+.gs-planning-pagination { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 0; margin-top: 16px; }

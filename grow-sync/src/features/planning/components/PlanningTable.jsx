@@ -85,6 +85,7 @@ const buildStatusMenuItems = (record, { onUpdateStatus, onCancel }, options = {}
 const PlanningTable = ({
     list,
     loading,
+    pagination = false,
     onEdit,
     onView,
     onUpdateStatus,
@@ -244,7 +245,7 @@ const PlanningTable = ({
             size="small"
             tableLayout="fixed"
             scroll={{ x: PLANNING_TABLE_WIDTH }}
-            pagination={{ pageSize: 8, position: ["bottomCenter"] }}
+            pagination={pagination}
             rowKey={rowKey}
         />
         </div>

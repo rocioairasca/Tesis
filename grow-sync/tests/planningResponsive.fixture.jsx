@@ -38,7 +38,7 @@ api.defaults.adapter = async config => {
   if (config.method !== 'get') throw new Error('Read-only layout test: unexpected mutation');
   let data = [];
   if (config.url.startsWith('/planning/planning-')) data = rows.find(row => '/planning/' + row.id === config.url);
-  if (config.url === '/planning') data = { data: rows };
+  if (config.url === '/planning') data = { data: rows, total: rows.length, page: 1, pageSize: config.params?.pageSize || 8 };
   if (config.url === '/users/planning-responsibles') data = [{ id: 'user', full_name: 'Responsable de prueba', email: 'responsable@example.test' },
     { id: 'colleague', full_name: 'Compañero habilitado', email: 'colleague@example.test' }, { id: 'supervisor', full_name: 'Supervisor habilitado', email: 'supervisor@example.test' },
     { id: 'admin', full_name: 'Admin habilitado', email: 'admin@example.test' },

@@ -31,7 +31,7 @@ for(const width of [1440,1024,390])test('Mis tareas dashboard → exact drawer, 
  await page.goBack();await readyDetail(page);await page.goForward();await drawer(page).waitFor({state:'hidden'});
  await page.goBack();await readyDetail(page);await page.goBack();await personal.getByText('Trabajo personal 1',{exact:true}).waitFor();
  await personal.getByRole('link',{name:'Ver todas mis tareas',exact:true}).click();await page.getByRole('button',{name:'Mis tareas',exact:true}).waitFor();
- await page.waitForFunction(()=>window.__requests.some(r=>r.path==='/planning' && r.params.mine===true && r.params.pageSize===1000));
+ await page.waitForFunction(()=>window.__requests.some(r=>r.path==='/planning' && r.params.mine===true && r.params.pageSize===8));
  assert.ok(!(await page.evaluate(()=>window.__requests)).some(r=>r.path==='/users/planning-responsibles'),'view-only user never requests the write-only assignment catalog');
  assert.equal(new URL(page.url()).search,'?mine=1');assert.deepEqual(await page.evaluate(()=>window.__mutations),[]);await fits(page);
 });

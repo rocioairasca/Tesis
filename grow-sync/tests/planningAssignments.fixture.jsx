@@ -31,7 +31,13 @@ api.defaults.adapter=async config=>{
   if(config.method!=='get')throw Error('Unexpected mutation in browser fixture');
   window.__gets.push(config.url);
   const response=data=>({data,status:200,statusText:'OK',headers:{},config});
-  if(config.url==='/planning')return response({data:location.search.includes('listed')?[row]:[],total:location.search.includes('listed')?1:0});
+  if(config.url==='/planning'){
+    // The deep-link test starts on page 3: provide a real third page of other plans.
+    const selected=location.search.includes('listed')?[row]:config.params?.cropId==='trigo'
+      ?Array.from({length:24},(_,i)=>({...row,id:'other-plan-'+i,crop_id:'trigo',crop_name:'Trigo'})):[];
+    const page=config.params?.page||1,pageSize=config.params?.pageSize||20;
+    return response({data:selected.slice((page-1)*pageSize,page*pageSize),total:selected.length,page,pageSize});
+  }
   if(config.url.startsWith('/planning/11111111-')){
     const key=config.url.slice(-1);
     config.signal?.addEventListener('abort',()=>window.__aborted.push(config.url));
