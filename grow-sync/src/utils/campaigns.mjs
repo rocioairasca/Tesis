@@ -30,3 +30,27 @@ export function sortCampaigns(rows, direction = 'asc') {
 }
 export const campaignOptions = rows => sortCampaigns(rows,'desc').map(row=>({value:campaignValue(row),label:campaignLabel(row)}));
 export const campaignFilterOptions = data => campaignOptions(data?.campaign_details ?? data?.campaigns ?? []);
+
+
+// Operational membership never selects or changes campaign identity.
+const calendarKey = value => dateKey(typeof value?.format === 'function' ? value.format('YYYY-MM-DD') : value);
+export const campaignWorkStart = campaign => dateKey(campaign?.work_start_date ?? campaign?.start_date);
+export const campaignWorkEnd = campaign => dateKey(campaign?.work_end_date ?? campaign?.end_date);
+export function campaignContainsWorkRange(campaign, range) {
+  const [from, to] = range || [];
+  const start = calendarKey(from), end = calendarKey(to);
+  if (!campaign || !start || !end) return false;
+  const lower = campaignWorkStart(campaign), upper = campaignWorkEnd(campaign);
+  return Boolean(lower && start <= end && start >= lower && (!upper || end <= upper));
+}
+export const campaignContainsWorkDate = (campaign, date) => campaignContainsWorkRange(campaign, [date, date]);
+export function orderCampaignsForRange(campaigns, range) {
+  return [...campaigns].sort((a, b) => Number(campaignContainsWorkRange(b, range)) - Number(campaignContainsWorkRange(a, range)));
+}
+export const campaignWindowWarning = campaign => `La fecha seleccionada está fuera de la ventana operativa de ${campaignLabel(campaign)}.`;
+export function planningCampaignDatesChanged(planning, campaignId, range) {
+  if (!planning) return true;
+  return campaignId !== planning.campaign_id
+    || calendarKey(range?.[0]) !== calendarKey(planning.start_at)
+    || calendarKey(range?.[1]) !== calendarKey(planning.end_at);
+}

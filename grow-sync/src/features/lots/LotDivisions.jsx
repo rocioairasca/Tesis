@@ -1,3 +1,4 @@
+import { campaignContainsWorkDate } from '../../utils/campaigns.mjs';
 import ProductiveStateLabel from './components/ProductiveStateLabel';
 import {unitCampaign} from './productiveStatePresentation.mjs';
 import { campaignLabel, sortCampaigns } from '../../utils/campaigns.mjs';
@@ -76,11 +77,7 @@ const formatActivity = (value) => {
 
 const toDateKey = (value) => calendarDateKey(value);
 
-const campaignContainsDate = (campaign, dateKey) => (
-  campaign?.start_date
-  && dateKey >= String(campaign.start_date).slice(0, 10)
-  && (!campaign.end_date || dateKey <= String(campaign.end_date).slice(0, 10))
-);
+const campaignContainsDate = campaignContainsWorkDate;
 
 const statusColor = {
   draft: 'gold',

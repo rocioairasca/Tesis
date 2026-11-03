@@ -1,3 +1,5 @@
+const { operationalSql } = require('./campaignWindow');
+const campaignWindowSql = operationalSql();
 const {sameUnit} = require('./inventoryUnits');
 const {normalizeQuantity,decimalText} = require('./inventoryConversion');
 const stock = require('./stock');
@@ -33,45 +35,22 @@ const assertDateFormat = (value, label) => {
 const getEffectiveWorkDate = (value) => assertDateFormat(value, 'La fecha efectiva del trabajo no es válida.');
 const getEffectiveSowingDate = (value) => assertDateFormat(value, 'La fecha de siembra no es válida.');
 
-const assertSowingDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
-  const { rows } = await client.query(
-    `
-    SELECT id, name, status, start_date, end_date
-    FROM campaigns
-    WHERE id = $1
-      AND company_id = $2
-      AND $3::date >= start_date
-      AND (end_date IS NULL OR $3::date <= end_date)
-    LIMIT 1;
-    `,
-    [campaignId, companyId, effectiveDate]
-  );
-
-  if (!rows.length) {
-    const err = new Error('La fecha efectiva de siembra debe estar dentro del período formal de la campaña.');
-    err.status = 400;
-    throw err;
-  }
-
-  return rows[0];
-};
-
 const assertWorkDateMatchesCampaign = async (client, campaignId, companyId, effectiveDate) => {
   const { rows } = await client.query(
     `
-    SELECT id, name, status, work_start_date, start_date, end_date
+    SELECT id, name, status, work_start_date, start_date, end_date, work_end_date
     FROM campaigns
     WHERE id = $1
       AND company_id = $2
-      AND $3::date >= COALESCE(work_start_date, start_date)
-      AND (end_date IS NULL OR $3::date <= end_date)
+      AND $3::date >= ${campaignWindowSql.start}
+      AND (${campaignWindowSql.end} IS NULL OR $3::date <= ${campaignWindowSql.end})
     LIMIT 1;
     `,
     [campaignId, companyId, effectiveDate]
   );
 
   if (!rows.length) {
-    const err = new Error('La fecha seleccionada está fuera del período de trabajos de la campaña.');
+    const err = new Error('La fecha seleccionada está fuera de la ventana operativa de la campaña.');
     err.status = 400;
     throw err;
   }
@@ -892,7 +871,7 @@ const completeSowingPlanning = async (
     throw err;
   }
 
-  await assertSowingDateMatchesCampaign(client, planning.campaign_id, companyId, effectiveDate);
+  await assertWorkDateMatchesCampaign(client, planning.campaign_id, companyId, effectiveDate);
 
   const selections = await getPlanningSelectionsForUsage(client, planning.id, companyId);
   if (!selections.length) {

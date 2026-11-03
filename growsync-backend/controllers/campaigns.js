@@ -1,8 +1,9 @@
+const { operationalWindow, campaignDateIssues, windowReduced } = require('../services/campaignWindow');
 const { pool } = require('../db/supabaseClient');
 
-const fields = 'id, name, work_start_date, start_date, end_date, status, created_at, updated_at';
+const fields = 'id, name, work_start_date, start_date, end_date, work_end_date, status, created_at, updated_at';
 const CAMPAIGN_IN_USE_MESSAGE = 'Esta campaña tiene información asociada y no puede eliminarse.';
-const CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE = 'No se pueden guardar estas fechas porque existen registros asociados fuera del período seleccionado.';
+const CAMPAIGN_DATES_OUTSIDE_REFERENCES_MESSAGE = 'No se puede reducir la ventana operativa porque dejaría registros asociados fuera de ella.';
 const CAMPAIGN_NAME_UNIQUE_INDEX = 'campaigns_company_name_ci_unique';
 const LEGACY_ONE_ACTIVE_INDEX = 'campaigns_one_active_per_company';
 
@@ -63,22 +64,26 @@ const getCampaignReferenceCounts = async (client, companyId, campaignId) => {
   return rows;
 };
 
-const assertCampaignDatesContainReferences = async (client, companyId, campaignId, workStartDate, startDate, endDate) => {
-  const effectiveWorkStartDate = workStartDate || startDate;
+const assertCampaignDatesContainReferences = async (client, companyId, campaignId, before, after) => {
   const { rows } = await client.query(
     `
+    -- Planning represents calendar days using UTC timestamps.
     WITH referenced_dates AS (
-      SELECT start_at::date AS date_value
+      SELECT (start_at AT TIME ZONE 'UTC')::date AS date_value
       FROM planning
       WHERE company_id = $1
         AND campaign_id = $2
         AND start_at IS NOT NULL
       UNION ALL
-      SELECT end_at::date AS date_value
+      SELECT (end_at AT TIME ZONE 'UTC')::date AS date_value
       FROM planning
       WHERE company_id = $1
         AND campaign_id = $2
         AND end_at IS NOT NULL
+      UNION ALL
+      SELECT effective_date AS date_value
+      FROM planning
+      WHERE company_id = $1 AND campaign_id = $2 AND effective_date IS NOT NULL
       UNION ALL
       SELECT start_date AS date_value
       FROM crop_assignments
@@ -102,10 +107,11 @@ const assertCampaignDatesContainReferences = async (client, companyId, campaignI
       MAX(date_value) AS max_date,
       COUNT(*)::int AS out_of_range_count
     FROM referenced_dates
-    WHERE date_value < $3::date
-       OR ($4::date IS NOT NULL AND date_value > $4::date);
+    WHERE (date_value < $3::date OR ($4::date IS NOT NULL AND date_value > $4::date))
+      AND date_value >= $5::date
+      AND ($6::date IS NULL OR date_value <= $6::date);
     `,
-    [companyId, campaignId, effectiveWorkStartDate, endDate]
+    [companyId, campaignId, after.start, after.end, before.start, before.end]
   );
 
   const outOfRangeCount = Number(rows[0]?.out_of_range_count || 0);
@@ -173,7 +179,9 @@ exports.create = async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { company_id } = req.user;
-    const { name, work_start_date = null, start_date, end_date } = req.body;
+    const { name, work_start_date = null, start_date, end_date, work_end_date = null } = req.body;
+    const issues = campaignDateIssues(req.body);
+    if (issues.length) return res.status(400).json({ error: 'BadRequest', message: issues[0].message });
 
     logCampaignCreate('REQUEST', {
       name,
@@ -198,11 +206,11 @@ exports.create = async (req, res, next) => {
 
     const { rows } = await client.query(
       `
-      INSERT INTO campaigns (company_id, name, work_start_date, start_date, end_date, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO campaigns (company_id, name, work_start_date, start_date, end_date, work_end_date, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING ${fields};
       `,
-      [company_id, insertName, work_start_date || null, start_date, end_date || null, status]
+      [company_id, insertName, work_start_date || null, start_date, end_date || null, work_end_date, status]
     );
 
     await client.query('COMMIT');
@@ -237,7 +245,7 @@ exports.update = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: currentRows } = await client.query(
-      'SELECT id, work_start_date, start_date, end_date, status FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      'SELECT id, work_start_date, start_date, end_date, work_end_date, status FROM campaigns WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, company_id]
     );
 
@@ -246,35 +254,19 @@ exports.update = async (req, res, next) => {
       return res.status(404).json({ error: 'NotFound', message: 'Campaña no encontrada' });
     }
 
-    const nextWorkStart = req.body.work_start_date !== undefined
-      ? req.body.work_start_date
-      : currentRows[0].work_start_date;
-    const nextStart = req.body.start_date ?? currentRows[0].start_date;
-    const nextEnd = req.body.end_date !== undefined ? req.body.end_date : currentRows[0].end_date;
-    const { rows: dateOrderRows } = await client.query(
-      `
-      SELECT
-        ($1::date IS NULL OR $1::date <= $2::date) AS valid_work_start,
-        ($3::date IS NULL OR $2::date <= $3::date) AS valid_date_order;
-      `,
-      [nextWorkStart, nextStart, nextEnd]
-    );
-    if (!dateOrderRows[0]?.valid_work_start) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'BadRequest',
-        message: 'La fecha "Trabajos desde" no puede ser posterior a la fecha de inicio.',
-      });
+    const current = currentRows[0];
+    const nextCampaign = { ...current };
+    for (const key of ['start_date', 'end_date', 'work_start_date', 'work_end_date']) {
+      if (req.body[key] !== undefined) nextCampaign[key] = req.body[key];
     }
-    if (!dateOrderRows[0]?.valid_date_order) {
+    const issues = campaignDateIssues(nextCampaign);
+    if (issues.length) {
       await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'BadRequest',
-        message: 'La fecha de finalización no puede ser anterior a la fecha de inicio.',
-      });
+      return res.status(400).json({ error: 'BadRequest', message: issues[0].message });
     }
-
-    await assertCampaignDatesContainReferences(client, company_id, id, nextWorkStart, nextStart, nextEnd);
+    const before = operationalWindow(current), after = operationalWindow(nextCampaign);
+    // Only newly excluded references block a reduction; historic anomalies do not block expansion/rename.
+    if (windowReduced(before, after)) await assertCampaignDatesContainReferences(client, company_id, id, before, after);
 
     const nextStatus = req.body.status;
 
@@ -289,6 +281,7 @@ exports.update = async (req, res, next) => {
     if (req.body.work_start_date !== undefined) push(req.body.work_start_date, 'work_start_date');
     if (req.body.start_date !== undefined) push(req.body.start_date, 'start_date');
     if (req.body.end_date !== undefined) push(req.body.end_date, 'end_date');
+    if (req.body.work_end_date !== undefined) push(req.body.work_end_date, 'work_end_date');
     if (nextStatus !== undefined) push(nextStatus, 'status');
 
     if (!sets.length) {

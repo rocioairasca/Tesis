@@ -1,3 +1,4 @@
+const { operationalWindow, operationalSql } = require('../services/campaignWindow');
 const { assertCanExecutePlanning } = require('../services/planningExecution');
 const planningNotifications = require('../services/planningNotifications');
 const planningRecipes = require('../services/planningRecipes');
@@ -173,7 +174,7 @@ const assertSowingUsesCompletionEndpoint = (activityType, nextStatus) => {
 
 const calendarDateSql = (param) => `left($${param}::text, 10)::date`;
 
-const campaignWorkStartSql = 'COALESCE(work_start_date, start_date)';
+const campaignWindowSql = operationalSql();
 
 const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   if (!campaignId) {
@@ -190,7 +191,7 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
   } = options;
   const { rows } = await client.query(
     `
-    SELECT id, name, status, work_start_date, start_date, end_date
+    SELECT id, name, status, work_start_date, start_date, end_date, work_end_date
     FROM campaigns
     WHERE id = $1
       AND company_id = $2
@@ -213,8 +214,8 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
         SELECT id, name, status, start_date
         FROM campaigns
         WHERE company_id = $5
-          AND ${calendarDateSql(1)} >= ${campaignWorkStartSql}
-          AND (end_date IS NULL OR ${calendarDateSql(1)} <= end_date)
+          AND ${calendarDateSql(1)} >= ${campaignWindowSql.start}
+          AND (${campaignWindowSql.end} IS NULL OR ${calendarDateSql(2)} <= ${campaignWindowSql.end})
       )
       SELECT
         (
@@ -235,11 +236,11 @@ const resolveCampaign = async (client, campaignId, companyId, options = {}) => {
           LIMIT 1
         ) AS suggested_campaign;
       `,
-      [startAt, endAt, campaign.work_start_date || campaign.start_date, campaign.end_date, companyId]
+      [startAt, endAt, operationalWindow(campaign).start, operationalWindow(campaign).end, companyId]
     );
 
     if (!dateRows[0]?.matches_campaign) {
-      const err = new Error('La campaña seleccionada no admite trabajos en las fechas indicadas.');
+      const err = new Error(`La fecha seleccionada está fuera de la ventana operativa de ${campaign.name}.`);
       err.status = 400;
       err.details = { suggested_campaign: dateRows[0]?.suggested_campaign || null };
       throw err;
@@ -1033,19 +1034,16 @@ exports.update = async (req, res, next) => {
       }
     }
 
-    if (campaign_id !== undefined) {
-      await resolveCampaign(client, campaign_id, company_id, {
-        allowClosedCampaignId: checkRows[0].campaign_id,
+    const currentPlanning = checkRows[0];
+    const datesChanged = (start_at !== undefined && new Date(start_at).getTime() !== new Date(currentPlanning.start_at).getTime())
+      || (end_at !== undefined && new Date(end_at).getTime() !== new Date(currentPlanning.end_at).getTime());
+    const campaignChanged = campaign_id !== undefined && campaign_id !== currentPlanning.campaign_id;
+    if (campaignChanged || datesChanged) {
+      await resolveCampaign(client, campaign_id !== undefined ? campaign_id : currentPlanning.campaign_id, company_id, {
+        allowClosedCampaignId: currentPlanning.campaign_id,
         allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
-        startAt: start_at ?? checkRows[0].start_at,
-        endAt: end_at ?? checkRows[0].end_at,
-      });
-    } else if ((start_at !== undefined || end_at !== undefined) && checkRows[0].campaign_id) {
-      await resolveCampaign(client, checkRows[0].campaign_id, company_id, {
-        allowClosedCampaignId: checkRows[0].campaign_id,
-        allowClosedHistorical: hasEffectivePermission(req.user, PERMISSIONS.PLANNING_EDIT),
-        startAt: start_at ?? checkRows[0].start_at,
-        endAt: end_at ?? checkRows[0].end_at,
+        startAt: start_at ?? currentPlanning.start_at,
+        endAt: end_at ?? currentPlanning.end_at,
       });
     }
 

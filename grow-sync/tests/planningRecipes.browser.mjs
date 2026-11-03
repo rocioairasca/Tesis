@@ -46,6 +46,7 @@ test('planning.create + recipes.view can select and apply a recipe without recip
   await drawer.getByText('Supera disponible',{exact:true}).waitFor();await area.fill('15');await area.press('Tab');await drawer.getByText('37,5 L',{exact:true}).waitFor();
   await drawer.getByRole('textbox',{name:'Fecha',exact:true}).fill('15/10/2026');await drawer.getByRole('textbox',{name:'Fecha',exact:true}).press('Enter');
   await choose(page,'responsible_user','Responsable');
+  await choose(page,'campaign_id','2026');
   const save=drawer.getByRole('button',{name:'Crear Planificación',exact:true});assert.equal(await save.isEnabled(),true);await save.click();
   await drawer.waitFor({state:'hidden'});
   const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning');
@@ -80,7 +81,7 @@ test('performed recipe payload confirms real amounts, resets on area change and 
  await page.waitForFunction(()=>document.querySelector('[aria-label="Cantidad realmente utilizada"]').value.includes('1485'));
  await choose(page,'recipe_id','Mezcla nueva · Fumigación · Rastrojo · Maíz');
  await page.waitForFunction(()=>document.querySelector('[aria-label="Cantidad realmente utilizada"]').value.includes('37'));
- await real.first().fill('24');await real.first().press('Tab');await drawer.getByRole('button',{name:'Registrar actividad',exact:true}).click();await drawer.waitFor({state:'hidden'});
+ await real.first().fill('24');await real.first().press('Tab');await choose(page,'campaign_id','2026');await drawer.getByRole('button',{name:'Registrar actividad',exact:true}).click();await drawer.waitFor({state:'hidden'});
  const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning/register-completed');assert.equal(writes[0].body.recipe_id,'fresh');assert.ok(!Object.hasOwn(writes[0].body,'products'));assert.equal(writes[0].body.actual_products.length,3);assert.deepEqual(writes[0].body.actual_products[0],{product_id:'glifo',actual_amount:'24',unit:'L'});
 });
 

@@ -1,3 +1,5 @@
+const { operationalWindow, operationalSql } = require('../services/campaignWindow');
+const campaignWindowSql = operationalSql('cp');
 const { pool } = require('../db/supabaseClient');
 const { PERMISSIONS, getEffectivePermissions } = require('../constants/permissions');
 
@@ -57,8 +59,8 @@ const resolveAssignmentTarget = async (
     SELECT
       cp.id AS campaign_id,
       cp.status AS campaign_status,
-      cp.start_date AS campaign_start_date,
-      cp.end_date AS campaign_end_date,
+      ${campaignWindowSql.start} AS campaign_start_date,
+      ${campaignWindowSql.end} AS campaign_end_date,
       l.id AS lot_id,
       COALESCE(l.area_ha, NULLIF(l.area, 0)::NUMERIC) AS lot_area_ha,
       sl.id AS sub_lot_id,
@@ -210,7 +212,7 @@ const assertCampaignAllowsDates = async (
 
   const { rows } = await client.query(
     `
-    SELECT id, status, start_date, end_date
+    SELECT id, status, start_date, end_date, work_start_date, work_end_date
     FROM campaigns
     WHERE id = $1
       AND company_id = $2
@@ -239,7 +241,7 @@ const assertCampaignAllowsDates = async (
       AND ($4::date IS NULL OR $2::date IS NULL OR $2::date <= $4::date)
     ) AS matches_campaign;
     `,
-    [startDate, endDate, campaign.start_date, campaign.end_date]
+    [startDate, endDate, operationalWindow(campaign).start, operationalWindow(campaign).end]
   );
 
   if (!dateRows[0]?.matches_campaign) {
