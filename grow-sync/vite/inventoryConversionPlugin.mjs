@@ -2,11 +2,11 @@ import { readFile } from 'node:fs/promises';
 
 // Shared exact inventory and recipe arithmetic exposed as ESM in Vite development.
 export default function inventoryConversionPlugin() {
-  const supported = id => /\/shared\/(inventoryConversion|recipeCalculation)\.cjs(?:\.mjs)?$/.test(id.replaceAll('\\', '/'));
+  const supported = id => /\/shared\/(inventoryConversion|recipeCalculation|costEstimate)\.cjs(?:\.mjs)?$/.test(id.replaceAll('\\', '/'));
   return {
     name: 'inventory-conversion-esm', enforce: 'pre',
     async resolveId(source, importer) {
-      if (!/(inventoryConversion|recipeCalculation)\.cjs$/.test(source)) return;
+      if (!/(inventoryConversion|recipeCalculation|costEstimate)\.cjs$/.test(source)) return;
       const resolved = await this.resolve(source, importer, { skipSelf: true });
       if (resolved && supported(resolved.id)) return resolved.id + '.mjs';
     },

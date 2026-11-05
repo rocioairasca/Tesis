@@ -1,3 +1,4 @@
+import PlanningCostEstimate from './components/PlanningCostEstimate';
 import { campaignWorkEnd, campaignContainsWorkRange, campaignContainsWorkDate, orderCampaignsForRange, campaignWindowWarning, planningCampaignDatesChanged } from "../../utils/campaigns.mjs";
 import { canExecutePlanning, completionEndpoint, primaryExecutionAction, executionDeniedMessage } from './planningExecution.mjs';
 import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters, planningFilterKey, readPlanningListState, updatePlanningPage } from './planningFilters.mjs';
@@ -2260,6 +2261,7 @@ const Planning = () => {
                 locale={{ emptyText: "Sin productos asignados" }}
               />
             </div>
+            {isDetailOpen && <PlanningCostEstimate planning={viewing} user={currentUser}/>}
           </Space>
         )}
       </Drawer>

@@ -3,6 +3,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { localToday } = require('./harvestRegistration');
 const {normalizeQuantity}=require('./inventoryConversion');
 const {expirationFields,effectiveExpirationSql}=require('./inventoryExpiration');
+const {eligibleBatchSql,fefoOrderSql}=require('./stockFefo');
 
 // Inventory V1 is standard for every authenticated company. Keep this adapter
 // while legacy callers are retired; authorization and SQL tenant guards remain
@@ -94,10 +95,8 @@ async function consumeStock(client, x) {
   // adjustment/legacy batches cannot prove existence before local creation day.
   // Consume only remaining quantity; never reuse quantities spent after D.
   const { rows: batches } = await client.query(`SELECT * FROM stock_batches
-    WHERE company_id=$1 AND product_id=$2 AND enabled=true AND available_quantity>0
-      AND COALESCE(received_date, (created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) <= $3::date
-      AND (${effectiveExpirationSql} IS NULL OR ${effectiveExpirationSql} >= $3::date)
-    ORDER BY ${effectiveExpirationSql} ASC NULLS LAST, received_date ASC NULLS LAST, id ASC FOR UPDATE`,
+    WHERE company_id=$1 AND product_id=$2 AND ${eligibleBatchSql}
+    ORDER BY ${fefoOrderSql} FOR UPDATE`,
   [x.companyId,x.productId,effectiveDate]);
   if (batches.reduce((sum,b) => sum+decimal(b.available_quantity),0n) < quantity) throw fail('Stock utilizable insuficiente.');
   let remaining = quantity;

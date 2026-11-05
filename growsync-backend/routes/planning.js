@@ -86,6 +86,8 @@ router.post('/:id/complete-work',
   ctrl.completeWork
 );
 
+router.use('/:id/cost-estimate', require('./planningCostEstimate')(require('../db/supabaseClient').pool));
+
 // OBTENER una planificacion por ID
 router.get('/:id',
   validate(schema.idParam),

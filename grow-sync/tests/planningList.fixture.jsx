@@ -14,6 +14,8 @@ import '../src/layout/shell.css';
 const uid = '22222222-2222-4222-8222-222222222222';
 const user = { id: uid, company_id: 'company', full_name: 'Agustina Airasca', role: 0, custom_permissions: ['planning.view', 'planning.edit', 'planning.disable'] };
 if (new URLSearchParams(location.search).has('denied')) user.custom_permissions = [];
+const costMode=new URLSearchParams(location.search).get('cost');
+if(costMode && costMode!=='denied') user.custom_permissions.push('inventory.view');
 localStorage.clear();
 localStorage.setItem('user', JSON.stringify(user));
 Object.entries(cssVariables).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
@@ -27,6 +29,18 @@ const rows = Array.from({ length: 47 }, (_, i) => ({
   responsible_user: uid, responsible_name: user.full_name, assigned_by_name: 'Juan Pérez',
   lots: [{ id: 'lot', lot_id: 'lot', name: 'Lote T4', area_ha: 10 }], products: [],
 }));
+if(costMode==='completed') rows[0].status=rows[0].status_effective='completado';
+window.__costEstimate={planning_id:rows[0].id,currency:'USD',simulation:true,as_of_date:'2026-11-05',
+  status:costMode==='partial'?'partial':costMode==='unavailable'?'unavailable':'complete',
+  area_ha:'93.000000',known_products_cost_usd:costMode==='partial'?'600.000000':costMode==='unavailable'?'0.000000':'685.400000',
+  pending_items:costMode==='unavailable'?1:0,stock_shortfalls:costMode==='partial'?1:0,invalid_items:0,
+  products:[{planning_product_id:'pp',product_id:'p',name:'Glifosato',unit:'L',
+    required_quantity:costMode==='complete'?'186.000000':'200.000000',
+    known_quantity:costMode==='unavailable'?'0.000000':costMode==='partial'?'150.000000':'186.000000',
+    pending_cost_quantity:costMode==='unavailable'?'200.000000':'0.000000',
+    uncovered_quantity:costMode==='partial'?'50.000000':'0.000000',
+    known_cost_usd:costMode==='partial'?'600.000000':costMode==='unavailable'?'0.000000':'685.400000',
+    status:costMode==='partial'?'partial':costMode==='unavailable'?'unavailable':'complete'}]};
 window.__requests = [];
 window.__mutations = [];
 window.__delay = 0;
@@ -57,6 +71,11 @@ api.defaults.adapter = async config => {
     // Test-only evidence: correlate rendered rows with the exact completed response.
     request.response = structuredClone(result.data);
     return result;
+  }
+  if (config.url.endsWith('/cost-estimate')) {
+    if(!costMode || costMode==='denied') throw Error('Unexpected estimate request');
+    if(window.__costFail) throw Error('Synthetic estimate failure');
+    return response(window.__costEstimate);
   }
   if (config.url.startsWith('/planning/')) return response(rows.find(row => config.url === '/planning/' + row.id));
   if (config.url === '/users/planning-responsibles') return response([user]);

@@ -1,0 +1,8 @@
+.planning-cost-estimate { width: 100%; min-width: 0; }
+.planning-cost-estimate-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.planning-cost-estimate-heading h5 { margin: 0; }
+.planning-cost-estimate-row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-block: 10px; overflow-wrap: anywhere; }
+.planning-cost-estimate-products { padding: 0; list-style: none; }
+.planning-cost-estimate-products li { padding-block: 8px; border-bottom: 1px solid #f0f0f0; overflow-wrap: anywhere; }
+.planning-cost-estimate-warning { color: #874d00; font-size: 12px; }
+.planning-cost-estimate-total { border-top: 1px solid #d9d9d9; margin-top: 12px; }
