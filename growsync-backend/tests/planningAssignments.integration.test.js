@@ -10,6 +10,7 @@ before(async()=>{
   for(const f of ['./historySchema.fixture.sql','../migrations/20261103_add_campaign_work_end_date.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql',
     '../migrations/20261008_planning_field_context.sql','../migrations/20261012_recipes.sql','../migrations/20261012_planning_recipe_snapshots.sql','../migrations/20261018_planning_assignment.sql'])
     await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
+  await require('./economicExecution.fixture').install(db);
   await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
   client={async query(sql,args){
     if(sql==='COMMIT' && failCommit){failCommit=false;throw Error('Synthetic failed commit');}
@@ -42,7 +43,7 @@ async function fixture(){
   await put('products',{id:product,company_id:company,name:'Producto sintético',unit:'L',total_quantity:0,available_quantity:0});
   const body={title:'Fumigación lote T4',activity_type:'fumigacion',field_context:'stubble',crop_id:crop,campaign_id:campaign,
     start_at:'2026-10-21T00:00:00.000Z',end_at:'2026-10-21T00:00:00.000Z',responsible_user:responsible,status:'pendiente',lot_selections:[{lot_id:lot,effective_area_ha:10}]};
-  const call=async(method,body={},id,actorId=actor,query={},permissions)=>{
+  const call=async(method,body={},id,actorId=actor,query={},permissions)=>{body=await require('./economicExecution.fixture').executionBody(db,method,body,id,crop);
     let data,code=200;await controller[method]({body,params:{id},query,user:{id:actorId,company_id:company,role:3,...(permissions?{custom_permissions:permissions}:{})}},
       {status(value){code=value;return this;},json(value){data=value;return this;}},error=>{throw error;});return {code,data};
   };
@@ -200,7 +201,7 @@ test('HTTP public routes preserve view/edit/create/complete permissions and reje
   const x=await fixture(),id=await x.create(),express=require('express'),app=express();let permissions=['planning.create','planning.edit','planning.view'];
   const filename=require.resolve('../routes/planning'),actual=createRequire(filename),module={exports:{}};
   const pass=(req,res,next)=>next();
-  vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>name==='../controllers/planning'?controller:name==='../middleware/historicalOperations'?{rejectModeInput:pass,historical:()=>pass,blockHistorical:()=>pass}:actual(name)},{filename});
+  vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>name==='../db/supabaseClient'?{pool:{...client,connect:async()=>client}}:name==='../controllers/planning'?controller:name==='../middleware/historicalOperations'?{rejectModeInput:pass,historical:()=>pass,blockHistorical:()=>pass}:actual(name)},{filename});
   app.use(express.json());app.use((req,res,next)=>{req.user={id:x.actor,company_id:x.company,role:0,custom_permissions:permissions};next();});app.use('/api/planning',module.exports);
   app.use((e,req,res,next)=>res.status(e.status||500).json({message:e.message}));
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
@@ -358,7 +359,7 @@ test('HTTP execute-only works without view but never grants PATCH, DELETE, resto
  const x=await fixture(),id=await x.create({activity_type:'riego'}),express=require('express'),app=express();let actor=x.responsible,permissions=['planning.execute'];
  const filename=require.resolve('../routes/planning'),actual=createRequire(filename),module={exports:{}};
  const pass=(req,res,next)=>next();
- vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>name==='../controllers/planning'?controller:name==='../middleware/historicalOperations'?{rejectModeInput:pass,historical:()=>pass,blockHistorical:()=>pass}:actual(name)},{filename});
+ vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,console,require:name=>name==='../db/supabaseClient'?{pool:{...client,connect:async()=>client}}:name==='../controllers/planning'?controller:name==='../middleware/historicalOperations'?{rejectModeInput:pass,historical:()=>pass,blockHistorical:()=>pass}:actual(name)},{filename});
  app.use(express.json());app.use((req,res,next)=>{req.user={id:actor,company_id:x.company,role:0,custom_permissions:permissions};next();});app.use('/api/planning',module.exports);app.use((e,req,res,next)=>res.status(e.status||500).json({message:e.message}));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
  const url='http://127.0.0.1:'+server.address().port+'/api/planning',send=(path,method='POST',body={})=>fetch(url+path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -369,7 +370,7 @@ test('HTTP execute-only works without view but never grants PATCH, DELETE, resto
  assert.equal((await send('/'+id+'/start','POST',{status:'completado'})).status,400);
  actor=x.third;assert.equal((await send('/'+id+'/start')).status,403);actor=x.responsible;
  assert.equal((await send('/'+id+'/start')).status,200);assert.equal((await send('/'+id+'/start')).status,200);
- assert.equal((await send('/'+id+'/complete-activity','POST',{effective_date:'2026-10-21'})).status,200);
+ assert.equal((await send('/'+id+'/complete-activity','POST',{effective_date:'2026-10-21',economic:{targets:[{lot_id:x.lot,beneficiary_crop_id:x.crop}]}})).status,200);
  permissions=['planning.view'];assert.equal((await send('/'+id+'/start')).status,403);
 });
 

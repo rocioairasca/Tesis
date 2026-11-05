@@ -790,6 +790,8 @@ const markPlanningCompleted = async (
     planningId,
     companyId,
     effectiveDate,
+    actorId,
+    economic,
     registeredRetroactively = false,
   }
 ) => {
@@ -806,6 +808,7 @@ const markPlanningCompleted = async (
     `,
     [planningId, companyId, effectiveDate, registeredRetroactively]
   );
+  await require('./economicExecution').capture(client, {planningId,companyId,actorId,effectiveDate,economic});
 };
 
 const completeSowingPlanning = async (
@@ -818,6 +821,7 @@ const completeSowingPlanning = async (
     historical = false,
     registeredRetroactively = false,
     actorId,
+    economic,
   }
 ) => {
   if (planning.activity_type !== 'siembra') {
@@ -898,6 +902,8 @@ const completeSowingPlanning = async (
 
   await markPlanningCompleted(client, {
     planningId: planning.id,
+    actorId,
+    economic,
     companyId,
     effectiveDate,
     registeredRetroactively,
@@ -920,6 +926,7 @@ const completeWorkPlanning = async (
     companyId,
     registeredRetroactively = false,
     actorId,
+    economic,
   }
 ) => {
   if (!PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type) || planning.activity_type === 'siembra') {
@@ -978,6 +985,8 @@ const completeWorkPlanning = async (
 
   await markPlanningCompleted(client, {
     planningId: planning.id,
+    actorId,
+    economic,
     companyId,
     effectiveDate,
     registeredRetroactively,
@@ -997,6 +1006,8 @@ const completeActivityWithoutProductiveEffects = async (
     effectiveDate,
     companyId,
     registeredRetroactively = false,
+    actorId,
+    economic,
   }
 ) => {
   if (planning.status === 'cancelado' || planning.enabled === false) {
@@ -1017,6 +1028,8 @@ const completeActivityWithoutProductiveEffects = async (
 
   await markPlanningCompleted(client, {
     planningId: planning.id,
+    actorId,
+    economic,
     companyId,
     effectiveDate,
     registeredRetroactively,

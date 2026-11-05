@@ -13,6 +13,11 @@ async function open(width=1440,path='/planificaciones?mine=1&planningId='+id){
  try{await page.locator('main .ant-table,main h1,main h2').first().waitFor();}catch{await page.reload();await page.locator('main .ant-table,main h1,main h2').first().waitFor({timeout:60000});}return page;
 }
 const drawer=page=>page.locator('.planning-detail-drawer');
+async function chooseBeneficiary(page,modal){
+ const select=modal.getByLabel('Cultivo beneficiario · Lote T4',{exact:true});
+ await select.press('ArrowDown');await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:/^Maíz$/}).click();
+}
+
 const ready=async page=>{await drawer(page).getByText('Juan Pérez',{exact:true}).waitFor();};
 async function fits(page,surface){assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no page overflow');if(surface)assert.ok(await surface.evaluate(el=>el.scrollWidth<=el.clientWidth),'no surface overflow');}
 async function capture(page,name){if(process.env.EXECUTION_SCREENSHOTS){mkdirSync(process.env.EXECUTION_SCREENSHOTS,{recursive:true});await page.screenshot({path:process.env.EXECUTION_SCREENSHOTS+'/'+name+'.png',animations:'disabled'});}}
@@ -24,18 +29,18 @@ for(const width of [1440,1024,390])test('own task Dashboard → start → comple
  await drawer(page).getByRole('button',{name:'Iniciar tarea',exact:true}).click();await drawer(page).getByRole('button',{name:'Completar tarea',exact:true}).waitFor();await drawer(page).getByText('En progreso',{exact:true}).waitFor();await page.locator('.gs-planning').getByText('En progreso',{exact:true}).waitFor();assert.equal(await page.locator('.gs-planning button[aria-label="Editar planificación"]').count(),0);
  await fits(page,drawer(page).locator('.ant-drawer-body'));await capture(page,'detail-'+width);
  await drawer(page).getByRole('button',{name:'Completar tarea',exact:true}).click();const modal=page.getByRole('dialog',{name:/^Completar/});await modal.getByLabel('Fecha efectiva del trabajo').waitFor();assert.equal(await modal.getByRole('spinbutton').count(),0);
- await fits(page,modal);await capture(page,'complete-'+width);await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});await drawer(page).getByText('Completado',{exact:true}).waitFor();
+ await fits(page,modal);await capture(page,'complete-'+width);await chooseBeneficiary(page,modal);await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});await drawer(page).getByText('Completado',{exact:true}).waitFor();
  assert.equal(await drawer(page).getByRole('button',{name:/Iniciar tarea|Completar tarea|Reabrir/}).count(),0);
- const writes=await page.evaluate(()=>window.__mutations);assert.deepEqual(writes.map(w=>[w.method,w.path]),[['post','/planning/'+id+'/start'],['post','/planning/'+id+'/complete-activity']]);assert.deepEqual(Object.keys(writes[1].body),['effective_date']);
+ const writes=await page.evaluate(()=>window.__mutations);assert.deepEqual(writes.map(w=>[w.method,w.path]),[['post','/planning/'+id+'/start'],['post','/planning/'+id+'/complete-activity']]);assert.deepEqual(Object.keys(writes[1].body),['effective_date','economic']);assert.equal(writes[1].body.economic.targets[0].beneficiary_crop_id,'crop');
  await drawer(page).getByRole('button',{name:/Close|Cerrar/}).click();await drawer(page).waitFor({state:'hidden'});await page.locator('.gs-planning .inventory-card, .gs-planning .ant-table-tbody tr[data-row-key]').waitFor({state:'hidden'});await fits(page);
 });
 for(const activity of ['siembra','fumigacion','fertilizacion','mantenimiento','otro','cosecha'])test('execute opens existing completion flow for '+activity,async t=>{
  const page=await open(390,'/planificaciones?mine=1&status=en_progreso&activity='+activity+'&planningId='+id);t.after(()=>page.close());await ready(page);await drawer(page).getByRole('button',{name:'Completar tarea',exact:true}).click();const modal=page.getByRole('dialog',{name:/^Completar/});
  const productive=['siembra','fumigacion','fertilizacion'].includes(activity);await modal.getByLabel(activity==='siembra'?'Fecha efectiva de siembra':'Fecha efectiva del trabajo').waitFor();
  if(productive){const amount=modal.getByRole('spinbutton',{name:'Cantidad real',exact:true});await amount.fill('0.5');await amount.press('Tab');}else assert.equal(await modal.getByRole('spinbutton').count(),0);
- await fits(page,modal);await modal.getByRole('button',{name:activity==='siembra'?'Confirmar siembra':'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});await drawer(page).getByText('Completado',{exact:true}).waitFor();
+ await fits(page,modal);await chooseBeneficiary(page,modal);await modal.getByRole('button',{name:activity==='siembra'?'Confirmar siembra':'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});await drawer(page).getByText('Completado',{exact:true}).waitFor();
  const [write]=await page.evaluate(()=>window.__mutations);assert.equal(write.path,'/planning/'+id+'/'+(activity==='siembra'?'complete-sowing':productive?'complete-work':'complete-activity'));
- if(productive){assert.equal(write.body.actual_products[0].planning_product_id,'pp');assert.equal(Number(write.body.actual_products[0].actual_amount),0.5);}else assert.deepEqual(Object.keys(write.body),['effective_date']);
+ if(productive){assert.equal(write.body.actual_products[0].planning_product_id,'pp');assert.equal(Number(write.body.actual_products[0].actual_amount),0.5);}else assert.deepEqual(Object.keys(write.body),['effective_date','economic']);
 });
 for(const mode of ['other','view','editor'])test('execution and editing capabilities: '+mode,async t=>{
  const page=await open(1024,'/planificaciones?mode='+mode+'&planningId='+id);t.after(()=>page.close());await ready(page);
@@ -49,7 +54,7 @@ test('execute without view does not expose Planning or Dashboard tasks',async t=
  assert.ok(!(await page.evaluate(()=>window.__requests)).some(r=>r.path.startsWith('/planning')));
 });
 test('reassignment before completion returns a clear error and retains form',async t=>{
- const page=await open(390,'/planificaciones?mode=reassigned&status=en_progreso&planningId='+id);t.after(()=>page.close());await ready(page);await drawer(page).getByRole('button',{name:'Completar tarea',exact:true}).click();const modal=page.getByRole('dialog',{name:/^Completar/});await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();
+ const page=await open(390,'/planificaciones?mode=reassigned&status=en_progreso&planningId='+id);t.after(()=>page.close());await ready(page);await drawer(page).getByRole('button',{name:'Completar tarea',exact:true}).click();const modal=page.getByRole('dialog',{name:/^Completar/});await chooseBeneficiary(page,modal);await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();
  await page.getByText('No tenés permiso para ejecutar esta tarea. Puede haber sido reasignada.',{exact:true}).waitFor();assert.ok(await modal.isVisible());assert.equal(await drawer(page).getByText('Completado',{exact:true}).count(),0);
 });
 test('permission editor includes execute, warns without view and never adds view silently',async t=>{

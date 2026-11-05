@@ -5,6 +5,7 @@ let db,controller,client;
 before(async()=>{
  db=new PGlite();await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
  for(const f of ['./historySchema.fixture.sql','../migrations/20261103_add_campaign_work_end_date.sql','../migrations/20261018_planning_assignment.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql','../migrations/20261008_planning_field_context.sql'])await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
+  await require('./economicExecution.fixture').install(db);
  await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
  client={async query(s,a){
   // No PostGIS in PGlite: with a NULL selected geometry the real spatial query returns no intersections.
@@ -32,7 +33,7 @@ async function fixture(){
  await db.query("INSERT INTO campaigns(id,company_id,name,start_date,end_date,status) VALUES($1,$2,'Test','2026-01-01','2026-12-31','active')",[campaignId,companyId]);
  const user={id:actorId,company_id:companyId,role:3};
  const body={activity_type:'fumigacion',field_context:'growing_crop',start_at:'2026-09-01T00:00:00Z',end_at:'2026-09-01T00:00:00Z',responsible_user:actorId,crop_id:cropId,campaign_id:campaignId,status:'pendiente',lot_selections:[{lot_id:lotId,effective_area_ha:10}]};
- const call=async(method,body={},id,query={})=>{let result,code=200;await controller[method]({body,params:{id},user,query},{status(n){code=n;return this;},json(data){result=data;return this;}},e=>{throw e;});return {code,data:result};};
+ const call=async(method,body={},id,query={})=>{body=await require('./economicExecution.fixture').executionBody(db,method,body,id,cropId);let result,code=200;await controller[method]({body,params:{id},user,query},{status(n){code=n;return this;},json(data){result=data;return this;}},e=>{throw e;});return {code,data:result};};
  return {companyId,actorId,lotId,body,call};
 }
 test('create/read/update use effective total without trusting client area or touching inventory',async()=>{

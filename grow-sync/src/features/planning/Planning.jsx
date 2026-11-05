@@ -1,3 +1,6 @@
+import PlanningActualCost from './components/PlanningActualCost';
+import ExecutionEconomicFields from './components/ExecutionEconomicFields';
+import {executionEconomicPayload,economicEditPermissions} from './planningEconomics.mjs';
 import PlanningCostEstimate from './components/PlanningCostEstimate';
 import { campaignWorkEnd, campaignContainsWorkRange, campaignContainsWorkDate, orderCampaignsForRange, campaignWindowWarning, planningCampaignDatesChanged } from "../../utils/campaigns.mjs";
 import { canExecutePlanning, completionEndpoint, primaryExecutionAction, executionDeniedMessage } from './planningExecution.mjs';
@@ -1134,6 +1137,7 @@ const Planning = () => {
 
       if (shouldRegisterCompleted) {
         payload.effective_date = effectiveDate?.format("YYYY-MM-DD");
+        payload.economic = executionEconomicPayload({...payload,lots:lotSelections},values,economicEditPermissions.every(p=>hasPermission(currentUser,p)));
       }
 
       if (isEditingCompleted) {
@@ -1144,7 +1148,6 @@ const Planning = () => {
         if (values.title !== undefined) {
           completedPayload.title = values.title?.trim() || null;
         }
-        console.log("📤 Payload a enviar:", JSON.stringify(completedPayload, null, 2));
         await api.patch(`/planning/${getId(editing)}`, completedPayload);
         notification.success({ message: "Planificación actualizada" });
         fetchPlanning();
@@ -1152,7 +1155,6 @@ const Planning = () => {
         return;
       }
 
-      console.log("📤 Payload a enviar:", JSON.stringify(payload, null, 2));
 
       if (editing && getId(editing)) {
         // actualizar; para status usamos PATCH (según colección)
@@ -1343,6 +1345,7 @@ const Planning = () => {
       const { data } = await api.post(`/planning/${getId(planning)}/complete-sowing`, {
         effective_date: values.effective_date.format("YYYY-MM-DD"),
         actual_products: buildActualProductsPayload(planning, values),
+        economic: executionEconomicPayload(planning,values,economicEditPermissions.every(p=>hasPermission(currentUser,p))),
       });
       notification.success({
         message: data?.message || (
@@ -1386,6 +1389,7 @@ const Planning = () => {
       const { data } = await api.post(`/planning/${getId(planning)}/${completionEndpoint(planning.activity_type)}`, {
         effective_date: values.effective_date.format("YYYY-MM-DD"),
         ...(completionEndpoint(planning.activity_type) === 'complete-work' ? { actual_products: buildActualProductsPayload(planning, values) } : {}),
+        economic: executionEconomicPayload(planning,values,economicEditPermissions.every(p=>hasPermission(currentUser,p))),
       });
       notification.success({
         message: data?.message || "El trabajo fue completado y los productos utilizados quedaron registrados.",
@@ -2052,6 +2056,11 @@ const Planning = () => {
             )}
           </Form.List>}
 
+          {!editing && registerCompleted && <ExecutionEconomicFields
+            planning={{field_context:selectedFieldContext,crop_id:selectedFormCropId,campaign_name:selectedCampaign?.name,
+              lots:selectedAreaRows.map(row=>({...parseSelectionKey(row.key),name:row.name}))}}
+            crops={crops} user={currentUser} form={form}/>}
+
           <Form.Item name="description" label="Descripción">
             <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
           </Form.Item>
@@ -2262,6 +2271,7 @@ const Planning = () => {
               />
             </div>
             {isDetailOpen && <PlanningCostEstimate planning={viewing} user={currentUser}/>}
+            {isDetailOpen && <PlanningActualCost planning={viewing} user={currentUser}/>}
           </Space>
         )}
       </Drawer>
@@ -2361,6 +2371,7 @@ const Planning = () => {
               <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
                 {renderActualProductsForm(sowingCompletion.planning)}
               </Form.Item>
+              <ExecutionEconomicFields planning={sowingCompletion.planning} crops={crops} user={currentUser} form={sowingForm}/>
             </Form>
           </Space>
         )}
@@ -2435,6 +2446,7 @@ const Planning = () => {
               {completionEndpoint(workCompletion.planning.activity_type) === 'complete-work' && <Form.Item label="Productos utilizados" style={{ marginBottom: 0 }}>
                 {renderActualProductsForm(workCompletion.planning)}
               </Form.Item>}
+              <ExecutionEconomicFields planning={workCompletion.planning} crops={crops} user={currentUser} form={completionForm}/>
             </Form>
           </Space>
         )}

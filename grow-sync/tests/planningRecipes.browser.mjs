@@ -81,14 +81,14 @@ test('performed recipe payload confirms real amounts, resets on area change and 
  await page.waitForFunction(()=>document.querySelector('[aria-label="Cantidad realmente utilizada"]').value.includes('1485'));
  await choose(page,'recipe_id','Mezcla nueva · Fumigación · Rastrojo · Maíz');
  await page.waitForFunction(()=>document.querySelector('[aria-label="Cantidad realmente utilizada"]').value.includes('37'));
- await real.first().fill('24');await real.first().press('Tab');await choose(page,'campaign_id','2026');await drawer.getByRole('button',{name:'Registrar actividad',exact:true}).click();await drawer.waitFor({state:'hidden'});
- const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning/register-completed');assert.equal(writes[0].body.recipe_id,'fresh');assert.ok(!Object.hasOwn(writes[0].body,'products'));assert.equal(writes[0].body.actual_products.length,3);assert.deepEqual(writes[0].body.actual_products[0],{product_id:'glifo',actual_amount:'24',unit:'L'});
+ await real.first().fill('24');await real.first().press('Tab');await choose(page,'campaign_id','2026');await choose(page,'economicTargets_0','Maíz');await drawer.getByRole('button',{name:'Registrar actividad',exact:true}).click();await drawer.waitFor({state:'hidden'});
+ const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning/register-completed');assert.equal(writes[0].body.economic.targets[0].beneficiary_crop_id,'crop');assert.equal(writes[0].body.recipe_id,'fresh');assert.ok(!Object.hasOwn(writes[0].body,'products'));assert.equal(writes[0].body.actual_products.length,3);assert.deepEqual(writes[0].body.actual_products[0],{product_id:'glifo',actual_amount:'24',unit:'L'});
 });
 
 test('future recipe completion modal shows saved name and dose and posts planning-product IDs',async t=>{
  const page=await open();t.after(()=>page.close());await page.locator('button[aria-label="Cambiar estado planificado"]').first().click();await page.getByText('Completar trabajo',{exact:true}).click();
  const modal=page.getByRole('dialog');await modal.getByText('Receta: Nombre guardado',{exact:true}).waitFor();await modal.getByText('Dosis: 2,5 L/ha',{exact:true}).waitFor();assert.match(await modal.innerText(),/Planificado:\s*25 L/);
  const real=modal.getByRole('spinbutton',{name:'Cantidad real',exact:true});assert.equal(Number((await real.inputValue()).replace(',','.')),25);await real.fill('24');await real.press('Tab');
- await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});
- const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning/plan/complete-work');assert.deepEqual(writes[0].body.actual_products[0],{planning_product_id:'pp',actual_amount:'24',unit:'L'});
+ await choose(page,'economicTargets_0','Maíz');await modal.getByRole('button',{name:'Confirmar trabajo',exact:true}).click();await modal.waitFor({state:'hidden'});
+ const writes=await page.evaluate(()=>window.__planningRecipeWrites);assert.equal(writes.length,1);assert.equal(writes[0].path,'/planning/plan/complete-work');assert.equal(writes[0].body.economic.targets[0].beneficiary_crop_id,'crop');assert.deepEqual(writes[0].body.actual_products[0],{planning_product_id:'pp',actual_amount:'24',unit:'L'});
 });

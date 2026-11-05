@@ -1,0 +1,11 @@
+.planning-economics,.planning-economics-form { width:100%;min-width:0; }
+.planning-economics { margin-top:16px; }
+.planning-economics-row { display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-block:10px;overflow-wrap:anywhere; }
+.planning-economics-actions { display:flex;gap:8px;flex-wrap:wrap;margin-block:12px; }
+.planning-economics-form { margin-top:16px; }
+.planning-economics-form .ant-picker { width:100%; }
+.planning-economics-form .ant-alert { margin-bottom:12px; }
+.planning-economics-line { border-bottom:1px solid #f0f0f0;padding-block:8px; }
+.planning-economics-evidence,.planning-economics details { overflow-wrap:anywhere; }
+.planning-economics summary { cursor:pointer;margin-block:10px; }
+@media(max-width:575px) { .planning-economics-actions .ant-btn { max-width:100%;white-space:normal;height:auto;min-height:32px; } }

@@ -10,6 +10,7 @@ before(async()=>{
   for(const f of ['./historySchema.fixture.sql','../migrations/20261103_add_campaign_work_end_date.sql','../migrations/20260916_historical_no_stock.sql','../migrations/20261007_planning_effective_area.sql',
     '../migrations/20261008_planning_field_context.sql','../migrations/20261012_recipes.sql','../migrations/20261012_planning_recipe_snapshots.sql','../migrations/20261018_planning_assignment.sql'])
     await db.exec(fs.readFileSync(require.resolve(f),'utf8'));
+  await require('./economicExecution.fixture').install(db);
   await db.exec('CREATE FUNCTION ST_AsGeoJSON(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;');
   client={async query(sql,args){
     if(sql==='COMMIT' && failCommit){failCommit=false;throw Error('Synthetic failed commit');}
@@ -42,7 +43,7 @@ async function fixture(){
   await put('products',{id:product,company_id:company,name:'Producto sintético',unit:'L',total_quantity:0,available_quantity:0});
   const body={title:'Fumigación lote T4',activity_type:'fumigacion',field_context:'stubble',crop_id:crop,campaign_id:campaign,
     start_at:'2026-10-21T00:00:00.000Z',end_at:'2026-10-21T00:00:00.000Z',responsible_user:responsible,status:'pendiente',lot_selections:[{lot_id:lot,effective_area_ha:10}]};
-  const call=async(method,body={},id,actorId=actor,query={},permissions)=>{
+  const call=async(method,body={},id,actorId=actor,query={},permissions)=>{body=await require('./economicExecution.fixture').executionBody(db,method,body,id,crop);
     let data,code=200;await controller[method]({body,params:{id},query,user:{id:actorId,company_id:company,role:3,...(permissions?{custom_permissions:permissions}:{})}},
       {status(value){code=value;return this;},json(value){data=value;return this;}},error=>{throw error;});return {code,data};
   };

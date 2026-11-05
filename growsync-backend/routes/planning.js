@@ -86,6 +86,8 @@ router.post('/:id/complete-work',
   ctrl.completeWork
 );
 
+router.use('/:id/economics', require('./planningEconomics')(require('../db/supabaseClient').pool));
+
 router.use('/:id/cost-estimate', require('./planningCostEstimate')(require('../db/supabaseClient').pool));
 
 // OBTENER una planificacion por ID

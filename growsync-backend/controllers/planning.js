@@ -1,3 +1,4 @@
+const economicExecution = require('../services/economicExecution');
 const { operationalWindow, operationalSql } = require('../services/campaignWindow');
 const { assertCanExecutePlanning } = require('../services/planningExecution');
 const planningNotifications = require('../services/planningNotifications');
@@ -707,6 +708,7 @@ exports.registerCompleted = async (req, res, next) => {
     if (planning.activity_type === 'siembra') {
       await resolveCrop(client, planning.crop_id, company_id);
       completion = await planningCompletion.completeSowingPlanning(client, planning, {
+        economic: economicExecution.completionInput(req.user, req.body.economic),
         actorId: req.user.id,
         effectiveDate,
         companyId: company_id,
@@ -718,6 +720,7 @@ exports.registerCompleted = async (req, res, next) => {
       planningCompletion.PRODUCT_CONSUMING_ACTIVITIES.has(planning.activity_type)
     ) {
       completion = await planningCompletion.completeWorkPlanning(client, planning, {
+        economic: economicExecution.completionInput(req.user, req.body.economic),
         actorId: req.user.id,
         effectiveDate,
         companyId: company_id,
@@ -726,6 +729,8 @@ exports.registerCompleted = async (req, res, next) => {
       });
     } else {
       completion = await planningCompletion.completeActivityWithoutProductiveEffects(client, planning, {
+        actorId: req.user.id,
+        economic: economicExecution.completionInput(req.user, req.body.economic),
         effectiveDate,
         companyId: company_id,
         registeredRetroactively: true,
@@ -789,6 +794,8 @@ exports.completeActivity = async (req, res, next) => {
       throw Object.assign(new Error('Esta actividad requiere su flujo de completion con productos.'), { status: 400 });
     }
     await planningCompletion.completeActivityWithoutProductiveEffects(client, planning, {
+        actorId: req.user.id,
+        economic: economicExecution.completionInput(req.user, req.body.economic),
       effectiveDate, companyId: company_id, registeredRetroactively: false,
     });
     const notificationEvents = await planningNotifications.prepare(client, {
@@ -823,6 +830,7 @@ exports.completeSowing = async (req, res, next) => {
     assertCanExecutePlanning(req.user, planning);
     await resolveCrop(client, planning.crop_id, company_id);
     const completion = await planningCompletion.completeSowingPlanning(client, planning, {
+        economic: economicExecution.completionInput(req.user, req.body.economic),
         actorId: req.user.id,
       actualProducts: actual_products,
       effectiveDate,
@@ -886,6 +894,7 @@ exports.completeWork = async (req, res, next) => {
     const planning = await planningCompletion.getPlanningForCompletion(client, id, company_id);
     assertCanExecutePlanning(req.user, planning);
     const completion = await planningCompletion.completeWorkPlanning(client, planning, {
+        economic: economicExecution.completionInput(req.user, req.body.economic),
         actorId: req.user.id,
       actualProducts: actual_products,
       effectiveDate,

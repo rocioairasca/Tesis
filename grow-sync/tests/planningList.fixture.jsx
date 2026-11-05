@@ -1,3 +1,4 @@
+import {configureEconomicFixture,economicRequest} from './planningEconomics.fixture.mjs';
 // Real Planning and shell scroll CSS; only the HTTP transport is synthetic.
 import '@ant-design/v5-patch-for-react-19';
 import React, { useState } from 'react';
@@ -14,6 +15,7 @@ import '../src/layout/shell.css';
 const uid = '22222222-2222-4222-8222-222222222222';
 const user = { id: uid, company_id: 'company', full_name: 'Agustina Airasca', role: 0, custom_permissions: ['planning.view', 'planning.edit', 'planning.disable'] };
 if (new URLSearchParams(location.search).has('denied')) user.custom_permissions = [];
+const economicMode=new URLSearchParams(location.search).get('economic');
 const costMode=new URLSearchParams(location.search).get('cost');
 if(costMode && costMode!=='denied') user.custom_permissions.push('inventory.view');
 localStorage.clear();
@@ -29,6 +31,8 @@ const rows = Array.from({ length: 47 }, (_, i) => ({
   responsible_user: uid, responsible_name: user.full_name, assigned_by_name: 'Juan Pérez',
   lots: [{ id: 'lot', lot_id: 'lot', name: 'Lote T4', area_ha: 10 }], products: [],
 }));
+configureEconomicFixture(rows,user,economicMode);
+if(economicMode)localStorage.setItem('user',JSON.stringify(user));
 if(costMode==='completed') rows[0].status=rows[0].status_effective='completado';
 window.__costEstimate={planning_id:rows[0].id,currency:'USD',simulation:true,as_of_date:'2026-11-05',
   status:costMode==='partial'?'partial':costMode==='unavailable'?'unavailable':'complete',
@@ -46,6 +50,8 @@ window.__mutations = [];
 window.__delay = 0;
 api.defaults.adapter = async config => {
   const params = config.params || {}, response = data => ({ data: structuredClone(data), status: 200, statusText: 'OK', headers: {}, config });
+  const economicResult=economicRequest(config,rows,economicMode);
+  if(economicResult!==undefined)return response(economicResult);
   if (config.method !== 'get') {
     const row = rows.find(row => config.url === '/planning/' + row.id);
     if (!row || !['patch', 'delete'].includes(config.method)) throw Error('Unexpected write');
@@ -73,13 +79,13 @@ api.defaults.adapter = async config => {
     return result;
   }
   if (config.url.endsWith('/cost-estimate')) {
-    if(!costMode || costMode==='denied') throw Error('Unexpected estimate request');
+    if((!costMode&&!economicMode) || costMode==='denied') throw Error('Unexpected estimate request');
     if(window.__costFail) throw Error('Synthetic estimate failure');
     return response(window.__costEstimate);
   }
   if (config.url.startsWith('/planning/')) return response(rows.find(row => config.url === '/planning/' + row.id));
   if (config.url === '/users/planning-responsibles') return response([user]);
-  if (config.url === '/crops') return response([{ id: 'crop', name: 'Maíz' }]);
+  if (config.url === '/crops') return response([{ id: 'crop', name: 'Maíz' },...(economicMode?[{id:'soy',name:'Soja'}]:[])]);
   if (config.url === '/lots') return response([{ id: 'lot', name: 'Lote T4', area_ha: 10 }]);
   if (config.url === '/campaigns') return response([{ id: 'campaign', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'active' }]);
   return response([]);

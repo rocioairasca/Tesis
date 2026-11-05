@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const economic = require('../services/economicExecution').completionSchema.optional();
 
 // Enums
 const ActivityType = z.enum(['fumigacion','siembra','cosecha','fertilizacion','riego','mantenimiento','otro']);
@@ -118,6 +119,7 @@ exports.createSchema = z.object({ body: baseBody });
 exports.registerCompletedSchema = z.object({
   body: z.object({
     ...baseBodyShape,
+    economic,
     status: EditableStatus.optional(),
     actual_products: z.array(z.object({
       product_id:z.string().uuid(),
@@ -172,13 +174,14 @@ exports.startSchema = z.object({
 });
 exports.completeActivitySchema = z.object({
   params: z.object({ id: z.string().uuid() }),
-  body: z.object({ effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD') }).strict(),
+  body: z.object({ economic, effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD') }).strict(),
 });
 
 exports.completeSowingSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+    economic,
     actual_products: z.array(ActualProductItem).optional(),
     created_by: z.never().optional(),
     assigned_by: z.never().optional(),
@@ -191,6 +194,7 @@ exports.completeWorkSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
+    economic,
     actual_products: z.array(ActualProductItem).optional(),
     created_by: z.never().optional(),
     assigned_by: z.never().optional(),
