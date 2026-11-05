@@ -108,4 +108,6 @@ router.get('/:id/movements',checkRole(0),requirePermission(PERMISSIONS.INVENTORY
 router.post('/:id/receipts',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerReceipt);
 router.post('/:id/adjustments',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerAdjustment);
 
+router.use('/:id/batches/:batchId/valuation', require('./stockBatchValuations')(require('../db/supabaseClient').pool));
+
 module.exports = router;

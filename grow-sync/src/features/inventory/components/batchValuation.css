@@ -1,0 +1,4 @@
+.inventory-valuation { margin-block: 20px; min-width: 0; }
+.inventory-valuation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.inventory-valuation-input { width: 100%; min-width: 0; }
+.inventory-valuation-price { overflow-wrap: anywhere; margin-block: 12px; }

@@ -1,11 +1,12 @@
 import {unitLabel} from '../../../utils/inventoryUnits';
+import BatchValuation from './BatchValuation';
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Card, Descriptions, Drawer, Empty, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Collapse, Descriptions, Drawer, Empty, Space, Spin, Tabs, Tag, Typography } from 'antd';
 import { getStockBatches, getStockMovements } from '../../../services/stockService';
 import { getUserFriendlyError } from '../../../utils/userFriendlyErrors';
 import { batchState, categoryLabel, expiration, expirationLabel, movementTypes, origins, productState, quantityLabel, receivedLabel, stockQuantity } from '../inventoryModel.mjs';
 
-function History({ product, tab, mobile }) {
+function History({ product, tab, mobile, canEdit }) {
   const [rows, setRows] = useState([]), [page, setPage] = useState(1), [more, setMore] = useState(false);
   const [loading, setLoading] = useState(true), [error, setError] = useState(null), [attempt, setAttempt] = useState(0);
   const [detail, setDetail] = useState(null);
@@ -41,13 +42,21 @@ function History({ product, tab, mobile }) {
       <Space><Button disabled={page === 1 || loading} onClick={() => setPage(p => p - 1)}>Anterior</Button><span>Página {page}</span><Button disabled={!more || loading} onClick={() => setPage(p => p + 1)}>Siguiente</Button></Space>
     </Space>
     <Drawer open={!!detail} onClose={() => setDetail(null)} title="Detalle de partida" width={mobile ? '100%' : 460}>
-      {detail && <Descriptions column={1} items={[
+      {detail && <><Descriptions column={1} items={[
         ['Cantidad inicial', quantityLabel(detail.initial_quantity, detail.unit)], ['Disponible', quantityLabel(detail.available_quantity, detail.unit)],
         [detail.origin === 'stock_initial' ? 'Fecha de apertura' : 'Fecha de ingreso', receivedLabel(detail.received_date)], ['Vencimiento', expirationLabel(detail)],
-        ['Precio unitario', detail.unit_price], ['Moneda', detail.currency], ['Tipo de cambio', detail.exchange_rate],
-        ['Total original', detail.total_original], ['Total ARS', detail.total_ars], ['Proveedor', detail.supplier],
-        ['Comprobante / referencia', detail.reference], ['Observaciones', detail.notes], ['Origen', origins[detail.origin]],
-      ].map(([label, children]) => ({ key: label, label, children: children ?? 'No registrado' }))} />}
+        ['Observaciones', detail.notes], ['Origen', origins[detail.origin]],
+      ].map(([label, children]) => ({ key: label, label, children: children ?? 'No registrado' }))} />
+      <BatchValuation key={detail.id} productId={product.id} batch={detail} canEdit={canEdit} />
+      <Collapse items={[{key:'original',label:'Datos originales del ingreso',children:<>
+        <Typography.Paragraph type="secondary">Estos datos se conservan como evidencia del ingreso y no representan una valorización confirmada.</Typography.Paragraph>
+        <Descriptions size="small" column={1} items={[
+          ['Precio unitario original',detail.unit_price],['Moneda original',detail.currency],
+          ['Tipo de cambio original',detail.exchange_rate],['Total original',detail.total_original],
+          ['Total ARS original',detail.total_ars],['Proveedor original',detail.supplier],
+          ['Comprobante original',detail.reference],
+        ].map(([label,children])=>({key:label,label,children:children??'No registrado'}))} />
+      </>}]} /></>}
     </Drawer>
   </Spin>;
 }
@@ -68,7 +77,7 @@ export default function ProductDetailDrawer({ product, enabled, canEdit, mobile,
         {canEdit && <Space wrap><Button type="primary" onClick={() => onReceipt(product)}>Registrar ingreso</Button><Button disabled={!enabled} onClick={()=>onAdjust(product)}>Ajustar stock</Button></Space>}
       </> },
       ...['batches', 'movements'].map(tab => ({ key: tab, label: tab === 'batches' ? 'Partidas' : 'Movimientos', children: enabled
-        ? <History key={`${product.id}:${tab}:${revision}`} product={product} tab={tab} mobile={mobile} />
+        ? <History key={`${product.id}:${tab}:${revision}`} product={product} tab={tab} mobile={mobile} canEdit={canEdit} />
         : <Empty description="El historial detallado de ingresos estará disponible al actualizar el inventario." /> })),
     ]} />
   </Drawer>;
