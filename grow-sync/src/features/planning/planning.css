@@ -35,3 +35,47 @@
 
 .gs-planning-results { min-width: 0; }
 .gs-planning-pagination { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 0; margin-top: 16px; }
+
+/* Registration modal: header and footer stay outside the scrolling form body. */
+.planning-form-modal { max-width: calc(100vw - 32px); top: 5vh; padding-bottom: 0; }
+.planning-form-modal .ant-modal-content { max-height: 90vh; display: flex; flex-direction: column; }
+.planning-form-modal .ant-modal-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
+.planning-form-modal .ant-modal-header,.planning-form-modal .ant-modal-footer { flex-shrink: 0; }
+.planning-form-modal .ant-modal-footer { text-align: right; }
+.planning-form-submit.ant-btn-primary { background: var(--gs-brand-primary,#437118); border-color: var(--gs-brand-primary,#437118); }
+.planning-form-section { display: grid; grid-template-columns: 235px minmax(0,1fr); gap: 24px; padding: 24px 0; border-bottom: 1px solid #eee; }
+.planning-form-section:last-child { border-bottom: 0; }
+.planning-form-section-heading { display: flex; gap: 12px; align-items: flex-start; }
+.planning-form-section-heading h3 { margin: 0 0 4px; font-size: 16px; }
+.planning-form-section-heading p { margin: 0; font-size: 13px; color: #66715f; }
+.planning-form-section-icon { background: #edf4e6; color: #437118; border-radius: 8px; padding: 9px; display: inline-flex; }
+.planning-form-section-fields { min-width: 0; }
+.planning-form-section-fields>.ant-form-item { max-width: 100%; }
+.planning-form-resource-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+.planning-selection-areas { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.planning-selection-area .ant-input-number { width: 100%; }
+.planning-selection-summary { font-size: 13px; margin-bottom: 12px; }
+.planning-form-products-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.planning-form-section-wide { grid-template-columns: 1fr; gap: 12px; }
+.planning-form-products-head,.planning-form-modal .planning-form-product-row { display: grid; grid-template-columns: minmax(160px,2fr) minmax(90px,1fr) minmax(110px,1fr) 100px 80px; gap: 12px; }
+.planning-form-products-head { font-weight: 600; margin-bottom: 8px; }
+.planning-form-modal .planning-form-product-row { padding: 8px 0; border: 0; border-bottom: 1px solid #eee; border-radius: 0; }
+.planning-form-product-row .ant-form-item { min-width: 0; margin-bottom: 8px; }
+.planning-form-product-row .ant-input-number { width: 100%; }
+.planning-form-product-actions { display: flex; align-items: flex-start; padding-top: 30px; }
+.planning-form-modal .planning-recipe-item { border: 0; border-bottom: 1px solid #eee; border-radius: 0; padding: 8px 0; }
+@media (min-width: 1000px) {
+ .planning-form-section[aria-label="Trabajo"] .planning-form-section-fields,
+ .planning-form-section[aria-label="Contexto productivo"] .planning-form-section-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 16px; }
+ .planning-form-section-fields>.planning-economics-form { grid-column: 1 / -1; }
+}
+@media (max-width: 767px) {
+ .planning-form-modal { top: 8px; margin: 0 auto; max-width: calc(100vw - 16px); }
+ .planning-form-modal .ant-modal-content { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); padding: 16px; }
+ .planning-form-section { grid-template-columns: 1fr; gap: 12px; padding: 16px 0; }
+ .planning-form-resource-grid,.planning-selection-areas { grid-template-columns: 1fr; gap: 0; }
+ .planning-form-products-head { display: none; }
+ .planning-form-modal .planning-form-product-row { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+ .planning-form-product-row>.ant-form-item:first-child { grid-column: 1 / -1; }
+ .planning-form-product-actions { justify-content: flex-end; padding: 0; align-items: center; }
+}

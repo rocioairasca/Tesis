@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:
 const migrations=[
  '20261103_add_campaign_work_end_date.sql','20260914_inventory_base_units.sql','20260916_historical_no_stock.sql',
  '20261007_planning_effective_area.sql','20261008_planning_field_context.sql','20261012_recipes.sql',
- '20261012_planning_recipe_snapshots.sql','20261018_planning_assignment.sql','20261104_stock_batch_valuations.sql','20261105_economic_execution.sql'];
+ '20261012_planning_recipe_snapshots.sql','20261018_planning_assignment.sql','20261104_stock_batch_valuations.sql','20261105_economic_execution.sql','20261108_planning_selection_mode.sql'];
 async function schema(db){
  await db.exec('CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;');
  await db.exec(fs.readFileSync(require.resolve('./historySchema.fixture.sql'),'utf8'));
@@ -22,7 +22,7 @@ module.exports={schema,controller};
 
 // Existing operational suites explicitly choose their fixture crop; no production inference.
 async function install(db){
- for(const f of ['20261104_stock_batch_valuations.sql','20261105_economic_execution.sql'])
+ for(const f of ['20261104_stock_batch_valuations.sql','20261105_economic_execution.sql','20261108_planning_selection_mode.sql'])
   await db.exec(fs.readFileSync(require.resolve('../migrations/'+f),'utf8'));
 }
 async function executionBody(db,method,body,id,crop){

@@ -19,6 +19,7 @@ const uuidArrayNoDup = (fieldLabel = 'IDs') =>
   );
 
 const LotSelectionItem = z.object({
+  selection_mode: z.enum(['full_lot','sub_lot','manual_portion']).optional(),
   lot_id: z.string().uuid(),
   sub_lot_id: z.string().uuid().optional().nullable(),
   effective_area_ha: z.union([z.number(), z.string()]).optional().nullable(),

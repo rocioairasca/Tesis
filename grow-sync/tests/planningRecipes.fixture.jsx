@@ -9,7 +9,9 @@ import {cssVariables} from '../src/theme/tokens';
 import api from '../src/services/apiClient';
 import '../src/index.css';
 import '../src/App.css';
-localStorage.clear();localStorage.setItem('user',JSON.stringify({id:'user',role:0,custom_permissions:new URLSearchParams(location.search).has('recipeReader')?['planning.create','recipes.view']:['planning.view','planning.create','planning.edit']}));
+const redesign=new URLSearchParams(location.search).has('formRedesign');
+window.__planningReads=[];
+localStorage.clear();localStorage.setItem('user',JSON.stringify({id:'user',role:0,custom_permissions:new URLSearchParams(location.search).has('recipeReader')?['planning.create','recipes.view']:['planning.view','planning.create','planning.edit',...(redesign?['inventory.view','inventory.edit']:[])]}));
 Object.entries(cssVariables).forEach(([key,value])=>document.documentElement.style.setProperty(key,value));
 const items=[{product_id:'glifo',product_name:'Glifosato',product_unit:'L',dose_amount:'2.5',dose_unit:'L',available_quantity:'5'},
   {product_id:'finesse',product_name:'Finesse',product_unit:'kg',dose_amount:'15',dose_unit:'g',available_quantity:'100'},
@@ -28,12 +30,12 @@ api.defaults.adapter=async config=>{
     window.__planningRecipeWrites.push({path:config.url,method:config.method,body:JSON.parse(config.data)});return response({id:'saved',ok:true});
   }
   if(config.url==='/planning/plan')return response(row);
-  if(config.url==='/planning')return response({data:[row],total:1});
+  if(config.url==='/planning'){window.__planningReads.push(config.params);return response({data:[row],total:1});}
   if(config.url==='/planning/recipe-options')return response(recipes.filter(r=>r.activity_type===config.params.activity_type&&r.field_context===config.params.field_context&&r.crop_id===config.params.crop_id));
   if(config.url==='/users/planning-responsibles')return response([{id:'user',full_name:'Responsable'}]);
   if(config.url==='/crops')return response([{id:'crop',name:'Maíz'}]);
-  if(config.url==='/lots')return response([{id:'lot',name:'Lote de prueba',area_ha:25}]);
-  if(config.url==='/products')return response(items.map(i=>({id:i.product_id,name:i.product_name,unit:i.product_unit,available_quantity:i.available_quantity})));
+  if(config.url==='/lots')return response([{id:'lot',name:'Lote de prueba',area_ha:25,...(redesign?{active_layout:{sub_lots:[{id:'sub',name:'Sector A',area_ha:10}]}}:{})}]);
+  if(config.url==='/products')return response(items.map(i=>({id:i.product_id,name:i.product_name,unit:i.product_unit,available_quantity:redesign?'500':i.available_quantity})));
   if(config.url==='/campaigns')return response([{id:'campaign',name:'2026',start_date:'2026-01-01',end_date:'2026-12-31',status:'active'}]);
   return response([]);
 };

@@ -1,3 +1,4 @@
+import {createPortal} from 'react-dom';
 import React,{useEffect,useRef,useState} from 'react';
 import {Alert,Form,Select,Tag} from 'antd';
 import QuantityUnitFields from '../../../components/QuantityUnitFields';
@@ -20,7 +21,7 @@ export function RecipeCalculationPreview({preview}){
     {preview.items.some(i=>i.insufficient)&&<Alert type="warning" showIcon message="La cantidad planificada supera el stock disponible. La disponibilidad es informativa; al registrar el trabajo se valida la cantidad real según la fecha efectiva." />}
   </section>;
 }
-export default function PlanningRecipeFields({form,activity,context,crop,selections,editing,completed=false,registerCompleted=false}){
+export default function PlanningRecipeFields({form,activity,context,crop,selections,editing,completed=false,registerCompleted=false,productsContainer=null}){
   const selected=recipeId(Form.useWatch('recipe_id',form));
   const realQuantities=Form.useWatch('recipe_actual_products',form);
   const [choices,setChoices]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState(null);
@@ -72,7 +73,7 @@ export default function PlanningRecipeFields({form,activity,context,crop,selecti
           }
         }} />
     </Form.Item>
-    {error&&<Alert type="error" showIcon message={error} />}
+    {productsContainer?createPortal(<>    {error&&<Alert type="error" showIcon message={error} />}
     {selected&&!compatible&&<Alert type="error" showIcon message="La receta seleccionada ya no es compatible con la actividad, contexto o cultivo. Cambiá la receta o usá carga manual." />}
     {selected&&calculationError&&<Alert type="error" showIcon message={calculationError} />}
     {preview&&<RecipeCalculationPreview preview={preview} />}
@@ -90,6 +91,24 @@ export default function PlanningRecipeFields({form,activity,context,crop,selecti
           unitName={['recipe_actual_products',item.product_id,'unit']} label="Cantidad realmente utilizada"
           baseUnit={item.product_unit} allowZero extra="El stock se valida al guardar según la fecha efectiva." />
       </div>)}
-    </section>}
+    </section>}</>,productsContainer):<>    {error&&<Alert type="error" showIcon message={error} />}
+    {selected&&!compatible&&<Alert type="error" showIcon message="La receta seleccionada ya no es compatible con la actividad, contexto o cultivo. Cambiá la receta o usá carga manual." />}
+    {selected&&calculationError&&<Alert type="error" showIcon message={calculationError} />}
+    {preview&&<RecipeCalculationPreview preview={preview} />}
+    {registerCompleted&&preview&&compatible&&<section aria-label="Productos utilizados" className="planning-recipe-preview">
+      <h4>Productos utilizados</h4>
+      {preview.items.some(item=>{
+        const real=realQuantities?.[item.product_id];
+        try{return real&&exceedsAvailable(real.actual_amount,real.unit,item.product_unit,item.available_quantity??'0',true);}catch{return false;}
+      })&&<Alert type="warning" showIcon message="La cantidad real supera el stock visible. Se validará la disponibilidad según la fecha de realización al guardar." />}
+      <p>Las cantidades se calcularon desde la receta. Ajustalas si en el trabajo se utilizó una cantidad diferente.</p>
+      {preview.items.map(item=><div key={item.product_id} className="planning-recipe-item">
+        <strong>{item.product_name}</strong>
+        <p>Dosis: {doseLabel(item.dose_amount,item.dose_unit)} · Planificado: {totalLabel(item.amount,item.unit)}</p>
+        <QuantityUnitFields quantityName={['recipe_actual_products',item.product_id,'actual_amount']}
+          unitName={['recipe_actual_products',item.product_id,'unit']} label="Cantidad realmente utilizada"
+          baseUnit={item.product_unit} allowZero extra="El stock se valida al guardar según la fecha efectiva." />
+      </div>)}
+    </section>}</>}
   </>;
 }

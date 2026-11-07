@@ -180,3 +180,45 @@ test('planning detail and list resolve full_name before email, independent of Au
  const {data:{id}}=await x.call('create',x.body);assert.equal((await x.call('getOne',{},id)).data.responsible_name,'Rocío Airasca');assert.equal((await x.call('list')).data.data.find(row=>row.id===id).responsible_name,'Rocío Airasca');
  await db.query("UPDATE users SET full_name='   ' WHERE id=$1",[x.actorId]);assert.equal((await x.call('getOne',{},id)).data.responsible_name,x.actorId+'@example.test');
 });
+
+
+test('explicit manual portion persists and edits without geometry or sublot; full/sublot mismatch rejected',async()=>{
+ const x=await fixture();x.body.lot_selections=[{lot_id:x.lotId,selection_mode:'manual_portion',effective_area_ha:'30.0000'}];
+ const before=await db.query('SELECT count(*)::int n FROM sub_lots WHERE company_id=$1',[x.companyId]);
+ const {data:{id}}=await x.call('create',x.body);
+ let view=(await x.call('getOne',{},id)).data;
+ assert.equal(view.lots[0].selection_mode,'manual_portion');assert.equal(view.lots[0].sub_lot_id,null);
+ assert.equal(Number(view.lots[0].area_ha),101.3);assert.equal(Number(view.lots[0].effective_area_ha),30);
+ await x.call('update',{lot_selections:[{lot_id:x.lotId,selection_mode:'manual_portion',effective_area_ha:40}]},id);
+ view=(await x.call('getOne',{},id)).data;assert.equal(Number(view.planned_area_ha),40);assert.equal(view.lots[0].selection_mode,'manual_portion');
+ for(const selection of [{selection_mode:'manual_portion',effective_area_ha:0},{selection_mode:'manual_portion',effective_area_ha:102},
+ {selection_mode:'manual_portion'},{selection_mode:'full_lot',effective_area_ha:30},{selection_mode:'sub_lot',effective_area_ha:30}])
+  await assert.rejects(x.call('update',{lot_selections:[{lot_id:x.lotId,...selection}]},id),e=>e.status===400);
+ assert.deepEqual(await db.query('SELECT count(*)::int n FROM sub_lots WHERE company_id=$1',[x.companyId]),before);
+ assert.equal((await db.query('SELECT geom FROM lots WHERE id=$1',[x.lotId])).rows[0].geom,null);
+ await assert.rejects(x.call('create',x.body),e=>e.status===409);
+ await assert.rejects(x.call('create',{...x.body,lot_selections:[{lot_id:x.lotId,selection_mode:'full_lot'}]}),e=>e.status===409);
+});
+test('manual portion register-completed uses partial area, real consumption and unchanged economics',async()=>{
+ const x=await fixture(),productId=uuid();
+ await db.query("UPDATE companies SET inventory_control_start_date='2026-01-01' WHERE id=$1",[x.companyId]);
+ await db.query("INSERT INTO products(id,company_id,name,unit) VALUES($1,$2,'Partial test','kg')",[productId,x.companyId]);
+ await stock.transaction({connect:async()=>client},c=>stock.receiveStock(c,{companyId:x.companyId,actorId:x.actorId,productId,quantity:'100',unit:'kg',origin:'purchase',received_date:'2026-01-01',key:uuid()}));
+ const {data:{id}}=await x.call('registerCompleted',{...x.body,effective_date:'2026-09-01',lot_selections:[{lot_id:x.lotId,selection_mode:'manual_portion',effective_area_ha:30}],products:[{product_id:productId,amount:'60.000000',unit:'kg'}]});
+ const usage=(await db.query('SELECT total_area,amount_used FROM usage_records WHERE source_planning_id=$1',[id])).rows[0];
+ assert.equal(Number(usage.total_area),30);assert.equal(Number(usage.amount_used),60);
+ assert.equal(Number((await db.query('SELECT sum(available_quantity) n FROM stock_batches WHERE product_id=$1',[productId])).rows[0].n),40);
+ assert.equal((await db.query('SELECT selection_mode FROM planning_lots WHERE planning_id=$1',[id])).rows[0].selection_mode,'manual_portion');
+ assert.equal((await x.call('update',{lot_selections:[{lot_id:x.lotId,selection_mode:'manual_portion',effective_area_ha:35}]},id)).code,409);
+ assert.equal(Number((await db.query('SELECT effective_area_ha FROM planning_lots WHERE planning_id=$1',[id])).rows[0].effective_area_ha),30);
+});
+test('selection mode migration keeps existing full, sublot and historical data unchanged',async()=>{
+ const isolated=new PGlite();try{
+  await isolated.exec("CREATE TABLE planning_lots(id int,sub_lot_id uuid,area_ha numeric,effective_area_ha numeric);INSERT INTO planning_lots VALUES(1,NULL,100,NULL),(2,gen_random_uuid(),30,20),(3,NULL,NULL,NULL),(4,NULL,100,10);");
+  const before=(await isolated.query('SELECT * FROM planning_lots ORDER BY id')).rows;
+  await isolated.exec(fs.readFileSync(require.resolve('../migrations/20261108_planning_selection_mode.sql'),'utf8'));
+  const after=(await isolated.query('SELECT * FROM planning_lots ORDER BY id')).rows;
+  assert.deepEqual(after.map(({selection_mode,...row})=>row),before);assert(after.every(r=>r.selection_mode===null));
+  await assert.rejects(isolated.exec("UPDATE planning_lots SET selection_mode='full_lot' WHERE id=4"),e=>e.code==='23514');
+ }finally{await isolated.close();}
+});

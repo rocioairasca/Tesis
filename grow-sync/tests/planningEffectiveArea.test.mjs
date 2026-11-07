@@ -15,10 +15,11 @@ test('surface form renders compact full-width controls and functional language',
  const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),configFile:false,optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
  try {
   const {default:Fields}=await server.ssrLoadModule('/src/features/planning/components/EffectiveAreaFields.jsx');
+  const {Form}=await import('antd');
   for(const completed of [false,true]){
-   const html=renderToStaticMarkup(React.createElement(Fields,{activity:'fumigacion',completed,selections:[{key:'test',name:'Lote Santos',area_ha:101.3,effective_area_ha:10}]}));
-   assert.match(html,/Lote Santos/);assert.match(html,/Superficie a trabajar/);assert.match(html,/101,3/);assert.match(html,/width:100%/);
-   if(completed)assert.match(html,/disabled/);else assert.match(html,/Podés indicar una superficie menor sin crear una división/);
+   const html=renderToStaticMarkup(React.createElement(Form,null,React.createElement(Fields,{activity:'fumigacion',completed,selections:[{key:'test',name:'Lote Santos',area_ha:101.3,effective_area_ha:10}]})));
+   assert.match(html,/Lote Santos/);assert.match(html,/Superficie a trabajar/);assert.match(html,/101,30/);assert.match(html,/Tipo de selección/);
+   if(completed)assert.match(html,/disabled/);else assert.match(html,/Porción del lote/);
   }
  }finally{await server.close();}
 });

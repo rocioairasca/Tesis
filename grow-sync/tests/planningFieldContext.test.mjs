@@ -19,7 +19,7 @@ test('crop names and compact context remain separate in display names and events
  assert.equal(getPlanningDisplayName({...row,field_context:null}),'Maíz - Fumigación');
  assert.equal(getPlanningDisplayName({...row,activity_type:'siembra'}),'Maíz - Siembra');
  const source=fs.readFileSync(new URL('../src/features/planning/Planning.jsx',import.meta.url),'utf8');
- assert.match(source,/label="Situación del lote"/);assert.match(source,/label=\{contextCropLabel/);assert.match(source,/field_context: row.field_context/);
+ assert.match(source,/label="Situación del lote"/);assert.match(source,/label="Cultivo beneficiario"/);assert.match(source,/field_context: row.field_context/);
 });
 
 for(const [context,label] of [['growing_crop','Implantado'],['stubble','Rastrojo'],['pre_sowing','Pre-siembra'],['fallow','Barbecho'],['other','Otro']]) {

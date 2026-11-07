@@ -44,9 +44,9 @@ test('area, unit and precision failures are reported before submitting',()=>{
 });
 test('selector placement and payload preserve manual and completed flows; stock is informational for recipes',()=>{
   const planning=fs.readFileSync(new URL('../src/features/planning/Planning.jsx',import.meta.url),'utf8');
-  const drawer=planning.slice(planning.indexOf('{/* Drawer crear/editar'),planning.indexOf('{/* Drawer Detalle'));
+  const drawer=planning.slice(planning.indexOf('{/* Modal crear/editar'),planning.indexOf('{/* Drawer Detalle'));
   assert.ok(drawer.indexOf('<EffectiveAreaFields')<drawer.indexOf('<PlanningRecipeFields'));
-  assert.match(drawer,/!selectedRecipeId && <Form.List name="products">/);
+  assert.match(drawer,/!selectedRecipeId&&<PlanningFormProducts/);
   assert.ok(planning.includes('if(effectiveRecipeId)payload.recipe_id=effectiveRecipeId'));
   assert.match(planning,/!effectiveRecipeId && !isEditingCompleted && values.products/);
   assert.match(planning,/!selectedRecipeId && !registerCompleted/);

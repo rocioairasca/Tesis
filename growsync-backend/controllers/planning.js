@@ -1,3 +1,4 @@
+const {selectionMode}=require('../services/planningSelections');
 const economicExecution = require('../services/economicExecution');
 const { operationalWindow, operationalSql } = require('../services/campaignWindow');
 const { assertCanExecutePlanning } = require('../services/planningExecution');
@@ -29,6 +30,7 @@ const lotSelectionJsonSql = `
       'sub_lot_name', sl.name,
       'sub_lot_geom', ST_AsGeoJSON(sl.geom)::json,
       'area_ha', pl.area_ha,
+      'selection_mode', COALESCE(pl.selection_mode, CASE WHEN pl.sub_lot_id IS NOT NULL THEN 'sub_lot' WHEN pl.effective_area_ha<pl.area_ha THEN 'manual_portion' ELSE 'full_lot' END),
       'effective_area_ha', COALESCE(pl.effective_area_ha, pl.area_ha)
     )
     ORDER BY l.name, sl.sort_order NULLS FIRST, sl.code NULLS FIRST
@@ -1083,7 +1085,7 @@ exports.update = async (req, res, next) => {
 
     if (shouldCheckLotConflicts || activity_type !== undefined || checkRows[0].recipe_id || req.body.recipe_id !== undefined) {
       const { rows } = await client.query(
-        'SELECT lot_id, sub_lot_id, area_ha, effective_area_ha FROM planning_lots WHERE planning_id = $1',
+        'SELECT lot_id, sub_lot_id, area_ha, effective_area_ha, selection_mode FROM planning_lots WHERE planning_id = $1',
         [id]
       );
       existingSelections = rows.map(row => ({
@@ -1091,6 +1093,7 @@ exports.update = async (req, res, next) => {
         sub_lot_id: row.sub_lot_id || null,
         area_ha: row.area_ha,
         effective_area_ha: row.effective_area_ha,
+        selection_mode: row.selection_mode,
       }));
     }
 
@@ -1107,14 +1110,14 @@ exports.update = async (req, res, next) => {
       if(checkRows[0].status === 'completado') {
         if(relationChanged || requestedSelections.some(selection => {
           const old=existingSelections.find(row=>selectionKey(row)===selectionKey(selection));
-          return selection.effective_area_ha != null && Number(selection.effective_area_ha)!==Number(old.effective_area_ha ?? old.area_ha);
+          return (selection.selection_mode!=null&&selectionMode(selection,old.area_ha)!==selectionMode(old)) || selection.effective_area_ha != null && Number(selection.effective_area_ha)!==Number(old.effective_area_ha ?? old.area_ha);
         })) throw Object.assign(new Error('La superficie de una planificación completada no puede modificarse.'),{status:409});
         resolvedSelections=existingSelections;
       } else {
         const unchangedAreas = !relationChanged && requestedSelections.every(selection=>{
           const old=existingSelections.find(row=>selectionKey(row)===selectionKey(selection));
           const effective=validateEffectiveArea(selection.effective_area_ha,old.area_ha,effectiveActivityType,old.sub_lot_id);
-          return Number(effective ?? old.area_ha)===Number(old.effective_area_ha ?? old.area_ha);
+          return selectionMode(selection,old.area_ha)===selectionMode(old) && Number(effective ?? old.area_ha)===Number(old.effective_area_ha ?? old.area_ha);
         });
         if(unchangedAreas) {
           // Unchanged selections keep their snapshot, including archived layouts or changed geometry.
@@ -1220,8 +1223,8 @@ exports.update = async (req, res, next) => {
 
       } else {
         for(const selection of resolvedSelections) await client.query(
-          'UPDATE planning_lots SET effective_area_ha=$1 WHERE planning_id=$2 AND lot_id=$3 AND sub_lot_id IS NOT DISTINCT FROM $4::uuid AND effective_area_ha IS DISTINCT FROM $1::numeric',
-          [selection.effective_area_ha,id,selection.lot_id,selection.sub_lot_id]);
+          'UPDATE planning_lots SET effective_area_ha=$1, selection_mode=$5 WHERE planning_id=$2 AND lot_id=$3 AND sub_lot_id IS NOT DISTINCT FROM $4::uuid AND (effective_area_ha IS DISTINCT FROM $1::numeric OR selection_mode IS DISTINCT FROM $5::text)',
+          [selection.effective_area_ha,id,selection.lot_id,selection.sub_lot_id,selection.selection_mode]);
       }
     }
 

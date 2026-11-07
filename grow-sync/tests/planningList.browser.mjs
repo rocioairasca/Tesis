@@ -182,7 +182,7 @@ test('edit refresh keeps rows and context; cancel last row clamps to the last va
   t.after(() => page.close()); assert.equal(await rows(page).count(), 1);
   await rows(page).first().getByRole('button', { name: 'Editar planificación', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Editar Planificación', exact: true });
-  await editor.getByLabel('Descripción', { exact: true }).fill('Trabajo actualizado');
+  await editor.getByRole('textbox', { name: 'Observaciones', exact: true }).fill('Trabajo actualizado');
   await page.evaluate(() => { window.__delay = 900; });
   const beforeEdit = (await calls(page)).length;
   await editor.getByRole('button', { name: 'Actualizar', exact: true }).click();
@@ -206,7 +206,7 @@ test('editing out of the active search updates total without resetting a valid p
   t.after(() => page.close());
   await rows(page).first().getByRole('button', { name: 'Editar planificación', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Editar Planificación', exact: true });
-  await editor.getByLabel('Descripción', { exact: true }).fill('Otra descripción');
+  await editor.getByRole('textbox', { name: 'Observaciones', exact: true }).fill('Otra descripción');
   await changeList(page, { search: 'sintético', page: 2, pageSize: 8 }, () => editor.getByRole('button', { name: 'Actualizar', exact: true }).click());
   await editor.waitFor({ state: 'hidden' });
   await page.getByText('44 planificaciones', { exact: true }).waitFor(); await ready(page);

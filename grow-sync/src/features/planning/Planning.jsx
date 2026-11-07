@@ -1,3 +1,5 @@
+import PlanningFormSection from './components/PlanningFormSection';
+import PlanningFormProducts from './components/PlanningFormProducts';
 import PlanningActualCost from './components/PlanningActualCost';
 import ExecutionEconomicFields from './components/ExecutionEconomicFields';
 import {executionEconomicPayload,economicEditPermissions} from './planningEconomics.mjs';
@@ -49,6 +51,7 @@ import {
   Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
 } from "antd";
 import {
+  CalendarOutlined, Leaf, EnvironmentOutlined, Package, DollarOutlined, FileTextOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
@@ -278,6 +281,8 @@ const Planning = () => {
   const [completionForm] = Form.useForm();
   const selectedLotKeys = Form.useWatch("lot_selection_keys", form) || [];
   const effectiveAreas = Form.useWatch("effective_areas", form) || {};
+  const selectionModes = Form.useWatch("selection_modes",form)||{};
+  const [recipeProductContainer,setRecipeProductContainer]=useState(null);
   const selectedActivityType = Form.useWatch("activity_type", form);
   const selectedFieldContext = Form.useWatch("field_context", form);
   const selectedFormCropId = Form.useWatch("crop_id",form);
@@ -370,7 +375,7 @@ const Planning = () => {
     const lot=lots.find(item=>(item.id ?? item._id)===parsed.lot_id);
     const sub=getActiveSubLots(lot).find(item=>item.id===parsed.sub_lot_id);
     const area=saved?.area_ha ?? (parsed.sub_lot_id ? sub?.area_ha : getLotArea(lot));
-    return {key,name:saved ? getPlanningLotName(saved) : (parsed.sub_lot_id ? (lot?.name+' / '+(sub?.name||sub?.code)) : lot?.name),area_ha:area,effective_area_ha:saved ? effectiveArea(saved) : area};
+    return {key,sub_lot_id:parsed.sub_lot_id,selection_mode:saved?.selection_mode,name:saved ? getPlanningLotName(saved) : (parsed.sub_lot_id ? (lot?.name+' / '+(sub?.name||sub?.code)) : lot?.name),area_ha:area,effective_area_ha:saved ? effectiveArea(saved) : area};
   }).filter(Boolean);
   const selectedPlanningArea=selectedAreaRows.reduce((sum,row)=>sum+Number(
     !isEditingCompleted && !partialAreaAllowed(selectedActivityType) ? row.area_ha : (effectiveAreas[row.key] ?? row.effective_area_ha)
@@ -381,6 +386,8 @@ const Planning = () => {
       let changed=false;
       for(const row of selectedAreaRows) if(Number(values[row.key])!==Number(row.area_ha)) {values[row.key]=row.area_ha;changed=true;}
       if(changed)form.setFieldValue('effective_areas',{...values});
+      const modes=form.getFieldValue('selection_modes')||{};
+      form.setFieldValue('selection_modes',Object.fromEntries(selectedAreaRows.map(row=>[row.key,row.sub_lot_id?'sub_lot':'full_lot'])));
     }
   },[selectedActivityType,selectedLotKeys.join('|'),isEditingCompleted,isEditingHistorical]);
 
@@ -1005,6 +1012,7 @@ const Planning = () => {
       form.setFieldsValue({
         title: row.title,
         recipe_id:row.recipe_id || MANUAL_RECIPE,
+        selection_modes: Object.fromEntries((row.lots||[]).map(lot=>[planningLotToSelectionKey(lot),lot.selection_mode||(lot.sub_lot_id?'sub_lot':effectiveArea(lot)<Number(lot.area_ha)?'manual_portion':'full_lot')])),
         effective_areas: Object.fromEntries((row.lots || []).map(lot=>[planningLotToSelectionKey(lot),effectiveArea(lot)])),
         historical_lots: (row.lots || []).map(lot => ({ area_ha: lot.area_ha })),
         description: row.description,
@@ -1096,7 +1104,7 @@ const Planning = () => {
 
       // Build payload conditionally to avoid sending empty strings
       const lotSelections = (values.lot_selection_keys || []).map(key=>({
-        ...parseSelectionKey(key),effective_area_ha:values.effective_areas?.[key],
+        ...parseSelectionKey(key),effective_area_ha:values.effective_areas?.[key],selection_mode:values.selection_modes?.[key],
       }));
 
       const payload = {
@@ -1802,17 +1810,13 @@ const Planning = () => {
 
       {adopting && <AdoptExistingModal key={adopting.id} planning={adopting} onClose={()=>setAdopting(null)}
         onAdopted={async()=>{await fetchPlanning();closeDetail();notification.success({message:'La planificación quedó marcada como registro histórico. Las existencias no se modificaron.'});}} />}
-      {/* Drawer crear/editar */}
-      <Drawer
-        title={isEditingHistorical ? "Corrección de antecedente" : editing ? "Editar Planificación" : "Nueva Planificación"}
-        placement={isMobile ? "bottom" : "right"}
-        onClose={closeDrawer}
-        open={isDrawerOpen}
-        height={isMobile ? "90vh" : undefined}
-        width={isMobile ? "100%" : 480}
-        destroyOnHidden
-        styles={{ body: { paddingBottom: 80 } }}
-      >
+      {/* Modal crear/editar; detalle y ejecución conservan sus contenedores. */}
+      <Modal className="planning-form-modal" title={isEditingHistorical?"Corrección de antecedente":editing?"Editar Planificación":registerCompleted?"Registrar actividad":"Nueva Planificación"}
+        width={1320} open={isDrawerOpen} onCancel={()=>!isSubmitting&&closeDrawer()} destroyOnHidden maskClosable={!isSubmitting}
+        footer={<><Button onClick={closeDrawer} disabled={isSubmitting}>Cancelar</Button><Button type="primary" className="planning-form-submit" onClick={()=>form.submit()}
+          loading={isSubmitting} disabled={isSubmitting||productStockExceeded||(!isEditingHistorical&&!selectedActivityType)}>
+          {isEditingHistorical?"Guardar corrección":editing?"Actualizar":registerCompleted?"Registrar actividad":"Crear Planificación"}
+        </Button></>}>
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           {isEditingHistorical ? <HistoricalPlanningFields editing={editing} responsibleOptions={responsibleOptions}
             onProductAdded={product=>{
@@ -1823,20 +1827,7 @@ const Planning = () => {
               fetchPlanning();
               notification.success({message:'Producto agregado al registro histórico'});
             }} /> : <>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", marginBottom: 12, textTransform: "uppercase" }}>
-            Planificación
-          </div>
-
-          {isEditingCompleted && (
-            <Alert
-              type="info"
-              showIcon
-              message="Los datos productivos de una actividad completada no pueden modificarse desde esta edición."
-              style={{ marginBottom: 16 }}
-            />
-          )}
-
-          <Form.Item name="activity_type" label={<strong style={{fontSize:16}}>Actividad</strong>} rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná la actividad" }]}>
+<PlanningFormSection title="Trabajo" description="Actividad y fecha de realización." icon={CalendarOutlined}>          <Form.Item name="activity_type" label={<strong style={{fontSize:16}}>Actividad</strong>} rules={isEditingCompleted ? [] : [{ required: true, message: "Seleccioná la actividad" }]}>
             <Select disabled={isEditingCompleted} options={ACTIVITY_OPTIONS} onChange={activity=>form.setFieldsValue(activityChangeFields(activity))} placeholder="Seleccioná la actividad" />
           </Form.Item>
 
@@ -1864,212 +1855,10 @@ const Planning = () => {
             </Form.Item>
           )}
 
-          {hasFieldContext(selectedActivityType) && <Form.Item name="field_context" label="Situación del lote"
-            rules={(!editing || editing.field_context != null || selectedActivityType !== editing.activity_type) ? [{required:true,message:'Seleccioná la situación del lote.'}] : []}>
-            <Select disabled={isEditingCompleted} allowClear={Boolean(editing && editing.field_context == null)}
-              placeholder={editing ? 'Sin especificar' : 'Seleccioná la situación del lote'} options={FIELD_CONTEXT_OPTIONS} />
-          </Form.Item>}
-          <Form.Item
-            name="crop_id"
-            label={contextCropLabel(hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
-            required={!isEditingCompleted && cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
-            rules={isEditingCompleted ? [] : [
-              {
-                validator: (_, value) => {
-                  if (cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null) && !value) {
-                    return Promise.reject(new Error("Seleccioná un cultivo."));
-                  }
-                  return Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <Select
-              allowClear
-              disabled={isEditingCompleted}
-              placeholder="Seleccioná un cultivo"
-              options={cropOptions}
-              onChange={(value) => {
-                if (value === ADD_CROP_VALUE) {
-                  form.setFieldValue("crop_id", undefined);
-                  cropForm.resetFields();
-                  setIsCropModalOpen(true);
-                }
-              }}
-            />
-          </Form.Item>
-
-
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
-            Ubicación
-          </div>
-
-          <Form.Item
-            name="lot_selection_keys"
-            label="Lotes y sublotes"
-            rules={isEditingCompleted ? [] : [
-              { required: true, message: "Seleccioná al menos un lote o sublote" },
-              {
-                validator: (_, value = []) => {
-                  const selectedByLot = value.reduce((acc, key) => {
-                    const parsed = parseSelectionKey(key);
-                    if (!parsed) return acc;
-                    const current = acc.get(parsed.lot_id) || { full: false, subLots: 0 };
-                    if (parsed.sub_lot_id) current.subLots += 1;
-                    else current.full = true;
-                    acc.set(parsed.lot_id, current);
-                    return acc;
-                  }, new Map());
-                  const hasInvalidMix = Array.from(selectedByLot.values()).some(item => item.full && item.subLots > 0);
-                  return hasInvalidMix
-                    ? Promise.reject(new Error("No combines un lote completo con sublotes del mismo lote"))
-                    : Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <Select
-              disabled={isEditingCompleted}
-              mode="multiple"
-              placeholder="Seleccioná lotes completos o sublotes"
-              options={lotSelectionOptions}
-              optionFilterProp="label"
-            />
-          </Form.Item>
-
-          <EffectiveAreaFields selections={selectedAreaRows} activity={selectedActivityType} completed={isEditingCompleted} />
-          <div style={{ marginBottom: 16, color: "#595959", fontSize: 13 }}>
-            Superficie total: <strong>{formatHa(selectedPlanningArea)}</strong>
-          </div>
-
-          {(['fumigacion','fertilizacion','siembra'].includes(selectedActivityType) || selectedRecipeId) && <PlanningRecipeFields
-            form={form} activity={selectedActivityType} context={hasFieldContext(selectedActivityType)?selectedFieldContext:null} crop={selectedFormCropId}
-            editing={editing} completed={isEditingCompleted} registerCompleted={registerCompleted}
-            selections={selectedAreaRows.map(row=>({...row,effective_area_ha:
-              !isEditingCompleted && !partialAreaAllowed(selectedActivityType)?row.area_ha:(effectiveAreas[row.key] ?? row.effective_area_ha)
-            }))} />}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
-            Recursos
-          </div>
-
-          <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: "Seleccioná un responsable" }]}>
-            <Select
-              allowClear
-              placeholder="Seleccioná un usuario"
-              options={responsibleOptions} optionRender={renderUserOption}
-              notFoundContent="No hay usuarios disponibles para asignar como responsables."
-            />
-          </Form.Item>
-
-          <Form.Item name="vehicle_id" label="Vehículo">
-            <Select
-              allowClear
-              disabled={isEditingCompleted}
-              placeholder="Seleccioná un vehículo"
-              options={vehicles
-                .filter(v => v.status === 'activo')
-                .map(v => ({ value: v.id ?? v._id, label: vehIx[v.id ?? v._id] }))}
-            />
-          </Form.Item>
-
-          {!selectedRecipeId && <Form.List name="products">
-            {(fields, { add, remove }) => (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <label style={{ fontWeight: 500 }}>Productos</label>
-                  <Button type="dashed" onClick={() => add()} size="small" disabled={isEditingCompleted}>Agregar producto</Button>
-                </div>
-
-                {!editing && registerCompleted && selectedProductsHaveItems && (
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="Los productos se descontarán de partidas existentes y vigentes en la fecha efectiva. El stock se valida al guardar."
-                    style={{ marginBottom: 12 }}
-                  />
-                )}
-
-                {fields.map(({ key, name, ...rest }) => (
-                  <div key={key} className="planning-product-row">
-                    <div className="planning-product-field">
-                      <Form.Item
-                        {...rest}
-                        name={[name, "product_id"]}
-                        label="Producto"
-                        rules={isEditingCompleted ? [] : [{ required: true, message: "Producto" }]}
-                      >
-                        <Select
-                          disabled={isEditingCompleted}
-                          showSearch
-                          placeholder="Producto"
-                          options={productOptions}
-                          optionFilterProp="searchLabel"
-                          filterOption={(input, option) => (
-                            String(option?.searchLabel || "")
-                              .toLowerCase()
-                              .includes(input.toLowerCase())
-                          )}
-                          onChange={(productId) => {
-                            const unit = normalizeUnit(getCatalogProductById(productId)?.unit) || "";
-                            const current = form.getFieldValue("products") || [];
-                            current[name] = { ...(current[name] || {}), unit };
-                            form.setFieldsValue({ products: current });
-                            if (current[name]?.amount !== undefined) {
-                              form.validateFields([["products", name, "amount"]]).catch(() => {});
-                            }
-                          }}
-                        />
-                      </Form.Item>
-                    </div>
-
-                    <div className="planning-product-field">
-                      <Form.Item
-                        shouldUpdate={(prev, current) => (
-                          prev.products?.[name]?.product_id !== current.products?.[name]?.product_id
-                          || prev.register_completed !== current.register_completed
-                        )}
-                        noStyle
-                      >
-                        {({ getFieldValue }) => {
-                          const productId = getFieldValue(["products", name, "product_id"]);
-                          const unit = getCatalogProductById(productId)?.unit || getFieldValue(["products", name, "unit"]) || "";
-                          const available = getCatalogProductById(productId)?.available_quantity ?? 0;
-                          const stockLabel = `Disponible: ${quantityLabel(available,unit)}`;
-                          return (
-                            <QuantityUnitFields key={name} quantityName={[name,"amount"]} unitName={[name,"unit"]} watchPrefix={["products"]}
-                              label={!editing && registerCompleted ? "Cantidad utilizada" : "Cantidad"}
-                              baseUnit={unit} available={registerCompleted ? undefined : available} extra={productId ? (registerCompleted ? `Stock utilizable hoy (referencia): ${quantityLabel(available,unit)}. Se valida al guardar según la fecha efectiva.` : stockLabel) : null}
-                              disabled={isEditingCompleted} allowConversion={inventoryEnabled && !isEditingCompleted} />
-                          );
-                        }}
-                      </Form.Item>
-                    </div>
-
-                    <Form.Item label=" " colon={false} className="planning-product-remove">
-                      <Button danger type="text" onClick={() => remove(name)} disabled={isEditingCompleted}>
-                        Eliminar
-                      </Button>
-                    </Form.Item>
-                  </div>
-                ))}
-              </>
-            )}
-          </Form.List>}
-
-          {!editing && registerCompleted && <ExecutionEconomicFields
-            planning={{field_context:selectedFieldContext,crop_id:selectedFormCropId,campaign_name:selectedCampaign?.name,
-              lots:selectedAreaRows.map(row=>({...parseSelectionKey(row.key),name:row.name}))}}
-            crops={crops} user={currentUser} form={form}/>}
-
-          <Form.Item name="description" label="Descripción">
-            <Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3} />
-          </Form.Item>
-
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7a59", margin: "24px 0 12px", textTransform: "uppercase" }}>
-            Información adicional
-          </div>
-
-          <Form.Item
+          </>}
+</PlanningFormSection>
+          {selectedActivityType && <>
+<PlanningFormSection title="Contexto productivo" description="Campaña y cultivo que recibe el trabajo." icon={Leaf}>          <Form.Item
             name="campaign_id"
             label="Campaña"
             rules={isEditingCompleted ? [] : [
@@ -2129,10 +1918,116 @@ const Planning = () => {
               )}
               notFoundContent="No hay campañas compatibles."
             />
+          </Form.Item>          {hasFieldContext(selectedActivityType) && <Form.Item name="field_context" label="Situación del lote"
+            rules={(!editing || editing.field_context != null || selectedActivityType !== editing.activity_type) ? [{required:true,message:'Seleccioná la situación del lote.'}] : []}>
+            <Select disabled={isEditingCompleted} allowClear={Boolean(editing && editing.field_context == null)}
+              placeholder={editing ? 'Sin especificar' : 'Seleccioná la situación del lote'} options={FIELD_CONTEXT_OPTIONS} />
+          </Form.Item>}
+          <Form.Item
+            name="crop_id"
+            label="Cultivo beneficiario"
+            tooltip="Puede diferir del cultivo o rastrojo presente en el lote. Los beneficiarios económicos se confirman por ubicación cuando corresponde."
+            required={!isEditingCompleted && cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
+            rules={isEditingCompleted ? [] : [
+              {
+                validator: (_, value) => {
+                  if (cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null) && !value) {
+                    return Promise.reject(new Error("Seleccioná un cultivo."));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Select
+              allowClear
+              disabled={isEditingCompleted}
+              placeholder="Seleccioná un cultivo"
+              options={cropOptions}
+              onChange={(value) => {
+                if (value === ADD_CROP_VALUE) {
+                  form.setFieldValue("crop_id", undefined);
+                  cropForm.resetFields();
+                  setIsCropModalOpen(true);
+                }
+              }}
+            />
+          </Form.Item>          {!editing && registerCompleted && <ExecutionEconomicFields
+            showLabor={false} compact planning={{field_context:selectedFieldContext,crop_id:selectedFormCropId,campaign_name:selectedCampaign?.name,
+              lots:selectedAreaRows.map(row=>({...parseSelectionKey(row.key),name:row.name}))}}
+            crops={crops} user={currentUser} form={form}/>}</PlanningFormSection>
+<PlanningFormSection title="Ubicación" description="Seleccioná lotes, sublotes o una superficie manual." icon={EnvironmentOutlined}>          <Form.Item
+            name="lot_selection_keys"
+            label="Lotes y sublotes"
+            rules={isEditingCompleted ? [] : [
+              { required: true, message: "Seleccioná al menos un lote o sublote" },
+              {
+                validator: (_, value = []) => {
+                  const selectedByLot = value.reduce((acc, key) => {
+                    const parsed = parseSelectionKey(key);
+                    if (!parsed) return acc;
+                    const current = acc.get(parsed.lot_id) || { full: false, subLots: 0 };
+                    if (parsed.sub_lot_id) current.subLots += 1;
+                    else current.full = true;
+                    acc.set(parsed.lot_id, current);
+                    return acc;
+                  }, new Map());
+                  const hasInvalidMix = Array.from(selectedByLot.values()).some(item => item.full && item.subLots > 0);
+                  return hasInvalidMix
+                    ? Promise.reject(new Error("No combines un lote completo con sublotes del mismo lote"))
+                    : Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Select
+              disabled={isEditingCompleted}
+              mode="multiple"
+              placeholder="Seleccioná lotes completos o sublotes"
+              options={lotSelectionOptions}
+              optionFilterProp="label"
+            />
           </Form.Item>
 
+          <EffectiveAreaFields selections={selectedAreaRows} activity={selectedActivityType} completed={isEditingCompleted} />
+          <div style={{ marginBottom: 16, color: "#595959", fontSize: 13 }}>
+            Superficie total: <strong>{formatHa(selectedPlanningArea)}</strong>
+          </div>
 
-          {(!registerCompleted || editing) && (
+</PlanningFormSection>
+<PlanningFormSection title="Recursos" description="Asigná responsable, vehículo y receta." icon={UserOutlined}><div className="planning-form-resource-grid">          <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: "Seleccioná un responsable" }]}>
+            <Select
+              allowClear
+              placeholder="Seleccioná un usuario"
+              options={responsibleOptions} optionRender={renderUserOption}
+              notFoundContent="No hay usuarios disponibles para asignar como responsables."
+            />
+          </Form.Item>
+
+          <Form.Item name="vehicle_id" label="Vehículo">
+            <Select
+              allowClear
+              disabled={isEditingCompleted}
+              placeholder="Seleccioná un vehículo"
+              options={vehicles
+                .filter(v => v.status === 'activo')
+                .map(v => ({ value: v.id ?? v._id, label: vehIx[v.id ?? v._id] }))}
+            />
+          </Form.Item>
+
+          {(['fumigacion','fertilizacion','siembra'].includes(selectedActivityType) || selectedRecipeId) && <PlanningRecipeFields
+            productsContainer={recipeProductContainer} form={form} activity={selectedActivityType} context={hasFieldContext(selectedActivityType)?selectedFieldContext:null} crop={selectedFormCropId}
+            editing={editing} completed={isEditingCompleted} registerCompleted={registerCompleted}
+            selections={selectedAreaRows.map(row=>({...row,effective_area_ha:
+              !isEditingCompleted && !partialAreaAllowed(selectedActivityType)?row.area_ha:(effectiveAreas[row.key] ?? row.effective_area_ha)
+            }))} />}
+</div></PlanningFormSection>
+<PlanningFormSection title="Productos" description="Dosis y cantidades para la superficie seleccionada." icon={Package} wide><div ref={setRecipeProductContainer}/>{!selectedRecipeId&&<PlanningFormProducts form={form} products={products} area={selectedPlanningArea.toFixed(4)} completed={isEditingCompleted} performed={!editing&&registerCompleted}/>} </PlanningFormSection>
+<PlanningFormSection title="Costo de la labor" description="La valorización pendiente puede completarse después." icon={DollarOutlined}>          {!editing && registerCompleted && <ExecutionEconomicFields
+            showTargets={false} compact planning={{field_context:selectedFieldContext,crop_id:selectedFormCropId,campaign_name:selectedCampaign?.name,
+              lots:selectedAreaRows.map(row=>({...parseSelectionKey(row.key),name:row.name}))}}
+            crops={crops} user={currentUser} form={form}/>}{(editing||!registerCompleted)&&<p>El costo real se registra al completar el trabajo.</p>}</PlanningFormSection>
+<PlanningFormSection title="Observaciones" description="Detalles adicionales del trabajo." icon={FileTextOutlined}><Form.Item name="description" label="Observaciones"><Input.TextArea placeholder="Agregá observaciones o detalles adicionales..." rows={3}/></Form.Item>          {(!registerCompleted || editing) && (
             <Form.Item name="status" label="Estado">
               <Select
                 disabled={isEditingCompleted}
@@ -2145,24 +2040,10 @@ const Planning = () => {
                 placeholder="Estado"
               />
             </Form.Item>
-          )}
-
-
-          </>}
-          </>}
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              block
-              loading={isSubmitting}
-              disabled={isSubmitting || productStockExceeded || (!isEditingHistorical && !selectedActivityType)}
-            >
-              {isEditingHistorical ? "Guardar corrección" : editing ? "Actualizar" : registerCompleted ? "Registrar actividad" : "Crear Planificación"}
-            </Button>
-          </Form.Item>
+          )}</PlanningFormSection>
+          </>}</>}
         </Form>
-      </Drawer>
+      </Modal>
 
       {/* Drawer Detalle (Read-only) */}
       <Drawer

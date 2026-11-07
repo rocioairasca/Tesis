@@ -14,12 +14,23 @@ function validateEffectiveArea(value, structural, activityType, subLotId) {
   return text;
 }
 
+function selectionMode(selection, structural=selection.area_ha) {
+  const mode=selection.selection_mode ?? (selection.sub_lot_id?'sub_lot':
+    selection.effective_area_ha!=null&&Number(String(selection.effective_area_ha).replace(',','.'))<Number(structural)?'manual_portion':'full_lot');
+  if(!['full_lot','sub_lot','manual_portion'].includes(mode) ||
+    (mode==='sub_lot')!==Boolean(selection.sub_lot_id))throw fail('El modo de selección no corresponde al lote o sublote.');
+  if(mode==='manual_portion'&&selection.effective_area_ha==null)throw fail('Indicá la superficie de la porción del lote.');
+  if(mode==='full_lot'&&selection.effective_area_ha!=null&&Number(String(selection.effective_area_ha).replace(',','.'))!==Number(structural))throw fail('Para una superficie menor seleccioná Porción del lote.');
+  return mode;
+}
+
 const normalizeLotSelections = (lotIds = [], lotSelections = null) => {
   if (Array.isArray(lotSelections) && (lotSelections.length > 0 || !Array.isArray(lotIds) || lotIds.length === 0)) {
     return lotSelections.map(item => ({
       lot_id: item.lot_id,
       sub_lot_id: item.sub_lot_id || null,
       effective_area_ha: item.effective_area_ha,
+      selection_mode: item.selection_mode,
     }));
   }
 
@@ -156,6 +167,7 @@ const resolveLotSelections = async (client, selections, companyId, options = {})
 
   return rows.map((row,index) => ({
     effective_area_ha: validateEffectiveArea(selections[index].effective_area_ha, row.area_ha, options.activityType, row.sub_lot_id),
+    selection_mode: selectionMode(selections[index],row.area_ha),
     lot_id: row.lot_id,
     sub_lot_id: row.sub_lot_id || null,
     area_ha: row.area_ha,
@@ -199,15 +211,15 @@ const insertPlanningLots = async (client, planningId, selections) => {
 
   const params = [planningId];
   const values = selections.map((selection, index) => {
-    const base = index * 4 + 2;
-    params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha, selection.effective_area_ha ?? null);
-    return `($1, $${base}, $${base + 1}, $${base + 2}, $${base + 3})`;
+    const base = index * 5 + 2;
+    params.push(selection.lot_id, selection.sub_lot_id, selection.area_ha, selection.effective_area_ha ?? null, selectionMode(selection));
+    return `($1, $${base}, $${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
   });
 
   await client.query(
-    `INSERT INTO planning_lots(planning_id, lot_id, sub_lot_id, area_ha, effective_area_ha) VALUES ${values.join(',')}`,
+    `INSERT INTO planning_lots(planning_id, lot_id, sub_lot_id, area_ha, effective_area_ha, selection_mode) VALUES ${values.join(',')}`,
     params
   );
 };
 
-module.exports={normalizeLotSelections,resolveLotSelections,selectionKey,haveSameSelections,checkLotScheduleConflicts,insertPlanningLots,validateEffectiveArea};
+module.exports={selectionMode,normalizeLotSelections,resolveLotSelections,selectionKey,haveSameSelections,checkLotScheduleConflicts,insertPlanningLots,validateEffectiveArea};

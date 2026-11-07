@@ -38,8 +38,8 @@ test('activity changes clear only incompatible context and retain crop/common da
 });
 test('ordinary drawer order, progressive disclosure, edit initialization and unchanged payload contract',()=>{
  const text=fs.readFileSync(new URL('../src/features/planning/Planning.jsx',import.meta.url),'utf8');
- const drawer=text.slice(text.indexOf('{/* Drawer crear/editar */}'),text.indexOf('{/* Drawer Detalle'));
- const expected=['name="activity_type"','<PlanningDateFields','name="field_context"','name="crop_id"','name="lot_selection_keys"','<EffectiveAreaFields','name="responsible_user"','name="vehicle_id"','<Form.List name="products"','name="description"'];
+ const drawer=text.slice(text.indexOf('{/* Modal crear/editar'),text.indexOf('{/* Drawer Detalle'));
+ const expected=['name="activity_type"','<PlanningDateFields','name="campaign_id"','name="field_context"','name="crop_id"','name="lot_selection_keys"','<EffectiveAreaFields','name="responsible_user"','name="vehicle_id"','<PlanningFormProducts','name="description"'];
  const positions=expected.map(x=>{assert.ok(drawer.includes(x),x);return drawer.indexOf(x);});assert.deepEqual(positions,[...positions].sort((a,b)=>a-b));
  assert.ok(drawer.indexOf('{selectedActivityType && <>')>drawer.indexOf('name="activity_type"'));assert.ok(drawer.indexOf('{selectedActivityType && <>')<drawer.indexOf('<PlanningDateFields'));
  assert.match(text,/duration_mode: "day"/);assert.match(text,/duration_mode: durationMode\(row.start_at,row.end_at\)/);

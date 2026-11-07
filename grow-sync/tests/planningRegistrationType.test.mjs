@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {registrationModeFields} from '../src/features/planning/planningFormFlow.mjs';
 const source=fs.readFileSync(new URL('../src/features/planning/Planning.jsx',import.meta.url),'utf8');
-const drawer=source.slice(source.indexOf('{/* Drawer crear/editar */}'),source.indexOf('{/* Drawer Detalle'));
+const drawer=source.slice(source.indexOf('{/* Modal crear/editar'),source.indexOf('{/* Drawer Detalle'));
 test('activity then creation-only registration type then dates; no hidden switch remains',()=>{
  const activity=drawer.indexOf('name="activity_type"'),type=drawer.indexOf('name="register_completed"'),dates=drawer.indexOf('<PlanningDateFields');
  assert.ok(activity<type && type<dates);assert.match(drawer,/!editing && <Form.Item name="register_completed"/);
@@ -15,7 +15,7 @@ test('each mode retains existing dates, quantity labels and state visibility con
  assert.match(drawer,/\(!registerCompleted \|\| editing\) && <PlanningDateFields/);
  assert.match(drawer,/!editing && registerCompleted && \(\s*<Form.Item\s*name="effective_date"\s*label="Fecha de realización"/);
  assert.match(drawer,/\(!registerCompleted \|\| editing\) && \(\s*<Form.Item name="status"/);
- assert.match(drawer,/label=\{!editing && registerCompleted \? "Cantidad utilizada" : "Cantidad"\}/);
+ assert.match(source,/performed=\{!editing&&registerCompleted\}/);
 });
 test('switching to performed clears planning dates and preserves compatible fields and quantities',()=>{
  const values={activity_type:'fumigacion',field_context:'stubble',crop_id:'maiz',lot_selection_keys:['santos'],effective_areas:{santos:10},responsible_user:'person',vehicle_id:'vehicle',products:[{amount:7}],date_range:['2026-09-22','2026-09-24'],duration_mode:'period',campaign_id:'campaign'};

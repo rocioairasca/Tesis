@@ -3,7 +3,7 @@ import {Alert,Form,Input,Select,DatePicker,Typography} from 'antd';
 import {hasPermission} from '../../../utils/permissions';
 import {economicEditPermissions,requiresBeneficiary} from '../planningEconomics.mjs';
 import './planningEconomics.css';
-export function LaborFields({form,prefix='economicLabor',allowKeep=false}) {
+export function LaborFields({form,prefix='economicLabor',allowKeep=false,compactPending=false}) {
  const status=Form.useWatch([prefix,'status'],form)|| (allowKeep?'unchanged':'pending');
  const currency=Form.useWatch([prefix,'currency'],form);
  const confirmed=status==='confirmed';
@@ -12,7 +12,8 @@ export function LaborFields({form,prefix='economicLabor',allowKeep=false}) {
    <Select options={[...(allowKeep?[{value:'unchanged',label:'Conservar labor actual'}]:[]),
      {value:'pending',label:'Pendiente'},{value:'confirmed',label:'Confirmada'},{value:'not_applicable',label:'No corresponde'}]}/>
   </Form.Item>
-  {!['unchanged','not_applicable'].includes(status)&&<>
+  {compactPending&&status==='pending'&&<Typography.Paragraph type="secondary">Podés completar el costo de la labor después.</Typography.Paragraph>}
+  {!['unchanged','not_applicable'].includes(status)&&(!compactPending||status!=='pending')&&<>
    <Form.Item name={[prefix,'currency']} label="Moneda de la labor" rules={[{required:confirmed,message:'Seleccioná la moneda.'}]}>
     <Select allowClear options={[{value:'USD',label:'USD'},{value:'ARS',label:'ARS'}]}/>
    </Form.Item>
@@ -40,20 +41,20 @@ export function LaborFields({form,prefix='economicLabor',allowKeep=false}) {
   </>}
  </div>;
 }
-export default function ExecutionEconomicFields({planning,crops,user,form}){
+export default function ExecutionEconomicFields({planning,crops,user,form,showTargets=true,showLabor=true,compact=false}){
  const editable=economicEditPermissions.every(p=>hasPermission(user,p));
  return <section className="planning-economics-form" aria-label="Resumen económico de ejecución">
-  <Typography.Title level={5}>Resumen económico</Typography.Title>
-  <Typography.Paragraph type="secondary">Los costos de productos se conservarán según las partidas realmente consumidas. Los precios faltantes y la labor pendiente permiten completar el trabajo.</Typography.Paragraph>
-  {requiresBeneficiary(planning)&&<Alert type="info" message="Seleccioná el cultivo que recibe el beneficio de este trabajo. Puede diferir del cultivo o rastrojo del lote."/>}
-  {(planning.lots||[]).map((lot,index)=><Form.Item key={(lot.lot_id||lot.id)+':'+(lot.sub_lot_id||'')}
+  {!compact&&<Typography.Title level={5}>Resumen económico</Typography.Title>}
+  {!compact&&<Typography.Paragraph type="secondary">Los costos de productos se conservarán según las partidas realmente consumidas. Los precios faltantes y la labor pendiente permiten completar el trabajo.</Typography.Paragraph>}
+  {showTargets&&requiresBeneficiary(planning)&&<Alert type="info" message="Seleccioná el cultivo que recibe el beneficio de este trabajo. Puede diferir del cultivo o rastrojo del lote."/>}
+  {showTargets&&(planning.lots||[]).map((lot,index)=><Form.Item key={(lot.lot_id||lot.id)+':'+(lot.sub_lot_id||'')}
     name={['economicTargets',index]} label={'Cultivo beneficiario · '+(lot.lot_name||lot.name||'Lote')+(lot.sub_lot_name?' / '+lot.sub_lot_name:'')}
     initialValue={requiresBeneficiary(planning)?undefined:planning.crop_id}
     rules={[{required:true,message:'Seleccioná el cultivo beneficiario.'}]}>
     <Select showSearch optionFilterProp="label" options={(crops||[]).map(c=>({value:c.id||c._id,label:c.name}))}/>
    </Form.Item>)}
-  <Typography.Paragraph type="secondary">Campaña: {planning.campaign_name||planning.campaign?.name||'la indicada en la planificación'}.</Typography.Paragraph>
-  {(planning.lots||[]).length>1&&<Alert type="info" message="Prorrateado por superficie. No representa consumo medido por lote."/>}
-  {editable?<LaborFields form={form}/>:<Typography.Paragraph type="secondary">La labor quedará pendiente de revisión económica.</Typography.Paragraph>}
+  {!compact&&<Typography.Paragraph type="secondary">Campaña: {planning.campaign_name||planning.campaign?.name||'la indicada en la planificación'}.</Typography.Paragraph>}
+  {showTargets&&(planning.lots||[]).length>1&&<Alert type="info" message="Prorrateado por superficie. No representa consumo medido por lote."/>}
+  {showLabor&&(editable?<LaborFields form={form} compactPending={compact}/>:<Typography.Paragraph type="secondary">La labor quedará pendiente de revisión económica.</Typography.Paragraph>)}
  </section>;
 }

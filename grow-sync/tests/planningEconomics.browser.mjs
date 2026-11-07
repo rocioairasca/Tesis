@@ -45,8 +45,8 @@ async function select(page,scope,label,value){
  await popup.waitFor({state:'visible'});
  const labels=await popup.locator('.ant-select-item-option-content').allTextContents();
  const index=labels.indexOf(value);assert(index>=0,'expected option '+value);
- await input.press('Home');for(let i=0;i<index;i++)await input.press('ArrowDown');
- await input.press('Enter');
+ // Select the observed option directly; keyboard navigation can race the popup's initial active option.
+ await popup.locator('.ant-select-item-option-content').nth(index).click();
  await popup.waitFor({state:'hidden'});
 }
 
