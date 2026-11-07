@@ -1,3 +1,5 @@
+import {inventoryReceiptPayload} from '../inventoryReceiptModel.mjs';
+import './ReceiptModal.css';
 import {normalizeUnit} from '../../../utils/inventoryUnits';
 import QuantityUnitFields from '../../../components/QuantityUnitFields';
 import {normalizeQuantity,receiptQuantityPayload} from '../../../utils/inventoryConversion';
@@ -6,9 +8,9 @@ import { Alert, Button, Collapse, DatePicker, Descriptions, Form, Input, Modal, 
 import dayjs from 'dayjs';
 import esES from 'antd/locale/es_ES';
 import api from '../../../services/apiClient';
-import { registerStockReceipt } from '../../../services/stockService';
+import { registerStockReceipt, registerInventoryReceipt } from '../../../services/stockService';
 import { getUserFriendlyError } from '../../../utils/userFriendlyErrors';
-import { canReceipt, expirationLabel, receiptExpirationPayload, quantityLabel, receiptPreview, stockQuantity, validateReceipt } from '../inventoryModel.mjs';
+import { canReceipt, receivedLabel, expirationLabel, receiptExpirationPayload, quantityLabel, receiptPreview, stockQuantity, validateReceipt } from '../inventoryModel.mjs';
 
 export function ReceiptExpirationField({ name = 'expiration_period', components } = {}) {
   return <Form.Item name={name} label="Vencimiento">
@@ -17,7 +19,7 @@ export function ReceiptExpirationField({ name = 'expiration_period', components 
   </Form.Item>;
 }
 
-export default function ReceiptModal({ products, product, enabled, canEdit, canCreate, onCreate, onClose, onSaved }) {
+function SingleReceiptModal({ products, product, enabled, canEdit, canCreate, onCreate, onClose, onSaved }) {
   const [form] = Form.useForm();
   const productId = Form.useWatch('product_id', form);
   const selected = products.find(p => p.id === productId);
@@ -83,6 +85,80 @@ export default function ReceiptModal({ products, product, enabled, canEdit, canC
       </>}
       {enabled && <Alert type="info" message="El costo se carga después del ingreso, desde Ver partida → Valorizar. El stock puede utilizarse mientras esté pendiente." />}
       <Button type="primary" htmlType="submit" disabled={!canEdit} block style={{ marginTop: 20 }}>Revisar ingreso</Button>
+    </Form>}
+  </Modal>;
+}
+
+// Keep the legacy non-batch branch intact. Inventory V1 uses one receipt for all lines.
+export default function ReceiptModal(props) {
+  return props.enabled ? <MultiReceiptModal {...props} /> : <SingleReceiptModal {...props} />;
+}
+function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,onSaved}) {
+  const [form]=Form.useForm();
+  const items=Form.useWatch('items',form)||[];
+  const [preview,setPreview]=useState(null),[saving,setSaving]=useState(false);
+  const retry=useRef(null),busy=useRef(false);
+  const prepare=values=>{
+    try {setPreview(inventoryReceiptPayload(values,products));}
+    catch(e){notification.error({message:e.message});}
+  };
+  const confirm=async()=>{
+    if(busy.current||!canEdit||!preview)return;
+    busy.current=true;setSaving(true);
+    try {
+      const fingerprint=JSON.stringify(preview);
+      if(retry.current?.fingerprint!==fingerprint)retry.current={fingerprint,key:crypto.randomUUID()};
+      await registerInventoryReceipt(preview,retry.current.key);
+      notification.success({message:'Ingreso registrado'});
+      onSaved();onClose();
+    } catch(e){notification.error({message:getUserFriendlyError(e,'No se pudo registrar el ingreso.')});}
+    finally{busy.current=false;setSaving(false);}
+  };
+  return <Modal open title="Registrar ingreso" width={800} footer={null} onCancel={()=>!saving&&onClose()} maskClosable={!saving} closable={!saving}>
+    {preview ? <>
+      <Descriptions column={1} items={[
+        {key:'date',label:'Fecha de ingreso',children:receivedLabel(preview.received_date)},
+        {key:'supplier',label:'Proveedor',children:preview.supplier||'No registrado'},
+        {key:'document',label:'Comprobante',children:[preview.document_type,preview.reference].filter(Boolean).join(' · ')||'No registrado'},
+        {key:'notes',label:'Notas',children:preview.notes||'Sin notas'},
+      ]}/>
+      {preview.items.map(item=><div key={item.product_id} className="inventory-receipt-line">
+        <strong>{products.find(p=>p.id===item.product_id)?.name}</strong>
+        <div>{quantityLabel(item.quantity,item.unit)} · {expirationLabel(item)}</div>
+        <div>Valorización pendiente</div>
+      </div>)}
+      <Space wrap><Button disabled={saving} onClick={()=>setPreview(null)}>Volver</Button>
+        <Button type="primary" loading={saving} disabled={!canEdit} onClick={confirm}>Confirmar ingreso</Button></Space>
+    </> : <Form form={form} layout="vertical" onFinish={prepare} initialValues={{items:[{product_id:product?.id,unit:normalizeUnit(product?.unit)}]}}>
+      <div className="inventory-receipt-common">
+        <Form.Item name="received_date" label="Fecha de ingreso" rules={[{required:true,message:'Ingresá la fecha de ingreso.'}]}><Input type="date" /></Form.Item>
+        <Form.Item name="supplier" label="Proveedor"><Input maxLength={500}/></Form.Item>
+        <Form.Item name="document_type" label="Tipo de comprobante"><Select allowClear options={['Remito','Factura','Otro'].map(value=>({value,label:value}))}/></Form.Item>
+        <Form.Item name="reference" label="Número de comprobante"><Input maxLength={500}/></Form.Item>
+      </div>
+      <Form.Item name="notes" label="Notas"><Input.TextArea maxLength={2000} autoSize={{minRows:2,maxRows:4}}/></Form.Item>
+      <h3>Productos</h3>
+      <Form.List name="items">{(fields,{add,remove})=><>
+        {fields.map(field=>{
+          const selected=products.find(p=>p.id===items[field.name]?.product_id);
+          return <div className="inventory-receipt-line" key={field.key} role="group" aria-label={`Producto ${field.name+1}`}>
+            <div className="inventory-receipt-line-heading"><strong>Producto {field.name+1}</strong>
+              <Button type="text" disabled={fields.length===1} onClick={()=>remove(field.name)} aria-label={`Eliminar producto ${field.name+1}`}>Eliminar</Button></div>
+            <Form.Item name={[field.name,'product_id']} label="Producto" rules={[{required:true,message:'Seleccioná un producto.'}]}>
+              <Select showSearch optionFilterProp="label" placeholder="Buscar producto..." options={products.filter(p=>p.enabled!==false).map(p=>({value:p.id,label:p.name,disabled:items.some((i,index)=>index!==field.name&&i?.product_id===p.id)}))}
+                onChange={id=>form.setFieldValue(['items',field.name,'unit'],normalizeUnit(products.find(p=>p.id===id)?.unit))}/>
+            </Form.Item>
+            <div className="inventory-receipt-item-fields">
+              <QuantityUnitFields quantityName={[field.name,'quantity']} unitName={[field.name,'unit']} watchPrefix={['items']} baseUnit={selected?.unit} allowConversion={false}/>
+              <ReceiptExpirationField name={[field.name,'expiration_period']}/>
+            </div>
+          </div>;
+        })}
+        <Button onClick={()=>add({})} disabled={fields.length>=100}>Agregar producto</Button>
+      </>}</Form.List>
+      {canCreate&&<Button type="link" onClick={onCreate}>Crear nuevo producto</Button>}
+      <Alert className="inventory-receipt-cost" type="info" message="El costo se carga después del ingreso, desde Ver partida → Valorizar. El stock puede utilizarse mientras esté pendiente."/>
+      <Button className="inventory-receipt-submit" type="primary" htmlType="submit" disabled={!canEdit} block>Revisar ingreso</Button>
     </Form>}
   </Modal>;
 }

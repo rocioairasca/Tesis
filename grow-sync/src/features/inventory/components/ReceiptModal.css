@@ -1,0 +1,10 @@
+.inventory-receipt-common,
+.inventory-receipt-item-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+.inventory-receipt-line { border: 1px solid var(--ant-color-border-secondary, #f0f0f0); border-radius: 8px; padding: 12px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.inventory-receipt-line-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.inventory-receipt-cost { margin-top: 16px; }
+.inventory-receipt-submit { margin-top: 20px; }
+@media (max-width: 575px) {
+  .inventory-receipt-common,
+  .inventory-receipt-item-fields { grid-template-columns: minmax(0, 1fr); }
+}

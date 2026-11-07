@@ -32,12 +32,15 @@ api.defaults.adapter=async config=>{
       if(window.__failAfterSave) {window.__failAfterSave=false;throw new Error('Respuesta interrumpida');}
     }
   } else if(config.url.endsWith('/batches')) data={data:[batch]};
-  else if(config.url.endsWith('/receipts')) data={movements:[]};
+  else if(config.url.endsWith('/receipts')) {
+    data={movements:[]};
+    if(window.__failAfterSave){window.__failAfterSave=false;throw new Error('Respuesta interrumpida');}
+  }
   else if(config.url.endsWith('/movements')) data={data:[]};
   else throw new Error('Unexpected synthetic request: '+config.url);
   return {data,status:200,statusText:'OK',headers:{},config};
 };
 createRoot(document.getElementById('root')).render(query.has('receipt')
-  ? <ReceiptModal products={[product]} product={product} enabled canEdit canCreate={false} onClose={()=>{}} onSaved={()=>{window.__saved=true;}} />
+  ? <ReceiptModal products={[product,{id:'product-two',name:'Segundo producto',unit:'L',enabled:true,on_hand_quantity:'0'}]} product={product} enabled canEdit canCreate={false} onClose={()=>{}} onSaved={()=>{window.__saved=true;window.__saveCount=(window.__saveCount||0)+1;}} />
   : <ProductDetailDrawer product={product} enabled canEdit={!query.has('readonly')} mobile={innerWidth<600}
       onClose={()=>{}} onReceipt={()=>{}} onAdjust={()=>{}} revision={0}/>);

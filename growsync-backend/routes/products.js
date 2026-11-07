@@ -105,6 +105,8 @@ router.delete('/:id',
 
 router.get('/:id/batches',checkRole(0),requirePermission(PERMISSIONS.INVENTORY_VIEW),stock.listBatches);
 router.get('/:id/movements',checkRole(0),requirePermission(PERMISSIONS.INVENTORY_VIEW),stock.listMovements);
+router.use('/receipts', require('./inventoryReceipts')(require('../db/supabaseClient').pool));
+
 router.post('/:id/receipts',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerReceipt);
 router.post('/:id/adjustments',checkRole(2),requirePermission(PERMISSIONS.INVENTORY_EDIT),stock.registerAdjustment);
 

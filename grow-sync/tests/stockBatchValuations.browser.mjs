@@ -123,7 +123,8 @@ test('new physical receipt does not collect or submit legacy monetary values',as
   await page.waitForFunction(()=>window.__saved===true);
   const body=await page.evaluate(()=>window.__requests.find(r=>r.url.endsWith('/receipts')).body);
   for(const key of ['currency','unit_price','exchange_rate','total_original','total_ars']) assert(body[key]==null);
-  assert.equal(body.quantity,'5');await noOverflow(page);
+  assert.equal(body.items[0].quantity,'5.000000');assert.equal(body.items.length,1);
+  for(const key of ['currency','unit_price','exchange_rate','total_original','total_ars']) assert(body.items[0][key]==null);await noOverflow(page);
 });
 
 test('changing currency does not relabel the previous invoice total',async t=>{
@@ -136,4 +137,59 @@ test('changing currency does not relabel the previous invoice total',async t=>{
   await region(page).getByText('Revisión 2',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.__valuations[0].invoice_total_original),'1900.000000');
   assert.equal(await page.evaluate(()=>window.__valuations[1].invoice_total_original),null);
+});
+
+for(const width of [1440,1024,390]) test('multi-product receipt groups common fields and refreshes once; responsive '+width,async t=>{
+  const page=await open(t,width,'?receipt');
+  await page.getByLabel('Fecha de ingreso',{exact:true}).fill('2020-01-02');
+  await page.getByLabel('Proveedor',{exact:true}).fill('Proveedor de prueba');
+  await select(page,'Tipo de comprobante','Remito');
+  await page.getByLabel('Número de comprobante',{exact:true}).fill('R-123');
+  await page.getByLabel('Notas',{exact:true}).fill('Entrega compartida');
+  await page.getByRole('group',{name:'Producto 1',exact:true}).getByRole('spinbutton').fill('1.123456');
+  await page.getByRole('button',{name:'Agregar producto',exact:true}).click();
+  const second=page.getByRole('group',{name:'Producto 2',exact:true});
+  await second.getByLabel('Producto',{exact:true}).press('ArrowDown');
+  const popup=page.locator('.ant-select-dropdown:visible');
+  await popup.locator('.ant-select-item-option-disabled').getByText('Producto sintético',{exact:true}).waitFor();
+  await popup.getByText('Segundo producto',{exact:true}).click();
+  await second.getByRole('spinbutton').fill('2.5');
+  await second.getByText('Unidad base: L',{exact:true}).waitFor();
+  await noOverflow(page);
+  await page.getByRole('button',{name:'Agregar producto',exact:true}).click();
+  await page.getByRole('button',{name:'Eliminar producto 3',exact:true}).click();
+  assert.equal(await page.getByRole('group',{name:/^Producto [0-9]+$/}).count(),2);
+  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).waitFor();
+  await page.getByText('Segundo producto',{exact:true}).waitFor();await noOverflow(page);
+  await page.getByRole('button',{name:'Volver',exact:true}).click();
+  assert.equal(await page.getByRole('group',{name:'Producto 2',exact:true}).getByRole('spinbutton').inputValue(),'2,5');
+  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  await page.waitForFunction(()=>window.__saved===true);
+  const result=await page.evaluate(()=>({requests:window.__requests.filter(r=>r.method==='post'),saved:window.__saveCount}));
+  assert.equal(result.requests.length,1);assert.equal(result.saved,1);
+  const r=result.requests[0];assert.equal(r.url,'/products/receipts');assert(r.key);
+  assert.equal(r.body.document_type,'Remito');assert.equal(r.body.reference,'R-123');
+  assert.equal(r.body.supplier,'Proveedor de prueba');assert.equal(r.body.notes,'Entrega compartida');
+  assert.deepEqual(r.body.items.map(i=>[i.product_id,i.quantity,i.unit,i.expiration_month]),
+    [['product-one','1.123456','kg',null],['product-two','2.500000','L',null]]);
+});
+test('receipt validates zero and reuses idempotency key after lost response',async t=>{
+  const page=await open(t,390,'?receipt');
+  await page.getByLabel('Fecha de ingreso',{exact:true}).fill('2020-01-02');
+  await page.getByRole('spinbutton').fill('0');
+  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.locator('.ant-form-item-explain-error').first().waitFor();
+  assert.equal(await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).count(),0);
+  await page.getByRole('spinbutton').fill('3');
+  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.evaluate(()=>{window.__failAfterSave=true;});
+  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  await page.locator('.ant-notification-notice-error').waitFor();
+  assert.equal(await page.evaluate(()=>window.__saveCount||0),0);
+  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  await page.waitForFunction(()=>window.__saved===true);
+  const result=await page.evaluate(()=>({requests:window.__requests.filter(r=>r.method==='post'),saved:window.__saveCount}));
+  assert.equal(result.requests.length,2);assert.equal(result.requests[0].key,result.requests[1].key);assert.equal(result.saved,1);
 });

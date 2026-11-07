@@ -25,3 +25,7 @@ export const createBatchValuation = async (productId, batchId, payload, idempote
     headers: { 'Idempotency-Key': idempotencyKey },
   })
 ).data;
+
+export const registerInventoryReceipt = async (payload, idempotencyKey) => (
+  await api.post('/products/receipts', payload, { headers: { 'Idempotency-Key': idempotencyKey } })
+).data;
