@@ -41,6 +41,6 @@ api.defaults.adapter=async config=>{
   return {data,status:200,statusText:'OK',headers:{},config};
 };
 createRoot(document.getElementById('root')).render(query.has('receipt')
-  ? <ReceiptModal products={[product,{id:'product-two',name:'Segundo producto',unit:'L',enabled:true,on_hand_quantity:'0'}]} product={product} enabled canEdit canCreate={false} onClose={()=>{}} onSaved={()=>{window.__saved=true;window.__saveCount=(window.__saveCount||0)+1;}} />
+  ? <ReceiptModal products={[product,{id:'product-two',name:'Segundo producto',unit:'L',enabled:true,on_hand_quantity:'0'},...Array.from({length:10},(_,i)=>({id:'extra-'+i,name:'Producto adicional '+(i+1),unit:'kg',enabled:true}))]} product={product} enabled canEdit canCreate={query.has('create')} onCreate={()=>{window.__createCount=(window.__createCount||0)+1;}} onClose={()=>{window.__closed=true;}} onSaved={()=>{window.__saved=true;window.__saveCount=(window.__saveCount||0)+1;}} />
   : <ProductDetailDrawer product={product} enabled canEdit={!query.has('readonly')} mobile={innerWidth<600}
       onClose={()=>{}} onReceipt={()=>{}} onAdjust={()=>{}} revision={0}/>);

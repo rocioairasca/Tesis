@@ -113,13 +113,13 @@ test('retry after lost response reuses key and does not duplicate revision',asyn
 });
 test('new physical receipt does not collect or submit legacy monetary values',async t=>{
   const page=await open(t,390,'?receipt');
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Agregar',exact:true}).waitFor();
   assert.equal(await page.getByLabel('Moneda',{exact:true}).count(),0);
   assert.equal(await page.getByLabel(/Precio por/).count(),0);
   await page.getByRole('spinbutton').fill('5');
   await page.getByLabel('Fecha de ingreso',{exact:true}).fill('2026-10-01');
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
-  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  await page.getByRole('button',{name:'Agregar',exact:true}).click();
+  await page.getByRole('button',{name:'Registrar ingreso',exact:true}).click();
   await page.waitForFunction(()=>window.__saved===true);
   const body=await page.evaluate(()=>window.__requests.find(r=>r.url.endsWith('/receipts')).body);
   for(const key of ['currency','unit_price','exchange_rate','total_original','total_ars']) assert(body[key]==null);
@@ -139,57 +139,128 @@ test('changing currency does not relabel the previous invoice total',async t=>{
   assert.equal(await page.evaluate(()=>window.__valuations[1].invoice_total_original),null);
 });
 
-for(const width of [1440,1024,390]) test('multi-product receipt groups common fields and refreshes once; responsive '+width,async t=>{
-  const page=await open(t,width,'?receipt');
+
+const receiptRows=page=>page.locator('.inventory-receipt-list-row');
+async function entryCleared(page) {
+  await page.waitForFunction(()=>document.activeElement?.id==='product_id');
+  assert.equal(await page.getByRole('spinbutton').inputValue(),'');
+  assert.equal(await page.getByLabel('Unidad',{exact:true}).inputValue(),'');
+  assert.equal(await page.getByPlaceholder('MM/AAAA').inputValue(),'');
+  assert.equal(await page.locator('.inventory-receipt-product .ant-select-selection-item').count(),0);
+}
+async function addReceiptItem(page,name,quantity='1',enter=false) {
+  if(name)await select(page,'Producto',name);
+  await page.getByRole('spinbutton').fill(quantity);
+  if(enter)await page.getByRole('spinbutton').press('Enter');
+  else await page.getByRole('button',{name:'Agregar',exact:true}).click();
+  await entryCleared(page);
+}
+for(const width of [1440,1024,390]) test('quick entry, Enter, edit, delete and unchanged receipt payload; responsive '+width,async t=>{
+  const page=await open(t,width,'?receipt&create');
   await page.getByLabel('Fecha de ingreso',{exact:true}).fill('2020-01-02');
   await page.getByLabel('Proveedor',{exact:true}).fill('Proveedor de prueba');
   await select(page,'Tipo de comprobante','Remito');
   await page.getByLabel('Número de comprobante',{exact:true}).fill('R-123');
   await page.getByLabel('Notas',{exact:true}).fill('Entrega compartida');
-  await page.getByRole('group',{name:'Producto 1',exact:true}).getByRole('spinbutton').fill('1.123456');
-  await page.getByRole('button',{name:'Agregar producto',exact:true}).click();
-  const second=page.getByRole('group',{name:'Producto 2',exact:true});
-  await second.getByLabel('Producto',{exact:true}).press('ArrowDown');
-  const popup=page.locator('.ant-select-dropdown:visible');
-  await popup.locator('.ant-select-item-option-disabled').getByText('Producto sintético',{exact:true}).waitFor();
-  await popup.getByText('Segundo producto',{exact:true}).click();
-  await second.getByRole('spinbutton').fill('2.5');
-  await second.getByText('Unidad base: L',{exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Unidad',{exact:true}).inputValue(),'kg');
+  assert.equal(await page.getByLabel('Unidad',{exact:true}).getAttribute('readonly'),'');
+  await page.getByPlaceholder('MM/AAAA').fill('07/2030');
+  await page.getByPlaceholder('MM/AAAA').press('Tab');
+  await addReceiptItem(page,null,'1.123456');
+  assert((await receiptRows(page).filter({hasText:'Producto sintético'}).textContent()).includes('07/2030'));
+  await page.getByLabel('Producto',{exact:true}).press('ArrowDown');
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option-disabled').getByText('Producto sintético',{exact:true}).waitFor();
+  await page.locator('.ant-select-dropdown:visible').getByText('Segundo producto',{exact:true}).click();
+  await addReceiptItem(page,null,'2.5',true);
+  assert.equal(await receiptRows(page).count(),2);
+  assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method==='post').length),0);
+  const first=receiptRows(page).filter({hasText:'Producto sintético'});
+  await first.getByRole('button',{name:'Editar',exact:true}).click();
+  assert.equal(await page.getByRole('spinbutton').inputValue(),'1,123456');
+  assert.equal(await page.getByPlaceholder('MM/AAAA').inputValue(),'07/2030');
+  await page.getByRole('spinbutton').fill('3.25');
+  const action=await page.getByRole('button',{name:'Guardar cambios',exact:true}).boundingBox();
+  const inputs=await page.locator('.inventory-receipt-entry-fields').boundingBox();
+  assert(action.x>=inputs.x+inputs.width);
+  await page.getByRole('spinbutton').press('Enter');
+  await entryCleared(page);
+  assert.equal(await receiptRows(page).count(),2);
+  assert((await first.textContent()).includes('3,25'));
+  await first.getByRole('button',{name:'Editar',exact:true}).click();
+  await page.getByRole('spinbutton').fill('99');
+  await page.getByRole('button',{name:'Cancelar edición',exact:true}).click();
+  await entryCleared(page);assert((await first.textContent()).includes('3,25'));
+  await addReceiptItem(page,'Producto adicional 1','5');
+  await receiptRows(page).filter({hasText:'Producto adicional 1'}).getByRole('button',{name:'Eliminar',exact:true}).click();
+  assert.equal(await receiptRows(page).count(),2);
   await noOverflow(page);
-  await page.getByRole('button',{name:'Agregar producto',exact:true}).click();
-  await page.getByRole('button',{name:'Eliminar producto 3',exact:true}).click();
-  assert.equal(await page.getByRole('group',{name:/^Producto [0-9]+$/}).count(),2);
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
-  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).waitFor();
-  await page.getByText('Segundo producto',{exact:true}).waitFor();await noOverflow(page);
-  await page.getByRole('button',{name:'Volver',exact:true}).click();
-  assert.equal(await page.getByRole('group',{name:'Producto 2',exact:true}).getByRole('spinbutton').inputValue(),'2,5');
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
-  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  const add=await page.getByRole('button',{name:'Agregar',exact:true}).boundingBox();
+  assert(add.x>=inputs.x+inputs.width);
+  const footer=page.locator('.inventory-receipt-footer');
+  const cancel=await footer.getByRole('button',{name:'Cancelar',exact:true}).boundingBox();
+  const save=await footer.getByRole('button',{name:'Registrar ingreso',exact:true}).boundingBox();
+  const footerBox=await footer.boundingBox();assert(save.x>cancel.x);assert(Math.abs(save.x+save.width-footerBox.x-footerBox.width)<2);
+  assert.equal(await page.getByText('Productos agregados',{exact:true}).count(),0);
+  assert.equal(await page.getByText(/Presioná Enter/).count(),0);
+  if(process.env.INVENTORY_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.INVENTORY_SCREENSHOT_DIR,'receipt-quick-'+width+'.png'),fullPage:true});
+  await footer.getByRole('button',{name:'Registrar ingreso',exact:true}).click();
   await page.waitForFunction(()=>window.__saved===true);
   const result=await page.evaluate(()=>({requests:window.__requests.filter(r=>r.method==='post'),saved:window.__saveCount}));
   assert.equal(result.requests.length,1);assert.equal(result.saved,1);
   const r=result.requests[0];assert.equal(r.url,'/products/receipts');assert(r.key);
   assert.equal(r.body.document_type,'Remito');assert.equal(r.body.reference,'R-123');
   assert.equal(r.body.supplier,'Proveedor de prueba');assert.equal(r.body.notes,'Entrega compartida');
-  assert.deepEqual(r.body.items.map(i=>[i.product_id,i.quantity,i.unit,i.expiration_month]),
-    [['product-one','1.123456','kg',null],['product-two','2.500000','L',null]]);
+  assert.deepEqual(r.body.items.map(i=>[i.product_id,i.quantity,i.unit,i.expiration_year,i.expiration_month]),
+    [['product-one','3.250000','kg',2030,7],['product-two','2.500000','L',null,null]]);
 });
-test('receipt validates zero and reuses idempotency key after lost response',async t=>{
+for(const width of [1440,1024,390]) test('receipt list stops growing after seven rows and scrolls internally '+width,async t=>{
+  const page=await open(t,width,'?receipt');
+  await addReceiptItem(page,null);
+  for(let i=1;i<=6;i++)await addReceiptItem(page,'Producto adicional '+i,'1',i%2===0);
+  const list=page.locator('.inventory-receipt-list');
+  const seven=await list.evaluate(el=>({height:el.clientHeight,scroll:el.scrollHeight}));
+  assert(seven.scroll<=seven.height+1,JSON.stringify(seven));
+  await addReceiptItem(page,'Producto adicional 7');
+  const eight=await list.evaluate(el=>({height:el.clientHeight,scroll:el.scrollHeight,overflow:getComputedStyle(el).overflowY}));
+  assert.equal(eight.height,seven.height);assert(eight.scroll>eight.height);assert.equal(eight.overflow,'auto');
+  await receiptRows(page).last().getByRole('button',{name:'Editar',exact:true}).scrollIntoViewIfNeeded();
+  assert(await list.evaluate(el=>el.scrollTop>0));
+  await noOverflow(page);
+});
+test('receipt validates zero, protects draft edits and reuses idempotency key after lost response',async t=>{
   const page=await open(t,390,'?receipt');
   await page.getByLabel('Fecha de ingreso',{exact:true}).fill('2020-01-02');
   await page.getByRole('spinbutton').fill('0');
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.getByRole('spinbutton').press('Enter');
   await page.locator('.ant-form-item-explain-error').first().waitFor();
-  assert.equal(await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).count(),0);
+  assert.equal(await receiptRows(page).count(),0);
   await page.getByRole('spinbutton').fill('3');
-  await page.getByRole('button',{name:'Revisar ingreso',exact:true}).click();
+  await page.getByRole('button',{name:'Registrar ingreso',exact:true}).click();
+  await page.getByText('Agregá el producto a la lista antes de registrar el ingreso.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__requests.length),0);
+  await page.getByRole('button',{name:'Agregar',exact:true}).click();
+  await entryCleared(page);
+  await receiptRows(page).getByRole('button',{name:'Editar',exact:true}).click();
+  await page.getByRole('spinbutton').fill('4');
+  await page.getByRole('button',{name:'Registrar ingreso',exact:true}).click();
+  await page.getByText('Guardá o cancelá la edición antes de registrar el ingreso.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__requests.length),0);
+  await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();
+  await entryCleared(page);
   await page.evaluate(()=>{window.__failAfterSave=true;});
-  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
-  await page.locator('.ant-notification-notice-error').waitFor();
+  await page.getByRole('button',{name:'Registrar ingreso',exact:true}).click();
+  await page.waitForFunction(()=>window.__requests.filter(r=>r.method==='post').length===1);
+  await page.getByText('Respuesta interrumpida',{exact:true}).waitFor();
+  const retryReceipt=page.locator('.inventory-receipt-footer button[type=submit]:not(.ant-btn-loading):not(:disabled)');
+  await retryReceipt.waitFor();
   assert.equal(await page.evaluate(()=>window.__saveCount||0),0);
-  await page.getByRole('button',{name:'Confirmar ingreso',exact:true}).click();
+  await retryReceipt.click();
   await page.waitForFunction(()=>window.__saved===true);
   const result=await page.evaluate(()=>({requests:window.__requests.filter(r=>r.method==='post'),saved:window.__saveCount}));
   assert.equal(result.requests.length,2);assert.equal(result.requests[0].key,result.requests[1].key);assert.equal(result.saved,1);
+});
+test('create product remains in section header and keeps existing callback',async t=>{
+  const page=await open(t,390,'?receipt&create');
+  await page.locator('.inventory-receipt-heading').getByRole('button',{name:'Crear nuevo producto',exact:true}).click();
+  assert.equal(await page.evaluate(()=>window.__createCount),1);
 });

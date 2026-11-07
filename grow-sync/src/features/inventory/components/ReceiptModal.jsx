@@ -1,16 +1,17 @@
 import {inventoryReceiptPayload} from '../inventoryReceiptModel.mjs';
 import './ReceiptModal.css';
-import {normalizeUnit} from '../../../utils/inventoryUnits';
+import {formatNumber} from '../../../utils/numberFormat';
+import {normalizeUnit,unitLabel} from '../../../utils/inventoryUnits';
 import QuantityUnitFields from '../../../components/QuantityUnitFields';
 import {normalizeQuantity,receiptQuantityPayload} from '../../../utils/inventoryConversion';
 import React, { useRef, useState } from 'react';
-import { Alert, Button, Collapse, DatePicker, Descriptions, Form, Input, Modal, Select, Space, notification } from 'antd';
+import { Alert, Button, Collapse, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Space, notification } from 'antd';
 import dayjs from 'dayjs';
 import esES from 'antd/locale/es_ES';
 import api from '../../../services/apiClient';
 import { registerStockReceipt, registerInventoryReceipt } from '../../../services/stockService';
 import { getUserFriendlyError } from '../../../utils/userFriendlyErrors';
-import { canReceipt, receivedLabel, expirationLabel, receiptExpirationPayload, quantityLabel, receiptPreview, stockQuantity, validateReceipt } from '../inventoryModel.mjs';
+import { canReceipt, expirationLabel, receiptExpirationPayload, quantityLabel, receiptPreview, stockQuantity, validateReceipt } from '../inventoryModel.mjs';
 
 export function ReceiptExpirationField({ name = 'expiration_period', components } = {}) {
   return <Form.Item name={name} label="Vencimiento">
@@ -94,42 +95,59 @@ export default function ReceiptModal(props) {
   return props.enabled ? <MultiReceiptModal {...props} /> : <SingleReceiptModal {...props} />;
 }
 function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,onSaved}) {
-  const [form]=Form.useForm();
-  const items=Form.useWatch('items',form)||[];
-  const [preview,setPreview]=useState(null),[saving,setSaving]=useState(false);
-  const retry=useRef(null),busy=useRef(false);
-  const prepare=values=>{
-    try {setPreview(inventoryReceiptPayload(values,products));}
-    catch(e){notification.error({message:e.message});}
+  const [form]=Form.useForm(),[entryForm]=Form.useForm();
+  const [items,setItems]=useState([]),[editingId,setEditingId]=useState(null),[saving,setSaving]=useState(false);
+  const selectedId=Form.useWatch('product_id',entryForm);
+  const selected=products.find(p=>p.id===selectedId);
+  const retry=useRef(null),busy=useRef(false),adding=useRef(false),productInput=useRef(null),editor=useRef(null);
+  const productOpen=useRef(false),expirationOpen=useRef(false);
+  const clearEntry=()=>{
+    entryForm.resetFields();
+    entryForm.setFieldsValue({product_id:undefined,quantity:undefined,expiration_period:null});
+    setEditingId(null);
+    requestAnimationFrame(()=>productInput.current?.focus());
   };
-  const confirm=async()=>{
-    if(busy.current||!canEdit||!preview)return;
+  const addItem=async()=>{
+    if(adding.current||saving||!canEdit)return;
+    adding.current=true;
+    try {
+      const values=await entryForm.validateFields();
+      receiptExpirationPayload(values.expiration_period);
+      if(editingId===null&&items.length>=100)throw new Error('Agregá hasta 100 productos.');
+      if(items.some(i=>i.product_id===values.product_id&&i.product_id!==editingId))throw new Error('No se puede repetir un producto en el mismo ingreso.');
+      setItems(previous=>editingId===null?[...previous,values]:previous.map(i=>i.product_id===editingId?values:i));
+      clearEntry();
+    } catch(e){if(!e.errorFields)notification.error({message:e.message});}
+    finally{adding.current=false;}
+  };
+  const editItem=item=>{
+    entryForm.resetFields();entryForm.setFieldsValue(item);setEditingId(item.product_id);
+    editor.current?.scrollIntoView({block:'nearest'});productInput.current?.focus();
+  };
+  const removeItem=item=>{
+    setItems(previous=>previous.filter(i=>i.product_id!==item.product_id));
+    if(editingId===item.product_id)clearEntry();
+  };
+  const register=async values=>{
+    if(busy.current||!canEdit)return;
+    const draft=entryForm.getFieldsValue();
+    if(editingId!==null||draft.product_id||draft.quantity!=null&&draft.quantity!==''||draft.expiration_period){
+      notification.error({message:editingId!==null?'Guardá o cancelá la edición antes de registrar el ingreso.':'Agregá el producto a la lista antes de registrar el ingreso.'});
+      return;
+    }
     busy.current=true;setSaving(true);
     try {
-      const fingerprint=JSON.stringify(preview);
+      const payload=inventoryReceiptPayload({...values,items},products);
+      const fingerprint=JSON.stringify(payload);
       if(retry.current?.fingerprint!==fingerprint)retry.current={fingerprint,key:crypto.randomUUID()};
-      await registerInventoryReceipt(preview,retry.current.key);
+      await registerInventoryReceipt(payload,retry.current.key);
       notification.success({message:'Ingreso registrado'});
       onSaved();onClose();
     } catch(e){notification.error({message:getUserFriendlyError(e,'No se pudo registrar el ingreso.')});}
     finally{busy.current=false;setSaving(false);}
   };
   return <Modal open title="Registrar ingreso" width={800} footer={null} onCancel={()=>!saving&&onClose()} maskClosable={!saving} closable={!saving}>
-    {preview ? <>
-      <Descriptions column={1} items={[
-        {key:'date',label:'Fecha de ingreso',children:receivedLabel(preview.received_date)},
-        {key:'supplier',label:'Proveedor',children:preview.supplier||'No registrado'},
-        {key:'document',label:'Comprobante',children:[preview.document_type,preview.reference].filter(Boolean).join(' · ')||'No registrado'},
-        {key:'notes',label:'Notas',children:preview.notes||'Sin notas'},
-      ]}/>
-      {preview.items.map(item=><div key={item.product_id} className="inventory-receipt-line">
-        <strong>{products.find(p=>p.id===item.product_id)?.name}</strong>
-        <div>{quantityLabel(item.quantity,item.unit)} · {expirationLabel(item)}</div>
-        <div>Valorización pendiente</div>
-      </div>)}
-      <Space wrap><Button disabled={saving} onClick={()=>setPreview(null)}>Volver</Button>
-        <Button type="primary" loading={saving} disabled={!canEdit} onClick={confirm}>Confirmar ingreso</Button></Space>
-    </> : <Form form={form} layout="vertical" onFinish={prepare} initialValues={{items:[{product_id:product?.id,unit:normalizeUnit(product?.unit)}]}}>
+    <Form form={form} layout="vertical" onFinish={register} disabled={saving}>
       <div className="inventory-receipt-common">
         <Form.Item name="received_date" label="Fecha de ingreso" rules={[{required:true,message:'Ingresá la fecha de ingreso.'}]}><Input type="date" /></Form.Item>
         <Form.Item name="supplier" label="Proveedor"><Input maxLength={500}/></Form.Item>
@@ -137,28 +155,67 @@ function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,
         <Form.Item name="reference" label="Número de comprobante"><Input maxLength={500}/></Form.Item>
       </div>
       <Form.Item name="notes" label="Notas"><Input.TextArea maxLength={2000} autoSize={{minRows:2,maxRows:4}}/></Form.Item>
-      <h3>Productos</h3>
-      <Form.List name="items">{(fields,{add,remove})=><>
-        {fields.map(field=>{
-          const selected=products.find(p=>p.id===items[field.name]?.product_id);
-          return <div className="inventory-receipt-line" key={field.key} role="group" aria-label={`Producto ${field.name+1}`}>
-            <div className="inventory-receipt-line-heading"><strong>Producto {field.name+1}</strong>
-              <Button type="text" disabled={fields.length===1} onClick={()=>remove(field.name)} aria-label={`Eliminar producto ${field.name+1}`}>Eliminar</Button></div>
-            <Form.Item name={[field.name,'product_id']} label="Producto" rules={[{required:true,message:'Seleccioná un producto.'}]}>
-              <Select showSearch optionFilterProp="label" placeholder="Buscar producto..." options={products.filter(p=>p.enabled!==false).map(p=>({value:p.id,label:p.name,disabled:items.some((i,index)=>index!==field.name&&i?.product_id===p.id)}))}
-                onChange={id=>form.setFieldValue(['items',field.name,'unit'],normalizeUnit(products.find(p=>p.id===id)?.unit))}/>
+      <div className="inventory-receipt-heading"><h3>Productos</h3>
+        {canCreate&&<Button type="link" onClick={onCreate}>Crear nuevo producto</Button>}
+      </div>
+      <Form form={entryForm} component={false} layout="vertical" disabled={saving} initialValues={{product_id:product?.id}}>
+        <div ref={editor} className="inventory-receipt-entry" onKeyDown={event=>{
+          if(event.key!=='Enter'||event.nativeEvent.isComposing)return;
+          event.preventDefault();
+          if(!productOpen.current&&!expirationOpen.current)addItem();
+        }}>
+          <div className="inventory-receipt-entry-fields">
+            <Form.Item name="product_id" label="Producto" className="inventory-receipt-product" rules={[
+              {required:true,message:'Seleccioná un producto.'},
+              {validator:(_,id)=>items.some(i=>i.product_id===id&&i.product_id!==editingId)?Promise.reject(new Error('Este producto ya está en la lista.')):Promise.resolve()},
+            ]}>
+              <Select ref={productInput} showSearch allowClear optionFilterProp="label" placeholder="Buscar producto..." onOpenChange={open=>{productOpen.current=open;}}
+                options={products.filter(p=>p.enabled!==false).map(p=>({value:p.id,label:p.name,disabled:items.some(i=>i.product_id===p.id&&i.product_id!==editingId)}))}/>
             </Form.Item>
-            <div className="inventory-receipt-item-fields">
-              <QuantityUnitFields quantityName={[field.name,'quantity']} unitName={[field.name,'unit']} watchPrefix={['items']} baseUnit={selected?.unit} allowConversion={false}/>
-              <ReceiptExpirationField name={[field.name,'expiration_period']}/>
+            <Form.Item name="quantity" label="Cantidad" rules={[{required:true,message:'Ingresá la cantidad.'},{validator:(_,quantity)=>{
+              try {normalizeQuantity({quantity,inputUnit:normalizeUnit(selected?.unit),productUnit:selected?.unit});return Promise.resolve();}
+              catch(e){return Promise.reject(new Error(e.message));}
+            }}]}>
+              <InputNumber stringMode changeOnBlur={false} decimalSeparator=","/>
+            </Form.Item>
+            <Form.Item label="Unidad"><Input aria-label="Unidad" readOnly value={normalizeUnit(selected?.unit)||''}/></Form.Item>
+            <Form.Item name="expiration_period" label="Vencimiento" className="inventory-receipt-expiration">
+              <DatePicker picker="month" format="MM/YYYY" placeholder="MM/AAAA" locale={(esES.default??esES).DatePicker} allowClear
+                minDate={dayjs('2000-01-01')} maxDate={dayjs('2100-12-31')} onOpenChange={open=>{expirationOpen.current=open;}}/>
+            </Form.Item>
+          </div>
+          <div className="inventory-receipt-entry-actions">
+            {editingId!==null&&<Button type="link" onClick={clearEntry}>Cancelar edición</Button>}
+            <Button type="primary" className="inventory-receipt-confirm" disabled={!canEdit||editingId===null&&items.length>=100} onClick={addItem}>{editingId===null?'Agregar':'Guardar cambios'}</Button>
+          </div>
+        </div>
+      </Form>
+      <div className="inventory-receipt-list" role="table" aria-label="Productos del ingreso">
+        <div className="inventory-receipt-list-header" role="row">
+          {['Producto','Cantidad','Unidad','Vencimiento','Acciones'].map(label=><div role="columnheader" key={label}>{label}</div>)}
+        </div>
+        {items.map(item=>{
+          const p=products.find(p=>p.id===item.product_id),unit=normalizeUnit(p?.unit);
+          const expiry=expirationLabel(receiptExpirationPayload(item.expiration_period));
+          return <div className="inventory-receipt-list-row" role="row" key={item.product_id} data-product-id={item.product_id}>
+            <div role="cell" className="inventory-receipt-list-name" title={p?.name}>{p?.name}</div>
+            <div role="cell" className="inventory-receipt-desktop">{formatNumber(item.quantity,6)}</div>
+            <div role="cell" className="inventory-receipt-desktop">{unitLabel(unit)}</div>
+            <div role="cell" className="inventory-receipt-desktop">{expiry}</div>
+            <div role="cell" className="inventory-receipt-mobile">{quantityLabel(item.quantity,unit)} · {expiry}</div>
+            <div role="cell" className="inventory-receipt-row-actions">
+              <Button type="link" onClick={()=>editItem(item)}>Editar</Button>
+              <Button type="link" danger onClick={()=>removeItem(item)}>Eliminar</Button>
             </div>
           </div>;
         })}
-        <Button onClick={()=>add({})} disabled={fields.length>=100}>Agregar producto</Button>
-      </>}</Form.List>
-      {canCreate&&<Button type="link" onClick={onCreate}>Crear nuevo producto</Button>}
+        {!items.length&&<div className="inventory-receipt-empty">No hay productos en la lista.</div>}
+      </div>
       <Alert className="inventory-receipt-cost" type="info" message="El costo se carga después del ingreso, desde Ver partida → Valorizar. El stock puede utilizarse mientras esté pendiente."/>
-      <Button className="inventory-receipt-submit" type="primary" htmlType="submit" disabled={!canEdit} block>Revisar ingreso</Button>
-    </Form>}
+      <div className="inventory-receipt-footer">
+        <Button disabled={saving} onClick={onClose}>Cancelar</Button>
+        <Button className="inventory-receipt-confirm" type="primary" htmlType="submit" disabled={!canEdit} loading={saving}>Registrar ingreso</Button>
+      </div>
+    </Form>
   </Modal>;
 }
