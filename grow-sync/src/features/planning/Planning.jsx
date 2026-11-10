@@ -1073,10 +1073,67 @@ const Planning = () => {
   }, []);
   const fetchProducts = useCallback(async () => {
     try {
-      const { data } = await api.get("/products");
-      setInventoryEnabled(data?.inventory_v1_enabled === true);
-      setProducts(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { }
+      const pageSize = 50;
+
+      const { data: first } = await api.get("/products", {
+        params: {
+          page: 1,
+          pageSize,
+        },
+      });
+
+      // Compatibilidad con respuesta legacy sin paginación.
+      if (Array.isArray(first)) {
+        setInventoryEnabled(false);
+        setProducts(first);
+        return;
+      }
+
+      const firstItems =
+        first?.items ||
+        first?.data ||
+        [];
+
+      const total = Number(first?.total ?? firstItems.length);
+
+      setInventoryEnabled(
+        first?.inventory_v1_enabled === true
+      );
+
+      if (total <= firstItems.length) {
+        setProducts(firstItems);
+        return;
+      }
+
+      const totalPages = Math.ceil(total / pageSize);
+
+      const remainingResponses = await Promise.all(
+        Array.from(
+          { length: totalPages - 1 },
+          (_, index) =>
+            api.get("/products", {
+              params: {
+                page: index + 2,
+                pageSize,
+              },
+            })
+        )
+      );
+
+      const remainingItems = remainingResponses.flatMap(
+        ({ data }) =>
+          Array.isArray(data)
+            ? data
+            : data?.items || data?.data || []
+      );
+
+      setProducts([
+        ...firstItems,
+        ...remainingItems,
+      ]);
+    } catch {
+      setProducts([]);
+    }
   }, []);
   const fetchVehicles = useCallback(async () => {
     try {
