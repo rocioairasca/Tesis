@@ -1,10 +1,10 @@
-const {z}=require('zod');
-const {pool}=require('../../db/supabaseClient');
-const stock=require('../../services/stock');
-const {getEffectivePermissions,PERMISSIONS}=require('../../constants/permissions');
-const uuid=z.string().uuid();
-const money=z.coerce.number().finite().nonnegative().nullable().optional();
-const receipt=z.object({quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').inputUnitSchema.optional(),
+const { z } = require('zod');
+const { pool } = require('../../db/supabaseClient');
+const stock = require('../../services/stock');
+const { getEffectivePermissions, PERMISSIONS } = require('../../constants/permissions');
+const uuid = z.string().uuid();
+const money = z.coerce.number().finite().nonnegative().nullable().optional();
+const receipt = z.object({quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').inputUnitSchema.optional(),
   unit_price_unit:require('../../services/inventoryUnits').unitSchema.optional(),
   received_date:z.string().nullable().optional(),expiration_date:z.string().nullable().optional(),
   expiration_year:z.number().int().min(2000).max(2100).nullable().optional(),
@@ -14,7 +14,7 @@ const receipt=z.object({quantity:z.union([z.string(),z.number()]),unit:require('
   supplier:z.string().max(500).nullable().optional(),reference:z.string().max(500).nullable().optional(),notes:z.string().max(2000).nullable().optional()}).strict()
   .refine(body=>!['purchase','return'].includes(body.origin)||body.received_date!=null,
     {path:['received_date'],message:'La fecha de ingreso es obligatoria para compras y devoluciones.'});
-const guard=req=>{
+const guard = req => {
   const companyId=uuid.parse(req.user?.company_id),productId=uuid.parse(req.params.id);
   if(!stock.isEnabled(companyId)) throw stock.fail('El modelo de partidas todavía no está activado para esta empresa.');
   return {companyId,productId};
@@ -43,14 +43,87 @@ const list=table=>handle(async(req,res)=>{
   const {rows}=await pool.query(query,[ctx.companyId,ctx.productId,size,(page-1)*size]);
   res.json({data:rows,page,pageSize:size});
 });
-const adjustment=z.object({direction:z.enum(['in','out']),quantity:z.union([z.string(),z.number()]),unit:require('../../services/inventoryUnits').inputUnitSchema.optional(),reason:z.string().trim().min(1).max(500),notes:z.string().max(2000).nullable().optional()}).strict();
-const registerAdjustment=handle(async(req,res)=>{
-  const ctx=guard(req),body=adjustment.parse(req.body);
-  const result=await stock.transaction(pool,async c=>{
-    const movements=await stock.adjustStock(c,{...body,...ctx,actorId:req.user.id,key:req.get('Idempotency-Key')});
-    const {rows}=await c.query('SELECT * FROM products WHERE company_id=$1 AND id=$2',[ctx.companyId,ctx.productId]);
-    return {movements,product:(await stock.decorate(c,ctx.companyId,rows))[0]};
+
+const calendarYmd = z.string().refine(value => {
+  try {
+    stock.calendarDate(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Fecha calendario inválida');
+
+const argentinaToday = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map(part => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const adjustment = z.object({
+  direction: z.enum(['in', 'out']),
+  quantity: z.union([z.string(), z.number()]),
+  unit: require('../../services/inventoryUnits').inputUnitSchema.optional(),
+  reason: z.string().trim().min(1).max(500),
+  notes: z.string().max(2000).nullable().optional(),
+
+  effective_date: calendarYmd.nullable().optional(),
+}).strict();
+
+const registerAdjustment = handle(async (req, res) => {
+  const ctx = guard(req);
+  const body = adjustment.parse(req.body);
+
+  if (body.direction === 'out' && body.effective_date != null) {
+    throw stock.fail(
+      'La fecha efectiva solo puede indicarse al sumar stock.',
+      400
+    );
+  }
+
+  const today = argentinaToday();
+
+  const effectiveDate =
+    body.direction === 'in'
+      ? body.effective_date ?? today
+      : null;
+
+  if (effectiveDate && effectiveDate > today) {
+    throw stock.fail(
+      'La fecha efectiva del saldo no puede estar en el futuro.',
+      400
+    );
+  }
+
+  const result = await stock.transaction(pool, async c => {
+    const movements = await stock.adjustStock(c, {
+      ...body,
+      effective_date: effectiveDate,
+      ...ctx,
+      actorId: req.user.id,
+      key: req.get('Idempotency-Key'),
+    });
+
+    const { rows } = await c.query(
+      'SELECT * FROM products WHERE company_id=$1 AND id=$2',
+      [ctx.companyId, ctx.productId]
+    );
+
+    return {
+      movements,
+      product: (await stock.decorate(c, ctx.companyId, rows))[0],
+    };
   });
+
   res.json(result);
 });
+
 module.exports={registerReceipt,registerAdjustment,listBatches:list('stock_batches'),listMovements:list('stock_movements')};

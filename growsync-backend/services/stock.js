@@ -173,19 +173,42 @@ async function receiveStock(client,x){
     expiry.expiration_year,expiry.expiration_month]);
   return [await movement(client,{...x,notes:auditNotes,batchId:rows[0].id,type:x.origin==='legacy'?'opening':x.origin==='adjustment'?'adjustment_in':'receipt',quantity:amount(qty),unit:product.unit,operationId:randomUUID(),hash})];
 }
+
 async function adjustStock(client, x) {
   context(x);
-  if (!isEnabled(x.companyId)) throw fail('Los ajustes todavía no están disponibles.');
+
+  if (!isEnabled(x.companyId)) {
+    throw fail('Los ajustes todavía no están disponibles.');
+  }
+
   let qty = decimal(x.quantity);
-  if (qty <= 0n) throw fail('La cantidad debe ser mayor a cero.',400);
+
+  if (qty <= 0n) {
+    throw fail('La cantidad debe ser mayor a cero.', 400);
+  }
+
   if (!['in','out'].includes(x.direction)) throw fail('Tipo de ajuste inválido.',400);
   if (typeof x.reason !== 'string' || !x.reason.trim() || x.reason.length > 500) throw fail('El motivo es obligatorio (máximo 500 caracteres).',400);
   if (x.notes != null && (typeof x.notes !== 'string' || x.notes.length > 2000)) throw fail('Observación inválida.',400);
+
+  if (x.effective_date != null) {
+    calendarDate(x.effective_date);
+  }
+
   const reason=x.reason.trim(), observation=x.notes?.trim() || null;
   const notes=`Motivo: ${reason}${observation ? `\nObservación: ${observation}` : ''}`;
   // notes is the existing human-readable audit field; no unrelated field is repurposed.
   const normalized={companyId:x.companyId,productId:x.productId,actorId:x.actorId,key:x.key,quantity:amount(qty),unit:x.unit,reason,notes};
-  if(x.direction==='in') return receiveStock(client,{...normalized,origin:'adjustment',received_date:null,expiration_date:null});
+  
+  if (x.direction === 'in') {
+    return receiveStock(client, {
+      ...normalized,
+      origin: 'adjustment',
+      received_date: x.effective_date ?? null,
+      expiration_date: null,
+    });
+  }
+
   const hash=fingerprint({...normalized,type:'adjustment_out',key:undefined});
   const previous=await replay(client,x.companyId,x.key,hash);
   if(previous) return previous;
@@ -211,6 +234,7 @@ async function adjustStock(client, x) {
   }
   return result;
 }
+
 async function disableStockProduct(client,companyId,productId){
   await lockProduct(client,companyId,productId);
   // Include disabled batches too: unresolved physical stock must not be hidden.
