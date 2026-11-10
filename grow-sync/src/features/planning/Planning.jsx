@@ -1,90 +1,188 @@
-import PlanningFormSection from './components/PlanningFormSection';
-import PlanningFormProducts from './components/PlanningFormProducts';
-import PlanningActualCost from './components/PlanningActualCost';
-import ExecutionEconomicFields from './components/ExecutionEconomicFields';
-import {executionEconomicPayload,economicEditPermissions} from './planningEconomics.mjs';
-import PlanningCostEstimate from './components/PlanningCostEstimate';
-import { campaignWorkEnd, campaignContainsWorkRange, campaignContainsWorkDate, orderCampaignsForRange, campaignWindowWarning, planningCampaignDatesChanged } from "../../utils/campaigns.mjs";
-import { canExecutePlanning, completionEndpoint, primaryExecutionAction, executionDeniedMessage } from './planningExecution.mjs';
-import { readPlanningFilters, updatePlanningFilters, clearPlanningFilters, planningFilterKey, readPlanningListState, updatePlanningPage } from './planningFilters.mjs';
-import usePlanningList from './usePlanningList';
-import {renderUserOption} from '../../components/users/UserOption';
-import {userDisplayName,userOptions} from '../../utils/userDisplay.mjs';
-import PlanningRecipeFields from './components/PlanningRecipeFields';
-import {recipeId as getRecipeId,MANUAL_RECIPE,totalLabel,registeredRecipeActualProducts} from './planningRecipe.mjs';
-import {doseLabel} from '../recipes/recipeModel.mjs';
-import PlanningRegistrationType from './components/PlanningRegistrationType';
-import PlanningDateFields from './components/PlanningDateFields';
-import {durationMode,validatedDateRange,activityChangeFields,registrationModeFields} from './planningFormFlow.mjs';
-import {FIELD_CONTEXT_OPTIONS,hasFieldContext,cropRequired,contextCropLabel} from './fieldContext.mjs';
-import EffectiveAreaFields from './components/EffectiveAreaFields';
-import {effectiveArea,partialAreaAllowed,selectionAreaLabel} from './effectiveArea.mjs';
-import AdoptExistingModal from './components/AdoptExistingModal';
-import { canAdoptExisting } from './historicalAdoption.mjs';
-import HistoricalPlanningFields from './components/HistoricalPlanningFields';
-import usePlanningLayout from './usePlanningLayout';
-import './planning.css';
-import { buildHistoricalPayload, canEditPlanning, isHistoricalPlanning } from './historicalPlanning.mjs';
-import { campaignLabel, campaignPeriod, sortCampaigns } from '../../utils/campaigns.mjs';
-import {quantityLabel,normalizeUnit} from '../../utils/inventoryUnits';
-import QuantityUnitFields from '../../components/QuantityUnitFields';
-import {exceedsAvailable,planningProductPayload,actualProductPayload} from '../../utils/inventoryConversion';
-import { parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
-/**
- * Componente: Planning
- * Ubicación: src/features/planning/Planning.jsx
- * Descripción:
- *  Contenedor principal para la gestión de planificaciones.
- *  Maneja la lógica de estado, llamadas a API, y renderizado condicional
- *  de vistas (Tabla Desktop, Lista Mobile, Calendario).
- * 
- * Refactorización:
- *  - Se extrajo la tabla desktop a `components/PlanningTable.jsx`.
- *  - Se extrajo la lista mobile a `components/PlanningListMobile.jsx`.
- *  - Se mantiene la lógica de estado y handlers aquí.
- */
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import {
-  Alert, Pagination, Spin,
-  Button, Card, Drawer, Form, Input, Select, DatePicker,
-  Dropdown, Space, Row, Col, Tag, notification,
-  Calendar as AntCalendar, Segmented, List, Popconfirm, Descriptions, Table, Modal, Popover, Tooltip
-} from "antd";
-import {
-  CalendarOutlined, Leaf, EnvironmentOutlined, Package, DollarOutlined, FileTextOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  MoreOutlined,
-  EyeOutlined,
-  UserOutlined,
-} from '../../components/AppIcons';
-import api from "../../services/apiClient";
-import useIsMobile from "../../hooks/useIsMobile";
-import { useNavigate, useSearchParams } from "react-router-dom";
+// React
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+// Librerías
+import {
+  Alert,
+  Button,
+  Calendar as AntCalendar,
+  Card,
+  Col,
+  DatePicker,
+  Descriptions,
+  Drawer,
+  Dropdown,
+  Form,
+  Input,
+  List,
+  Modal,
+  Pagination,
+  Popconfirm,
+  Popover,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Tooltip,
+  notification,
+} from "antd";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
-import PlanningTable from "./components/PlanningTable";
-import PlanningListMobile from "./components/PlanningListMobile";
-import LotMapPreview from "./components/LotMapPreview";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
+// Servicios y configuración
+import api from "../../services/apiClient";
 import { PERMISSIONS } from "../../constants/permissions";
+
+// Componentes globales
+import {
+  CalendarOutlined,
+  DeleteOutlined,
+  DollarOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  Leaf,
+  MoreOutlined,
+  Package,
+  PlusOutlined,
+  UserOutlined,
+} from "../../components/AppIcons";
+import QuantityUnitFields from "../../components/QuantityUnitFields";
+import { renderUserOption } from "../../components/users/UserOption";
+
+// Hooks globales
+import useIsMobile from "../../hooks/useIsMobile";
+
+// Utilidades globales
+import {
+  campaignLabel,
+  campaignPeriod,
+  campaignWorkEnd,
+  campaignContainsWorkDate,
+  campaignContainsWorkRange,
+  campaignWindowWarning,
+  orderCampaignsForRange,
+  planningCampaignDatesChanged,
+  sortCampaigns,
+} from "../../utils/campaigns.mjs";
+import {
+  actualProductPayload,
+  exceedsAvailable,
+  planningProductPayload,
+} from "../../utils/inventoryConversion";
+import {
+  normalizeUnit,
+  quantityLabel,
+} from "../../utils/inventoryUnits";
+import {
+  formatCalendarDate,
+  parseCalendarDate,
+} from "../../utils/calendarDate";
 import { hasPermission } from "../../utils/permissions";
+import {
+  userDisplayName,
+  userOptions,
+} from "../../utils/userDisplay.mjs";
+import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
+
+// Componentes de Planning
+import AdoptExistingModal from "./components/AdoptExistingModal";
+import ExecutionEconomicFields from "./components/ExecutionEconomicFields";
+import HistoricalPlanningFields from "./components/HistoricalPlanningFields";
+import LotMapPreview from "./components/LotMapPreview";
+import PlanningActualCost from "./components/PlanningActualCost";
+import PlanningCostEstimate from "./components/PlanningCostEstimate";
+import PlanningDateFields from "./components/PlanningDateFields";
+import PlanningFormProducts from "./components/PlanningFormProducts";
+import PlanningFormSection from "./components/PlanningFormSection";
+import PlanningListMobile from "./components/PlanningListMobile";
+import PlanningLocationSection from "./components/PlanningLocationSection";
+import PlanningRecipeFields from "./components/PlanningRecipeFields";
+import PlanningRegistrationType from "./components/PlanningRegistrationType";
+import PlanningTable from "./components/PlanningTable";
+
+// Hooks de Planning
+import usePlanningLayout from "./usePlanningLayout";
+import usePlanningList from "./usePlanningList";
+
+// Lógica de Planning
+import { canAdoptExisting } from "./historicalAdoption.mjs";
+import {
+  effectiveArea,
+  partialAreaAllowed,
+  selectionAreaLabel,
+} from "./effectiveArea.mjs";
+import {
+  FIELD_CONTEXT_OPTIONS,
+  cropRequired,
+  hasFieldContext,
+} from "./fieldContext.mjs";
+import {
+  buildHistoricalPayload,
+  canEditPlanning,
+  isHistoricalPlanning,
+} from "./historicalPlanning.mjs";
+import {
+  economicEditPermissions,
+  executionEconomicPayload,
+} from "./planningEconomics.mjs";
+import {
+  canExecutePlanning,
+  completionEndpoint,
+  executionDeniedMessage,
+  primaryExecutionAction,
+} from "./planningExecution.mjs";
+import {
+  clearPlanningFilters,
+  planningFilterKey,
+  readPlanningFilters,
+  readPlanningListState,
+  updatePlanningFilters,
+  updatePlanningPage,
+} from "./planningFilters.mjs";
+import {
+  activityChangeFields,
+  durationMode,
+  registrationModeFields,
+  validatedDateRange,
+} from "./planningFormFlow.mjs";
+import {
+  MANUAL_RECIPE,
+  recipeId as getRecipeId,
+  registeredRecipeActualProducts,
+  totalLabel,
+} from "./planningRecipe.mjs";
 import {
   ACTIVITY_EVENT_STYLES,
   STATUS_COLORS,
   formatActivity,
   formatPlanningPeriod,
   getCropDisplayName,
+  getPlanningContextLabel,
   getPlanningDatePart,
   getPlanningDisplayName,
-  getPlanningContextLabel,
   getPlanningEventLabel,
   getPlanningLotName,
-  summarizePlanningLotsShort,
   statusLabel,
+  summarizePlanningLotsShort,
 } from "./planningDisplay";
-import { getUserFriendlyError } from "../../utils/userFriendlyErrors";
+import { formatHa } from "./planningFormat.mjs";
+
+// Recetas
+import { doseLabel } from "../recipes/recipeModel.mjs";
+
+// Estilos
+import "./planning.css";
 
 dayjs.extend(isBetween);
 
@@ -97,10 +195,6 @@ const getId = (r) => r?.id ?? r?._id;
 const rowKey = (r) => getId(r) ?? r?.title ?? String(Math.random());
 const fullLotKey = (lotId) => `lot:${lotId}`;
 const subLotKey = (lotId, subLotId) => `sub:${lotId}:${subLotId}`;
-const formatHa = (value) => `${Number(value || 0).toLocaleString("es-AR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-})} ha`;
 const getLotArea = (lot) => Number(lot?.area_ha ?? lot?.area ?? 0);
 const getActiveSubLots = (lot) => (
   Array.isArray(lot?.active_layout?.sub_lots) ? lot.active_layout.sub_lots : []
@@ -1890,7 +1984,9 @@ const Planning = () => {
                 )}
                 {!campaignDateMismatch && selectedPlanningStartsBeforeCampaign && (
                   <div style={{ color: "#595959" }}>
-                    Este trabajo se realizará antes del inicio de la campaña y quedará asociado a ella.
+                    {registerCompleted
+                      ? "Este trabajo se realizó antes del inicio de la campaña y quedará asociado a ella."
+                      : "Este trabajo se realizará antes del inicio de la campaña y quedará asociado a ella."}
                   </div>
                 )}
                 {!campaignDateMismatch && campaignCompatibilityRange?.[0] && campaignCompatibilityRange?.[1] && compatibleCampaignCount === 0 && (
@@ -1926,7 +2022,7 @@ const Planning = () => {
           <Form.Item
             name="crop_id"
             label="Cultivo beneficiario"
-            tooltip="Puede diferir del cultivo o rastrojo presente en el lote. Los beneficiarios económicos se confirman por ubicación cuando corresponde."
+            tooltip="Se aplicará a todos los lotes seleccionados. Si una actividad beneficia cultivos distintos por lote, podrás indicarlo por destino."
             required={!isEditingCompleted && cropRequired(selectedActivityType, hasFieldContext(selectedActivityType) ? selectedFieldContext : null)}
             rules={isEditingCompleted ? [] : [
               {
@@ -1956,45 +2052,13 @@ const Planning = () => {
             showLabor={false} compact planning={{field_context:selectedFieldContext,crop_id:selectedFormCropId,campaign_name:selectedCampaign?.name,
               lots:selectedAreaRows.map(row=>({...parseSelectionKey(row.key),name:row.name}))}}
             crops={crops} user={currentUser} form={form}/>}</PlanningFormSection>
-<PlanningFormSection title="Ubicación" description="Seleccioná lotes, sublotes o una superficie manual." icon={EnvironmentOutlined}>          <Form.Item
-            name="lot_selection_keys"
-            label="Lotes y sublotes"
-            rules={isEditingCompleted ? [] : [
-              { required: true, message: "Seleccioná al menos un lote o sublote" },
-              {
-                validator: (_, value = []) => {
-                  const selectedByLot = value.reduce((acc, key) => {
-                    const parsed = parseSelectionKey(key);
-                    if (!parsed) return acc;
-                    const current = acc.get(parsed.lot_id) || { full: false, subLots: 0 };
-                    if (parsed.sub_lot_id) current.subLots += 1;
-                    else current.full = true;
-                    acc.set(parsed.lot_id, current);
-                    return acc;
-                  }, new Map());
-                  const hasInvalidMix = Array.from(selectedByLot.values()).some(item => item.full && item.subLots > 0);
-                  return hasInvalidMix
-                    ? Promise.reject(new Error("No combines un lote completo con sublotes del mismo lote"))
-                    : Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <Select
-              disabled={isEditingCompleted}
-              mode="multiple"
-              placeholder="Seleccioná lotes completos o sublotes"
-              options={lotSelectionOptions}
-              optionFilterProp="label"
-            />
-          </Form.Item>
-
-          <EffectiveAreaFields selections={selectedAreaRows} activity={selectedActivityType} completed={isEditingCompleted} />
-          <div style={{ marginBottom: 16, color: "#595959", fontSize: 13 }}>
-            Superficie total: <strong>{formatHa(selectedPlanningArea)}</strong>
-          </div>
-
-</PlanningFormSection>
+          <PlanningLocationSection
+            lotSelectionOptions={lotSelectionOptions}
+            selectedAreaRows={selectedAreaRows}
+            selectedActivityType={selectedActivityType}
+            selectedPlanningArea={selectedPlanningArea}
+            isEditingCompleted={isEditingCompleted}
+          />
 <PlanningFormSection title="Recursos" description="Asigná responsable, vehículo y receta." icon={UserOutlined}><div className="planning-form-resource-grid">          <Form.Item name="responsible_user" label="Responsable" rules={[{ required: true, message: "Seleccioná un responsable" }]}>
             <Select
               allowClear

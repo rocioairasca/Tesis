@@ -62,19 +62,134 @@ async function update(client,{companyId,id,current,body,selections,planning}){
   }
   return true;
 }
-async function options(pool,companyId,planning){
-  if(!['fumigacion','fertilizacion','siembra'].includes(planning.activity_type))return [];
-  const recipes=(await pool.query(`SELECT r.*,c.name AS crop_name FROM recipes r LEFT JOIN crops c ON c.id=r.crop_id AND c.company_id=r.company_id WHERE r.company_id=$1 AND r.enabled=true AND r.activity_type=$2
-    AND (r.field_context IS NULL OR r.field_context IS NOT DISTINCT FROM $3::text)
-    AND (r.crop_id IS NULL OR r.crop_id IS NOT DISTINCT FROM $4::uuid)
-    AND NOT EXISTS(SELECT 1 FROM recipe_items i LEFT JOIN products p ON p.id=i.product_id AND p.company_id=r.company_id
-      WHERE i.recipe_id=r.id AND (p.id IS NULL OR p.enabled IS NOT TRUE)) ORDER BY r.name,r.id`,[companyId,planning.activity_type,planning.field_context??null,planning.crop_id??null])).rows;
-  const items=recipes.length?(await pool.query(`SELECT i.recipe_id,i.product_id,p.name AS product_name,p.unit AS product_unit,
-    i.dose_amount::text AS dose_amount,i.dose_unit FROM recipe_items i JOIN products p ON p.id=i.product_id AND p.company_id=$1
-    WHERE i.recipe_id=ANY($2::uuid[]) ORDER BY i.id`,[companyId,recipes.map(r=>r.id)])).rows:[];
-  const balances=await stock.balances(pool,companyId,[...new Set(items.map(i=>i.product_id))]);
-  return recipes.map(r=>({...r,items:items.filter(i=>i.recipe_id===r.id).map(i=>({...i,available_quantity:balances.get(i.product_id)?.available_quantity||'0'}))}));
+
+async function options(pool, companyId, planning) {
+  if (!['fumigacion', 'fertilizacion', 'siembra'].includes(planning.activity_type)) {
+    return [];
+  }
+
+  const params = [companyId, planning.activity_type];
+
+  const filters = [
+    'r.company_id = $1',
+    'r.enabled = true',
+    'r.activity_type = $2',
+  ];
+
+  // Si todavía no se eligió contexto, no filtramos por contexto.
+  // Cuando existe, permitimos recetas genéricas + recetas de ese contexto.
+  if (planning.field_context != null) {
+    params.push(planning.field_context);
+
+    filters.push(
+      `(r.field_context IS NULL
+        OR r.field_context IS NOT DISTINCT FROM $${params.length}::text)`
+    );
+  }
+
+  /*
+   * recipe.crop_id y planning.crop_id no significan lo mismo en rastrojo:
+   *
+   * - recipe.crop_id = cultivo del rastrojo/contexto de la receta
+   * - planning.crop_id = cultivo beneficiario
+   *
+   * Por eso en stubble NO filtramos recetas por crop_id.
+   *
+   * Para siembra sí tiene sentido.
+   * Para otros contextos ya definidos también mantenemos el filtro actual.
+   */
+  const shouldFilterCrop =
+    planning.crop_id != null &&
+    (
+      planning.activity_type === 'siembra' ||
+      (
+        planning.field_context != null &&
+        planning.field_context !== 'stubble'
+      )
+    );
+
+  if (shouldFilterCrop) {
+    params.push(planning.crop_id);
+
+    filters.push(
+      `(r.crop_id IS NULL
+        OR r.crop_id IS NOT DISTINCT FROM $${params.length}::uuid)`
+    );
+  }
+
+  filters.push(`
+    NOT EXISTS (
+      SELECT 1
+      FROM recipe_items i
+      LEFT JOIN products p
+        ON p.id = i.product_id
+       AND p.company_id = r.company_id
+      WHERE i.recipe_id = r.id
+        AND (
+          p.id IS NULL
+          OR p.enabled IS NOT TRUE
+        )
+    )
+  `);
+
+  const recipes = (
+    await pool.query(
+      `
+      SELECT
+        r.*,
+        c.name AS crop_name
+      FROM recipes r
+      LEFT JOIN crops c
+        ON c.id = r.crop_id
+       AND c.company_id = r.company_id
+      WHERE ${filters.join('\n AND ')}
+      ORDER BY r.name, r.id
+      `,
+      params
+    )
+  ).rows;
+
+  const items = recipes.length
+    ? (
+        await pool.query(
+          `
+          SELECT
+            i.recipe_id,
+            i.product_id,
+            p.name AS product_name,
+            p.unit AS product_unit,
+            i.dose_amount::text AS dose_amount,
+            i.dose_unit
+          FROM recipe_items i
+          JOIN products p
+            ON p.id = i.product_id
+           AND p.company_id = $1
+          WHERE i.recipe_id = ANY($2::uuid[])
+          ORDER BY i.id
+          `,
+          [companyId, recipes.map(r => r.id)]
+        )
+      ).rows
+    : [];
+
+  const balances = await stock.balances(
+    pool,
+    companyId,
+    [...new Set(items.map(i => i.product_id))]
+  );
+
+  return recipes.map(r => ({
+    ...r,
+    items: items
+      .filter(i => i.recipe_id === r.id)
+      .map(i => ({
+        ...i,
+        available_quantity:
+          balances.get(i.product_id)?.available_quantity || '0',
+      })),
+  }));
 }
+
 // Register-completed alone accepts product IDs before planning-product IDs exist.
 async function actualProductsForRegistration(client,planningId,companyId,provided){
   const planned=(await client.query(`SELECT pp.id,pp.product_id,p.unit AS product_unit FROM planning_products pp

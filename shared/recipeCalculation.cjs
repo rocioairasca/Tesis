@@ -21,9 +21,30 @@ function calculateRecipeItem({dose_amount,dose_unit,product_unit,area_ha}){
   if(amount>=MAX)throw fail('La cantidad calculada supera el máximo permitido.');
   return {amount:text(amount),unit:product_unit,dose_amount:dose.entered_quantity,dose_unit:dose.entered_unit};
 }
-function isRecipeCompatible(recipe,planning){
-  return recipe.activity_type===planning.activity_type&&
-    (recipe.field_context==null||recipe.field_context===(planning.field_context??null))&&
-    (recipe.crop_id==null||recipe.crop_id===(planning.crop_id??null));
+
+function isRecipeCompatible(recipe, planning) {
+  if (recipe.activity_type !== planning.activity_type) {
+    return false;
+  }
+
+  if (
+    recipe.field_context != null &&
+    recipe.field_context !== (planning.field_context ?? null)
+  ) {
+    return false;
+  }
+
+  // En rastrojo, recipe.crop_id describe el cultivo del rastrojo
+  // mientras que planning.crop_id representa el cultivo beneficiario.
+  // No deben compararse entre sí.
+  if (planning.field_context === 'stubble') {
+    return true;
+  }
+
+  return (
+    recipe.crop_id == null ||
+    recipe.crop_id === (planning.crop_id ?? null)
+  );
 }
+
 module.exports={calculateRecipeItem,sumEffectiveAreas,isRecipeCompatible};

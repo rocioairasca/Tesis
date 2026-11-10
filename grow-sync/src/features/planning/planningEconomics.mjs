@@ -13,14 +13,29 @@ export function laborPayload(value){
  if(result.currency==='USD')for(const key of ['fx_rate','fx_date','fx_source'])delete result[key];
  return result;
 }
-export function executionEconomicPayload(planning,values,canEdit) {
- const result={};
- const targets=(planning.lots||[]).map((lot,index)=>({
-  lot_id:lot.lot_id||lot.id,sub_lot_id:lot.sub_lot_id||null,
-  beneficiary_crop_id:values.economicTargets?.[index]||(requiresBeneficiary(planning)?null:planning.crop_id)
- }));
- if(targets.some(t=>!t.beneficiary_crop_id))throw Error('Seleccioná el cultivo beneficiario de cada destino.');
- result.targets=targets;
- if(canEdit){const labor=laborPayload(values.economicLabor);if(labor)result.labor=labor;}
- return result;
+
+export function executionEconomicPayload(planning, values, canEdit) {
+  const result = {};
+
+  const targets = (planning.lots || []).map((lot, index) => ({
+    lot_id: lot.lot_id || lot.id,
+    sub_lot_id: lot.sub_lot_id || null,
+    beneficiary_crop_id:
+      values.economicTargets?.[index] ||
+      planning.crop_id ||
+      null,
+  }));
+
+  if (targets.some(target => !target.beneficiary_crop_id)) {
+    throw Error("Seleccioná el cultivo beneficiario.");
+  }
+
+  result.targets = targets;
+
+  if (canEdit) {
+    const labor = laborPayload(values.economicLabor);
+    if (labor) result.labor = labor;
+  }
+
+  return result;
 }
