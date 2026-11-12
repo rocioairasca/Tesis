@@ -13,13 +13,24 @@ const first={id:'revision-one',revision:1,supersedes_id:null,status:'confirmed',
   created_at:'2026-10-10T15:00:00Z',provenance:'manual',reason:null};
 window.__valuations=query.has('confirmed')?[first]:[];
 window.__requests=[];
+const receiptProducts=[product,{id:'product-two',name:'Segundo producto',unit:'L',enabled:true,on_hand_quantity:'0'},...Array.from({length:10},(_,i)=>({id:'extra-'+i,name:'Producto adicional '+(i+1),unit:'kg',enabled:true}))];
+const catalogue=[...receiptProducts];
 const keys=new Map();
 api.defaults.adapter=async config=>{
   const body=typeof config.data==='string'?JSON.parse(config.data):config.data;
   const request={url:config.url,method:config.method,body,key:config.headers.get('Idempotency-Key')};
   window.__requests.push(request);
   let data;
-  if(config.url.endsWith('/valuation/history')) data={data:[...window.__valuations].reverse()};
+  if(config.url==='/products') {
+    if(config.method==='get') data={data:catalogue,total:catalogue.length};
+    else {
+      if(window.__holdProduct)await new Promise(resolve=>{window.__releaseProduct=resolve;});
+      if(window.__failProduct)throw new Error('No se pudo crear el producto de prueba');
+      const created={...body,id:'created-'+catalogue.length,enabled:true,on_hand_quantity:'0'};
+      catalogue.push(created);data={product:created};
+    }
+  }
+  else if(config.url.endsWith('/valuation/history')) data={data:[...window.__valuations].reverse()};
   else if(config.url.endsWith('/valuation')) {
     if(config.method==='get') data={batch,status:window.__valuations.at(-1)?.status||'pending',current:window.__valuations.at(-1)||null};
     else {
@@ -41,6 +52,6 @@ api.defaults.adapter=async config=>{
   return {data,status:200,statusText:'OK',headers:{},config};
 };
 createRoot(document.getElementById('root')).render(query.has('receipt')
-  ? <ReceiptModal products={[product,{id:'product-two',name:'Segundo producto',unit:'L',enabled:true,on_hand_quantity:'0'},...Array.from({length:10},(_,i)=>({id:'extra-'+i,name:'Producto adicional '+(i+1),unit:'kg',enabled:true}))]} product={product} enabled canEdit canCreate={query.has('create')} onCreate={()=>{window.__createCount=(window.__createCount||0)+1;}} onClose={()=>{window.__closed=true;}} onSaved={()=>{window.__saved=true;window.__saveCount=(window.__saveCount||0)+1;}} />
+  ? <ReceiptModal products={receiptProducts} product={product} enabled={!query.has('legacy')} canEdit canCreate={query.has('create')} onProductCreated={p=>{window.__createdProduct=p;}} onClose={()=>{window.__closed=true;}} onSaved={()=>{window.__saved=true;window.__saveCount=(window.__saveCount||0)+1;}} />
   : <ProductDetailDrawer product={product} enabled canEdit={!query.has('readonly')} mobile={innerWidth<600}
       onClose={()=>{}} onReceipt={()=>{}} onAdjust={()=>{}} revision={0}/>);

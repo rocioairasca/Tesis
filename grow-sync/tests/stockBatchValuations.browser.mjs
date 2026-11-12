@@ -259,8 +259,122 @@ test('receipt validates zero, protects draft edits and reuses idempotency key af
   const result=await page.evaluate(()=>({requests:window.__requests.filter(r=>r.method==='post'),saved:window.__saveCount}));
   assert.equal(result.requests.length,2);assert.equal(result.requests[0].key,result.requests[1].key);assert.equal(result.saved,1);
 });
-test('create product remains in section header and keeps existing callback',async t=>{
-  const page=await open(t,390,'?receipt&create');
-  await page.locator('.inventory-receipt-heading').getByRole('button',{name:'Crear nuevo producto',exact:true}).click();
-  assert.equal(await page.evaluate(()=>window.__createCount),1);
+
+const receiptDialog=page=>page.getByRole('dialog',{name:'Registrar ingreso',exact:true});
+const quickDialog=page=>page.getByRole('dialog',{name:'Crear nuevo producto',exact:true});
+async function quickSelect(page,label,value){
+  await quickDialog(page).getByLabel(label,{exact:true}).press('ArrowDown');
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:new RegExp('^'+value+'$')}).click();
+}
+async function seedReceipt(page){
+  const receipt=receiptDialog(page);
+  await receipt.getByLabel('Fecha de ingreso',{exact:true}).fill('2020-01-02');
+  await receipt.getByLabel('Proveedor',{exact:true}).fill('Proveedor conservado');
+  await select(page,'Tipo de comprobante','Remito');
+  await receipt.getByLabel('Número de comprobante',{exact:true}).fill('R-456');
+  await receipt.getByLabel('Notas',{exact:true}).fill('Notas conservadas');
+  await receipt.getByPlaceholder('MM/AAAA').fill('07/2030');await receipt.getByPlaceholder('MM/AAAA').press('Tab');
+  await addReceiptItem(page,null,'3.25');
+  await receipt.getByRole('spinbutton').fill('2.5');
+  await receipt.getByPlaceholder('MM/AAAA').fill('09/2031');await receipt.getByPlaceholder('MM/AAAA').press('Tab');
+  await receipt.getByLabel('Producto',{exact:true}).fill('Metribuzin 48');
+}
+async function preservedReceipt(page){
+  const receipt=receiptDialog(page);
+  assert.equal(await receipt.getByLabel('Fecha de ingreso',{exact:true}).inputValue(),'2020-01-02');
+  assert.equal(await receipt.getByLabel('Proveedor',{exact:true}).inputValue(),'Proveedor conservado');
+  assert.equal(await receipt.getByLabel('Número de comprobante',{exact:true}).inputValue(),'R-456');
+  assert.equal(await receipt.getByLabel('Notas',{exact:true}).inputValue(),'Notas conservadas');
+  assert.equal(Number((await receipt.getByRole('spinbutton').inputValue()).replace(',','.')),2.5);
+  assert.equal(await receipt.getByPlaceholder('MM/AAAA').inputValue(),'09/2031');
+  assert.equal(await receiptRows(page).count(),1);
+  assert.match(await receiptRows(page).innerText(),/3,25/);assert.match(await receiptRows(page).innerText(),/07\/2030/);
+}
+async function openQuick(page){
+  await receiptDialog(page).getByRole('button',{name:'Crear nuevo producto',exact:true}).click();
+  await quickDialog(page).waitFor();
+}
+for(const width of [1440,1024,390])test('quick product preserves receipt on cancel/X and selects created identity without stock '+width,async t=>{
+  const page=await open(t,width,'?receipt&create');const url=page.url(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',m=>{if(m.type()==='error'&&!/Static function can not consume context/.test(m.text()))errors.push(m.text());});
+  await seedReceipt(page);await openQuick(page);const quick=quickDialog(page);
+  assert.equal(await quick.getByLabel('Nombre',{exact:true}).inputValue(),'Metribuzin 48');
+  await preservedReceipt(page);assert.equal(await page.locator('.ant-drawer-open').count(),0);
+  await quick.getByRole('button',{name:'Cancelar',exact:true}).click();await quick.waitFor({state:'hidden'});
+  await preservedReceipt(page);assert.equal(await receiptDialog(page).getByLabel('Producto',{exact:true}).inputValue(),'Metribuzin 48');
+  await openQuick(page);await quick.getByRole('button',{name:/Close|Cerrar/}).click();await quick.waitFor({state:'hidden'});
+  await preservedReceipt(page);await openQuick(page);
+  await quickSelect(page,'Categoría','Agroquímicos');await quickSelect(page,'Unidad base','L');
+  await quick.getByLabel('Descripción',{exact:true}).fill('Descripción documental');
+  assert.equal(await quick.getByLabel('Stock mínimo',{exact:true}).count(),0);
+  await noOverflow(page);
+  if(process.env.INVENTORY_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.INVENTORY_SCREENSHOT_DIR,'quick-product-'+width+'.png'),fullPage:true});
+  await quick.getByRole('button',{name:'Crear y usar',exact:true}).click();await quick.waitFor({state:'hidden'});
+  await preservedReceipt(page);
+  await receiptDialog(page).locator('.inventory-receipt-product .ant-select-selection-item').getByText('Metribuzin 48',{exact:true}).waitFor();
+  assert.equal(await receiptDialog(page).getByLabel('Unidad',{exact:true}).inputValue(),'L');
+  assert.equal(page.url(),url);
+  const creation=await page.evaluate(()=>({posts:window.__requests.filter(r=>r.method==='post'),created:window.__createdProduct}));
+  assert.equal(creation.posts.length,1);assert.equal(creation.posts[0].url,'/products');
+  assert.deepEqual(creation.posts[0].body,{name:'Metribuzin 48',category:'agroquimicos',unit:'L',notes:'Descripción documental'});
+  assert.equal(creation.created.on_hand_quantity,'0');
+  await receiptDialog(page).getByRole('button',{name:'Agregar',exact:true}).click();await entryCleared(page);
+  await receiptDialog(page).getByRole('button',{name:'Registrar ingreso',exact:true}).click();await page.waitForFunction(()=>window.__saved);
+  const receipt=await page.evaluate(()=>window.__requests.find(r=>r.url==='/products/receipts').body);
+  assert.equal(receipt.items.length,2);assert.equal(receipt.items[0].quantity,'3.250000');
+  assert.equal(receipt.items[1].product_id,creation.created.id);assert.equal(receipt.items[1].quantity,'2.500000');
+  assert.equal(receipt.items[1].expiration_month,9);assert.equal(receipt.document_type,'Remito');
+  assert.equal(receipt.supplier,'Proveedor conservado');assert.equal(receipt.reference,'R-456');assert.equal(receipt.notes,'Notas conservadas');
+  assert.deepEqual(errors,[]);
+});
+
+test('quick product errors preserve both forms and repeated submit sends one POST while busy',async t=>{
+  const page=await open(t,390,'?receipt&create');await seedReceipt(page);await openQuick(page);
+  const quick=quickDialog(page);await quickSelect(page,'Categoría','Agroquímicos');await quickSelect(page,'Unidad base','L');
+  await quick.getByLabel('Descripción',{exact:true}).fill('Conservar descripción');
+  await page.evaluate(()=>{window.__holdProduct=true;window.__failProduct=true;});
+  await page.waitForFunction(()=>!document.querySelector('.inventory-quick-product-modal button[type=submit]').disabled);
+  await quick.locator('form').evaluate(form=>{form.requestSubmit();form.requestSubmit();});
+  await page.waitForFunction(()=>typeof window.__releaseProduct==='function');
+  assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method==='post').length),1);
+  assert(await quick.locator('button[type=submit]').isDisabled());
+  assert(await quick.getByRole('button',{name:'Cancelar',exact:true}).isDisabled());
+  await page.evaluate(()=>window.__releaseProduct());
+  await page.getByText('No se pudo crear el producto de prueba',{exact:true}).waitFor();
+  await preservedReceipt(page);assert.equal(await quick.getByLabel('Nombre',{exact:true}).inputValue(),'Metribuzin 48');
+  assert.equal(await quick.getByLabel('Descripción',{exact:true}).inputValue(),'Conservar descripción');
+  await page.evaluate(()=>{window.__holdProduct=false;window.__failProduct=false;});
+  await quick.getByRole('button',{name:'Crear y usar',exact:true}).click();await quick.waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method==='post').length),2);
+  await preservedReceipt(page);
+});
+
+test('quick product reuses similarity warning and existing product without navigating or creating stock',async t=>{
+  const page=await open(t,1440,'?receipt&create');await addReceiptItem(page,null);
+  await receiptDialog(page).getByLabel('Producto',{exact:true}).fill('Segundo producto');
+  await receiptDialog(page).getByLabel('Producto',{exact:true}).fill('');await openQuick(page);
+  const quick=quickDialog(page);assert.equal(await quick.getByLabel('Nombre',{exact:true}).inputValue(),'');
+  await quick.getByLabel('Nombre',{exact:true}).fill('Segundo producto');await quick.getByText('Ya existe un producto con este nombre.',{exact:true}).waitFor();
+  await quick.getByRole('button',{name:'Usar este producto',exact:true}).click();await quick.waitFor({state:'hidden'});
+  await receiptDialog(page).locator('.inventory-receipt-product .ant-select-selection-item').getByText('Segundo producto',{exact:true}).waitFor();
+  assert.equal(await receiptRows(page).count(),1);assert.equal(await receiptDialog(page).getByLabel('Unidad',{exact:true}).inputValue(),'L');
+  assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method==='post').length),0);
+});
+
+
+test('quick product also preserves the compatible single-product receipt',async t=>{
+  const page=await open(t,390,'?receipt&create&legacy'),receipt=receiptDialog(page);
+  await receipt.getByRole('spinbutton').fill('4');
+  await receipt.getByLabel('Producto',{exact:true}).fill('Producto contextual');
+  // The legacy selector opens above its existing create link; close that popup with the keyboard.
+  await receipt.getByLabel('Producto',{exact:true}).press('Escape');await openQuick(page);
+  const quick=quickDialog(page);assert.equal(await quick.getByLabel('Nombre',{exact:true}).inputValue(),'Producto contextual');
+  await quickSelect(page,'Categoría','Fertilizantes');await quickSelect(page,'Unidad base','kg');
+  await quick.getByRole('button',{name:'Crear y usar',exact:true}).click();await quick.waitFor({state:'hidden'});
+  assert.equal(await receipt.getByRole('spinbutton').inputValue(),'4');
+  await receipt.locator('.ant-select-selection-item').getByText('Producto contextual',{exact:true}).waitFor();
+  await receipt.getByText('Unidad base: kg',{exact:true}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.__requests.filter(r=>r.method==='post').map(r=>r.url)),['/products']);
+  await noOverflow(page);
 });

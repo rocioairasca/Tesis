@@ -133,7 +133,7 @@ export default function Inventory() {
         onUse={p=>{setIdentity(null);setSimilarDetail(p);setDetailId(p.id);}}
         onReceipt={p=>{setIdentity(null);setProducts(list=>list.some(x=>x.id===p.id)?list:[...list,p]);setReceipt({product:p});}} />}
     </Drawer>
-    {receipt && <ReceiptModal products={products} product={receipt.product} enabled={enabled} canEdit={canEdit && ready} canCreate={canCreate} onCreate={() => { setReceipt(null); openIdentity(null); }} onClose={() => setReceipt(null)} onSaved={fetchProducts} />}
+    {receipt && <ReceiptModal products={products} product={receipt.product} enabled={enabled} canEdit={canEdit && ready} canCreate={canCreate} canViewDisabled={canViewDisabled} onProductCreated={p=>setProducts(list=>list.some(x=>x.id===p.id)?list:[...list,p])} onClose={() => setReceipt(null)} onSaved={fetchProducts} />}
     {detail && <ProductDetailDrawer product={detail} enabled={enabled} canEdit={canEdit && ready&&detail.enabled!==false} mobile={mobile} onClose={() => setDetailId(null)} onReceipt={p => setReceipt({ product: p })} onAdjust={setAdjustment} revision={revision} />}
     {adjustment&&<AdjustmentModal product={adjustment} enabled={enabled} canEdit={canEdit&&ready} onClose={()=>setAdjustment(null)} onSaved={p=>{setProducts(list=>list.map(x=>x.id===p.id?p:x));fetchProducts();}}/>}
   </div>;

@@ -1,3 +1,4 @@
+import QuickProductModal from './QuickProductModal';
 import {inventoryReceiptPayload} from '../inventoryReceiptModel.mjs';
 import './ReceiptModal.css';
 import {formatNumber} from '../../../utils/numberFormat';
@@ -22,6 +23,8 @@ export function ReceiptExpirationField({ name = 'expiration_period', components 
 
 function SingleReceiptModal({ products, product, enabled, canEdit, canCreate, onCreate, onClose, onSaved }) {
   const [form] = Form.useForm();
+  const [productSearch,setProductSearch]=useState('');
+  const productOpen=useRef(false);
   const productId = Form.useWatch('product_id', form);
   const selected = products.find(p => p.id === productId);
   const [preview, setPreview] = useState(null);
@@ -70,10 +73,10 @@ function SingleReceiptModal({ products, product, enabled, canEdit, canCreate, on
       <Space wrap><Button disabled={saving} onClick={() => setPreview(null)}>Volver</Button><Button type="primary" loading={saving} disabled={!canEdit} onClick={confirm}>Confirmar ingreso</Button></Space>
     </> : <Form form={form} layout="vertical" onFinish={prepare} initialValues={{ product_id: product?.id, unit:normalizeUnit(product?.unit) }}>
       <Form.Item name="product_id" label="Producto" rules={[{ required: true, message: 'Seleccioná un producto.' }]}>
-        <Select showSearch optionFilterProp="label" placeholder="Buscar producto..." options={products.map(p => ({ value: p.id, label: p.name }))}
-          onChange={id=>form.setFieldsValue({unit:normalizeUnit(products.find(p=>p.id===id)?.unit)})} />
+        <Select showSearch onOpenChange={open=>{productOpen.current=open;}} searchValue={productSearch} onSearch={value=>{if(value||productOpen.current)setProductSearch(value);}} optionFilterProp="label" placeholder="Buscar producto..." options={products.map(p => ({ value: p.id, label: p.name }))}
+          onChange={id=>{setProductSearch('');form.setFieldsValue({unit:normalizeUnit(products.find(p=>p.id===id)?.unit)});}} />
       </Form.Item>
-      {canCreate && <Button type="link" style={{ paddingLeft: 0 }} onClick={onCreate}>Crear nuevo producto</Button>}
+      {canCreate && <Button type="link" style={{ paddingLeft: 0 }} onClick={()=>onCreate({name:productSearch,onUse:p=>{form.setFieldsValue({product_id:p.id,unit:normalizeUnit(p.unit)});setProductSearch('');}})}>Crear nuevo producto</Button>}
       <QuantityUnitFields quantityName="quantity" unitName="unit" baseUnit={selected?.unit} allowConversion={enabled} previewPrefix="Se registrarán" />
       {enabled && <>
         <Form.Item name="received_date" label="Fecha de ingreso" rules={[{ required: true, message: 'Ingresá la fecha de ingreso.' }]}><Input type="date" /></Form.Item>
@@ -90,21 +93,36 @@ function SingleReceiptModal({ products, product, enabled, canEdit, canCreate, on
   </Modal>;
 }
 
-// Keep the legacy non-batch branch intact. Inventory V1 uses one receipt for all lines.
+// Both receipt variants keep their mounted forms while creating product identity only.
 export default function ReceiptModal(props) {
-  return props.enabled ? <MultiReceiptModal {...props} /> : <SingleReceiptModal {...props} />;
+  const [quickCreate,setQuickCreate]=useState(null),[addedProducts,setAddedProducts]=useState([]);
+  const products=[...props.products,...addedProducts.filter(p=>!props.products.some(item=>item.id===p.id))];
+  const useProduct=p=>{
+    setAddedProducts(list=>list.some(item=>item.id===p.id)?list:[...list,p]);
+    props.onProductCreated?.(p);
+    quickCreate.onUse(p);
+    setQuickCreate(null);
+  };
+  const receiptProps={...props,products,onCreate:setQuickCreate};
+  return <>
+    {props.enabled ? <MultiReceiptModal {...receiptProps}/> : <SingleReceiptModal {...receiptProps}/>}
+    {quickCreate&&<QuickProductModal initialName={quickCreate.name} canCreate={props.canCreate}
+      canViewDisabled={props.canViewDisabled} onUse={useProduct} onClose={()=>setQuickCreate(null)}/>}
+  </>;
 }
 function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,onSaved}) {
   const [form]=Form.useForm(),[entryForm]=Form.useForm();
   const [items,setItems]=useState([]),[editingId,setEditingId]=useState(null),[saving,setSaving]=useState(false);
+  const [productSearch,setProductSearch]=useState('');
   const selectedId=Form.useWatch('product_id',entryForm);
   const selected=products.find(p=>p.id===selectedId);
   const retry=useRef(null),busy=useRef(false),adding=useRef(false),productInput=useRef(null),editor=useRef(null);
   const productOpen=useRef(false),expirationOpen=useRef(false);
+  // Ignore Select's automatic empty search after closing; explicit edits/selection still clear it.
   const clearEntry=()=>{
     entryForm.resetFields();
     entryForm.setFieldsValue({product_id:undefined,quantity:undefined,expiration_period:null});
-    setEditingId(null);
+    setEditingId(null);setProductSearch('');
     requestAnimationFrame(()=>productInput.current?.focus());
   };
   const addItem=async()=>{
@@ -121,7 +139,7 @@ function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,
     finally{adding.current=false;}
   };
   const editItem=item=>{
-    entryForm.resetFields();entryForm.setFieldsValue(item);setEditingId(item.product_id);
+    setProductSearch('');entryForm.resetFields();entryForm.setFieldsValue(item);setEditingId(item.product_id);
     editor.current?.scrollIntoView({block:'nearest'});productInput.current?.focus();
   };
   const removeItem=item=>{
@@ -156,7 +174,7 @@ function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,
       </div>
       <Form.Item name="notes" label="Notas"><Input.TextArea maxLength={2000} autoSize={{minRows:2,maxRows:4}}/></Form.Item>
       <div className="inventory-receipt-heading"><h3>Productos</h3>
-        {canCreate&&<Button type="link" onClick={onCreate}>Crear nuevo producto</Button>}
+        {canCreate&&<Button type="link" onClick={()=>onCreate({name:productSearch,onUse:p=>{entryForm.setFieldsValue({product_id:p.id});setProductSearch('');requestAnimationFrame(()=>productInput.current?.focus());}})}>Crear nuevo producto</Button>}
       </div>
       <Form form={entryForm} component={false} layout="vertical" disabled={saving} initialValues={{product_id:product?.id}}>
         <div ref={editor} className="inventory-receipt-entry" onKeyDown={event=>{
@@ -169,7 +187,7 @@ function MultiReceiptModal({products,product,canEdit,canCreate,onCreate,onClose,
               {required:true,message:'Seleccioná un producto.'},
               {validator:(_,id)=>items.some(i=>i.product_id===id&&i.product_id!==editingId)?Promise.reject(new Error('Este producto ya está en la lista.')):Promise.resolve()},
             ]}>
-              <Select ref={productInput} showSearch allowClear optionFilterProp="label" placeholder="Buscar producto..." onOpenChange={open=>{productOpen.current=open;}}
+              <Select ref={productInput} showSearch searchValue={productSearch} onSearch={value=>{if(value||productOpen.current)setProductSearch(value);}} onChange={()=>setProductSearch('')} allowClear optionFilterProp="label" placeholder="Buscar producto..." onOpenChange={open=>{productOpen.current=open;}}
                 options={products.filter(p=>p.enabled!==false).map(p=>({value:p.id,label:p.name,disabled:items.some(i=>i.product_id===p.id&&i.product_id!==editingId)}))}/>
             </Form.Item>
             <Form.Item name="quantity" label="Cantidad" rules={[{required:true,message:'Ingresá la cantidad.'},{validator:(_,quantity)=>{

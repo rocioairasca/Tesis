@@ -43,3 +43,11 @@
   .inventory-receipt-mobile { display: block; font-size: 13px; }
   .inventory-receipt-row-actions { justify-content: flex-end; }
 }
+
+.inventory-quick-product-modal { max-width: calc(100vw - 24px); }
+.inventory-quick-product-modal .ant-modal-content { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.inventory-quick-product-help { color: var(--ant-color-text-secondary, #66715f); margin: 0 0 16px; }
+.inventory-quick-product-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+@media (max-width: 575px) {
+  .inventory-quick-product-fields { grid-template-columns: minmax(0,1fr); gap: 0; }
+}
