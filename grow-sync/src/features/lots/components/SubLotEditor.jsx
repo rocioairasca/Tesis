@@ -1,3 +1,4 @@
+import {formatNumber} from '../../../utils/numberFormat';
 import * as turf from '@turf/turf';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -28,7 +29,7 @@ import L from '../../../utils/leafletGeoman';
 import { ensureLeafletGeoman } from '../../../utils/leafletGeoman';
 import { useLeafletGeoman } from '../../../hooks/useLeafletGeoman';
 import MapViewport from '../../../components/MapViewport';
-import { geometryBounds, leafletBounds } from '../../../utils/mapGeometry.mjs';
+import { displayGeometry, geometryBounds, leafletBounds } from '../../../utils/mapGeometry.mjs';
 import 'leaflet/dist/leaflet.css';
 
 import {
@@ -63,14 +64,8 @@ const toNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const formatHa = (value) => toNumber(value).toLocaleString('es-AR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const formatPercent = (value) => toNumber(value).toLocaleString('es-AR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const formatHa = value => formatNumber(toNumber(value));
+const formatPercent = value => formatNumber(toNumber(value));
 
 const getDraftId = (subLot) => subLot?.client_id || subLot?.id;
 
@@ -801,7 +796,7 @@ const DrawControls = ({ enabled, drawing, onDrawingChange, onSnapChange, onCreat
   return null;
 };
 
-const EditableSubLotPolygon = ({ subLot, index, editable, geomanReady, drawing, onEdit, onSnapChange, onError }) => {
+const EditableSubLotPolygon = ({ subLot, index, editable, geomanReady, drawing, onEdit, onSnapChange, onError, summary = false }) => {
   const map = useMap();
   const ref = useRef(null);
   const frameRef = useRef(null);
@@ -875,8 +870,8 @@ const EditableSubLotPolygon = ({ subLot, index, editable, geomanReady, drawing, 
       }}
     >
       {!drawing && (
-        <LeafletTooltip direction="center" opacity={0.95}>
-          {subLot.name} - {formatHa(subLot.area_ha)} ha
+        <LeafletTooltip direction="center" opacity={0.95} permanent={summary} className={summary?"lot-detail-map-label":undefined}>
+          {summary?<><strong>{subLot.name || subLot.code}</strong><br/>{formatHa(subLot.area_ha)} ha</>:<>{subLot.name} - {formatHa(subLot.area_ha)} ha</>}
         </LeafletTooltip>
       )}
     </Polygon>
@@ -927,6 +922,8 @@ const SubLotEditor = ({
   onSaveChanges,
   onDirtyChange,
   isMobile = false,
+  viewMode = 'editor',
+  summaryLayout = null,
 }) => {
   const [drawing, setDrawing] = useState(false);
   const [snapActive, setSnapActive] = useState(false);
@@ -1327,7 +1324,14 @@ const SubLotEditor = ({
     }
   }, [dirty, draftSubLots, editable, onSaveChanges]);
 
-  if (!parentGeometry) {
+  const summary=viewMode==='summary';
+  const displayParentGeometry=summary
+    ? getParentFeature(summaryLayout)?.geometry || displayGeometry(lot?.location ?? lot?.geom)
+    : parentGeometry;
+  const displaySubLots=summary?(summaryLayout?.sub_lots||[]).filter(sub=>sub.enabled!==false):draftSubLots;
+  const displayBounds=leafletBounds(geometryBounds([displayParentGeometry]));
+
+  if (!displayParentGeometry) {
     return (
       <Alert
         type="warning"
@@ -1342,22 +1346,22 @@ const SubLotEditor = ({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(300px, 370px)',
+        gridTemplateColumns: summary || isMobile ? '1fr' : 'minmax(0, 1fr) minmax(300px, 370px)',
         gap: 16,
       }}
-      className="sub-lot-editor"
+      className={summary?"sub-lot-editor lot-detail-summary-map":"sub-lot-editor"}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ height: isMobile ? 420 : 580, width: '100%', border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden' }}>
-          {geometryBounds([parentGeometry]) ? <MapContainer
-            bounds={leafletBounds(geometryBounds([parentGeometry]))}
+        <div style={{ height: summary ? 340 : isMobile ? 420 : 580, width: '100%', border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden' }}>
+          {geometryBounds([displayParentGeometry]) ? <MapContainer
+            bounds={leafletBounds(geometryBounds([displayParentGeometry]))}
             zoom={14}
             style={{ height: '100%', width: '100%' }}
           >
             <MapRefBinder mapRef={mapRef} />
-            <MapViewport bounds={editable ? null : leafletBounds(geometryBounds([parentGeometry]))} />
+            <MapViewport bounds={!summary&&editable ? null : displayBounds} requestKey={viewMode} />
             <MapGeomanInitializer
-              enabled={editable && packageGeomanReady}
+              enabled={!summary && editable && packageGeomanReady}
               onReadyChange={setMapGeomanReady}
               onError={handleGeomanError}
             />
@@ -1371,26 +1375,27 @@ const SubLotEditor = ({
               opacity={0.45}
             />
             <SnapReferencePolygon
-              key={`parent-${layout?.id || lot?.id}`}
-              geometry={parentGeometry}
+              key={`parent-${summary?summaryLayout?.id:layout?.id}-${lot?.id}`}
+              geometry={displayParentGeometry}
             />
-            {draftSubLots.map((subLot, index) => (
+            {displaySubLots.map((subLot, index) => (
               <EditableSubLotPolygon
-                key={getDraftId(subLot)}
+                key={`${summary?'summary':'editor'}-${getDraftId(subLot)}`}
                 subLot={subLot}
                 index={index}
-                editable={editable && geomanReady}
-                geomanReady={geomanReady}
-                drawing={drawing}
+                editable={!summary && editable && geomanReady}
+                summary={summary}
+                geomanReady={!summary && geomanReady}
+                drawing={!summary && drawing}
                 onEdit={handleEdit}
                 onSnapChange={setSnapActive}
                 onError={handleGeomanError}
               />
             ))}
-            {geomanReady ? (
+            {!summary && geomanReady ? (
               <DrawControls
                 enabled={editable && geomanReady}
-                drawing={drawing}
+                drawing={!summary && drawing}
                 onDrawingChange={setDrawing}
                 onSnapChange={setSnapActive}
                 onCreate={handleCreate}
@@ -1398,11 +1403,11 @@ const SubLotEditor = ({
               />
             ) : null}
             <SurfacePlacementHandler
-              enabled={editable && Boolean(surfacePlacement)}
+              enabled={!summary && editable && Boolean(surfacePlacement)}
               onPick={handleSurfacePick}
               onMove={setSurfacePreviewPoint}
             />
-            {surfacePlacement?.cutPoints?.length === 1 && surfacePreviewPoint ? (
+            {!summary && surfacePlacement?.cutPoints?.length === 1 && surfacePreviewPoint ? (
               <Polyline
                 positions={[
                   [surfacePlacement.cutPoints[0][1], surfacePlacement.cutPoints[0][0]],
@@ -1411,12 +1416,12 @@ const SubLotEditor = ({
                 pathOptions={{ color: '#1677ff', weight: 2, dashArray: '6 6' }}
               />
             ) : null}
-            {editable && <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />}
+            {!summary && editable && <FitBounds parentGeometry={parentGeometry} fitKey={layout?.id || lot?.id} />}
           </MapContainer> : <Empty description="No hay una geometría válida del lote para mostrar las divisiones." />}
         </div>
       </div>
 
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      {summary?<div className="lot-detail-map-actions"><Button size="small" icon={<AimOutlined/>} onClick={()=>{if(displayBounds)mapRef.current?.fitBounds(displayBounds,{padding:[24,24],maxZoom:16});}}>Centrar mapa</Button></div>:<Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap>
           <Tooltip title="Centrar mapa en el lote">
             <Button icon={<AimOutlined />} onClick={handleCenterMap}>
@@ -1617,11 +1622,11 @@ const SubLotEditor = ({
             </Button>
           ) : null}
         </Space>
-      </Space>
+      </Space>}
     </div>
     <Modal
       title="Dividir por superficie"
-      open={surfaceModalOpen}
+      open={!summary && surfaceModalOpen}
       onCancel={() => {
         setSurfaceModalOpen(false);
         setSurfacePlacement(null);

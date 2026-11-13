@@ -1,8 +1,12 @@
+import LotDetailHeader from './components/LotDetailHeader';
+import {LotInformation, LotIndicators} from './components/LotSummary';
+import LotHistoryTimeline from './components/LotHistoryTimeline';
+import {formatNumber} from '../../utils/numberFormat';
+import './lotDetail.css';
 import { campaignContainsWorkDate } from '../../utils/campaigns.mjs';
 import ProductiveStateLabel from './components/ProductiveStateLabel';
 import {unitCampaign} from './productiveStatePresentation.mjs';
 import { campaignLabel, sortCampaigns } from '../../utils/campaigns.mjs';
-import HarvestTrace from '../harvest/HarvestTrace';
 import { calendarDateKey, parseCalendarDate, formatCalendarDate } from '../../utils/calendarDate';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -21,6 +25,7 @@ import {
   Space,
   Spin,
   Tag,
+  Tabs,
   Typography,
   notification,
 } from 'antd';
@@ -32,23 +37,17 @@ import useIsMobile from '../../hooks/useIsMobile';
 import { PERMISSIONS } from '../../constants/permissions';
 import { hasPermission } from '../../utils/permissions';
 import {
-  ArrowLeftOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
-  PlusOutlined,
-  SyncOutlined,
 } from '../../components/AppIcons';
 import SubLotEditor from './components/SubLotEditor';
 import LotSoilAnalysisSummary from './soilAnalysis/LotSoilAnalysisSummary';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const getId = (record) => record?.id ?? record?._id;
-const formatHa = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00';
-};
+const formatHa = value => formatNumber(value);
 
 const formatPercent = (value) => {
   const n = Number(value);
@@ -58,21 +57,6 @@ const formatPercent = (value) => {
 const formatDate = (value) => {
   if (!value) return 'Actual';
   return formatCalendarDate(value, 'Actual');
-};
-
-const formatActivity = (value) => {
-  const labels = {
-    siembra: 'Siembra',
-    fumigacion: 'Fumigación',
-    fertilizacion: 'Fertilización',
-    cosecha: 'Cosecha',
-    riego: 'Riego',
-    mantenimiento: 'Mantenimiento',
-    otro: 'Actividad',
-    uso_producto: 'Uso de producto',
-    ciclo_cultivo: 'Ciclo de cultivo',
-  };
-  return labels[value] || value || 'Actividad';
 };
 
 const toDateKey = (value) => calendarDateKey(value);
@@ -159,6 +143,8 @@ const LotDivisions = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+  const [activeTab,setActiveTab]=useState('summary');
+  const [historyFilters,setHistoryFilters]=useState({});
   const [lot, setLot] = useState(null);
   const [layouts, setLayouts] = useState([]);
   const [selectedLayoutId, setSelectedLayoutId] = useState(null);
@@ -327,6 +313,7 @@ const LotDivisions = () => {
       });
       const layout = data?.layout || data;
       notification.success({ message: 'Nueva división creada' });
+      setActiveTab('divisions');
       await refreshAll(layout.id);
     } catch (error) {
       console.error('Error al crear división:', error);
@@ -672,112 +659,10 @@ const LotDivisions = () => {
     </Card>
   );
 
-  const renderHistoryProducts = (products = []) => {
-    if (!products.length) return null;
-
-    return (
-      <Space direction="vertical" size={2}>
-        <Text type="secondary">{products.length === 1 ? 'Producto' : 'Productos'}</Text>
-        {products.map((product) => (
-          <Text key={`${product.product_id}-${product.name}`}>
-            {product.name || 'Producto'}
-            {' · '}
-            {Number(product.amount || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
-            {product.unit ? ` ${product.unit}` : ''}
-          </Text>
-        ))}
-      </Space>
-    );
-  };
-
-  const renderHistoryDetails = (event) => {
-    if (event.type === 'harvest_closure') {
-      const labels = { measurement_difference: 'Diferencia de medición', unharvested_area: 'Superficie no cosechada', loss: 'Pérdida', weather: 'Condiciones climáticas', other: 'Otro' };
-      return <Space direction="vertical" size={2}>
-        <Text>Motivo: {labels[event.details?.reason] || event.details?.reason}</Text>
-        <Text>Usuario: {event.details?.created_by || 'No documentado'} · Total: {formatHa(event.details?.total_area_ha)} ha</Text>
-        <Text>Cosechado al finalizar: {formatHa(event.details?.harvested_area_ha)} ha · Pendiente al finalizar: {formatHa(event.details?.remaining_area_ha)} ha</Text>
-        {event.details?.notes && <Text>{event.details.notes}</Text>}
-      </Space>;
-    }
-    if (event.type === 'harvest') {
-      return (
-        <Space direction="vertical" size={2}>
-          <HarvestTrace record={event} />
-          {event.details?.yield_kg_ha != null && (
-            <Text>Rendimiento: {Number(event.details.yield_kg_ha).toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg/ha</Text>
-          )}
-          {event.details?.production_kg != null && (
-            <Text>Producción: {Number(event.details.production_kg).toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg</Text>
-          )}
-        </Space>
-      );
-    }
-
-    if (event.type === 'crop_cycle') {
-      return (
-        <Text type="secondary">
-          {formatDate(event.details?.start_date)} - {formatDate(event.details?.end_date)}
-        </Text>
-      );
-    }
-
-    return null;
-  };
-
-  const renderProductiveHistory = () => (
-    <Card size="small" title="Historial del lote">
-      <List
-        dataSource={history}
-        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No hay actividades registradas" /> }}
-        renderItem={(event) => {
-          const isManualCropCycle = event.type === 'crop_cycle';
-          const cropAssignment = isManualCropCycle ? {
-            ...event,
-            id: event.source_id,
-            crop_name: event.crop,
-            campaign_name: event.campaign,
-            start_date: event.details?.start_date,
-            end_date: event.details?.end_date,
-          } : null;
-
-          return (
-            <List.Item
-              actions={canManageProductiveState && isManualCropCycle ? [
-                <Button type="link" size="small" onClick={() => openCropModal({ mode: 'edit', assignment: cropAssignment })}>
-                  Editar
-                </Button>,
-              ] : []}
-            >
-              <List.Item.Meta
-                title={(
-                  <Space wrap>
-                    <Text strong>{event.title || formatActivity(event.activity_type)}</Text>
-                    {event.campaign && <Tag>{event.campaign}</Tag>}
-                    {event.registered_retroactively && <Tag>Registrada posteriormente</Tag>}
-                  </Space>
-                )}
-                description={(
-                  <Space direction="vertical" size={4}>
-                    <Text type="secondary">
-                      {formatDate(event.event_date)}
-                      {' · '}
-                      {event.sub_lot_name || 'Lote completo'}
-                      {event.area_ha ? ` · ${formatHa(event.area_ha)} ha` : ''}
-                    </Text>
-                    {event.crop && <Text>Cultivo: {event.crop}</Text>}
-                    {renderHistoryProducts(event.products)}
-                    {renderHistoryDetails(event)}
-                    {event.description && <Text type="secondary">{event.description}</Text>}
-                  </Space>
-                )}
-              />
-            </List.Item>
-          );
-        }}
-      />
-    </Card>
-  );
+  const editHistoryCycle=event=>openCropModal({mode:'edit',assignment:{
+    ...event,id:event.source_id,crop_name:event.crop,campaign_name:event.campaign,
+    start_date:event.details?.start_date,end_date:event.details?.end_date,
+  }});
 
   const confirmDiscardSubLotChanges = (onDiscard) => {
     if (!subLotDirty) {
@@ -861,116 +746,53 @@ const LotDivisions = () => {
     );
   }
 
+  const activeSubLots=(activeLayout?.sub_lots || []).filter(sub=>sub.enabled!==false);
+  const cropNames=Array.from(new Set([...history.map(event=>event.crop),...productiveUnits.flatMap(unit=>(unit.previous_crops||[]).map(crop=>crop.crop_name))].filter(Boolean)));
+  const timeline=condensed=><LotHistoryTimeline history={history} filters={historyFilters} onFiltersChange={setHistoryFilters}
+    condensed={condensed} onShowAll={()=>setActiveTab('activities')} onEditCycle={canManageProductiveState?editHistoryCycle:undefined}/>;
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Row justify="space-between" align="middle" gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        <Col>
-          <Space align="center" wrap>
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => confirmDiscardSubLotChanges(() => navigate('/lotes'))}
-              shape={isMobile ? 'circle' : undefined}
-            >
-              {isMobile ? null : 'Volver'}
-            </Button>
-            <div>
-              <Title level={3} style={{ margin: 0 }}>{lot?.name || 'Lote'}</Title>
-              <Text type="secondary">Superficie total: {formatHa(lot?.area_ha || lot?.area)} ha</Text>
-            </div>
-          </Space>
-        </Col>
-        <Col>
-          <Space wrap>
-            <Button icon={<SyncOutlined />} onClick={() => refreshAll(selectedLayoutId)} loading={loading}>
-              Actualizar
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={createDraftLayout} loading={saving}>
-              Nueva división
-            </Button>
-          </Space>
-        </Col>
-      </Row>
-
-      {activeLayout ? (
-        <Alert
-          type="success"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="División actual del lote"
-        />
-      ) : (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Este lote todavía no tiene una división actual."
-        />
-      )}
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={7} order={isMobile ? 2 : 1}>
-          <Card size="small" title="Historial de divisiones">
-            <List
-              dataSource={layouts}
-              loading={loading}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin divisiones" /> }}
-              renderItem={renderLayoutCard}
-            />
+    <div className="lot-detail">
+      <LotDetailHeader lot={lot} divisionCount={activeSubLots.length} loading={loading} saving={saving}
+        canRegister={canManageProductiveState&&productiveUnits.length>0}
+        onBack={()=>confirmDiscardSubLotChanges(()=>navigate('/lotes'))} onRefresh={()=>refreshAll(selectedLayoutId)}
+        onRegister={()=>openCropModal()} onNewDivision={createDraftLayout}/>
+      <Tabs className="lot-detail-tabs" activeKey={activeTab} onChange={setActiveTab} items={[
+        {key:'summary',label:'Resumen'}, {key:'activities',label:'Actividades'},
+        {key:'divisions',label:'Divisiones'}, {key:'soil',label:'Análisis de suelo'},
+      ]}/>
+      <div className={'lot-detail-content lot-detail-content-'+activeTab}>
+        {activeTab==='divisions'&&<aside key="versions" className="lot-detail-versions">
+          <Card size="small" title="Historial de divisiones"><List dataSource={layouts} loading={loading}
+            locale={{emptyText:<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin divisiones"/>}} renderItem={renderLayoutCard}/></Card>
+        </aside>}
+        <div key="map" className="lot-detail-map-column" hidden={!['summary','divisions'].includes(activeTab)}>
+          <Card size="small" className="lot-detail-map-card" title={activeTab==='summary'?'Ubicación y divisiones':
+            <Space wrap><span>{selectedSummary?`Versión ${selectedSummary.version}`:'Editor'}</span>
+              {selectedSummary?.status&&<Tag color={statusColor[selectedSummary.status]||'default'}>{statusLabel[selectedSummary.status]||selectedSummary.status}</Tag>}
+              {validation?.valid&&<CheckCircleOutlined/>}
+            </Space>}>
+            {lot&&<SubLotEditorErrorBoundary boundaryKey={selectedLayout?.id}>
+              <SubLotEditor lot={lot} layout={selectedLayout} editable={editable} validation={validation} saving={saving} isMobile={isMobile}
+                summaryLayout={activeLayout} viewMode={activeTab==='divisions'?'editor':'summary'}
+                onValidate={validateLayout} onActivate={activateLayout} onSaveChanges={saveSubLotChanges} onDirtyChange={setSubLotDirty}/>
+            </SubLotEditorErrorBoundary>}
+            {activeTab==='divisions'&&!selectedLayout&&<Empty description="Seleccioná o creá una división"/>}
           </Card>
-        </Col>
-
-        <Col xs={24} lg={17} order={isMobile ? 1 : 2}>
-          {renderProductiveState()}
-          {lot && getId(lot) === lotId && hasPermission(currentUser, PERMISSIONS.SOIL_ANALYSIS_VIEW) && (
-            <LotSoilAnalysisSummary
-              key={lotId}
-              lotId={lotId}
-              canCreate={hasPermission(currentUser, PERMISSIONS.SOIL_ANALYSIS_CREATE)}
-              onNavigate={path => confirmDiscardSubLotChanges(() => navigate(path))}
-            />
-          )}
-
-          <Card
-            size="small"
-            title={(
-              <Space wrap>
-                <span>
-                  {selectedSummary ? `Versión ${selectedSummary.version}` : 'Editor'}
-                </span>
-                {selectedSummary?.status && (
-                  <Tag color={statusColor[selectedSummary.status] || 'default'}>
-                    {statusLabel[selectedSummary.status] || selectedSummary.status}
-                  </Tag>
-                )}
-                {validation?.valid && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
-              </Space>
-            )}
-          >
-            {selectedLayout ? (
-              <SubLotEditorErrorBoundary boundaryKey={selectedLayout.id}>
-                <SubLotEditor
-                  lot={lot}
-                  layout={selectedLayout}
-                  editable={editable}
-                  validation={validation}
-                  saving={saving}
-                  isMobile={isMobile}
-                  onValidate={validateLayout}
-                  onActivate={activateLayout}
-                  onSaveChanges={saveSubLotChanges}
-                  onDirtyChange={setSubLotDirty}
-                />
-              </SubLotEditorErrorBoundary>
-            ) : (
-              <Empty description="Seleccioná o creá una división" />
-            )}
-          </Card>
-
-          <div style={{ marginTop: 16 }}>
-            {renderProductiveHistory()}
-          </div>
-        </Col>
-      </Row>
+          {activeTab==='summary'&&<LotInformation lot={lot} layout={activeLayout} divisionCount={activeSubLots.length}
+            cropNames={cropNames} units={productiveUnits} productiveDetails={renderProductiveState()}/>}
+        </div>
+        {activeTab==='summary'&&<div key="summary" className="lot-detail-summary-column">
+          <LotIndicators lot={lot} divisionCount={activeSubLots.length} cropCount={cropNames.length} activityCount={history.length}/>
+          {timeline(true)}
+        </div>}
+        {activeTab==='activities'&&<div key="activities" className="lot-detail-activities">{timeline(false)}</div>}
+        <div key="soil" className="lot-detail-soil" hidden={activeTab!=='soil'}>
+          {lot&&getId(lot)===lotId&&hasPermission(currentUser,PERMISSIONS.SOIL_ANALYSIS_VIEW)?
+            <LotSoilAnalysisSummary key={lotId} lotId={lotId} canCreate={hasPermission(currentUser,PERMISSIONS.SOIL_ANALYSIS_CREATE)}
+              onNavigate={path=>confirmDiscardSubLotChanges(()=>navigate(path))}/>
+            :<Alert type="info" message="No tenés permiso para ver los análisis de suelo."/>}
+        </div>
+      </div>
 
       <Modal
         title={cropModal.mode === 'finalize' ? 'Finalizar ciclo' : cropModal.assignment ? 'Editar cultivo' : 'Registrar cultivo'}

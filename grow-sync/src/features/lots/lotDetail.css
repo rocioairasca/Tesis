@@ -1,0 +1,86 @@
+.lot-detail { padding: 24px; min-width: 0; max-width: 100%; background: var(--gs-bg-page, #f6f8fa); }
+.lot-detail [hidden] { display: none !important; }
+.lot-detail-header .ant-breadcrumb { margin-bottom: 12px; }
+.lot-detail-header .ant-breadcrumb .ant-btn { padding: 0; height: auto; }
+.lot-detail-header-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.lot-detail-heading { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.lot-detail-heading>.ant-btn { flex-shrink: 0; }
+.lot-detail-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lot-detail-title h1 { font-size: 26px; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }
+.lot-detail-heading p { color: #64748b; margin: 6px 0 0; }
+.lot-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.lot-detail .ant-btn-primary { background: var(--gs-brand-primary,#437118); border-color: var(--gs-brand-primary,#437118); }
+.lot-detail-tabs { margin-top: 16px; }
+.lot-detail-content { min-width: 0; }
+.lot-detail-content-summary { display: grid; grid-template-columns: minmax(0, 39fr) minmax(0,61fr); gap: 16px; align-items: start; }
+.lot-detail-map-column,.lot-detail-summary-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.lot-detail .ant-card { min-width: 0; border-color: #e5e9e3; box-shadow: none; }
+.lot-detail .ant-card-head { min-height: 46px; }
+.lot-detail .ant-card-head-title { white-space: normal; overflow-wrap: anywhere; }
+.lot-detail .ant-card-body { min-width: 0; }
+.lot-detail-map-actions { display: flex; justify-content: flex-end; }
+.lot-detail-map-label { text-align: center; background: #ffffffee; border: 0; border-radius: 6px; color: #183c2a; box-shadow: 0 1px 4px #0002; line-height: 1.3; }
+.lot-detail-facts { margin: 0; }
+.lot-detail-facts>div { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #f0f2ef; }
+.lot-detail-facts dt,.lot-detail-metrics dt,.lot-history-harvest-metrics dt { color: #64748b; font-size: 12px; }
+.lot-detail-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-size: 13px; }
+.lot-detail-unit-name { font-weight: 500; }
+.lot-detail-information .ant-collapse-content-box { padding: 8px 0 !important; }
+.lot-detail-information .productive-state-card .ant-row { row-gap: 8px !important; }
+.lot-detail-information .ant-list-grid .ant-col { width: 100%; max-width: 100%; }
+.lot-detail-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; gap: 12px; }
+.lot-detail-metrics>div { min-width: 0; padding-right: 8px; border-right: 1px solid #edf0eb; }
+.lot-detail-metrics>div:last-child { border: 0; padding-right: 0; }
+.lot-detail-metrics dd { margin: 4px 0 0; font-size: 21px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+.lot-history-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.lot-history-filters:empty { display: none; }
+.lot-history-filters .ant-select { flex: 1 1 130px; min-width: 0; max-width: 240px; }
+.lot-history-timeline { padding: 0; margin: 0; list-style: none; }
+.lot-history-event { --history-accent: #728073; --history-tint: #f4f6f3; position: relative; display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 10px; padding-bottom: 14px; }
+.lot-history-event:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: #e2e7e0; }
+.lot-history-green { --history-accent: #527d45; --history-tint: #f0f6ec; }
+.lot-history-blue { --history-accent: #4c7a9e; --history-tint: #eff5fa; }
+.lot-history-ochre { --history-accent: #9a7b39; --history-tint: #faf6eb; }
+.lot-history-icon { display: inline-flex; align-items: center; justify-content: center; height: 32px; border-radius: 50%; color: var(--history-accent); background: var(--history-tint); z-index: 1; }
+.lot-history-event article { min-width: 0; padding: 12px; border: 1px solid #e6eae3; border-left: 3px solid var(--history-accent); border-radius: 8px; background: #fff; }
+.lot-history-event-heading { display: flex; justify-content: space-between; align-items: start; gap: 8px; flex-wrap: wrap; }
+.lot-history-event h3 { font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.lot-history-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.lot-history-tags .ant-tag { margin: 0; white-space: normal; }
+.lot-history-metadata { display: flex; flex-wrap: wrap; gap: 3px 12px; color: #64748b; font-size: 12px; margin: 6px 0; overflow-wrap: anywhere; }
+.lot-history-products { margin: 6px 0; padding: 0; list-style: none; font-size: 13px; overflow-wrap: anywhere; }
+.lot-history-note { margin: 6px 0 0; color: #64748b; font-size: 12px; overflow-wrap: anywhere; }
+.lot-history-harvest-metrics { display: flex; gap: 24px; flex-wrap: wrap; margin: 10px 0; }
+.lot-history-harvest-metrics dd { margin: 2px 0 0; font-weight: 600; font-size: 16px; }
+.lot-history-trace { font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+.lot-history-trace p { margin: 2px 0; }
+.lot-history-all { padding-inline: 0; }
+.lot-detail-content-divisions { display: grid; grid-template-columns: minmax(200px,24fr) minmax(0,76fr); gap: 16px; align-items: start; }
+@media (max-width: 1199px) {
+ .lot-detail-header-row { align-items: flex-start; flex-wrap: wrap; }
+ .lot-detail-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .lot-detail-metrics>div:nth-child(even) { border-right: 0; }
+ .lot-detail-content-divisions { grid-template-columns: minmax(0,1fr); }
+ .lot-detail-versions .ant-list-items { display: flex; flex-wrap: wrap; gap: 8px; }
+ .lot-detail-versions .ant-list-item { flex: 1 1 220px; }
+}
+@media (max-width: 767px) {
+ .lot-detail { padding: 12px; }
+ .lot-detail-content-summary { grid-template-columns: minmax(0,1fr); }
+ .lot-detail-header-row { gap: 12px; }
+ .lot-detail-title h1 { font-size: 22px; }
+ .lot-detail-heading p { font-size: 12px; }
+ .lot-detail-actions { justify-content: flex-start; width: 100%; }
+ .lot-detail-actions .ant-btn { padding-inline: 10px; }
+ .lot-detail-tabs .ant-tabs-nav { overflow-x: auto; scrollbar-width: none; }
+ .lot-detail-tabs .ant-tabs-nav-wrap { flex: none; overflow: visible; }
+ .lot-detail-tabs .ant-tabs-nav-operations { display: none !important; }
+ .lot-detail-tabs .ant-tabs-tab { margin-left: 18px; }
+ .lot-detail-tabs .ant-tabs-tab:first-child { margin-left: 0; }
+ .lot-history-event { grid-template-columns: 26px minmax(0,1fr); gap: 8px; }
+ .lot-history-icon { height: 26px; }
+ .lot-history-event:not(:last-child)::before { left: 12px; top: 26px; }
+ .lot-history-event article { padding: 10px; }
+ .lot-history-metadata { flex-direction: column; gap: 2px; }
+ .lot-history-filters .ant-select { max-width: none; }
+}
