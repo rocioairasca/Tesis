@@ -17,7 +17,7 @@ async function open(t,width=1440,flags=''){
 }
 const drawer=page=>page.locator('.ant-drawer-open');
 async function add(page,name,quantity='2'){
- await drawer(page).getByRole('combobox',{name:'Producto / descripción',exact:true}).fill(name);
+ await drawer(page).getByRole('textbox',{name:'Descripción del documento',exact:true}).fill(name);
  await drawer(page).getByRole('spinbutton',{name:'Cantidad',exact:true}).fill(quantity);
  await drawer(page).getByRole('button',{name:'Agregar',exact:true}).click();
  await drawer(page).getByRole('cell',{name,exact:true}).waitFor();
@@ -40,11 +40,13 @@ for(const width of [1440,1024,390])test('capture-only draft, compact lines, subm
  assert.ok((await page.evaluate(()=>window.__receiptRequests)).every(r=>r.url.startsWith('/receipts')));await noOverflow(page);
 });
 test('safe product selector associates existing identity and unsaved line cannot be silently lost',async t=>{
- const page=await open(t);await page.getByRole('button',{name:'Cargar remito',exact:true}).click();const input=drawer(page).getByRole('combobox',{name:'Producto / descripción',exact:true});
+ const page=await open(t);await page.getByRole('button',{name:'Cargar remito',exact:true}).click();
+ await drawer(page).getByRole('textbox',{name:'Descripción del documento',exact:true}).fill('Texto documental exacto');
+ const input=drawer(page).getByRole('combobox',{name:'Producto GrowSync asociado',exact:true});
  await input.fill('Semilla');await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('Semilla sintética',{exact:true}).click();
  await drawer(page).getByRole('button',{name:'Guardar borrador',exact:true}).click();await drawer(page).getByText('Agregá o cancelá la línea en edición antes de guardar.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__receiptWrites.length),0);
  await drawer(page).getByRole('button',{name:'Agregar',exact:true}).click();await drawer(page).getByRole('button',{name:'Guardar borrador',exact:true}).click();await page.waitForFunction(()=>window.__receiptWrites.some(w=>w.url.endsWith('/lines')));
- const line=await page.evaluate(()=>window.__receiptWrites.find(w=>w.url.endsWith('/lines')).body.lines[0]);assert.equal(line.matched_product_id,'product');assert.equal(line.unit,'kg');assert.equal(line.quantity,null);
+ const line=await page.evaluate(()=>window.__receiptWrites.find(w=>w.url.endsWith('/lines')).body.lines[0]);assert.equal(line.raw_description,'Texto documental exacto');assert.equal(line.matched_product_id,'product');assert.equal(line.unit,'kg');assert.equal(line.quantity,null);
 });
 test('reviewer sees company inbox, corrects operational data and rejects with retained reason',async t=>{
  const page=await open(t,390,'?review');await page.getByRole('heading',{name:'Pendientes de revisión',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Cargar remito',exact:true}).count(),0);

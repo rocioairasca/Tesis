@@ -49,9 +49,11 @@ async function warnings(client,ctx,row){
  return result.rows.length?[{code:'possible_duplicate',message:'Existe otro remito no rechazado con este proveedor y número. Revisalo antes de continuar.'}]:[];
 }
 async function operationalDetail(client,ctx,row){
- const lines=(await client.query(`SELECT id,receipt_id,line_number,raw_description,quantity::text AS quantity,unit,presentation,supplier_batch,
- expiration_date::text AS expiration_date,matched_product_id,match_status,created_at,updated_at
- FROM receipt_submission_lines WHERE company_id=$1 AND receipt_id=$2 ORDER BY line_number,id`,[ctx.companyId,row.id])).rows;
+ const lines=(await client.query(`SELECT l.id,l.receipt_id,l.line_number,l.raw_description,l.quantity::text AS quantity,l.unit,l.presentation,l.supplier_batch,
+ l.expiration_date::text AS expiration_date,l.matched_product_id,l.match_status,p.name AS matched_product_name,l.created_at,l.updated_at
+ FROM receipt_submission_lines l
+ LEFT JOIN products p ON p.company_id=l.company_id AND p.id=l.matched_product_id
+ WHERE l.company_id=$1 AND l.receipt_id=$2 ORDER BY l.line_number,l.id`,[ctx.companyId,row.id])).rows;
  return {...row,lines,warnings:await warnings(client,ctx,row)};
 }
 async function detail({pool},{user,id}){

@@ -18,18 +18,25 @@ export default function ReceiptLines({lines,onChange,editable,disabled,onPending
   try{
    const values=await form.validateFields();
    if(editing===null&&lines.length>=200){setError('El remito admite hasta 200 líneas.');return;}
-   onChange(editing===null?[...lines,values]:lines.map((line,i)=>i===editing?values:line));clear();
+   const matched=products.find(product=>product.id===values.matched_product_id);
+   const next={...values,matched_product_name:matched?.name||lines[editing]?.matched_product_name||null};
+   onChange(editing===null?[...lines,next]:lines.map((line,i)=>i===editing?next:line));clear();
   }catch(e){if(!e.errorFields)setError('Revisá la línea.');}finally{busy.current=false;}
  };
  return <section className="receipts-lines" aria-label="Productos del remito"><h3>Productos</h3>
   {editable&&<Form form={form} component={false} layout="vertical" disabled={disabled} onValuesChange={(_,values)=>onPendingChange(editing!==null||Object.values(values).some(v=>v!=null&&v!==''))}>
    <div className="receipts-entry">
     <div className="receipts-entry-fields">
-     <Form.Item name="raw_description" label="Producto / descripción" className="receipts-description" rules={[{required:true,whitespace:true,message:'Ingresá la descripción.'}]}>
-      <AutoComplete aria-label="Producto / descripción" ref={productInput} maxLength={500} options={products.map(p=>({value:p.name,label:p.name,product:p}))} onSearch={value=>{setSearch(value);form.setFieldValue('matched_product_id',null);}}
-       onSelect={(_value,option)=>form.setFieldsValue({matched_product_id:option.product.id,unit:normalizeUnit(option.product.unit)})} placeholder="Buscar o escribir descripción"/>
+     <Form.Item name="raw_description" label="Descripción del documento" className="receipts-description" rules={[{required:true,whitespace:true,message:'Ingresá la descripción documental.'}]}>
+      <Input aria-label="Descripción del documento" ref={productInput} maxLength={500} placeholder="Copiar el texto tal como figura en el remito"/>
      </Form.Item>
-     <Form.Item name="matched_product_id" hidden><Input/></Form.Item>
+     <Form.Item name="matched_product_id" label="Producto GrowSync asociado" className="receipts-product-match">
+      <Select aria-label="Producto GrowSync asociado" allowClear showSearch filterOption={false} searchValue={search}
+       onSearch={setSearch} onClear={()=>{setSearch('');form.setFieldValue('unit',null);}}
+       options={products.map(p=>({value:p.id,label:p.name,product:p}))}
+       onSelect={(_value,option)=>form.setFieldValue('unit',normalizeUnit(option.product.unit))}
+       placeholder="Buscar producto existente"/>
+     </Form.Item>
      <Form.Item name="quantity" label="Cantidad" rules={[{validator:(_,v)=>v==null||v===''||/^\d{1,14}(\.\d{1,6})?$/.test(String(v))&&Number(v)>0?Promise.resolve():Promise.reject(new Error('Cantidad mayor a cero, hasta 6 decimales.'))}]}><InputNumber aria-label="Cantidad" stringMode decimalSeparator=","/></Form.Item>
      <Form.Item name="unit" label="Unidad"><Select allowClear options={unitOptions} onChange={()=>form.setFieldValue('matched_product_id',null)}/></Form.Item>
      <Form.Item name="presentation" label="Presentación"><Input maxLength={200}/></Form.Item>
@@ -43,7 +50,7 @@ export default function ReceiptLines({lines,onChange,editable,disabled,onPending
   <div className="receipts-lines-list" role="table" aria-label="Líneas del remito">
    <div role="row" className="receipts-lines-head">{['Producto / descripción','Cantidad','Unidad','Presentación / lote','Vencimiento','Acciones'].map(x=><div role="columnheader" key={x}>{x}</div>)}</div>
    {lines.map((line,index)=><div role="row" className="receipts-line" key={index}>
-    <div role="cell" className="receipts-line-name">{line.raw_description}{line.matched_product_id&&<small>Producto asociado</small>}</div>
+    <div role="cell" className="receipts-line-name">{line.matched_product_name||line.raw_description}{line.matched_product_id&&<small>Documento: {line.raw_description}</small>}</div>
     <div role="cell">{formatNumber(line.quantity,6)}</div><div role="cell">{line.unit||'—'}</div>
     <div role="cell">{[line.presentation,line.supplier_batch].filter(Boolean).join(' · ')||'—'}</div>
     <div role="cell">{formatCalendarDate(line.expiration_date,'Sin vencimiento')}</div>

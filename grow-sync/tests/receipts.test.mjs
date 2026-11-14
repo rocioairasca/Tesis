@@ -12,7 +12,7 @@ test('receipts catalog agrees in frontend/backend and custom capture grants noth
 });
 test('payload builders select only writable operational fields and preserve quantities',()=>{
  const values={supplier_name:'Proveedor',price:12,economics:{total:1},company_id:'forged'};assert.equal(metadataPayload(values).price,undefined);assert.equal(metadataPayload(values).economics,undefined);assert.equal(metadataPayload(values).company_id,undefined);
- const result=linesPayload([{id:'server-id',raw_description:'Documental',quantity:'1.123456',unit:'kg',expiration_date:'',cost:12,match_status:'approved'}]).lines[0];assert.equal(result.quantity,'1.123456');assert.equal(result.expiration_date,null);assert.equal(result.cost,undefined);assert.equal(result.id,undefined);assert.equal(result.match_status,undefined);
+ const result=linesPayload([{id:'server-id',raw_description:'Documental',matched_product_name:'Producto GrowSync',quantity:'1.123456',unit:'kg',expiration_date:'',cost:12,match_status:'approved'}]).lines[0];assert.equal(result.quantity,'1.123456');assert.equal(result.expiration_date,null);assert.equal(result.cost,undefined);assert.equal(result.id,undefined);assert.equal(result.match_status,undefined);assert.equal(result.matched_product_name,undefined);
 });
 test('route exists inside authenticated PrivatePage; receipt route enforces capture or review',()=>{
  assert.match(read('App.jsx'),/path="\/remitos" element={<PrivatePage><Receipts \/><\/PrivatePage>}/);

@@ -48,7 +48,7 @@ test('capture alone creates/edits draft and receives the exact operational DTO',
  const x=await fixture(),r=await create({supplier_name:'Proveedor',document_number:'R-1',document_date:'2026-11-14'});
  assert.equal(r.status,'draft');assert.equal(r.created_by,x.actor);assert.deepEqual(Object.keys(r).sort(),[...headerKeys,'lines','warnings'].sort());noEconomics(r);
  assert.equal((await request('PATCH','/'+r.id,{notes:'Nota'})).status,200);const saved=await lines(r.id);assert.equal(saved.status,200);assert.equal(saved.data.lines[0].quantity,'2.123456');
- assert.deepEqual(Object.keys(saved.data.lines[0]).sort(),['id','receipt_id','line_number','raw_description','quantity','unit','presentation','supplier_batch','expiration_date','matched_product_id','match_status','created_at','updated_at'].sort());
+ assert.deepEqual(Object.keys(saved.data.lines[0]).sort(),['id','receipt_id','line_number','raw_description','quantity','unit','presentation','supplier_batch','expiration_date','matched_product_id','match_status','matched_product_name','created_at','updated_at'].sort());
  assert.equal(saved.data.lines[0].matched_product_id,null);
 });
 test('mine contains only own records in every state; capture cannot access a coworker',async()=>{
@@ -117,7 +117,7 @@ test('line replacement rolls back entirely on second insert failure and validate
  for(const patch of [{quantity:0},{quantity:-1},{quantity:'1.1234567'},{unit:'invalid'},{expiration_date:'2026-02-30'},{unit:'L',matched_product_id:a.product}])assert.equal((await lines(r.id,[{...line,...patch}])).status,400);
  failLine=true;assert.equal((await lines(r.id,[line,{...line,raw_description:'Segunda'}])).status,500);failLine=false;
  assert.deepEqual((await request('GET','/'+r.id)).data.lines,before);
- const matched=await lines(r.id,[{...line,matched_product_id:a.product}]);assert.equal(matched.status,200);assert.equal(matched.data.lines[0].match_status,'proposed');
+ const matched=await lines(r.id,[{...line,matched_product_id:a.product}]);assert.equal(matched.status,200);assert.equal(matched.data.lines[0].match_status,'proposed');assert.equal(matched.data.lines[0].matched_product_name,'Producto de prueba');assert.equal(matched.data.lines[0].raw_description,'Semilla documental');
  assert.equal((await lines(r.id,[{raw_description:'Sin cantidad',quantity:null,unit:null}])).status,200);
 });
 test('duplicate warning includes supplier and tenant, never leaks IDs or blocks different suppliers',async()=>{

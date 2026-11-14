@@ -16,7 +16,7 @@
 .receipts-document .ant-btn { height:auto; white-space:normal; overflow-wrap:anywhere; }
 .receipts-message { margin:12px 0; }
 .receipts-entry { display:flex; align-items:flex-end; gap:12px; margin-bottom:16px; }
-.receipts-entry-fields { flex:1; min-width:0; display:grid; grid-template-columns:minmax(160px,2fr) repeat(4,minmax(75px,1fr)) minmax(135px,1.2fr); gap:8px; }
+.receipts-entry-fields { flex:1; min-width:0; display:grid; grid-template-columns:minmax(180px,2fr) minmax(180px,2fr) repeat(4,minmax(75px,1fr)) minmax(135px,1.2fr); gap:8px; }
 .receipts-entry .ant-form-item { margin-bottom:0; min-width:0; }
 .receipts-entry .ant-input-number { width:100%; }
 .receipts-entry .ant-form-item-label>label { font-size:12px; }
@@ -46,7 +46,7 @@
  .receipts-filters>* { flex:1 1 100%; max-width:none!important; }
  .receipts-entry { flex-wrap:wrap; }
  .receipts-entry-fields { flex-basis:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }
- .receipts-description { grid-column:1/-1; }
+ .receipts-description,.receipts-product-match { grid-column:1/-1; }
  .receipts-entry-actions { margin-left:auto; }
  .receipts-lines-head { display:none; }
  .receipts-line { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px 8px; }
