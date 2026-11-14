@@ -31,6 +31,8 @@ const Users = lazy(() =>
   import("./features/users/Users.jsx")
 );
 
+const Receipts = lazy(() => import('./features/receipts/Receipts.jsx'));
+
 const Inventory = lazy(() =>
   import("./features/inventory/Inventory.jsx")
 );
@@ -223,6 +225,8 @@ function App() {
                 </PrivatePage>
               }
             />
+
+            <Route path="/remitos" element={<PrivatePage><Receipts /></PrivatePage>} />
 
             <Route
               path="/inventario"

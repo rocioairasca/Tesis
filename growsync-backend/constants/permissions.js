@@ -1,4 +1,8 @@
 const PERMISSIONS = {
+  RECEIPTS_CAPTURE: "receipts.capture",
+  RECEIPTS_REVIEW: "receipts.review",
+  RECEIPTS_APPROVE: "receipts.approve",
+  RECEIPTS_VIEW_ECONOMICS: "receipts.view_economics",
   SOIL_ANALYSIS_VIEW: "soil_analysis.view",
   SOIL_ANALYSIS_CREATE: "soil_analysis.create",
   SOIL_ANALYSIS_EDIT: "soil_analysis.edit",

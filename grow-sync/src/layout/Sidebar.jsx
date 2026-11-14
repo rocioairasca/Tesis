@@ -19,6 +19,8 @@ const Sidebar = ({ collapsed, onCollapse }) => {
   }, []);
 
   const allItems = [
+    {key:"remitos",icon:<FormOutlined />,label:<Link to="/remitos">Remitos</Link>,
+      show:hasPermission(currentUser,PERMISSIONS.RECEIPTS_CAPTURE)||hasPermission(currentUser,PERMISSIONS.RECEIPTS_REVIEW)},
     {
       key: "dashboard",
       icon: <DashboardOutlined />,

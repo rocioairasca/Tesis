@@ -49,6 +49,9 @@ const BottomNavigation = () => {
   ].filter((item) => item.show).sort((a,b)=>['dashboard','planning','lotes','inventario'].indexOf(a.key)-['dashboard','planning','lotes','inventario'].indexOf(b.key));
 
   const menuItems = [
+    {key:"remitos",label:"Remitos",icon:<FormOutlined />,
+      show:hasPermission(currentUser,PERMISSIONS.RECEIPTS_CAPTURE)||hasPermission(currentUser,PERMISSIONS.RECEIPTS_REVIEW),
+      onClick:()=>{navigate("/remitos");setDrawerVisible(false);}},
     {
       key: "cosecha",
       label: "Cosechas",
