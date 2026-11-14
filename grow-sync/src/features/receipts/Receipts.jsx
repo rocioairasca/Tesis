@@ -40,7 +40,7 @@ export default function Receipts(){
    <Input.Search aria-label="Filtrar por proveedor" placeholder="Proveedor" allowClear onSearch={supplier_name=>{setPage(1);setFilters(f=>({...f,supplier_name:supplier_name||undefined}));}}/>
   </div>
   {mobile?<><div className="receipts-mobile-list" aria-busy={loading}>{!rows.length&&!loading&&<p>No hay remitos.</p>}{rows.map(row=><article key={row.id}><h3>{row.supplier_name||'Sin proveedor'}</h3><p>{formatCalendarDate(row.document_date,'Sin fecha')} · {row.document_number||'Sin número'} · {row.line_count} líneas</p>{mode==='review'&&<p>Cargado por {row.created_by_name}</p>}<Tag color={statusColors[row.status]}>{statusLabels[row.status]}</Tag>{action(row)}</article>)}</div><div className="receipts-pagination"><Button disabled={page===1||loading} onClick={()=>setPage(p=>p-1)}>Anterior</Button><span>Página {page}</span><Button disabled={page*25>=total||loading} onClick={()=>setPage(p=>p+1)}>Siguiente</Button></div></>:
-   <Table rowKey="id" loading={loading} dataSource={rows} columns={columns} pagination={{current:page,pageSize:25,total,showSizeChanger:false,position:['bottomCenter'],onChange:setPage}}/>}
+   <Table rowKey="id" loading={loading} dataSource={rows} columns={columns} locale={{emptyText:'No hay remitos registrados'}} pagination={{current:page,pageSize:25,total,showSizeChanger:false,position:['bottomCenter'],onChange:setPage}}/>}
   {detail&&<ReceiptDetail key={detail.data?.id||'new'} initial={detail.data} user={user} onClose={()=>setDetail(null)} onSaved={load}/>}
  </main>;
 }
