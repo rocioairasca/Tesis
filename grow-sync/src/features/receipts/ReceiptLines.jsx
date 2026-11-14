@@ -18,7 +18,9 @@ export default function ReceiptLines({lines,onChange,editable,disabled,onPending
   try{
    const values=await form.validateFields();
    if(editing===null&&lines.length>=200){setError('El remito admite hasta 200 líneas.');return;}
-   onChange(editing===null?[...lines,values]:lines.map((line,i)=>i===editing?values:line));clear();
+   const matched=products.find(product=>product.id===values.matched_product_id);
+   const next={...values,matched_product_name:matched?.name||lines[editing]?.matched_product_name||null};
+   onChange(editing===null?[...lines,next]:lines.map((line,i)=>i===editing?next:line));clear();
   }catch(e){if(!e.errorFields)setError('Revisá la línea.');}finally{busy.current=false;}
  };
  return <section className="receipts-lines" aria-label="Productos del remito"><h3>Productos</h3>
