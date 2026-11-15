@@ -1,7 +1,12 @@
 const express=require('express'),multer=require('multer');
 const requirePermission=require('../middleware/requirePermission');
 const requireTenant=require('../middleware/requireTenant');
-const service=require('../services/receipts'),documents=require('../services/receiptDocuments'),schema=require('../validations/receipts.schema');
+const service = require('../services/receipts');
+const documents = require('../services/receiptDocuments');
+const extraction = require('../services/receiptExtraction');
+const schema = require('../validations/receipts.schema');
+
+
 module.exports=dependencies=>{
  const router=express.Router();
  router.use(requireTenant);
@@ -23,6 +28,54 @@ module.exports=dependencies=>{
  router.put('/:id/document',permission('capture'),(req,res,next)=>upload(req,res,error=>error?next(service.fail(error.code==='LIMIT_FILE_SIZE'?'El documento no puede superar 10 MB.':'Enviá solamente un PDF o foto.',error.code==='LIMIT_FILE_SIZE'?413:400)):next()),run(async(req,res)=>{
   schema.parse(schema.empty,req.body||{});res.json(await documents.upload(dependencies,{...input(req),file:req.file}));
  }));
+
+    router.post(
+        '/:id/extract',
+        permission('capture'),
+        run(async (req, res) => {
+            schema.parse(
+            schema.empty,
+            req.body || {},
+            );
+
+            const file =
+            await documents.readForExtraction(
+                dependencies,
+                input(req),
+            );
+
+            const controller =
+            new AbortController();
+
+            const abort = () => {
+            if (!res.writableEnded) {
+                controller.abort();
+            }
+            };
+
+            res.once('close', abort);
+
+            try {
+            const data = await (
+                dependencies.receiptExtractor ||
+                extraction.extract
+            )({
+                file,
+                signal: controller.signal,
+            });
+
+            if (!controller.signal.aborted) {
+                res.json(data);
+            }
+            } finally {
+            res.removeListener(
+                'close',
+                abort,
+            );
+            }
+        }),
+    );
+
  router.get('/:id/document-url',either,run(async(req,res)=>res.json(await documents.fileUrl(dependencies,input(req)))));
  return router;
 };

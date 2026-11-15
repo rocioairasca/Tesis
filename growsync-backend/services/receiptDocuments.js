@@ -1,12 +1,15 @@
 const {randomUUID}=require('node:crypto');
 const receipts=require('./receipts');
 const BUCKET='receipt-submissions',MAX_BYTES=10*1024*1024;
+
+
 async function privateBucket(storage){
  if(!storage)throw receipts.fail('La carga de documentos no está disponible. Podés guardar el borrador manualmente.',503);
  const {data,error}=await storage.getBucket(BUCKET);
  if(error||data?.public!==false)throw receipts.fail('La carga de documentos no está disponible. Podés guardar el borrador manualmente.',503);
  return storage.from(BUCKET);
 }
+
 function validate(file){
  if(!file?.buffer?.length)throw receipts.fail('Seleccioná un PDF o una foto JPG/PNG.');
  if(file.buffer.length>MAX_BYTES)throw receipts.fail('El documento no puede superar 10 MB.',413);
@@ -15,6 +18,7 @@ function validate(file){
  if(!valid)throw receipts.fail('El contenido no corresponde a un PDF o una foto JPG/PNG.');
  return {filename:String(file.originalname||'documento').split(/[\\/]/).pop().replace(/[\x00-\x1f\x7f]/g,'').slice(0,255)||'documento',type};
 }
+
 async function upload({pool,storage,logger=console},{user,id,file}){
  const ctx=receipts.context(user),meta=validate(file);
  if(!ctx.capture)throw receipts.fail('No tenés permiso para cargar documentos.',403);
@@ -36,6 +40,82 @@ async function upload({pool,storage,logger=console},{user,id,file}){
   throw error;
  }
 }
+
+async function readForExtraction({ pool, storage }, { user, id }) {
+  const ctx = receipts.context(user);
+
+  if (!ctx.capture) {
+    throw receipts.fail(
+      'No tenés permiso para analizar documentos.',
+      403,
+    );
+  }
+
+  const row = await receipts.header(
+    pool,
+    ctx,
+    id,
+    false,
+    true,
+  );
+
+  if (row.status !== 'draft') {
+    throw receipts.fail(
+      'Solo se pueden analizar borradores propios.',
+      409,
+    );
+  }
+
+  if (
+    !row.source_storage_key ||
+    !row.source_storage_key.startsWith(
+      `${ctx.companyId}/${id}/`,
+    )
+  ) {
+    throw receipts.fail(
+      'Adjuntá un documento antes de analizar el remito.',
+      404,
+    );
+  }
+
+  const bucket = await privateBucket(storage);
+
+  const { data, error } = await bucket.download(
+    row.source_storage_key,
+  );
+
+  if (error || !data) {
+    throw receipts.fail(
+      'No pudimos leer el documento adjunto.',
+      503,
+    );
+  }
+
+  let buffer;
+
+  try {
+    buffer = Buffer.from(
+      await data.arrayBuffer(),
+    );
+  } catch {
+    throw receipts.fail(
+      'No pudimos leer el documento adjunto.',
+      503,
+    );
+  }
+
+  const file = {
+    buffer,
+    mimetype: row.source_mime_type,
+    originalname:
+      row.source_filename || 'remito',
+  };
+
+  validate(file);
+
+  return file;
+}
+
 async function fileUrl({pool,storage},{user,id}){
  const ctx=receipts.context(user),row=await receipts.header(pool,ctx,id);
  if(!row.source_storage_key||!row.source_storage_key.startsWith(ctx.companyId+'/'+id+'/'))throw receipts.fail('El remito no tiene documento adjunto.',404);
@@ -43,4 +123,11 @@ async function fileUrl({pool,storage},{user,id}){
  if(result.error||!result.data?.signedUrl)throw receipts.fail('No pudimos abrir el documento.',503);
  return {url:result.data.signedUrl,filename:row.source_filename,expires_at:new Date(Date.now()+60000).toISOString()};
 }
-module.exports={BUCKET,MAX_BYTES,upload,fileUrl};
+
+module.exports = {
+  BUCKET,
+  MAX_BYTES,
+  upload,
+  fileUrl,
+  readForExtraction,
+};

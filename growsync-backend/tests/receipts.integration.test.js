@@ -3,12 +3,160 @@ const {test,before,after,afterEach}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),{randomUUID:uuid}=require('node:crypto');
 const {PGlite}=require('@electric-sql/pglite'),express=require('express');
 const service=require('../services/receipts'),routes=require('../routes/receipts');
-let db,pool,server,origin,user,queries=[],storageCalls=[],failLine=false,failStorage=false,publicBucket=false;
-const storage={async getBucket(){return {data:{public:publicBucket}};},from(name){assert.equal(name,'receipt-submissions');return {
- async upload(key,buffer,options){storageCalls.push({op:'upload',key,options});return failStorage?{error:{message:'private error'}}:{};},
- async remove(keys){storageCalls.push({op:'remove',keys});return {};},
- async createSignedUrl(key,seconds){storageCalls.push({op:'sign',key,seconds});return {data:{signedUrl:'https://storage.invalid/'+key}};}
-};}};
+
+let db,pool,server,origin,user,
+  queries=[],
+  storageCalls=[],
+  extractorCalls=[],
+  storedDocuments=new Map(),
+  failLine=false,
+  failStorage=false,
+  publicBucket=false;
+
+const storage = {
+  async getBucket() {
+    return {
+      data: {
+        public: publicBucket,
+      },
+    };
+  },
+
+  from(name) {
+    assert.equal(
+      name,
+      'receipt-submissions',
+    );
+
+    return {
+      async upload(
+        key,
+        buffer,
+        options,
+      ) {
+        storageCalls.push({
+          op: 'upload',
+          key,
+          options,
+        });
+
+        if (failStorage) {
+          return {
+            error: {
+              message: 'private error',
+            },
+          };
+        }
+
+        storedDocuments.set(
+          key,
+          Buffer.from(buffer),
+        );
+
+        return {};
+      },
+
+      async download(key) {
+        storageCalls.push({
+          op: 'download',
+          key,
+        });
+
+        const buffer =
+          storedDocuments.get(key);
+
+        if (!buffer) {
+          return {
+            data: null,
+            error: {
+              message: 'not found',
+            },
+          };
+        }
+
+        return {
+          data: new Blob([
+            buffer,
+          ]),
+          error: null,
+        };
+      },
+
+      async remove(keys) {
+        storageCalls.push({
+          op: 'remove',
+          keys,
+        });
+
+        for (const key of keys) {
+          storedDocuments.delete(key);
+        }
+
+        return {};
+      },
+
+      async createSignedUrl(
+        key,
+        seconds,
+      ) {
+        storageCalls.push({
+          op: 'sign',
+          key,
+          seconds,
+        });
+
+        return {
+          data: {
+            signedUrl:
+              'https://storage.invalid/' +
+              key,
+          },
+        };
+      },
+    };
+  },
+};
+
+const receiptExtractor = async ({
+  file,
+  signal,
+}) => {
+  extractorCalls.push({
+    mimetype: file.mimetype,
+    originalname:
+      file.originalname,
+    size: file.buffer.length,
+    aborted: signal.aborted,
+  });
+
+  return {
+    supplier_name:
+      'Proveedor extraído',
+    supplier_tax_id:
+      '30-12345678-9',
+    document_number:
+      '0005-00012023',
+    document_date:
+      '2026-11-10',
+    document_type:
+      'Remito',
+
+    lines: [
+      {
+        raw_description:
+          '2.4 D LV ESTER ETIL HEXILICO (Baja volatilidad)',
+        quantity: '420',
+        unit: 'L',
+        presentation: null,
+        supplier_batch: null,
+        expiration_date: null,
+      },
+    ],
+
+    warnings: [],
+  };
+};
+
 before(async()=>{
  db=new PGlite();await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;
  CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,full_name text,email text,enabled boolean DEFAULT true);
@@ -19,16 +167,44 @@ before(async()=>{
  await db.exec(fs.readFileSync(require('node:path').join(__dirname,'../migrations/20261114_receipt_submissions.sql'),'utf8'));
  const query=async(sql,args=[])=>{queries.push({sql,args});if(failLine&&sql.includes('INSERT INTO receipt_submission_lines')&&args[2]===2)throw Error('synthetic second line failure');return db.query(sql,args);};
  pool={query,connect:async()=>({query,release(){}})};
- const app=express();app.use(express.json());app.use((req,_res,next)=>{req.user=user;next();});app.use('/api/receipts',routes({pool,storage,logger:{error(){}}}));
+ const app=express();app.use(express.json());app.use((req,_res,next)=>{req.user=user;next();});
+    app.use(
+        '/api/receipts',
+        routes({
+            pool,
+            storage,
+            logger: {
+            error() {},
+            },
+            receiptExtractor,
+        }),
+    );
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({message:error.status?error.message:'Error interno'}));
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));origin='http://127.0.0.1:'+server.address().port+'/api/receipts';
 });
+
 after(async()=>{await new Promise(r=>server.close(r));await db.close();});
 afterEach(async()=>{
- failLine=failStorage=publicBucket=false;
- for(const table of ['stock_batches','stock_movements'])assert.equal((await db.query('SELECT count(*)::int n FROM '+table)).rows[0].n,0);
- assert.ok(!queries.some(q=>/stock_batches|stock_movements|inventory_receipts/i.test(q.sql)),'module never touches official inventory');
+    extractorCalls = [];
+    storedDocuments.clear();
+    failLine=failStorage=publicBucket=false;
+
+    for(const table of ['stock_batches','stock_movements'])
+    assert.equal(
+      (await db.query(
+        'SELECT count(*)::int n FROM '+table
+      )).rows[0].n,
+      0
+    );
+
+  assert.ok(
+    !queries.some(q =>
+      /stock_batches|stock_movements|inventory_receipts/i.test(q.sql)
+    ),
+    'module never touches official inventory'
+  );
 });
+
 async function fixture(company=uuid()){
  await db.query('INSERT INTO companies VALUES($1) ON CONFLICT DO NOTHING',[company]);
  const actor=uuid();await db.query("INSERT INTO users(id,company_id,full_name,email) VALUES($1,$2,'Empleado sintético','test@example.invalid')",[actor,company]);
@@ -44,6 +220,150 @@ async function pending(){const r=await create();assert.equal((await lines(r.id))
 const forbidden=['price','unit_price','subtotal','discount','discounts','tax','taxes','total','currency','acquisition_cost','cost','economics','raw_extraction'];
 function noEconomics(value){if(!value||typeof value!=='object')return;for(const [key,item] of Object.entries(value)){assert.ok(!forbidden.includes(key),'economic key absent: '+key);noEconomics(item);}}
 const headerKeys=['id','company_id','created_by','status','supplier_name','supplier_tax_id','document_number','document_type','source_filename','source_mime_type','source_storage_key','notes','submitted_at','reviewed_at','reviewed_by','rejected_at','rejected_by','rejection_reason','created_at','updated_at','document_date','created_by_name','line_count'];
+
+test(
+  'extract reads the private draft document and returns only a proposal',
+  async () => {
+    const a = await fixture();
+
+    const receipt = await create({
+      supplier_name:
+        'Proveedor manual',
+    });
+
+    const attached =
+      await upload(receipt.id);
+
+    assert.equal(
+      attached.status,
+      200,
+    );
+
+    extractorCalls = [];
+
+    const extracted =
+      await request(
+        'POST',
+        '/' +
+          receipt.id +
+          '/extract',
+        {},
+      );
+
+    assert.equal(
+      extracted.status,
+      200,
+    );
+
+    assert.equal(
+      extractorCalls.length,
+      1,
+    );
+
+    assert.equal(
+      extractorCalls[0].mimetype,
+      'application/pdf',
+    );
+
+    assert.equal(
+      extractorCalls[0].originalname,
+      'test.pdf',
+    );
+
+    assert.ok(
+      extractorCalls[0].size > 0,
+    );
+
+    assert.equal(
+      extractorCalls[0].aborted,
+      false,
+    );
+
+    assert.equal(
+      extracted.data.supplier_name,
+      'Proveedor extraído',
+    );
+
+    assert.equal(
+      extracted.data.lines.length,
+      1,
+    );
+
+    assert.equal(
+      extracted.data.lines[0]
+        .raw_description,
+      '2.4 D LV ESTER ETIL HEXILICO (Baja volatilidad)',
+    );
+
+    assert.equal(
+      extracted.data.lines[0]
+        .quantity,
+      '420',
+    );
+
+    assert.equal(
+      extracted.data.lines[0]
+        .unit,
+      'L',
+    );
+
+    /*
+     * La extracción es solo una propuesta.
+     * No debe modificar el remito.
+     */
+    const unchanged =
+      await request(
+        'GET',
+        '/' + receipt.id,
+      );
+
+    assert.equal(
+      unchanged.data.supplier_name,
+      'Proveedor manual',
+    );
+
+    assert.equal(
+      unchanged.data.lines.length,
+      0,
+    );
+
+    /*
+     * La lectura debe haber salido
+     * del Storage privado.
+     */
+    assert.equal(
+      storageCalls.filter(
+        (call) =>
+          call.op === 'download',
+      ).length,
+      1,
+    );
+
+    /*
+     * Sigue sin tocar inventario.
+     */
+    assert.equal(
+      (
+        await db.query(
+          'SELECT count(*)::int n FROM stock_batches',
+        )
+      ).rows[0].n,
+      0,
+    );
+
+    assert.equal(
+      (
+        await db.query(
+          'SELECT count(*)::int n FROM stock_movements',
+        )
+      ).rows[0].n,
+      0,
+    );
+
+    user = a.capture;
+  },
+);
+
 test('capture alone creates/edits draft and receives the exact operational DTO',async()=>{
  const x=await fixture(),r=await create({supplier_name:'Proveedor',document_number:'R-1',document_date:'2026-11-14'});
  assert.equal(r.status,'draft');assert.equal(r.created_by,x.actor);assert.deepEqual(Object.keys(r).sort(),[...headerKeys,'lines','warnings'].sort());noEconomics(r);
@@ -57,26 +377,137 @@ test('mine contains only own records in every state; capture cannot access a cow
  const mine=(await request('GET','/mine')).data;assert.deepEqual(mine.data.map(x=>x.id),[other.id]);
  user=a.capture;assert.equal((await request('GET','/mine')).data.data[0].status,'pending_validation');assert.equal((await request('GET','/'+other.id)).status,404);
 });
+
 test('all read/write/review/file paths isolate companies, including product matches',async()=>{
+ storageCalls=[];
+
  const a=await fixture(),r=await pending(),b=await fixture();user=b.review;
- for(const [method,path,body] of [['GET','/'+r.id],['PATCH','/'+r.id,{notes:'foreign'}],['PUT','/'+r.id+'/lines',{lines:[line]}],['POST','/'+r.id+'/reject',{reason:'foreign'}],['GET','/'+r.id+'/document-url']])assert.equal((await request(method,path,body)).status,404);
- assert.equal((await request('GET','/review')).data.total_count,0);user=b.capture;
+
+ for(const [method,path,body] of [
+  ['GET','/'+r.id],
+  ['PATCH','/'+r.id,{notes:'foreign'}],
+  ['PUT','/'+r.id+'/lines',{lines:[line]}],
+  ['POST','/'+r.id+'/reject',{reason:'foreign'}],
+  ['GET','/'+r.id+'/document-url']
+ ])assert.equal((await request(method,path,body)).status,404);
+
+ assert.equal((await request('GET','/review')).data.total_count,0);
+
+ user=b.capture;
+
  assert.equal((await request('POST','/'+r.id+'/submit',{})).status,404);
- const own=await create();assert.equal((await lines(own.id,[{...line,matched_product_id:a.product}])).status,400);
+
+ const own=await create();
+
+ assert.equal(
+  (await lines(
+   own.id,
+   [{...line,matched_product_id:a.product}]
+  )).status,
+  400
+ );
+
  assert.equal(storageCalls.length,0);
 });
+
 test('economic data is not selected for capture, mine or reviewer without view_economics',async()=>{
- const a=await fixture(),r=await create();await db.query("INSERT INTO receipt_submission_economics(receipt_id,company_id,currency,total,raw_extraction) VALUES($1,$2,'USD',987654,$3)",[r.id,a.company,JSON.stringify({secret:true})]);
- for(const permissions of [['receipts.capture'],['receipts.capture','receipts.view_economics'],['receipts.review']]){
-  user={...a.capture,custom_permissions:permissions};queries=[];
-  const read=await request('GET','/'+r.id+'?include_economics=true'),list=await request('GET',permissions.includes('receipts.review')?'/review':'/mine');
-  assert.equal(read.status,200);noEconomics(read.data);noEconomics(list.data);assert.ok(!JSON.stringify(read.data).includes('987654'));
-  assert.ok(!queries.some(q=>/receipt_submission_economics|\bprice\b|raw_extraction/i.test(q.sql)));
-  assert.ok(!queries.some(q=>/SELECT\s+(?:\w+\.)?\*/i.test(q.sql)));
+ const a=await fixture(),r=await create();
+
+ await db.query(
+  "INSERT INTO receipt_submission_economics(receipt_id,company_id,currency,total,raw_extraction) VALUES($1,$2,'USD',987654,$3)",
+  [
+   r.id,
+   a.company,
+   JSON.stringify({secret:true})
+  ]
+ );
+
+ for(const permissions of [
+  ['receipts.capture'],
+  ['receipts.capture','receipts.view_economics'],
+  ['receipts.review']
+ ]){
+  user={
+   ...a.capture,
+   custom_permissions:permissions
+  };
+
+  queries=[];
+
+  const read=await request(
+   'GET',
+   '/'+r.id+'?include_economics=true'
+  );
+
+  const list=await request(
+   'GET',
+   permissions.includes('receipts.review')
+    ?'/review'
+    :'/mine'
+  );
+
+  assert.equal(read.status,200);
+
+  noEconomics(read.data);
+  noEconomics(list.data);
+
+  assert.ok(
+   !JSON.stringify(read.data).includes('987654')
+  );
+
+  assert.ok(
+   !queries.some(q=>
+    /receipt_submission_economics|\bprice\b|raw_extraction/i.test(q.sql)
+   )
+  );
+
+  assert.ok(
+   !queries.some(q=>
+    /SELECT\s+(?:\w+\.)?\*/i.test(q.sql)
+   )
+  );
  }
- user={...a.review,custom_permissions:['receipts.review','receipts.view_economics']};queries=[];
- const data=(await request('GET','/'+r.id)).data;assert.equal(data.economics.total,'987654');assert.equal(data.economics.currency,'USD');assert.equal(data.economics.raw_extraction,undefined);assert.equal(queries.filter(q=>q.sql.includes('receipt_submission_economics')).length,1);
+
+ user={
+  ...a.review,
+  custom_permissions:[
+   'receipts.review',
+   'receipts.view_economics'
+  ]
+ };
+
+ queries=[];
+
+ const data=(
+  await request(
+   'GET',
+   '/'+r.id
+  )
+ ).data;
+
+ assert.equal(
+  data.economics.total,
+  '987654'
+ );
+
+ assert.equal(
+  data.economics.currency,
+  'USD'
+ );
+
+ assert.equal(
+  data.economics.raw_extraction,
+  undefined
+ );
+
+ assert.equal(
+  queries.filter(q=>
+   q.sql.includes('receipt_submission_economics')
+  ).length,
+  1
+ );
 });
+
 test('economic input and server-owned fields rejected with 400 at every operational level',async()=>{
  const a=await fixture(),r=await create();
  for(const key of [...forbidden,'company_id','created_by','status','source_storage_key','source_filename','source_mime_type']){
@@ -87,6 +518,7 @@ test('economic input and server-owned fields rejected with 400 at every operatio
  assert.equal((await request('PUT','/'+r.id+'/lines',{lines:[line],economics:{total:1}})).status,400);
  user=a.review;assert.equal((await request('PATCH','/'+r.id,{total:1})).status,400);
 });
+
 test('submit locks capture editing; reviewer can correct and reject without deleting',async()=>{
  const a=await fixture(),r=await create();assert.equal((await request('POST','/'+r.id+'/submit',{})).status,400);
  await lines(r.id);const sent=await request('POST','/'+r.id+'/submit',{});assert.equal(sent.data.status,'pending_validation');assert.ok(sent.data.submitted_at);
@@ -98,6 +530,7 @@ test('submit locks capture editing; reviewer can correct and reject without dele
  const rejected=await request('POST','/'+r.id+'/reject',{reason:'Documento ilegible'});assert.equal(rejected.data.status,'rejected');assert.equal(rejected.data.rejection_reason,'Documento ilegible');assert.equal(rejected.data.rejected_by,a.actor);assert.ok(rejected.data.rejected_at);assert.equal(rejected.data.lines.length,1);
  assert.equal((await request('PATCH','/'+r.id,{notes:'no'})).status,409);user=a.capture;assert.equal((await request('GET','/'+r.id)).data.status,'rejected');assert.equal((await request('POST','/'+r.id+'/submit',{})).status,409);
 });
+
 test('permissions all/custom and absent tenant; no approval endpoint even for approvers',async()=>{
  const a=await fixture(),r=await pending();
  assert.equal((await request('GET','/review')).status,403);assert.equal((await request('POST','/'+r.id+'/reject',{reason:'no'})).status,403);
@@ -108,10 +541,12 @@ test('permissions all/custom and absent tenant; no approval endpoint even for ap
  user={...a.capture,custom_permissions:['all']};assert.equal((await request('GET','/review')).status,200);
  user={...a.capture,company_id:null};assert.equal((await request('GET','/mine')).status,403);
 });
+
 test('safe product lookup requires no inventory.view and never selects prices',async()=>{
  const a=await fixture(),b=await fixture();user=a.capture;queries=[];
  const result=await request('GET','/products?search=Producto');assert.equal(result.status,200);assert.deepEqual(result.data.map(p=>p.id),[a.product]);assert.deepEqual(Object.keys(result.data[0]).sort(),['id','name','unit']);noEconomics(result.data);assert.ok(!queries.some(q=>q.sql.includes('price')));
 });
+
 test('line replacement rolls back entirely on second insert failure and validates quantity/unit/date/match',async()=>{
  const a=await fixture(),r=await create();await lines(r.id);const before=(await request('GET','/'+r.id)).data.lines;
  for(const patch of [{quantity:0},{quantity:-1},{quantity:'1.1234567'},{unit:'invalid'},{expiration_date:'2026-02-30'},{unit:'L',matched_product_id:a.product}])assert.equal((await lines(r.id,[{...line,...patch}])).status,400);
@@ -120,15 +555,18 @@ test('line replacement rolls back entirely on second insert failure and validate
  const matched=await lines(r.id,[{...line,matched_product_id:a.product}]);assert.equal(matched.status,200);assert.equal(matched.data.lines[0].match_status,'proposed');assert.equal(matched.data.lines[0].matched_product_name,'Producto de prueba');assert.equal(matched.data.lines[0].raw_description,'Semilla documental');
  assert.equal((await lines(r.id,[{raw_description:'Sin cantidad',quantity:null,unit:null}])).status,200);
 });
+
 test('duplicate warning includes supplier and tenant, never leaks IDs or blocks different suppliers',async()=>{
  const a=await fixture();await create({supplier_name:'Proveedor A',document_number:'1'});
  const duplicate=await create({supplier_name:' proveedor a ',document_number:'1'});assert.equal(duplicate.warnings[0].code,'possible_duplicate');assert.deepEqual(Object.keys(duplicate.warnings[0]).sort(),['code','message']);
  assert.equal((await create({supplier_name:'Proveedor B',document_number:'1'})).warnings.length,0);
  await fixture();assert.equal((await create({supplier_name:'Proveedor A',document_number:'1'})).warnings.length,0);
 });
+
 async function upload(id,bytes='%PDF-1.7 synthetic',type='application/pdf'){
  const body=new FormData();body.append('file',new Blob([bytes],{type}),'test.pdf');const response=await fetch(origin+'/'+id+'/document',{method:'PUT',body});return {status:response.status,data:await response.json()};
 }
+
 test('private documents enforce ownership/state/tenant, validate bytes and compensate failed upload',async()=>{
  const a=await fixture(),r=await create();storageCalls=[];
  const stranger=await fixture(a.company);assert.equal((await upload(r.id)).status,404);assert.equal(storageCalls.length,0);user=a.capture;
@@ -139,6 +577,7 @@ test('private documents enforce ownership/state/tenant, validate bytes and compe
  await lines(r.id);await request('POST','/'+r.id+'/submit',{});assert.equal((await upload(r.id)).status,409);
  await fixture();const count=storageCalls.length;assert.equal((await request('GET','/'+r.id+'/document-url')).status,404);assert.equal((await upload(r.id)).status,404);assert.equal(storageCalls.length,count);
 });
+
 test('migration denies direct API roles including economics and private Storage',async()=>{
  for(const role of ['anon','authenticated']){
   for(const table of ['receipt_submissions','receipt_submission_lines','receipt_submission_economics']){
