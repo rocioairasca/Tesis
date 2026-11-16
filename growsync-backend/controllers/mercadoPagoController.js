@@ -1,3 +1,4 @@
+const intents = require('../services/registrationIntents');
 const crypto = require('crypto');
 const { Preference, Payment } = require('mercadopago');
 const mercadoPagoClient = require('../src/config/mercadoPago');
@@ -5,16 +6,8 @@ const mercadoPagoClient = require('../src/config/mercadoPago');
 const preferenceClient = new Preference(mercadoPagoClient);
 const paymentClient = new Payment(mercadoPagoClient);
 
-const PLAN_CONFIG = {
-  basic: {
-    label: 'Plan Basico',
-    amount: 20000,
-  },
-  professional: {
-    label: 'Plan Profesional',
-    amount: 45000,
-  },
-};
+const { PLAN_CONFIG } = require('../services/registrationPayments');
+const { pool } = require('../db/supabaseClient');
 
 function isLocalReturnUrl(returnUrl) {
   try {
@@ -26,11 +19,12 @@ function isLocalReturnUrl(returnUrl) {
 }
 
 const createPaymentPreference = async (req, res) => {
-  console.log('Entro al controller createPaymentPreference');
+  res.set('Cache-Control', 'no-store');
 
   try {
+    if (!pool) return res.status(503).json({ message: 'El registro no está disponible temporalmente' });
     const { plan } = req.body;
-    const selectedPlan = PLAN_CONFIG[plan];
+    const selectedPlan = Object.hasOwn(PLAN_CONFIG, plan) ? PLAN_CONFIG[plan] : null;
 
     if (!selectedPlan) {
       return res.status(400).json({
@@ -51,16 +45,11 @@ const createPaymentPreference = async (req, res) => {
     }).toString()}`;
     const shouldAutoReturn = !isLocalReturnUrl(paymentReturnUrl);
 
-    console.log('Mercado Pago return URL:', {
-      paymentReturnUrl,
-      shouldAutoReturn,
-    });
-
     const preferenceBody = {
       items: [
         {
           id: plan,
-          title: `GrowSync - ${selectedPlan.label}`,
+          title: `GrowSync - Plan ${selectedPlan.label}`,
           description: 'Suscripcion a la plataforma GrowSync',
           quantity: 1,
           currency_id: 'ARS',
@@ -70,7 +59,7 @@ const createPaymentPreference = async (req, res) => {
       external_reference: externalReference,
       metadata: {
         plan,
-        plan_label: selectedPlan.label,
+        plan_label: `Plan ${selectedPlan.label}`,
       },
       back_urls: {
         success: paymentReturnUrl,
@@ -87,8 +76,17 @@ const createPaymentPreference = async (req, res) => {
       body: preferenceBody,
     });
 
+    const { registrationToken, registrationTokenHash } = intents.issue();
+    // The private secret is never included in the Mercado Pago request or checkout URL.
+    // Persist server-owned terms before exposing a checkout URL to the browser.
+    await pool.query(`INSERT INTO public.company_registration_payments
+      (provider,reference,preference_id,plan,amount,currency,registration_token_hash)
+      VALUES ('mercadopago',$1,$2,$3,$4,'ARS',$5)`,
+    [externalReference, preferenceResponse.id, plan, selectedPlan.amount, registrationTokenHash]);
+
     return res.status(201).json({
       message: 'Preferencia de pago creada correctamente',
+      registrationToken,
       preference: {
         id: preferenceResponse.id,
         externalReference,
@@ -96,16 +94,14 @@ const createPaymentPreference = async (req, res) => {
           preferenceResponse.init_point ||
           preferenceResponse.sandbox_init_point,
         plan,
-        planLabel: selectedPlan.label,
+        planLabel: `Plan ${selectedPlan.label}`,
         amount: selectedPlan.amount,
         currency: 'ARS',
       },
     });
   } catch (error) {
     console.error('Error al crear preferencia de Mercado Pago:', {
-      message: error.message,
       status: error.status,
-      cause: error.cause,
     });
 
     return res.status(500).json({
@@ -115,6 +111,7 @@ const createPaymentPreference = async (req, res) => {
 };
 
 const getPaymentStatus = async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const { paymentId } = req.params;
 
@@ -124,9 +121,12 @@ const getPaymentStatus = async (req, res) => {
       });
     }
 
-    const payment = await paymentClient.get({
-      id: paymentId,
+    const intent = await intents.validate(pool, {
+      provider: 'mercadopago', reference: req.get('X-Registration-Reference'),
+      registrationToken: req.get('X-Registration-Token'),
     });
+    const payment = await paymentClient.get({ id: paymentId });
+    if (payment.external_reference !== intent.reference) throw intents.denied();
 
     return res.status(200).json({
       message: 'Pago consultado correctamente',
@@ -145,8 +145,9 @@ const getPaymentStatus = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error al consultar el pago', error);
+    console.error('Error al consultar el pago', { status: error.status });
 
+    if ([403,409,503].includes(error.status)) return res.status(error.status).json({ message: error.message });
     return res.status(500).json({
       message: 'No se pudo consultar el pago',
     });
@@ -154,6 +155,7 @@ const getPaymentStatus = async (req, res) => {
 };
 
 const getPaymentByReference = async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const { externalReference } = req.params;
 
@@ -163,6 +165,8 @@ const getPaymentByReference = async (req, res) => {
       });
     }
 
+    await intents.validate(pool, { provider: 'mercadopago', reference: externalReference,
+      registrationToken: req.get('X-Registration-Token') });
     const searchResponse = await paymentClient.search({
       options: {
         external_reference: externalReference,
@@ -170,7 +174,7 @@ const getPaymentByReference = async (req, res) => {
     });
 
     const payments = searchResponse.results || [];
-    const payment = payments[0];
+    const payment = payments.find(item => item.external_reference === externalReference);
 
     if (!payment) {
       return res.status(200).json({
@@ -197,11 +201,10 @@ const getPaymentByReference = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al buscar pago por referencia:', {
-      message: error.message,
       status: error.status,
-      cause: error.cause,
     });
 
+    if ([403,409,503].includes(error.status)) return res.status(error.status).json({ message: error.message });
     return res.status(500).json({
       message: 'No se pudo consultar el estado del pago',
     });

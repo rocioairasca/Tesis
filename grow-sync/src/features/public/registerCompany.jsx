@@ -108,7 +108,7 @@ const RegisterCompany = () => {
 
       navigate("/login");
     } catch (error) {
-      console.error(error);
+      // Do not log request headers or registration credentials.
 
       notification.error({
         message: "No se pudo crear la empresa",

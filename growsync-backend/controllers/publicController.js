@@ -1,8 +1,8 @@
-const supabase = require("../db/supabaseClient");
 const { pool } = require("../db/supabaseClient");
 const axios = require("axios");
 const { Payment } = require("mercadopago");
 const mercadoPagoClient = require("../src/config/mercadoPago");
+const registrationPayments = require("../services/registrationPayments");
 const { seedDefaultCrops } = require("../services/defaultCrops");
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
@@ -16,138 +16,58 @@ const getAuth0ManagementToken = async () => {
     client_secret: AUTH0_CLIENT_SECRET,
     audience: `https://${AUTH0_DOMAIN}/api/v2/`,
     grant_type: "client_credentials",
-  });
+  }, { timeout: 10000 });
 
   return data.access_token;
 };
 
 exports.registerCompany = async (req, res) => {
+  let client;
   try {
-    const {
-      companyName,
-      adminName,
-      email,
-      password,
-      paymentId,
-      mercadoPagoExternalReference,
-    } = req.body;
-
-    if (
-      !companyName ||
-      !adminName ||
-      !email ||
-      !password ||
-      (!paymentId && !mercadoPagoExternalReference)
-    ) {
-      return res.status(400).json({
-        error: "BadRequest",
-        message: "Faltan datos obligatorios",
-      });
+    const { companyName, adminName, email, password, paymentId, mercadoPagoExternalReference } = req.body || {};
+    if ([companyName, adminName, email, password].some(value => typeof value !== 'string' || !value.trim())) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Faltan datos obligatorios' });
     }
-
-    let paymentApproved = false;
-
-    if (paymentId) {
-      const { data: payment, error: paymentError } = await supabase
-        .from("payments")
-        .select("id,status")
-        .eq("id", paymentId)
-        .maybeSingle();
-
-      if (paymentError) throw paymentError;
-
-      paymentApproved = payment?.status === "approved";
-    } else {
-      const searchResponse = await mercadoPagoPaymentClient.search({
-        options: {
-          external_reference: mercadoPagoExternalReference,
-        },
-      });
-
-      const mercadoPagoPayment = searchResponse.results?.[0];
-      paymentApproved = mercadoPagoPayment?.status === "approved";
-    }
-
-    if (!paymentApproved) {
-      return res.status(402).json({
-        error: "PaymentRequired",
-        message: "Debes confirmar el pago antes de registrar la empresa",
-      });
-    }
-
+    const registrationToken = req.get('X-Registration-Token');
+    res.set('Cache-Control', 'no-store');
+    const payment = await registrationPayments.verify(pool, mercadoPagoPaymentClient,
+      { paymentId, mercadoPagoExternalReference, registrationToken });
     const normalizedEmail = email.toLowerCase().trim();
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await registrationPayments.claim(client, payment, registrationToken);
 
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
+    const existing = await client.query('SELECT id FROM users WHERE email=$1', [normalizedEmail]);
+    if (existing.rows.length) throw Object.assign(new Error('Ya existe un usuario con ese email'), { status: 409 });
 
-    if (existingUser) {
-      return res.status(409).json({
-        error: "Conflict",
-        message: "Ya existe un usuario con ese email",
-      });
-    }
-
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .insert({
-        name: companyName.trim(),
-      })
-      .select()
-      .single();
-
-    if (companyError) throw companyError;
-
-    if (pool) {
-      const client = await pool.connect();
-      try {
-        await seedDefaultCrops(client, company.id);
-      } finally {
-        client.release();
-      }
-    }
-
+    const { rows: [company] } = await client.query('INSERT INTO companies(name) VALUES($1) RETURNING *', [companyName.trim()]);
+    await seedDefaultCrops(client, company.id);
     const managementToken = await getAuth0ManagementToken();
-
-    const { data: auth0User } = await axios.post(
-      `https://${AUTH0_DOMAIN}/api/v2/users`,
-      {
-        email: normalizedEmail,
-        password,
-        name: adminName,
-        connection: "Username-Password-Authentication",
-        email_verified: false,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${managementToken}`,
-        },
-      }
-    );
-
-    const { error: userError } = await supabase.from("users").insert({
+    const { data: auth0User } = await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users`, {
       email: normalizedEmail,
-      full_name: adminName.trim(),
-      role: 3,
-      enabled: true,
-      company_id: company.id,
-      auth0_id: auth0User.user_id,
-    });
+      password,
+      name: adminName,
+      connection: 'Username-Password-Authentication',
+      email_verified: false,
+    }, { headers: { Authorization: `Bearer ${managementToken}` }, timeout: 10000 });
 
-    if (userError) throw userError;
-
-    return res.status(201).json({
-      message: "Empresa y administrador creados correctamente",
-      company,
-    });
+    await client.query(`INSERT INTO users(email,full_name,role,enabled,company_id,auth0_id)
+      VALUES($1,$2,3,true,$3,$4)`, [normalizedEmail, adminName.trim(), company.id, auth0User.user_id]);
+    await client.query(`UPDATE public.company_registration_payments SET company_id=$3,consumed_at=now()
+      WHERE provider=$1 AND reference=$2`, [payment.provider, payment.reference, company.id]);
+    await client.query('COMMIT');
+    return res.status(201).json({ message: 'Empresa y administrador creados correctamente', company });
   } catch (error) {
-    console.error("Error registerCompany:", error?.response?.data || error);
-
-    return res.status(500).json({
-      error: "InternalServerError",
-      message: "No se pudo registrar la empresa",
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    const status = error.code === '23505' ? 409 : error.status || 500;
+    // Never log the Axios request, password, tokens or provider response bodies.
+    console.error('Error registerCompany:', { status, code: error.code });
+    return res.status(status).json({
+      error: status === 409 ? 'Conflict' : status === 402 ? 'PaymentRequired' : status === 403 ? 'Forbidden' : 'InternalServerError',
+      message: error.code === '23505' ? 'El pago o usuario ya fue registrado' :
+        [402,403,409,503].includes(status) ? error.message : 'No se pudo registrar la empresa',
     });
+  } finally {
+    client?.release();
   }
 };

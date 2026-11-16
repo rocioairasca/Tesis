@@ -89,7 +89,6 @@ const PaymentSimulation = () => {
         plan: selectedPlan,
       });
 
-      console.log("Preferencia recibida:", result);
 
       if (!result?.preference?.checkoutUrl) {
         throw new Error(
@@ -115,10 +114,7 @@ const PaymentSimulation = () => {
           "Escaneá con tu celular para continuar con el pago.",
       });
     } catch (error) {
-      console.error(
-        "Error al crear la preferencia de pago:",
-        error
-      );
+      // Axios errors can include private registration headers; do not log them.
 
       notification.error({
         message: getUserFriendlyError(error, "No se pudo generar el código de pago."),
@@ -267,7 +263,7 @@ const PaymentSimulation = () => {
         setPaymentData(result.payment);
         setPaymentStatus(result.payment.status);
       } catch (error) {
-        console.error(error);
+        // Do not log Axios errors containing private registration headers.
       }
     };
 

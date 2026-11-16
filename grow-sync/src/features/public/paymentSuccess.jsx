@@ -20,6 +20,7 @@ const PaymentSuccess = () => {
   const [error, setError] = useState("");
 
   const paymentId = searchParams.get("payment_id");
+  const externalReference = searchParams.get("externalReference") || searchParams.get("external_reference") || undefined;
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -30,7 +31,7 @@ const PaymentSuccess = () => {
       }
 
       try {
-        const response = await getMercadoPagoPaymentStatus(paymentId);
+        const response = await getMercadoPagoPaymentStatus(paymentId, externalReference);
 
         setPayment(response.payment);
 
@@ -41,7 +42,7 @@ const PaymentSuccess = () => {
           );
         }
       } catch (requestError) {
-        console.error("Error al verificar el pago:", requestError);
+        // Do not log Axios errors containing private registration headers.
 
         setError(
           getUserFriendlyError(requestError, "No se pudo verificar el pago.")
@@ -52,7 +53,7 @@ const PaymentSuccess = () => {
     };
 
     verifyPayment();
-  }, [paymentId]);
+  }, [paymentId, externalReference]);
 
   if (loading) {
     return (
