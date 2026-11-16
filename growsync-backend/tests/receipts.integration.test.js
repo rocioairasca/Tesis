@@ -606,3 +606,32 @@ test('storage policy blocks the new bucket even when an older policy permits aut
  try{await db.exec('SET ROLE authenticated');assert.deepEqual((await db.query('SELECT bucket_id FROM storage.objects')).rows,[{bucket_id:'unrelated-bucket'}]);}
  finally{await db.exec('RESET ROLE');}
 });
+
+
+test('extract does not call the provider when disconnected during document download', async (t) => {
+  const { EventEmitter } = require('node:events');
+  const documents = require('../services/receiptDocuments');
+  let finishDownload;
+  t.mock.method(documents, 'readForExtraction', () => new Promise(resolve => {
+    finishDownload = resolve;
+  }));
+  const extract = t.mock.fn(async () => ({}));
+  const router = routes({ receiptExtractor: extract });
+  const handler = router.stack.find(layer => layer.route?.path === '/:id/extract')
+    .route.stack.at(-1).handle;
+  const response = new EventEmitter();
+  response.writableEnded = false;
+  response.json = t.mock.fn();
+  const next = t.mock.fn();
+  const pending = handler({ body: {}, params: { id: uuid() }, user: {} }, response, next);
+
+  // The connection closes while Storage is still pending, before AI starts.
+  response.emit('close');
+  finishDownload({ buffer: Buffer.from('%PDF-1.7 synthetic'), mimetype: 'application/pdf' });
+  await pending;
+
+  assert.equal(extract.mock.callCount(), 0);
+  assert.equal(response.json.mock.callCount(), 0);
+  assert.equal(next.mock.callCount(), 0);
+  assert.equal(response.listenerCount('close'), 0);
+});

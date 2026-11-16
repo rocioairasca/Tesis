@@ -38,12 +38,6 @@ module.exports=dependencies=>{
             req.body || {},
             );
 
-            const file =
-            await documents.readForExtraction(
-                dependencies,
-                input(req),
-            );
-
             const controller =
             new AbortController();
 
@@ -56,6 +50,16 @@ module.exports=dependencies=>{
             res.once('close', abort);
 
             try {
+            const file =
+            await documents.readForExtraction(
+                dependencies,
+                input(req),
+            );
+
+            if (controller.signal.aborted || res.destroyed) {
+                return;
+            }
+
             const data = await (
                 dependencies.receiptExtractor ||
                 extraction.extract
