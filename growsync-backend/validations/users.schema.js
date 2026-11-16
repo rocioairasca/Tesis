@@ -23,3 +23,11 @@ exports.updateRole = z.object({
     role: z.coerce.number().int().min(0).max(3), // 0..3
   }),
 });
+
+
+exports.invite = z.object({
+  body: z.object({
+    email: z.string().trim().toLowerCase().email('Email inválido'),
+    role: z.number().int().min(0).max(2),
+  }).strict(),
+});

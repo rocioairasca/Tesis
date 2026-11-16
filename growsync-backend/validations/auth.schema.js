@@ -10,7 +10,7 @@ exports.register = z.object({
     username: z.string().trim().min(1, 'Nombre requerido').optional(),
     full_name: z.string().trim().min(1, 'Nombre requerido').optional(),
     token: z.string().min(1, 'Token requerido'),
-  }),
+  }).strict(),
 });
 
 exports.login = z.object({

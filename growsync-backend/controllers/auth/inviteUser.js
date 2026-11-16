@@ -1,23 +1,23 @@
 const crypto = require('crypto');
 const supabase = require('../../db/supabaseClient');
+const { getEffectivePermissions, PERMISSIONS } = require('../../constants/permissions');
+const schema = require('../../validations/users.schema');
 
 module.exports = async function inviteUser(req, res) {
-    // 1) Verificar que el solicitante sea Supervisor (role 1), Owner (role 2), o Admin (role 3)
-    // req.user viene del middleware checkJwt + userData
-    const { role, company_id } = req.user;
-
-    if (role !== 1 && role !== 2 && role !== 3) {
+    res.set('Cache-Control', 'no-store');
+    const actor = req.user;
+    const permissions = getEffectivePermissions(actor);
+    if (!permissions.includes('all') && !permissions.includes(PERMISSIONS.USERS_INVITE)) {
         return res.status(403).json({ error: 'Forbidden', message: 'No tienes permisos para invitar usuarios' });
     }
-
-    if (!company_id) {
-        return res.status(400).json({ error: 'BadRequest', message: 'Tu usuario no pertenece a ninguna empresa' });
+    const parsed = schema.invite.safeParse({ body: req.body });
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'ValidationError', message: 'Enviá solamente email válido y rol entero entre 0 y 2' });
     }
-
-    const { email, role: inviteRole } = req.body;
-
-    if (!email) {
-        return res.status(400).json({ error: 'BadRequest', message: 'El email es requerido' });
+    const { email, role: inviteRole } = parsed.data.body;
+    const { role, company_id } = actor;
+    if (!company_id || !Number.isInteger(role) || role < 0 || role > 3 || inviteRole > role) {
+        return res.status(403).json({ error: 'Forbidden', message: 'No puedes invitar ese rol en tu empresa' });
     }
 
     // 2) Generar token unico
@@ -33,7 +33,7 @@ module.exports = async function inviteUser(req, res) {
                 email,
                 token,
                 company_id,
-                role: inviteRole || 0, // 0 por defecto (User)
+                role: inviteRole,
                 expires_at: expiresAt,
                 used: false
             }])
@@ -41,7 +41,7 @@ module.exports = async function inviteUser(req, res) {
             .single();
 
         if (error) {
-            console.error('Error creating invitation:', error);
+            console.error('Error creating invitation:', { code: error.code });
             return res.status(500).json({ error: 'DbError', message: 'Error al crear la invitación' });
         }
 
@@ -59,7 +59,7 @@ module.exports = async function inviteUser(req, res) {
         });
 
     } catch (err) {
-        console.error('Invite error:', err);
+        console.error('Invite error:', { code: err.code });
         return res.status(500).json({ error: 'ServerError', message: 'Error interno al procesar la invitación' });
     }
 };

@@ -6,6 +6,7 @@ const supabase = require('../../db/supabaseClient');
  * Endpoint público para autocompletar el formulario de registro
  */
 module.exports = async function getInvitation(req, res) {
+    res.set('Cache-Control', 'no-store');
     const { token } = req.params;
 
     if (!token) {
@@ -15,13 +16,13 @@ module.exports = async function getInvitation(req, res) {
     try {
         const { data: invite, error } = await supabase
             .from('invitations')
-            .select('email, role, expires_at, companies(name)')
+            .select('email, role, company_id, expires_at, companies(name)')
             .eq('token', token)
             .eq('used', false)
             .gt('expires_at', new Date().toISOString())
             .single();
 
-        if (error || !invite) {
+        if (error || !invite || ![0, 1, 2].includes(invite.role) || !invite.company_id) {
             return res.status(404).json({ error: 'NotFound', message: 'Invitación no encontrada o expirada' });
         }
 
@@ -33,7 +34,7 @@ module.exports = async function getInvitation(req, res) {
         });
 
     } catch (err) {
-        console.error('Get invitation error:', err);
+        console.error('Get invitation error:', { code: err.code });
         return res.status(500).json({ error: 'ServerError', message: 'Error al obtener la invitación' });
     }
 };

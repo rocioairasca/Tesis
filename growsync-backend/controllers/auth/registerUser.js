@@ -38,7 +38,9 @@ function mapAuth0RegisterError(err) {
 }
 
 module.exports = async function registerUser(req, res) {
-  const { email, password, username } = req.body;
+  res.set('Cache-Control', 'no-store');
+  const { password, username } = req.body;
+  const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
 
   // 1) Validacion basica
   if (!email || !password) {
@@ -77,11 +79,11 @@ module.exports = async function registerUser(req, res) {
       .gt('expires_at', new Date().toISOString())
       .single();
 
-    if (inviteError || !invite) {
+    if (inviteError || !invite || ![0, 1, 2].includes(invite.role) || !invite.company_id) {
       return res.status(403).json({ error: 'InvalidToken', message: 'Invitación inválida o expirada' });
     }
 
-    if (invite.email.toLowerCase() !== email.toLowerCase()) {
+    if (invite.email.trim().toLowerCase() !== email) {
       return res.status(400).json({ error: 'BadRequest', message: 'El email no coincide con la invitación' });
     }
 
@@ -93,7 +95,7 @@ module.exports = async function registerUser(req, res) {
       .maybeSingle();
 
     if (pre.error && pre.error.code && pre.error.code !== 'PGRST116') {
-      console.error('Supabase pre-check error:', pre.error);
+      console.error('Supabase pre-check error:', { code: pre.error.code });
       return res.status(500).json({ error: 'DbError', message: 'Error verificando email' });
     }
     if (pre.data) {
@@ -173,7 +175,7 @@ module.exports = async function registerUser(req, res) {
       } catch (delErr) {
         console.error('⚠️ Falló el rollback en Auth0:', delErr.response?.data || delErr.message);
       }
-      console.error('Supabase insert error:', error);
+      console.error('Supabase insert error:', { code: error.code });
       return res.status(500).json({ error: 'DbError', message: 'Error al guardar el usuario en la base de datos' });
     }
 
@@ -218,8 +220,6 @@ module.exports = async function registerUser(req, res) {
     console.error('Register error:', {
       status: err.response?.status,
       code: mappedError.error,
-      description: mappedError.details,
-      auth0: err.response?.data,
     });
 
     return res.status(mappedError.status).json({

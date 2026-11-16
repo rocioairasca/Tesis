@@ -24,6 +24,8 @@ const Users = () => {
   const [form] = Form.useForm();
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canInvite = hasPermission(currentUser, PERMISSIONS.USERS_INVITE);
+  const inviteRoleOptions = Number.isInteger(currentUser?.role)
+    ? ROLE_OPTIONS.filter(option => option.value <= currentUser.role) : [];
 
   const handleInvite = async (values) => {
     try {
@@ -98,7 +100,7 @@ const Users = () => {
               rules={[{ required: true, message: "Por favor seleccione un rol" }]}
               initialValue={0}
             >
-              <Select options={ROLE_OPTIONS} />
+              <Select options={inviteRoleOptions} />
             </Form.Item>
 
             <Form.Item>
