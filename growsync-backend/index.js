@@ -2,10 +2,12 @@
 // Core & Setup
 // ---------------------------------------------------
 const express = require('express');
-const cors = require('cors');
+const { configureHttpSecurity } = require('./middleware/httpSecurity');
+const { createPublicRateLimits } = require('./middleware/publicRateLimits');
 require('dotenv').config();
 
 const app = express();
+configureHttpSecurity(app);
 
 // ---------------------------------------------------
 // Conexión a la base de datos Supabase
@@ -23,27 +25,12 @@ const supabase = require('./db/supabaseClient');
 // ---------------------------------------------------
 // Middleware
 // ---------------------------------------------------
-const allowedOrigins = [
-  "https://tesis-seven-phi.vercel.app",
-  process.env.FRONTEND_URL,
-  "http://localhost:3000",
-  "http://localhost:5173",
-].filter(Boolean);
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error("No permitido por CORS: " + origin));
-  },
-  credentials: true,
-}));
 
 app.use('/api/history', express.json({ limit: '5mb' }));
 app.use('/api/soil-analysis', express.json({ limit: '2mb' }));
 app.use('/api/receipts', express.json({ limit: '1mb' }));
 app.use(express.json());
+app.use(createPublicRateLimits());
 
 // ---------------------------------------------------
 // Rutas publicas (no usan token)

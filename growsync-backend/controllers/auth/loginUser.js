@@ -4,6 +4,7 @@
 const axios = require("axios");
 
 const loginUser = async (req, res) => {
+  res.set("Cache-Control", "no-store");
   const { email, password } = req.body;
 
   // 1) Validacion rapida de entrada
@@ -21,7 +22,7 @@ const loginUser = async (req, res) => {
   } = process.env;
 
   if (!AUTH0_DOMAIN || !AUTH0_API_AUDIENCE || !AUTH0_CLIENT_ID || !AUTH0_CLIENT_SECRET) {
-    return res.status(500).json({ error: "ServerConfig", message: "Faltan variables de entorno de Auth0" });
+    return res.status(500).json({ error: "ServerConfig", message: "No se pudo iniciar sesión" });
   }
 
   try {
@@ -45,7 +46,7 @@ const loginUser = async (req, res) => {
 
     if (!data?.access_token) {
       // Algo anduvo mal del lado de Auth0
-      return res.status(502).json({ error: "Auth0Response", message: "Auth0 no devolvió access_token" });
+      return res.status(502).json({ error: "Auth0Response", message: "No se pudo iniciar sesión" });
     }
 
     // 4) Responder: el front debe usar el access_token en Authorization: Bearer <token>
@@ -61,7 +62,6 @@ const loginUser = async (req, res) => {
     // 5) Manejo fino de errores de Auth0
     const ax = err.response?.data || {};
     const code = ax.error || err.code;
-    const description = ax.error_description || err.message;
 
     // Casos comunes
     if (code === "invalid_grant") {
@@ -76,15 +76,18 @@ const loginUser = async (req, res) => {
       });
     }
     if (code === "too_many_requests" || err.response?.status === 429) {
+      res.set("Retry-After", "60");
       return res.status(429).json({ error: "too_many_requests", message: "Demasiados intentos, intenta más tarde" });
     }
     if (code === "access_denied") {
-      return res.status(403).json({ error: "access_denied", message: "Acceso denegado por el proveedor de identidad" });
+      return res.status(403).json({ error: "access_denied", message: "Acceso denegado" });
     }
 
     // Log minimal (sin credenciales)
-    console.error("Login error:", { status: err.response?.status, code, description });
-    return res.status(500).json({ error: "AuthError", message: "No se pudo iniciar sesión", details: description });
+    const safeCodes = ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED', 'ERR_NETWORK', 'server_error', 'temporarily_unavailable'];
+    const status = Number.isInteger(err.response?.status) ? err.response.status : undefined;
+    console.error("Login error:", { status, code: safeCodes.includes(code) ? code : 'provider_error' });
+    return res.status(500).json({ error: "AuthError", message: "No se pudo iniciar sesión" });
   }
 };
 

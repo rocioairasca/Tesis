@@ -11,7 +11,8 @@ module.exports = (err, req, res, _next) => {
   console.error('❌ Error:', {
     name: err.name,
     type: err.type,
-    message: err.message,
+    // JSON parse errors may include a fragment of credentials from the request body.
+    message: err.type === 'entity.parse.failed' ? 'JSON inválido' : err.message,
     code: err.code,
     status: err.status,
     ...(err.adoptionDiagnostic ? { adoptionDiagnostic: err.adoptionDiagnostic } : {})
