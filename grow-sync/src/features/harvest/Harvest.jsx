@@ -8,7 +8,7 @@ import { PlusOutlined } from "../../components/AppIcons";
 
 
 import HarvestTable from "./HarvestTable";
-import HarvestResults from "./HarvestResults";
+import HarvestResults from "./HarvestResults.jsx";
 import HarvestCostForm from "./HarvestCostForm";
 import HarvestFilters from "./HarvestFilters";
 import { getHarvestFilters } from "../../services/harvestService";

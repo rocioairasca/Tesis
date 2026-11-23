@@ -4,7 +4,7 @@ import { Metric, EmptyState, ErrorState, LoadingState, StatusBadge } from '../..
 import useIsMobile from '../../hooks/useIsMobile';
 import { getHarvestResults } from '../../services/harvestService';
 import { formatNumber } from '../../utils/numberFormat';
-import { costStatus, formatArea, formatCostPerHa, formatCostPerTn, formatKnownCost, formatProduction, formatUsd, formatYield, harvestStatus, hasCostAccess,
+import { costStatus, formatArea, formatCostPerHa, formatCostPerTn, formatKnownCost, formatProductionUnit, formatUsd, formatYield, harvestStatus, hasCostAccess,
   proratedNote, recordsFilterFor, resultKeyParams, resultParams, sameResult, summaryCostHelp, treeRows, unclassifiedNote } from './harvestResults.mjs';
 import HarvestResultDetail from './HarvestResultDetail';
 
@@ -54,26 +54,26 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
     {formatNumber(row.records_count, 0)}</Button>;
   const columns = [
     { title: 'Lote', key: 'lot', render: (_, row) => <span className="gs-harvest-lot"><Button type="link" size="small" className="gs-harvest-open" onClick={() => open(row)} aria-label={`Ver detalle de ${row.lot.name}${row.sub_lot ? ' ' + row.sub_lot.name : ''}`}>
-      <strong title={row.sub_lot ? row.sub_lot.name : row.lot.name}>{title(row)}</strong></Button><Prorated row={row} />{costAccess && <small className="gs-harvest-lot-surface">{formatArea(row.surface_ha)}</small>}</span> },
+      <strong title={row.sub_lot ? row.sub_lot.name : row.lot.name}>{title(row)}</strong></Button><Prorated row={row} /><small className="gs-harvest-lot-surface">{formatArea(row.surface_ha)}</small></span> },
     { title: 'Cultivo', key: 'crop', width: 110, render: (_, row) => row.crop.name || '—' },
     { title: 'Superficie', key: 'surface', width: 100, align: 'right', render: (_, row) => formatArea(row.surface_ha) },
-    { title: 'Producción', key: 'production', width: 130, align: 'right', render: (_, row) => formatProduction(row.production_kg) },
+    { title: 'Producción', key: 'production', width: 130, align: 'right', render: (_, row) => formatProductionUnit(row.production_kg, unit) },
     ...(costAccess ? [] : [{ title: 'Sup. cosechada', key: 'harvested', width: 130, align: 'right', render: (_, row) => formatArea(row.harvested_area_ha) }]),
     { title: 'Rendimiento', key: 'yield', width: 130, align: 'right', render: (_, row) => formatYield(row.yield_kg_ha, unit) },
     { title: 'Registros', key: 'records', width: 80, align: 'right', render: (_, row) => recordsButton(row) },
     { title: 'Cosecha', key: 'status', width: 110, render: (_, row) => <StatusCell row={row} /> },
     ...(costAccess ? [
+      { title: 'Estado económico', key: 'cost_status', width: 130, className: 'gs-harvest-col-econ-first', onHeaderCell: () => ({ className: 'gs-harvest-col-econ-first' }), render: (_, row) => <CostStatus row={row} /> },
       { title: 'Gastos', key: 'cost', width: 150, align: 'right', render: (_, row) => <span className={hasKnownCostClass(row)}>{formatKnownCost(row.costs)}</span> },
       { title: 'Gasto / ha', key: 'cost_ha', width: 120, align: 'right', render: (_, row) => formatCostPerHa(row.costs) },
       { title: 'Costo / tn', key: 'cost_tn', width: 130, align: 'right', render: (_, row) => <>{formatCostPerTn(row.costs)}<Provisional row={row} /></> },
-      { title: 'Estado económico', key: 'cost_status', width: 130, render: (_, row) => <CostStatus row={row} /> },
     ] : []),
   ];
   const panel = selected && !mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={onChanged} />;
   return <>
     {summary && <div className={`gs-harvest-summary ${costAccess ? 'gs-harvest-summary--4' : ''}`} aria-label="Resumen de la selección">
       <Metric compact label="Superficie cosechada" value={formatArea(summary.harvested_area_ha)} />
-      <Metric compact label="Producción total" value={`${formatNumber(summary.production_kg)} kg`} />
+      <Metric compact label="Producción total" value={formatProductionUnit(summary.production_kg, unit)} />
       <Metric compact label="Lotes con resultados" value={formatNumber(summary.results, 0)} helper={`${formatNumber(summary.records, 0)} registros de cosecha`} />
       {costAccess && <Metric compact label="Gasto conocido" value={formatUsd(summary.known_cost_usd)}
         helper={`${summaryCostHelp} · ${formatNumber(summary.incomplete_lots, 0)} ${summary.incomplete_lots === 1 ? 'lote' : 'lotes'} con costos incompletos`} />}
@@ -91,13 +91,22 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
             const isOpen = expanded.includes(row.key);
             const card = (item, child) => <li key={item.key} className={child ? 'gs-harvest-result-child' : undefined}>
               <div className="gs-ui-record-heading"><Button type="link" size="small" className="gs-harvest-open" onClick={() => open(item)} aria-label={`Ver detalle de ${item.lot.name}${item.sub_lot ? ' ' + item.sub_lot.name : ''}`}><strong>{title(item)}</strong></Button><StatusCell row={item} /></div>
-              <div className="gs-harvest-mobile"><span>{item.crop.name} · {formatArea(item.surface_ha)}</span>
-                <span>Producción: {formatProduction(item.production_kg)}</span><span>Sup. cosechada: {formatArea(item.harvested_area_ha)}</span><span>Rendimiento: {formatYield(item.yield_kg_ha, unit)}</span>
-                {costAccess && <span className="gs-harvest-card-costs"><span>Gasto conocido: {formatKnownCost(item.costs)}</span><span>Costo / tn: {formatCostPerTn(item.costs)}{item.costs?.is_provisional ? ' (prov.)' : ''}</span>
-                  <span>Estado económico: <CostStatus row={item} /></span></span>}
+              <div className="gs-harvest-mobile">
+                <span className="gs-harvest-mobile-meta">{item.crop.name} · {formatArea(item.surface_ha)}</span>
+                <div className="gs-harvest-mobile-nums">
+                  <span><small>Producción</small><strong>{formatProductionUnit(item.production_kg, unit)}</strong></span>
+                  <span><small>Rendimiento</small><strong>{formatYield(item.yield_kg_ha, unit)}</strong></span>
+                  <span><small>Sup. cosechada</small><strong>{formatArea(item.harvested_area_ha)}</strong></span>
+                </div>
+                {costAccess && item.costs && <div className="gs-harvest-mobile-costs">
+                  <span className={hasKnownCostClass(item)}>{formatKnownCost(item.costs)}</span>
+                  <span className="gs-harvest-mobile-cost-unit">{formatCostPerTn(item.costs)}{item.costs?.is_provisional ? <small> prov.</small> : null}</span>
+                  <CostStatus row={item} />
+                </div>}
                 <Prorated row={item} />
                 <span className="gs-harvest-card-actions">{recordsButton(item)}{!child && item.children.length > 0 && <Button type="link" size="small" aria-expanded={isOpen}
-                  onClick={() => onExpanded(isOpen ? expanded.filter(key => key !== item.key) : [...expanded, item.key])}>{isOpen ? 'Ocultar subdivisiones' : `Ver ${item.children.length} subdivisiones`}</Button>}</span></div></li>;
+                  onClick={() => onExpanded(isOpen ? expanded.filter(key => key !== item.key) : [...expanded, item.key])}>{isOpen ? 'Ocultar subdivisiones' : `Ver ${item.children.length} subdivisiones`}</Button>}</span>
+              </div></li>;
             return <React.Fragment key={row.key}>{card(row, false)}{isOpen && row.children.map(child => card(child, true))}</React.Fragment>;
           })}</ul>}
         {mobile && data?.pagination.total > 0 && <Pagination simple className="gs-ui-pagination" current={data.pagination.page} pageSize={PAGE_SIZE} total={data.pagination.total} showSizeChanger={false} onChange={onPage} />}

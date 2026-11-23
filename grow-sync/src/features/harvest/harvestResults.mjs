@@ -26,6 +26,15 @@ export function formatYield(kgPerHa, unit = 'kg', { withUnit = true } = {}) {
 export const formatProduction = value => numberOrNull(value) == null ? 'Pendiente' : `${format(value)} kg`;
 export const formatArea = value => numberOrNull(value) == null ? '—' : `${format(value)} ha`;
 
+/** Formats production converting kg → selected unit (same divisors as yield). Pure presentation. */
+const PROD_UNIT_LABEL = { kg: 'kg', qq: 'qq', tn: 'tn' };
+export const formatProductionUnit = (kgValue, unit = 'kg') => {
+  const kg = numberOrNull(kgValue);
+  if (kg === null) return 'Pendiente';
+  const divisor = (YIELD_UNITS[unit] || YIELD_UNITS.kg).divisor;
+  return `${format(kg / divisor, 2)} ${PROD_UNIT_LABEL[unit] || 'kg'}`;
+};
+
 export const HARVEST_STATUS = {
   not_started: { label: 'Sin cosecha', tone: 'neutral' },
   in_progress: { label: 'En curso', tone: 'info' },

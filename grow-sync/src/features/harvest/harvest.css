@@ -106,7 +106,7 @@
 .gs-harvest-row--selected > td { background:var(--gs-surface-selected) !important; }
 .gs-harvest-card-costs { display:grid; gap:var(--gs-space-4); }
 .gs-harvest-results-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--gs-space-16); align-items:start; }
-.gs-harvest-results-layout--panel { grid-template-columns:minmax(0,1fr) 380px; }
+.gs-harvest-results-layout--panel { grid-template-columns:minmax(0,1fr) 440px; }
 .gs-harvest-result-detail { background:var(--gs-surface); border:1px solid var(--gs-border); border-radius:8px; min-width:0; }
 .gs-harvest-detail-header { display:flex; justify-content:space-between; align-items:flex-start; gap:var(--gs-space-8); padding:var(--gs-space-16); border-bottom:1px solid var(--gs-border); }
 .gs-harvest-detail-header h2 { font-size:18px; margin:0; overflow-wrap:anywhere; }
@@ -126,6 +126,20 @@
 @media (max-width:767px) { .gs-harvest-summary--4 { grid-template-columns:1fr; } }
 .gs-harvest-lot { flex-wrap:wrap; row-gap:0; }
 .gs-harvest-lot-surface { flex-basis:100%; color:var(--gs-text-secondary); font-size:12px; }
+
+/* FIN-01B/C: detail panel sections, economic column separator, mobile cards */
+.gs-harvest-detail-section { border-top:1px solid var(--gs-border); padding-top:var(--gs-space-8); }
+.gs-harvest-detail-body > .gs-harvest-detail-section:first-child { border-top:none; padding-top:0; }
+.gs-harvest-detail-section > h3 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--gs-text-secondary); margin:0 0 var(--gs-space-8); }
+.gs-harvest-note { margin:var(--gs-space-8) 0 0; font-size:12px; color:var(--gs-text-secondary); }
+.gs-harvest-col-econ-first { border-left:2px solid var(--gs-border) !important; }
+.gs-harvest-mobile-meta { font-size:13px; color:var(--gs-text-secondary); }
+.gs-harvest-mobile-nums { display:grid; grid-template-columns:1fr 1fr; gap:var(--gs-space-4) var(--gs-space-16); padding:var(--gs-space-8) 0; }
+.gs-harvest-mobile-nums span { display:flex; flex-direction:column; gap:2px; }
+.gs-harvest-mobile-nums small { font-size:11px; color:var(--gs-text-secondary); text-transform:uppercase; letter-spacing:0.04em; }
+.gs-harvest-mobile-nums strong { font-size:15px; font-weight:600; }
+.gs-harvest-mobile-costs { display:flex; align-items:center; gap:var(--gs-space-8); flex-wrap:wrap; padding:var(--gs-space-4) 0; border-top:1px solid var(--gs-border); font-size:13px; }
+.gs-harvest-mobile-cost-unit { color:var(--gs-text-secondary); font-size:12px; }
 
 /* FIN-01C: expense form and completeness */
 .gs-harvest-cost-form { display: flex; flex-direction: column; gap: 16px; }
