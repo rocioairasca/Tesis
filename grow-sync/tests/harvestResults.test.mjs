@@ -99,10 +99,11 @@ test('costos conocidos, relaciones mínimas con ≥ y provisorio; Pendiente sin 
   assert.equal(hasKnownCost(known), true); assert.equal(hasKnownCost(pending), false); assert.equal(hasKnownCost(null), false);
 });
 
-test('estado económico: solo Pendiente y Parcial; nunca Completo', () => {
+test('estado económico: Pendiente, Parcial y (FIN-01C) Completo solo si el servidor lo declara', () => {
   assert.equal(costStatus({ status: 'pending' }).label, 'Pendiente');
   assert.equal(costStatus({ status: 'partial' }).label, 'Parcial');
-  assert.equal(costStatus({ status: 'complete' }), null);   // FIN-01C: not representable yet
+  assert.equal(costStatus({ status: 'complete' }).label, 'Completo');   // FIN-01C: explicit declaration made by the server
+  assert.equal(costStatus({ status: 'anything-else' }), null);
   assert.equal(costStatus(null), null);
 });
 
@@ -118,4 +119,45 @@ test('acceso económico viene del servidor y la clave del resultado es exacta', 
   assert.equal(sameResult({ ...row, sub_lot: null }, resultKeyParams(row)), false);
   assert.equal(sameResult(row, null), false);
   assert.match(costDisclaimer, /Pueden existir otros gastos aún no imputados/); assert.match(provisionalNote, /provisional/);
+});
+
+// ---- FIN-01C: additional expenses and completeness helpers ----
+import { COST_CATEGORIES, buildCostPayload, categoryLabel, blockerText, percentUnits, percentsSumToHundred, revisedBy } from '../src/features/harvest/harvestResults.mjs';
+
+test('categorías cerradas en español', () => {
+  assert.deepEqual(COST_CATEGORIES.map(item => item.label), ['Semilla', 'Contratista', 'Labor', 'Combustible / maquinaria', 'Alquiler', 'Flete', 'Secado', 'Otro']);
+  assert.equal(categoryLabel('fuel_machinery'), 'Combustible / maquinaria');
+});
+
+test('Completo: sin ≥ y costo/tn provisional solo mientras la cosecha no cierra', () => {
+  const complete = { status: 'complete', is_minimum: false, is_provisional: true, per_tn_usd: '14.000000', per_ha_usd: '20.497802' };
+  assert.equal(costStatus(complete).label, 'Completo');
+  assert.equal(formatCostPerTn(complete), 'USD 14/t · prov.');
+  assert.equal(formatCostPerHa(complete), 'USD 20,50/ha');
+  assert.equal(formatCostPerTn({ ...complete, is_provisional: false }), 'USD 14/t');
+  assert.equal(formatCostPerTn({ status: 'partial', is_minimum: true, is_provisional: true, per_tn_usd: '14.000000' }), '≥ USD 14/t');
+});
+
+test('porcentajes exactos sin flotantes y bloqueos legibles', () => {
+  assert.equal(percentUnits('33.3333'), 333333); assert.equal(percentUnits('100'), 1000000); assert.equal(percentUnits('abc'), null);
+  assert.ok(percentsSumToHundred(['33.3333', '33.3333', '33.3334']));
+  assert.ok(!percentsSumToHundred(['60', '30'])); assert.ok(!percentsSumToHundred([]));
+  assert.deepEqual(blockerText(['pending_entries']), ['Hay gastos pendientes de cotización.']);
+  assert.equal(revisedBy({ declared_by: 'Ana Pérez', declared_at: '2027-03-05T12:00:00Z' }), 'Revisado por Ana Pérez · 05/03/2027');
+});
+
+test('payload del gasto: USD sin FX, ARS con FX en la fecha de pago, nunca empresa ni actor', () => {
+  const base = { campaign_id: 'c', crop_id: 'k', category: 'seed', description: ' Semilla ', expense_date: '2027-01-05', amount: '1000,5', currency: 'USD', scope: 'lots', method: 'area_proportional',
+    targets: [{ lot_id: 'l', sub_lot_id: '' }], payment_date: '', fx_rate: '', fx_source: '' };
+  const usd = buildCostPayload(base);
+  assert.equal(usd.amount, '1000.5'); assert.equal(usd.description, 'Semilla'); assert.ok(!('fx_rate' in usd) && !('company_id' in usd));
+  assert.deepEqual(usd.destination, { scope: 'lots', crop_id: 'k', method: 'area_proportional', targets: [{ lot_id: 'l', sub_lot_id: null }] });
+  const ars = buildCostPayload({ ...base, currency: 'ARS', payment_date: '2027-01-06', fx_rate: '1000,5', fx_source: 'BCRA' });
+  assert.deepEqual([ars.payment_date, ars.fx_rate, ars.fx_date], ['2027-01-06', '1000.5', '2027-01-06']);
+  const pending = buildCostPayload({ ...base, currency: 'ARS' });
+  assert.deepEqual([pending.fx_rate, pending.fx_date, pending.payment_date], [null, null, null]);
+  const campaign = buildCostPayload({ ...base, scope: 'campaign', method: 'manual_percent' });
+  assert.deepEqual(campaign.destination, { scope: 'campaign', crop_id: 'k', method: 'area_proportional' });
+  const manual = buildCostPayload({ ...base, method: 'manual_percent', targets: [{ lot_id: 'l', sub_lot_id: 's', percent: '100' }] });
+  assert.deepEqual(manual.destination.targets, [{ lot_id: 'l', sub_lot_id: 's', percent: '100' }]);
 });

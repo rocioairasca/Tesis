@@ -71,7 +71,7 @@ export function unclassifiedNote(summary) {
 }
 
 // ---- Real costs from Planning (FIN-01B) ------------------------------------------------------------------------------
-// Costs are a KNOWN FLOOR, never a total: there is no "Completo" yet and every derived value is shown as a minimum (≥).
+// Costs are a KNOWN FLOOR (≥) until an explicit, still-valid completeness declaration exists (FIN-01C); then the status is "Completo".
 // Money arrives as decimal strings; rounding to 2 decimals (half up) is done on integers, never with floats.
 function microUnits(value) {
   const text = String(value ?? '').trim();
@@ -89,13 +89,14 @@ export function formatUsd(value) {
   const fraction = String(cents % 100n).padStart(2, '0');
   return `USD ${whole}${fraction === '00' ? '' : ',' + fraction}`; // integers never show ,00
 }
-export const COST_STATUS = { pending: { label: 'Pendiente', tone: 'neutral' }, partial: { label: 'Parcial', tone: 'warning' } };
+export const COST_STATUS = { pending: { label: 'Pendiente', tone: 'neutral' }, partial: { label: 'Parcial', tone: 'warning' }, complete: { label: 'Completo', tone: 'success' } };
 export const costStatus = costs => (costs && COST_STATUS[costs.status]) || null;
 export const hasKnownCost = costs => !!costs && costs.known_total_usd != null;
 const floor = (costs, text) => text === '—' ? text : (costs?.is_minimum ? `≥ ${text}` : text);
 export const formatKnownCost = costs => hasKnownCost(costs) ? `${formatUsd(costs.known_total_usd)} conocidos` : 'Pendiente';
 export const formatCostPerHa = costs => costs?.per_ha_usd == null ? '—' : floor(costs, `${formatUsd(costs.per_ha_usd)}/ha`);
-export const formatCostPerTn = costs => costs?.per_tn_usd == null ? '—' : floor(costs, `${formatUsd(costs.per_tn_usd)}/t`);
+// A complete cost keeps "prov." while the harvest is open: production may still grow even though costs are reviewed.
+export const formatCostPerTn = costs => costs?.per_tn_usd == null ? '—' : floor(costs, `${formatUsd(costs.per_tn_usd)}/t`) + (costs.status === 'complete' && costs.is_provisional ? ' · prov.' : '');
 export const costDisclaimer = 'Estos costos corresponden a ejecuciones registradas en GrowSync. Pueden existir otros gastos aún no imputados.';
 export const provisionalNote = 'La cosecha sigue en curso: el costo por tonelada es provisional.';
 export const summaryCostHelp = 'Costos registrados hasta el momento';
@@ -104,3 +105,45 @@ export const hasCostAccess = data => data?.summary?.cost_access === true;
 export const resultKeyParams = row => ({ campaign_id: row.campaign.id, crop_id: row.crop.id, lot_id: row.lot.id, ...(row.sub_lot ? { sub_lot_id: row.sub_lot.id } : {}) });
 export const sameResult = (row, params) => !!row && !!params && row.campaign.id === params.campaign_id && row.crop.id === params.crop_id
   && row.lot.id === params.lot_id && (row.sub_lot?.id || null) === (params.sub_lot_id || null);
+
+// ---- Additional expenses and completeness (FIN-01C) -------------------------------------------------------------------
+export const COST_CATEGORIES = [
+  { value: 'seed', label: 'Semilla' }, { value: 'contractor', label: 'Contratista' }, { value: 'labor', label: 'Labor' },
+  { value: 'fuel_machinery', label: 'Combustible / maquinaria' }, { value: 'rent', label: 'Alquiler' }, { value: 'freight', label: 'Flete' },
+  { value: 'drying', label: 'Secado' }, { value: 'other', label: 'Otro' },
+];
+export const categoryLabel = value => COST_CATEGORIES.find(item => item.value === value)?.label || 'Otro';
+export const overlapWarning = 'Verificá que este gasto no esté ya registrado mediante una planificación ejecutada.';
+export const campaignScopeNotice = 'El gasto se distribuirá entre los destinos actuales de la campaña.';
+export const completeWarning = 'Confirmás que revisaste los gastos de este lote, campaña y cultivo y que no quedan gastos conocidos por registrar.';
+export const pendingEntryNote = 'Pendiente: falta la cotización del día de pago. No suma al total hasta confirmarla.';
+export const COMPLETE_BLOCKERS = {
+  no_known_cost: 'Todavía no hay gastos conocidos para declarar.',
+  pending_lines: 'Hay líneas de planificaciones pendientes de valorizar.',
+  pending_entries: 'Hay gastos pendientes de cotización.',
+};
+export const blockerText = blockers => (blockers || []).map(code => COMPLETE_BLOCKERS[code]).filter(Boolean);
+export const distributionLabel = method => (method === 'manual_percent' ? 'Porcentaje manual' : 'Por superficie');
+/** Percent text ("33.3333") -> integer x10^4, or null when invalid. Never a float. */
+export function percentUnits(text) {
+  const value = String(text ?? '').trim().replace(',', '.');
+  if (!/^\d{1,3}(\.\d{1,4})?$/.test(value)) return null;
+  const [whole, fraction = ''] = value.split('.');
+  return Number(whole) * 10000 + Number(fraction.padEnd(4, '0'));
+}
+export const percentsSumToHundred = list => list.length > 0 && list.every(text => percentUnits(text) != null) && list.reduce((sum, text) => sum + percentUnits(text), 0) === 1000000;
+export const revisedBy = part => (part?.declared_by ? `Revisado por ${part.declared_by}` : 'Revisado') + (part?.declared_at ? ` · ${String(part.declared_at).slice(0, 10).split('-').reverse().join('/')}` : '');
+
+/** Builds the POST /cost-entries body from the form state. Tenant and actor are never part of it. */
+export function buildCostPayload(form) {
+  const dest = form.scope === 'campaign'
+    ? { scope: 'campaign', crop_id: form.crop_id, method: 'area_proportional' }
+    : { scope: 'lots', crop_id: form.crop_id, method: form.method,
+        targets: form.targets.map(target => ({ lot_id: target.lot_id, sub_lot_id: target.sub_lot_id || null, ...(form.method === 'manual_percent' ? { percent: String(target.percent).replace(',', '.') } : {}) })) };
+  const ars = form.currency === 'ARS';
+  const clean = value => (value == null || String(value).trim() === '' ? null : String(value).trim());
+  return { campaign_id: form.campaign_id, category: form.category, description: form.description.trim(), expense_date: form.expense_date, currency: form.currency,
+    amount: String(form.amount).trim().replace(',', '.'),
+    ...(ars ? { payment_date: clean(form.payment_date), fx_rate: clean(form.fx_rate)?.replace(',', '.') ?? null, fx_date: clean(form.fx_rate) && clean(form.payment_date) ? form.payment_date : null, fx_source: clean(form.fx_source) } : {}),
+    supplier_name: clean(form.supplier_name), reference: clean(form.reference), notes: clean(form.notes), destination: dest };
+}

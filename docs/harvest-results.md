@@ -104,3 +104,50 @@ La selección, filtros y página viven en `Harvest.jsx`: «Ver los N registros»
 ## Tests
 Backend: `tests/harvestResultsCosts.integration.test.js` (PGlite; tablas económicas con las columnas de la migración, sin aplicar sus triggers).
 Frontend: `tests/harvestResults.test.mjs` (helpers), `tests/harvestCosts.browser.mjs` (fixture `harvest.fixture.jsx` con `?costs`).
+
+# FIN-01C: gastos adicionales y completitud explícita
+
+Estado: implementado localmente (sin commit, push, deploy ni migraciones ejecutadas). No se consultó producción ni staging. Las migraciones nuevas
+(`20261123_cost_entries.sql`, `20261123_economic_completeness.sql`) solo se validaron en PGlite y **no** están aplicadas en ningún entorno.
+Requieren `20261105` (economic_snapshots) ya aplicada. Sin ventas, precios de grano, ingresos, margen, ROI, caja ni contabilidad.
+
+## Tablas
+- `cost_entries`: append-only (`root_id`, `revision`, `supersedes_id` único, `state` active|void). Categorías cerradas: seed, contractor, labor, fuel_machinery, rent, freight, drying, other.
+  Moneda USD confirma directo; ARS confirma solo con fecha de pago, cotización mayorista, fecha de cotización = fecha de pago y fuente; si no, `cost_status='pending'` y `amount_usd NULL`
+  (NULL ≠ 0; sin consulta automática de FX). UPDATE/DELETE/TRUNCATE bloqueados por trigger; `Idempotency-Key` + `request_hash` por empresa.
+- `cost_entry_targets`: destinos explícitos (lote, sublote, cultivo, superficie de referencia, método `area_proportional|manual_percent`, `allocation_weight` NUMERIC(20,12)).
+  Los pesos suman EXACTAMENTE 1 y un solo método por gasto (constraint trigger diferido al COMMIT). Sellados en la misma transacción. «Toda la campaña» se expande al guardar a los destinos actuales (un lote o ciclo posterior no recibe parte).
+- `economic_completeness_declarations`: append-only por empresa+campaña+lote+sublote+cultivo (estado open|complete, revisión, `supersedes_id`, motivo, observación, `auto_invalidated`, huella de la evidencia, total conocido, actor y fecha).
+- RLS habilitado y REVOKE a `anon`/`authenticated` (acceso solo vía backend). Triggers con `search_path` fijo y verificación de tenant (campaña, lote, sublote, cultivo, usuario).
+- Índices: `cost_entries(company_id, campaign_id)`, `cost_entry_targets(company_id, lot_id, beneficiary_crop_id)`, `economic_completeness_declarations(company_id, campaign_id)`.
+
+## API (siempre `Cache-Control: no-store`, empresa y actor desde la sesión)
+- `GET /api/cost-entries` (filtros `campaign_id`, `lot_id`, `sub_lot_id`, `crop_id`, `category`, `status`, `include_void`, `page`, `pageSize`), `GET /api/cost-entries/:id`,
+  `POST /api/cost-entries` y `POST /api/cost-entries/:id/revisions` (con `supersedes_id` y `reason`, o `state:'void'`). `Idempotency-Key` obligatorio en escrituras. No hay PUT/PATCH/DELETE.
+- `GET|POST /api/harvest-records/results/completeness`: consultar, `action: 'complete'` o `'reopen'` (con motivo), `include_children` para un lote con sublotes. Idempotente.
+- `GET /api/harvest-records/results` agrega `costs.other_usd`, `costs.pending_entries` y estado `complete`; el resumen agrega `complete_lots`, `incomplete_lots` (estado ≠ complete) y `additional_costs_available`.
+  `GET …/results/detail` agrega `cost_detail.other_expenses` (por categoría), `completeness` (estado, partes, bloqueos, `can_declare`, `can_reopen`) y `economic_edit`.
+
+## Reglas
+- Estado visible: **Pendiente** (sin costo conocido), **Parcial** (hay costo conocido pero hay pendientes o no existe una declaración vigente), **Completo** solo con costo conocido, sin líneas ni gastos pendientes y declaración `complete` cuya huella coincide con la evidencia actual.
+  `≥` solo en Parcial; en Completo no aparece, pero el costo/tn mantiene «prov.» mientras la cosecha no esté cerrada.
+- Sin doble conteo: los gastos no nacen de `economic_snapshots`; solo cuenta la última revisión de cada gasto y de cada snapshot; los `void` no suman. La UI advierte (sin bloquear): «Verificá que este gasto no esté ya registrado mediante una planificación ejecutada.»
+- Sublotes (D2): la completitud es por clave literal. Un lote padre es Completo si toda parte con evidencia (nivel lote y cada sublote) tiene declaración vigente y nada pendiente; una parte sin evidencia se ignora hasta que aparece evidencia. Nada de nivel lote se reparte a las hijas.
+- Invalidación: crear o revisar/anular un gasto inserta, en la misma transacción, una revisión `open` (`auto_invalidated`) para cada clave afectada que estuviera `complete` (claves del destino viejo y del nuevo). Nada se borra. Respaldo: la declaración guarda la huella (sha256) de la evidencia; si llega evidencia nueva por otra vía (p. ej. un snapshot de Planning posterior), deja de ser válida sin intervención.
+- Permisos (sin permisos nuevos): leer = `planning.view` + `inventory.view`; registrar gastos/declarar/reabrir = además `planning.edit` + `inventory.edit` (`economic.editKeys`). El servidor decide; la UI solo oculta acciones. Si en el futuro se quiere separar «editar economía» de planificación/inventario, conceptualmente correspondería un permiso `economic.edit`; no se agregó por falta de justificación todavía.
+- Compatibilidad de despliegue: si las tablas aún no existen, el agregador trata su ausencia como «sin evidencia adicional» (no devuelve 500); registrar/declarar sí requiere las migraciones.
+
+## Rendimiento
+Una consulta para destinos y otra para líneas de Planning, una para gastos+destinos y una para declaraciones, todas filtradas por campaña/cultivo/lote en SQL; sin producto cartesiano cosechas×líneas×destinos; sin caché.
+
+## Tests
+Backend: `tests/costEntries.integration.test.js` (PGlite con las migraciones reales: constraints, inmutabilidad, pesos, tenant, permisos, idempotencia, completitud, invalidación, sublotes).
+Frontend: `tests/harvestResults.test.mjs` (helpers) y `tests/harvestEconomic.browser.mjs` (fixture `?costs&edit`; 390 px incluido). Se actualizó la aserción de FIN-01B «nunca Completo» porque el contrato cambió a propósito.
+
+## Decisiones aprobadas (FIN-01C)
+- Crear, revisar o anular un gasto que afecta una combinación declarada `complete` inserta una revisión `open` con `auto_invalidated=true`; la historia se conserva.
+- Un gasto no cambia de campaña por revisión: se anula y se registra de nuevo en la campaña correcta.
+- «Toda la campaña» solo admite `area_proportional`; `manual_percent` requiere destinos explícitos.
+- Evidencia nueva de Planning (snapshot o revisión) invalida por huella sin escribir nada: `results`, `results/detail` y `GET …/completeness` muestran el estado efectivo (`partial`/`open`).
+  `GET …/completeness` devuelve `state` (efectivo), `declared_state` (lo guardado) y `stale`.
+- Falla preexistente, ajena a FIN-01C: `economicExecution.integration.test.js` referencia `migrations/20261108_planning_selection_mode.sql`, que no existe en el repo.

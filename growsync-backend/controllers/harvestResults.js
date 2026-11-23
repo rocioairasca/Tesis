@@ -13,3 +13,15 @@ const run = fn => async (req, res, next) => {
 
 exports.getHarvestResults = run(service.results);
 exports.getHarvestResultDetail = run(service.detail);
+
+// Completeness declarations (FIN-01C): append-only, idempotent writes (Idempotency-Key).
+const completeness = require('../services/economicCompleteness');
+exports.getCompleteness = run(completeness.current);
+exports.declareCompleteness = async (req, res, next) => {
+  try {
+    const out = await completeness.declare(pool, { user: req.user, key: req.get('Idempotency-Key'), body: req.body });
+    res.set('Cache-Control', 'no-store').status(out.replayed ? 200 : 201).json(out);
+  } catch (error) {
+    next(error);
+  }
+};

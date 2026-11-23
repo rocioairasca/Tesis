@@ -9,6 +9,7 @@ import { PlusOutlined } from "../../components/AppIcons";
 
 import HarvestTable from "./HarvestTable";
 import HarvestResults from "./HarvestResults";
+import HarvestCostForm from "./HarvestCostForm";
 import HarvestFilters from "./HarvestFilters";
 import { getHarvestFilters } from "../../services/harvestService";
 import { campaignFilterOptions } from "../../utils/campaigns.mjs";
@@ -22,6 +23,9 @@ import { hasPermission } from "../../utils/permissions";
 const Harvest = () => {
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const canCreate = hasPermission(currentUser, PERMISSIONS.HARVEST_CREATE);
+  // UX only: the server enforces planning.view + inventory.view + planning.edit + inventory.edit on every cost write.
+  const canEditCosts = [PERMISSIONS.PLANNING_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.PLANNING_EDIT, PERMISSIONS.INVENTORY_EDIT].every((key) => hasPermission(currentUser, key));
+  const [costDrawer, setCostDrawer] = useState({ open: false, preset: null });
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [registrationMode, setRegistrationMode] = useState("current");
@@ -192,7 +196,8 @@ const Harvest = () => {
     <div className="gs-harvest">
       <PageHeader title="Cosechas" description="Registrá y analizá el rendimiento de tus lotes por campaña."
         primaryAction={{label:'Registrar cosecha',icon:<PlusOutlined/>,onClick:()=>openDrawer(),hidden:!canCreate}}
-        secondaryActions={[{key:'historical',label:'Registrar cosecha histórica',onClick:()=>openDrawer(null,'historical'),hidden:!canCreate}]}/>
+        secondaryActions={[{key:'historical',label:'Registrar cosecha histórica',onClick:()=>openDrawer(null,'historical'),hidden:!canCreate},
+          {key:'cost',label:'Registrar gasto',onClick:()=>setCostDrawer({open:true,preset:null}),hidden:!canEditCosts}]}/>
       <div className="gs-harvest-viewbar">
         <Tabs className="gs-harvest-tabs" activeKey={tab} onChange={changeTab} items={[{ key: "records", label: "Registros" }, { key: "results", label: "Resultados por lote" }]} />
         <div className="gs-harvest-viewtools">
@@ -205,7 +210,8 @@ const Harvest = () => {
         ? <HarvestTable refreshKey={refreshKey} onEdit={openDrawer} lots={lots} filters={filters} keyFilter={keyFilter} onClearKeyFilter={() => setKeyFilter(null)}
             onBack={keyFilter ? backToResults : undefined} page={recordsPage} onPage={setRecordsPage} unit={unit} chartsOpen={chartsOpen} onSurfaces={addSurfaces} />
         : <HarvestResults refreshKey={refreshKey} filters={filters} page={resultsPage} onPage={setResultsPage} expanded={expanded} onExpanded={setExpanded}
-            unit={unit} onViewRecords={viewRecords} onSurfaces={addSurfaces} selected={selectedResult} onSelect={setSelectedResult} />}
+            unit={unit} onViewRecords={viewRecords} onSurfaces={addSurfaces} selected={selectedResult} onSelect={setSelectedResult}
+            onRegisterExpense={canEditCosts ? (preset) => setCostDrawer({ open: true, preset }) : undefined} onChanged={() => setRefreshKey((prev) => prev + 1)} />}
       <FormDrawer title={editingRecord ? 'Editar registro de cosecha' : 'Nuevo registro de cosecha'} open={isDrawerOpen} onClose={closeDrawer} wide destroyOnHidden>
         <HarvestForm
           lots={lots}
@@ -219,6 +225,11 @@ const Harvest = () => {
           onSuccess={handleSuccess}
           onCancel={closeDrawer}
         />
+      </FormDrawer>
+      <FormDrawer title="Registrar gasto" open={costDrawer.open} onClose={() => setCostDrawer({ open: false, preset: null })} wide destroyOnHidden>
+        <HarvestCostForm lots={lots} crops={crops} preset={costDrawer.preset}
+          onSuccess={() => { setCostDrawer({ open: false, preset: null }); setRefreshKey((prev) => prev + 1); notification.success({ message: "Gasto registrado" }); }}
+          onCancel={() => setCostDrawer({ open: false, preset: null })} />
       </FormDrawer>
     </div>
   );

@@ -44,6 +44,10 @@ router.get(
   harvestRecordsController.getHarvestStatsByCrop
 );
 
+// Completeness of additional costs: economic permissions are enforced in the service (planning + inventory view/edit).
+router.get('/results/completeness', checkJwt, userData, requirePermission(PERMISSIONS.HARVEST_VIEW), harvestResultsController.getCompleteness);
+router.post('/results/completeness', checkJwt, userData, requirePermission(PERMISSIONS.HARVEST_VIEW), harvestResultsController.declareCompleteness);
+
 router.get(
   '/results/detail',
   checkJwt,

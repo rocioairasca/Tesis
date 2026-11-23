@@ -126,3 +126,11 @@
 @media (max-width:767px) { .gs-harvest-summary--4 { grid-template-columns:1fr; } }
 .gs-harvest-lot { flex-wrap:wrap; row-gap:0; }
 .gs-harvest-lot-surface { flex-basis:100%; color:var(--gs-text-secondary); font-size:12px; }
+
+/* FIN-01C: expense form and completeness */
+.gs-harvest-cost-form { display: flex; flex-direction: column; gap: 16px; }
+.gs-harvest-cost-field { display: flex; flex-direction: column; gap: 4px; }
+.gs-harvest-cost-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.gs-harvest-cost-fx { border: 1px solid var(--gs-border, #d9d9d9); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.gs-harvest-cost-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+@media (max-width: 767px) { .gs-harvest-cost-row { grid-template-columns: 1fr; } .gs-harvest-cost-actions .ant-btn { flex: 1 1 100%; } }

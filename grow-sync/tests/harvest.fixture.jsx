@@ -13,7 +13,7 @@ import '../src/App.css';
 
 const flags = new URLSearchParams(location.search);
 const user = { id: 'u1', email: 'synthetic@example.invalid', role: 2, company_id: 'synthetic-company',
-  custom_permissions: ['harvest.view', 'harvest.create', 'harvest.edit'] };
+  custom_permissions: ['harvest.view', 'harvest.create', 'harvest.edit', ...(flags.has('edit') ? ['planning.view', 'inventory.view', 'planning.edit', 'inventory.edit'] : [])] };
 localStorage.setItem('user', JSON.stringify(user));
 Object.entries(cssVariables).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
 
@@ -45,24 +45,53 @@ const results = Array.from({ length: 30 }, (_, index) => {
 });
 // FIN-01B: economic data only when the server grants it (?costs). Row 0 is T4 (+ sublots), row 1 has nothing known, row 2 a confirmed zero.
 const costAccess = flags.has('costs');
+// FIN-01C (?edit): Lote 04 is declared complete, Lote 05 is partial and ready to declare. Declarations are kept in memory.
+const editFlag = flags.has('edit');
+const declared = new Set(editFlag ? ['lot-04'] : []);
+const view = { complete: { status: 'complete', known_total_usd: '1400.000000', products_usd: null, labor_usd: null, other_usd: '1400.000000', pending_lines: 0, pending_entries: 0, per_ha_usd: '20.497802', per_tn_usd: '14.000000', is_minimum: false, is_provisional: true },
+  ready: { status: 'partial', known_total_usd: '2000.000000', products_usd: null, labor_usd: null, other_usd: '2000.000000', pending_lines: 0, pending_entries: 0, per_ha_usd: '29.282577', per_tn_usd: '20.000000', is_minimum: true, is_provisional: true } };
 const costOf = (index, child) => {
   if (!costAccess) return null;
+  if (editFlag && !child && index === 3) return declared.has('lot-04') ? view.complete : { ...view.ready, known_total_usd: '1400.000000', other_usd: '1400.000000' };
+  if (editFlag && !child && index === 5) return view.ready;                  // Lote 06: declared before, evidence changed since
+  if (editFlag && !child && index === 4) return declared.has('lot-05') ? { ...view.ready, status: 'complete', is_minimum: false } : view.ready;
   if (index === 1) return { status: 'pending', known_total_usd: null, products_usd: null, labor_usd: null, pending_lines: 2, per_ha_usd: null, per_tn_usd: null, is_minimum: false, is_provisional: false };
   if (index === 2) return { status: 'partial', known_total_usd: '0.000000', products_usd: '0.000000', labor_usd: null, pending_lines: 0, per_ha_usd: '0.000000', per_tn_usd: '0.000000', is_minimum: true, is_provisional: true };
   if (child) return { status: 'partial', known_total_usd: '100.500000', products_usd: '100.500000', labor_usd: null, pending_lines: 0, per_ha_usd: '3.350000', per_tn_usd: '0.335000', is_minimum: true, is_provisional: true };
   return { status: 'partial', known_total_usd: '5420.000000', products_usd: '3980.000000', labor_usd: '1440.000000', pending_lines: 1, per_ha_usd: '99.449541', per_tn_usd: '12.431193', is_minimum: true, is_provisional: true };
 };
-results.forEach((row, index) => { row.costs = costOf(index); row.children.forEach(child => { child.costs = costOf(index, true); }); });
+const refreshCosts = () => results.forEach((row, index) => { row.costs = costOf(index); row.children.forEach(child => { child.costs = costOf(index, true); }); });
+refreshCosts();
 const flatResults = () => results.flatMap(row => [row, ...row.children]);
 const costDetail = () => ({ source: 'planning_economic_snapshots', note: 'Estos costos corresponden a ejecuciones registradas en GrowSync. Pueden existir otros gastos aún no imputados.',
   plannings: [{ planning_id: 'p-2', planning_enabled: false, revision: 1, activity: 'Fumigación', effective_date: '2027-02-01', sub_lot: null, allocation_weight: '1.000000000000', products_usd: '60.000000', labor_usd: null, known_usd: '60.000000', pending_lines: 1,
     lines: [{ kind: 'product', name: 'Glifosato', quantity: '10', unit: 'L', amount_usd: '60.000000', pending: false }, { kind: 'product', name: 'Coadyuvante', quantity: '2', unit: 'L', amount_usd: null, pending: true }] }] });
-window.__requests = [];
+const expenses = [{ entry_id: 'e-1', category: 'freight', description: 'Flete a puerto', expense_date: '2027-03-01', amount_usd: '1400.000000', pending: false, method: 'area_proportional', reference: 'Remito 123', sub_lot: null },
+  { entry_id: 'e-2', category: 'drying', description: 'Secado ARS', expense_date: '2027-03-02', amount_usd: null, pending: true, method: 'manual_percent', reference: null, sub_lot: null }];
+const completenessOf = row => {
+  const lot = row.lot.id, isDone = declared.has(lot);
+  const parts = lot === 'lot-04' || lot === 'lot-05' ? [{ sub_lot: null, state: isDone ? 'complete' : 'open', declared: isDone, valid: isDone, evidence_changed: false, declared_by: isDone ? 'Ana Pérez' : null, declared_at: isDone ? '2027-03-05T12:00:00Z' : null, auto_invalidated: false }] : [];
+  if (lot === 'lot-06') return { status: 'partial', parts: [{ sub_lot: null, state: 'open', declared: true, valid: false, evidence_changed: true, declared_by: 'Ana Pérez', declared_at: '2027-03-05T12:00:00Z', auto_invalidated: false }], blockers: [], can_declare: editFlag, can_reopen: false, include_children: false };
+  const blockers = lot === 'lot-04' || lot === 'lot-05' ? [] : lot === 'lot-02' ? ['no_known_cost'] : ['pending_lines', 'pending_entries'];
+  const status = isDone ? 'complete' : (lot === 'lot-02' ? 'pending' : 'partial');
+  return { status, parts, blockers, can_declare: editFlag && !isDone && !blockers.length, can_reopen: editFlag && isDone, include_children: row.children.length > 0 };
+};
+window.__requests = []; window.__posts = [];
 api.defaults.adapter = async config => {
   const params = config.params || {};
   window.__requests.push({ method: config.method, path: config.url, params: structuredClone(params) });
   const ok = data => ({ data: structuredClone(data), status: 200, statusText: 'OK', headers: {}, config });
   const url = config.url;
+  if (config.method === 'post') window.__posts.push({ path: url, key: config.headers?.get?.('Idempotency-Key') ?? config.headers?.['Idempotency-Key'], body: config.data ? JSON.parse(config.data) : null });
+  if (url === '/campaigns') return ok([{ id: 'cmp-1', name: 'Gruesa 2026/27' }, { id: 'cmp-0', name: 'Gruesa 2025/26' }]);
+  if (url === '/cost-entries' && config.method === 'post') return { data: { data: { id: 'new' }, replayed: false }, status: 201, statusText: 'Created', headers: {}, config };
+  if (url === '/harvest-records/results/completeness' && config.method === 'post') {
+    const body = JSON.parse(config.data), lotId = results.find(r => r.lot.id && r.lot.id === body.lot_id)?.lot.id;
+    if (window.__failNext) { window.__failNext = false; const error = new Error('conflict'); error.response = { status: 409, data: { message: 'Hay gastos pendientes.' } }; throw error; }
+    if (body.action === 'complete') declared.add(lotId); else declared.delete(lotId);
+    refreshCosts();
+    return { data: { data: [], replayed: false }, status: 201, statusText: 'Created', headers: {}, config };
+  }
   if (url === '/lots') return ok({ data: lots });
   if (url === '/crops') return ok([{ id: 'crop-1', name: 'Soja' }, { id: 'crop-2', name: 'Maíz' }]);
   if (url === '/lots/productive-states') return ok([]);
@@ -73,7 +102,8 @@ api.defaults.adapter = async config => {
   if (url === '/harvest-records/results/detail') {
     const row = flatResults().find(r => r.lot.id === params.lot_id && r.campaign.id === params.campaign_id && r.crop.id === params.crop_id && (r.sub_lot?.id || undefined) === params.sub_lot_id && (params.sub_lot_id ? r.level === 'sub_lot' : r.level === 'lot'));
     if (!row) { const error = new Error('not found'); error.response = { status: 404, data: { message: 'Resultado no encontrado.' } }; throw error; }
-    return ok({ ...row, cost_access: costAccess, ...(costAccess ? { cost_detail: costDetail() } : {}), records_query: { campaign_id: row.campaign.id, crop_id: row.crop.id, lot_id: row.lot.id } });
+    return ok({ ...row, cost_access: costAccess, ...(costAccess && editFlag ? { economic_edit: true, completeness: completenessOf(row) } : {}),
+      ...(costAccess ? { cost_detail: { ...costDetail(), ...(editFlag ? { other_expenses: row.lot.id === 'lot-04' || row.lot.id === 'lot-1' ? [{ category: 'freight', known_usd: '1400.000000', pending: 0, entries: [expenses[0]] }, { category: 'drying', known_usd: null, pending: 1, entries: [expenses[1]] }] : [] } : {}) } } : {}), records_query: { campaign_id: row.campaign.id, crop_id: row.crop.id, lot_id: row.lot.id } });
   }
   if (url === '/harvest-records/results') {
     const page = Number(params.page || 1), size = Number(params.pageSize || 25);

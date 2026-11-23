@@ -69,3 +69,10 @@ export const enableHarvestRecord = async (id) => {
   const res = await api.patch(`/harvest-records/${id}/enable`);
   return res.data;
 };
+
+// FIN-01C: additional costs and completeness. Writes are idempotent: one Idempotency-Key per user intent (kept while the form is open).
+export const newIdempotencyKey = () => (globalThis.crypto?.randomUUID?.() || `gs-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+export const createCostEntry = async (payload, key) => (await api.post('/cost-entries', payload, { headers: { 'Idempotency-Key': key } })).data;
+export const reviseCostEntry = async (id, payload, key) => (await api.post(`/cost-entries/${id}/revisions`, payload, { headers: { 'Idempotency-Key': key } })).data;
+export const getCostEntries = async (params = {}) => (await api.get('/cost-entries', { params })).data;
+export const declareCompleteness = async (payload, key) => (await api.post('/harvest-records/results/completeness', payload, { headers: { 'Idempotency-Key': key } })).data;

@@ -112,6 +112,7 @@ app.use('/api/history', ...privateMiddlewares, require('./routes/history'));
 app.use('/api/planning', ...privateMiddlewares, planningRoutes);
 app.use('/api/vehicles', ...privateMiddlewares, vehicleRoutes);
 app.use('/api/notifications', ...privateMiddlewares, notificationsRoutes);
+app.use('/api/cost-entries', ...privateMiddlewares, require('./routes/costEntries')(supabase.pool));
 app.use('/api/harvest-records', ...privateMiddlewares, harvestRecordsRoutes);
 app.use('/api/rain-records', ...privateMiddlewares, rainRecordsRoutes);
 

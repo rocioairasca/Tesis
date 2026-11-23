@@ -23,7 +23,7 @@ const Provisional = ({ row }) => row.costs?.is_provisional ? <small className="g
 
 // "Resultados por lote": one row per lot + campaign + crop. The parent row is the authoritative total; sublots expand.
 // Cost columns appear only when the server says cost_access: harvest.view alone never receives an amount.
-export default function HarvestResults({ filters, page, onPage, expanded, onExpanded, unit, refreshKey = 0, onViewRecords, onSurfaces, selected, onSelect }) {
+export default function HarvestResults({ filters, page, onPage, expanded, onExpanded, unit, refreshKey = 0, onViewRecords, onSurfaces, selected, onSelect, onRegisterExpense, onChanged }) {
   const mobile = useIsMobile();
   const [data, setData] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState(null), [revision, setRevision] = useState(0);
   const params = useMemo(() => resultParams(filters, { page, pageSize: PAGE_SIZE }), [filters, page]);
@@ -69,7 +69,7 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
       { title: 'Estado económico', key: 'cost_status', width: 130, render: (_, row) => <CostStatus row={row} /> },
     ] : []),
   ];
-  const panel = selected && !mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} />;
+  const panel = selected && !mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={onChanged} />;
   return <>
     {summary && <div className={`gs-harvest-summary ${costAccess ? 'gs-harvest-summary--4' : ''}`} aria-label="Resumen de la selección">
       <Metric compact label="Superficie cosechada" value={formatArea(summary.harvested_area_ha)} />
@@ -104,7 +104,7 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
       </div>
       {panel}
     </div>
-    {selected && mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} />}
+    {selected && mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={onChanged} />}
   </>;
 }
 const hasKnownCostClass = row => row.costs?.known_total_usd == null ? 'gs-harvest-cost--pending' : 'gs-harvest-cost';

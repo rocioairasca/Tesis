@@ -1,11 +1,12 @@
 'use strict';
 // "Resultados por lote": productive base (FIN-01A) plus real costs already sealed by Planning (FIN-01B).
-// Costs come ONLY from the latest revision of each Planning economic snapshot; manual expenses and the
-// completeness declaration do not exist yet (FIN-01C), so a result is never "complete".
+// Costs: the latest Planning economic snapshots + current additional cost entries (harvestCostSources.js).
+// A result is `complete` ONLY with a valid explicit completeness declaration and nothing pending (FIN-01C).
 // Result identity: lot_id + sub_lot_id + campaign_id + crop_id. Every amount is exact (BigInt hundredths);
 // yield is always SUM(production)/SUM(area), never an average of per-record yields.
 const economic = require('./economicExecution');
-const money = require('../../shared/costEstimate.cjs');
+const sources = require('./harvestCostSources');
+const { keyOf, inClause, campaignIdsOf, cropIdsOf, usd, hasKnown, hasEvidence, hasPending, loadCosts, loadDeclarations, declarationValid, mergeCosts, rowComplete, costView } = sources;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const fold = value => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -33,7 +34,6 @@ const decimal2 = value => {
 const yieldText = (productionCents, areaCents) =>
   areaCents > 0n ? decimal2((productionCents * 200n + areaCents) / (2n * areaCents)) : null;
 
-const keyOf = (lot, sub, campaign, crop) => [lot, sub || '', campaign, crop].join('|');
 const parentKeyOf = key => { const [lot, , campaign, crop] = key.split('|'); return [lot, campaign, crop].join('|'); };
 
 // Largest-remainder split of an exact total by integer weights. Stable order breaks ties.
@@ -119,14 +119,6 @@ function parseFilters(query = {}, data) {
   return filters;
 }
 const pageNumber = (value, fallback, max) => Math.min(Math.max(Math.trunc(Number(value)) || fallback, 1), max);
-const campaignIdsOf = f => f.campaign_id ? [f.campaign_id] : f.campaign_ids;
-const cropIdsOf = f => f.crop_id ? [f.crop_id] : f.crop_ids;
-
-// Pushes ids as individual parameters (no array params: the production adapter uses postgres.js unsafe()).
-function inClause(params, column, ids) {
-  if (!ids.length) return 'FALSE';
-  return `${column} IN (${ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ')})`;
-}
 
 // ---- Productive facts (filters are a conservative SQL pre-filter; the exact checks stay in JS) -----------------------
 async function loadFacts(pool, companyId, filters) {
@@ -169,105 +161,10 @@ async function loadFacts(pool, companyId, filters) {
   return { records, cycles };
 }
 
-// ---- Real costs from Planning (FIN-01B). The sealed economic snapshots are the only source. ---------------------------
-// Exact arithmetic: amount (scale 1e12) x allocation_weight (scale 1e12) = scale 1e24. Never JS floats.
-const S24 = money.COST_SCALE * money.COST_SCALE;
-const half = (numerator, denominator) => (numerator * 2n + denominator) / (2n * denominator);
-const fmt6 = value => `${value / 1000000n}.${String(value % 1000000n).padStart(6, '0')}`;
-const usd = scaled24 => fmt6(half(scaled24, 10n ** 18n));
-const newCost = () => ({ total: 0n, products: 0n, labor: 0n, productKnown: false, laborKnown: false, known: new Set(), pending: new Set(), plannings: new Map() });
-
-/** Latest revision of every Planning only (a superseded revision is never counted), per result key. */
-async function loadCosts(pool, companyId, filters, withLines) {
-  const campaigns = campaignIdsOf(filters), crops = cropIdsOf(filters);
-  const build = () => {
-    const params = [companyId];
-    // planning.enabled is soft-disable/visibility, NOT an economic reversal: a sealed snapshot keeps counting.
-    const where = ['s.company_id = $1',
-      'NOT EXISTS (SELECT 1 FROM economic_snapshots n WHERE n.company_id = s.company_id AND n.supersedes_id = s.id)'];
-    if (campaigns) where.push(`${inClause(params, 's.campaign_id', campaigns)}`);
-    const target = ['t.snapshot_id = s.id', 't.company_id = s.company_id'];
-    if (crops) target.push(`${inClause(params, 't.beneficiary_crop_id', crops)}`);
-    if (filters.lot_id) { params.push(filters.lot_id); target.push(`t.lot_id = $${params.length}`); }
-    if (filters.sub_lot_id) { params.push(filters.sub_lot_id); target.push(`t.sub_lot_id = $${params.length}`); }
-    return { params, where, target };
-  };
-  const a = build();
-  const targets = (await pool.query(`SELECT s.id AS snapshot_id, s.planning_id, s.campaign_id, s.revision, s.effective_date::text AS effective_date,
-      s.activity_type_snapshot AS activity, p.enabled AS planning_enabled, t.lot_id, t.sub_lot_id, t.beneficiary_crop_id AS crop_id, t.allocation_weight::text AS weight
-    FROM economic_snapshots s
-    JOIN planning p ON p.id = s.planning_id AND p.company_id = s.company_id
-    JOIN economic_snapshot_targets t ON ${a.target.join(' AND ')}
-    WHERE ${a.where.join(' AND ')}`, a.params)).rows;
-  const byKey = new Map();
-  if (!targets.length) return byKey;
-  const b = build();
-  const lines = (await pool.query(`SELECT l.snapshot_id, l.id AS line_id, l.kind, l.cost_status, l.amount_usd::text AS amount_usd,
-      l.product_name_snapshot AS name, l.quantity::text AS quantity, l.unit_snapshot AS unit
-    FROM economic_snapshot_lines l
-    JOIN economic_snapshots s ON s.id = l.snapshot_id AND s.company_id = l.company_id
-    WHERE l.company_id = $1 AND ${b.where.slice(1).join(' AND ')}
-      AND EXISTS (SELECT 1 FROM economic_snapshot_targets t WHERE ${b.target.join(' AND ')})`, b.params)).rows;
-  const linesOf = new Map();
-  for (const line of lines) linesOf.set(line.snapshot_id, [...(linesOf.get(line.snapshot_id) || []), line]);
-  for (const t of targets) {
-    const weight = money.cost(t.weight);
-    if (weight === 0n) continue; // a zero weight receives no cost and is not affected by a pending line
-    const key = keyOf(t.lot_id, t.sub_lot_id, t.campaign_id, t.crop_id);
-    if (!byKey.has(key)) byKey.set(key, newCost());
-    const cost = byKey.get(key);
-    const planning = withLines ? { planning_id: t.planning_id, revision: t.revision, effective_date: t.effective_date, activity: t.activity, weight: t.weight, enabled: t.planning_enabled !== false,
-      products: 0n, labor: 0n, productKnown: false, laborKnown: false, pending: 0, lines: [] } : null;
-    for (const line of linesOf.get(t.snapshot_id) || []) {
-      const known = line.amount_usd != null; // NULL is pending, never zero; a confirmed zero is known
-      const allocated = known ? money.cost(line.amount_usd) * weight : null;
-      if (known) {
-        cost.total += allocated; cost.known.add(line.line_id);
-        if (line.kind === 'product') { cost.products += allocated; cost.productKnown = true; } else { cost.labor += allocated; cost.laborKnown = true; }
-      } else cost.pending.add(line.line_id);
-      if (planning) {
-        if (known) { planning[line.kind === 'product' ? 'products' : 'labor'] += allocated; planning[line.kind === 'product' ? 'productKnown' : 'laborKnown'] = true; } else planning.pending++;
-        planning.lines.push({ kind: line.kind, name: line.kind === 'product' ? line.name : 'Labor', quantity: line.kind === 'product' ? line.quantity : null,
-          unit: line.kind === 'product' ? line.unit : null, amount_usd: known ? usd(allocated) : null, pending: !known });
-      }
-    }
-    if (planning) cost.plannings.set(t.snapshot_id, planning);
-  }
-  return byKey;
-}
-
-const mergeCosts = parts => {
-  const merged = newCost();
-  for (const cost of parts) {
-    if (!cost) continue;
-    // Totals add (each line x target pair is unique); line sets are unions, so a pending line spread over several
-    // sublots is still ONE pending line.
-    merged.total += cost.total; merged.products += cost.products; merged.labor += cost.labor;
-    merged.productKnown ||= cost.productKnown; merged.laborKnown ||= cost.laborKnown;
-    cost.known.forEach(id => merged.known.add(id)); cost.pending.forEach(id => merged.pending.add(id));
-  }
-  return merged;
-};
-
-/** FIN-01B: only `pending` (nothing known) or `partial` (something known). `complete` needs FIN-01C and never appears. */
-function costView(cost, surface, production, harvestStatus) {
-  const known = !!cost && cost.known.size > 0;
-  const view = { status: known ? 'partial' : 'pending', known_total_usd: null, products_usd: null, labor_usd: null,
-    pending_lines: cost ? cost.pending.size : 0, per_ha_usd: null, per_tn_usd: null, is_minimum: known, is_provisional: false };
-  if (!known) return view;
-  view.known_total_usd = usd(cost.total);
-  view.products_usd = cost.productKnown ? usd(cost.products) : null;
-  view.labor_usd = cost.laborKnown ? usd(cost.labor) : null;
-  if (surface != null && surface > 0n) view.per_ha_usd = fmt6(half(cost.total * 100n, surface * 10n ** 18n));
-  if (production != null && production > 0n) {
-    view.per_tn_usd = fmt6(half(cost.total * 100000n, production * 10n ** 18n));
-    view.is_provisional = harvestStatus !== 'closed'; // production may still grow
-  }
-  return view;
-}
-
 // ---- Result computation --------------------------------------------------------------------------------------------
 const rowMeta = new WeakMap();
+const cents6 = text => { const [w, f = ''] = String(text).split('.'); return BigInt(w) * 1000000n + BigInt((f + '000000').slice(0, 6)); };
+const fmt6 = value => `${value / 1000000n}.${String(value % 1000000n).padStart(6, '0')}`;
 
 async function compute(pool, { user, query = {}, withDetail = false }) {
   const companyId = user?.company_id;
@@ -277,7 +174,11 @@ async function compute(pool, { user, query = {}, withDetail = false }) {
   const costAccess = economic.allowed(user, economic.readKeys);
   const names = await loadNames(pool, companyId);
   const filters = parseFilters(query, names);
-  const [facts, costMap] = await Promise.all([loadFacts(pool, companyId, filters), costAccess ? loadCosts(pool, companyId, filters, withDetail) : new Map()]);
+  const [facts, costs, declarations] = await Promise.all([
+    loadFacts(pool, companyId, filters),
+    costAccess ? loadCosts(pool, companyId, filters, withDetail) : { byKey: new Map(), additionalAvailable: true },
+    costAccess ? loadDeclarations(pool, companyId, filters) : new Map(),
+  ]);
   const name = {
     lot: new Map(names.lots.map(l => [l.id, l])), sub: new Map(names.subLots.map(s => [s.id, s])),
     crop: new Map(names.crops.map(c => [c.id, c.name])), campaign: new Map(names.campaigns.map(c => [c.id, c.name])),
@@ -295,7 +196,7 @@ async function compute(pool, { user, query = {}, withDetail = false }) {
   };
   for (const cycle of facts.cycles) ensure(keyOf(cycle.lot_id, cycle.sub_lot_id, cycle.campaign_id, cycle.crop_id)).cycles.push(cycle);
   // The economic combination must equal the productive one explicitly (lot + sublot + campaign + beneficiary crop).
-  for (const [key, cost] of costMap) ensure(key).cost = cost;
+  for (const [key, cost] of costs.byKey) ensure(key).cost = cost;
 
   // 2) Harvest facts, one record at a time, then aggregated by key.
   const byRecord = new Map();
@@ -363,7 +264,7 @@ async function compute(pool, { user, query = {}, withDetail = false }) {
       yield_kg_ha: row.production == null ? null : yieldText(row.production, row.area),
       records_count: row.records.size, harvest_status: row.status,
       production_basis: { prorated_records: row.prorated, method: row.prorated ? 'area_proportional' : null },
-      costs: costAccess ? costView(row.cost, row.surface.value, row.production, row.status) : null,
+      costs: costAccess ? costView(row.cost, row.surface.value, row.production, row.status, rowComplete(row.parts || [row], declarations)) : null,
       children,
     };
     rowMeta.set(out, { parts: row.parts || [row], cost: row.cost });
@@ -424,13 +325,15 @@ async function compute(pool, { user, query = {}, withDetail = false }) {
       reasons: unclassified.reasons, record_ids: unclassified.record_ids },
   };
   if (costAccess) {
-    // Known cost only: FIN-01B has no completeness declaration, so no lot is ever "complete" and no average is offered.
-    const known = rows.reduce((n, r) => { const c = rowMeta.get(r).cost; return n + (c && c.known.size ? c.total : 0n); }, 0n);
+    // Known cost only; "complete" rows come from explicit declarations. No average is offered.
+    const known = rows.reduce((n, r) => { const c = rowMeta.get(r).cost; return n + (hasKnown(c) ? c.total : 0n); }, 0n);
     summary.known_cost_usd = usd(known);
-    summary.incomplete_lots = new Set(rows.map(r => r.lot.id)).size;
+    summary.complete_lots = new Set(rows.filter(r => r.costs.status === 'complete').map(r => r.lot.id)).size;
+    summary.incomplete_lots = new Set(rows.filter(r => r.costs.status !== 'complete').map(r => r.lot.id)).size;
     summary.lots_without_known_cost = new Set(rows.filter(r => r.costs.status === 'pending').map(r => r.lot.id)).size;
+    summary.additional_costs_available = costs.additionalAvailable;
   }
-  return { filters, query, rows, summary, costAccess, name };
+  return { filters, query, rows, summary, costAccess, name, declarations, companyId, user };
 }
 async function results(pool, { user, query = {} }) {
   const { filters, rows, summary } = await compute(pool, { user, query });
@@ -460,14 +363,59 @@ async function detail(pool, { user, query = {} }) {
     const sub = part.entry.sub_lot_id ? { id: part.entry.sub_lot_id, name: state.name.sub.get(part.entry.sub_lot_id)?.name ?? null } : null;
     for (const planning of part.cost.plannings.values()) {
       const known = planning.productKnown || planning.laborKnown;
-      plannings.push({ planning_id: planning.planning_id, revision: planning.revision, activity: planning.activity, effective_date: planning.effective_date,
-        sub_lot: sub, allocation_weight: planning.weight, planning_enabled: planning.enabled,
+      plannings.push({ planning_id: planning.planning_id, planning_enabled: planning.enabled, revision: planning.revision, activity: planning.activity, effective_date: planning.effective_date,
+        sub_lot: sub, allocation_weight: planning.weight,
         products_usd: planning.productKnown ? usd(planning.products) : null, labor_usd: planning.laborKnown ? usd(planning.labor) : null,
         known_usd: known ? usd(planning.products + planning.labor) : null, pending_lines: planning.pending, lines: planning.lines });
     }
   }
   plannings.sort((a, b) => String(b.effective_date).localeCompare(String(a.effective_date)) || String(a.planning_id).localeCompare(String(b.planning_id)));
-  result.cost_detail = { plannings, source: 'planning_economic_snapshots',
+
+  // Additional expenses grouped by category (each entry x target counted once, with its own allocated share).
+  const groups = new Map();
+  for (const part of meta.parts) {
+    if (!part.cost) continue;
+    const sub = part.entry.sub_lot_id ? { id: part.entry.sub_lot_id, name: state.name.sub.get(part.entry.sub_lot_id)?.name ?? null } : null;
+    for (const item of part.cost.entries.values()) {
+      if (!groups.has(item.category)) groups.set(item.category, { category: item.category, sum: null, pending: 0, entries: [] });
+      const group = groups.get(item.category);
+      group.entries.push({ ...item, sub_lot: sub });
+      if (item.pending) group.pending++; else group.sum = (group.sum ?? 0n) + cents6(item.amount_usd);
+    }
+  }
+  const otherExpenses = [...groups.values()].map(({ sum, ...g }) => ({ ...g, known_usd: sum == null ? null : fmt6(sum),
+    entries: g.entries.sort((a, b) => String(b.expense_date).localeCompare(String(a.expense_date)) || String(a.entry_id).localeCompare(String(b.entry_id))) }))
+    .sort((a, b) => a.category.localeCompare(b.category));
+
+  // Completeness per literal key (parts with economic evidence): declared, valid or invalidated, who and when.
+  const relevant = meta.parts.filter(part => hasEvidence(part.cost));
+  const declaredBy = [...new Set(relevant.map(part => state.declarations.get(part.entry.key)?.declared_by).filter(Boolean))];
+  const people = new Map();
+  if (declaredBy.length) {
+    const params = [state.companyId];
+    const found = await pool.query(`SELECT id, COALESCE(NULLIF(btrim(full_name), ''), NULLIF(btrim(name), ''), email) AS display FROM users WHERE company_id = $1 AND ${inClause(params, 'id', declaredBy)}`, params);
+    for (const person of found.rows) people.set(person.id, person.display);
+  }
+  const parts = relevant.map(part => {
+    const declaration = state.declarations.get(part.entry.key);
+    const valid = declarationValid(declaration, part.cost);
+    return { sub_lot: part.entry.sub_lot_id ? { id: part.entry.sub_lot_id, name: state.name.sub.get(part.entry.sub_lot_id)?.name ?? null } : null,
+      state: valid ? 'complete' : 'open', declared: !!declaration && declaration.state === 'complete', valid,
+      evidence_changed: !!declaration && declaration.state === 'complete' && !valid,
+      declared_by: declaration ? (people.get(declaration.declared_by) ?? null) : null, declared_at: declaration ? declaration.declared_at : null,
+      observation: declaration ? declaration.observation : null, reason: declaration ? declaration.reason : null, auto_invalidated: declaration ? declaration.auto_invalidated : false,
+      pending_lines: part.cost.pendingLines.size, pending_entries: part.cost.pendingEntries.size };
+  });
+  const rowCosts = row.costs;
+  const blockers = [];
+  if (!hasKnown(meta.cost)) blockers.push('no_known_cost');
+  if (rowCosts.pending_lines > 0) blockers.push('pending_lines');
+  if (rowCosts.pending_entries > 0) blockers.push('pending_entries');
+  const economicEdit = economic.allowed(user, economic.editKeys);
+  result.economic_edit = economicEdit;
+  result.completeness = { status: rowCosts.status, parts, blockers, can_declare: economicEdit && !blockers.length && rowCosts.status !== 'complete',
+    can_reopen: economicEdit && parts.some(part => part.declared), include_children: row.level === 'lot' && row.children.length > 0 };
+  result.cost_detail = { plannings, other_expenses: otherExpenses, source: 'planning_economic_snapshots_and_cost_entries',
     note: 'Estos costos corresponden a ejecuciones registradas en GrowSync. Pueden existir otros gastos aún no imputados.' };
   return result;
 }

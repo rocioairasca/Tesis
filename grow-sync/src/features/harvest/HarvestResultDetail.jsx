@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Button } from 'antd';
-import { LoadingState, ErrorState, StatusBadge } from '../../components/ui';
+import React, { useEffect, useRef, useState } from 'react';
+import { Button, Input } from 'antd';
+import { LoadingState, ErrorState, StatusBadge, ConfirmDialog, FocusModal } from '../../components/ui';
 import useIsMobile from '../../hooks/useIsMobile';
-import { getHarvestResultDetail } from '../../services/harvestService';
+import { declareCompleteness, getHarvestResultDetail, newIdempotencyKey } from '../../services/harvestService';
 import { formatCalendarDate } from '../../utils/calendarDate';
 import { formatNumber } from '../../utils/numberFormat';
-import { costDisclaimer, costStatus, formatArea, formatCostPerHa, formatCostPerTn, formatProduction, formatUsd, formatYield, harvestStatus,
-  hasKnownCost, provisionalNote, proratedNote, recordsFilterFor, resultTitle } from './harvestResults.mjs';
+import { blockerText, categoryLabel, completeWarning, costDisclaimer, costStatus, distributionLabel, formatArea, formatCostPerHa, formatCostPerTn, formatProduction, formatUsd, formatYield, harvestStatus,
+  hasKnownCost, pendingEntryNote, provisionalNote, proratedNote, recordsFilterFor, resultKeyParams, resultTitle, revisedBy } from './harvestResults.mjs';
 
 const Row = ({ label, children }) => <div className="gs-harvest-detail-row"><dt>{label}</dt><dd>{children}</dd></div>;
 const usdOrPending = value => value == null ? 'Pendiente' : formatUsd(value);
 
 // Detail of one "Resultados por lote" row. Desktop: docked, non-modal panel. Mobile: full screen with a back button.
 // Economic sections exist only when the server returned them (cost_access); nothing is hidden client-side.
-export default function HarvestResultDetail({ params, unit, onClose, onViewRecords, refreshKey = 0 }) {
+export default function HarvestResultDetail({ params, unit, onClose, onViewRecords, refreshKey = 0, onRegisterExpense, onChanged }) {
   const mobile = useIsMobile();
   const [data, setData] = useState(null), [error, setError] = useState(null), [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function HarvestResultDetail({ params, unit, onClose, onViewRecor
   }, [params, refreshKey, revision]);
 
   const body = error ? <ErrorState error={error} onRetry={() => setRevision(value => value + 1)} />
-    : !data ? <LoadingState label="Cargando detalle…" rows={4} /> : <Content data={data} unit={unit} onViewRecords={onViewRecords} />;
+    : !data ? <LoadingState label="Cargando detalle…" rows={4} /> : <Content data={data} unit={unit} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={() => { setRevision(value => value + 1); onChanged?.(); }} />;
   const title = data ? resultTitle(data) : 'Detalle del resultado';
   const header = <div className="gs-harvest-detail-header">
     {mobile && <Button type="link" onClick={onClose}>Volver a resultados</Button>}
@@ -36,7 +36,7 @@ export default function HarvestResultDetail({ params, unit, onClose, onViewRecor
   </aside>;
 }
 
-function Content({ data, unit, onViewRecords }) {
+function Content({ data, unit, onViewRecords, onRegisterExpense, onChanged }) {
   const costs = data.costs, status = costStatus(costs), harvest = harvestStatus(data.harvest_status);
   return <div className="gs-harvest-detail-body">
     <section aria-label="Resumen"><dl>
@@ -49,10 +49,12 @@ function Content({ data, unit, onViewRecords }) {
       <dl>
         <Row label="Productos">{usdOrPending(costs.products_usd)}</Row>
         <Row label="Labor">{usdOrPending(costs.labor_usd)}</Row>
+        <Row label="Otros gastos">{usdOrPending(costs.other_usd)}</Row>
         <Row label="Total conocido"><strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Pendiente'}</strong></Row>
         <Row label="Líneas pendientes">{formatNumber(costs.pending_lines, 0)}</Row>
+        {costs.pending_entries > 0 && <Row label="Gastos pendientes">{formatNumber(costs.pending_entries, 0)}</Row>}
       </dl>
-      <p className="gs-harvest-warning" role="note">{costDisclaimer}</p>
+      {costs.status !== 'complete' && <p className="gs-harvest-warning" role="note">{costDisclaimer}</p>}
     </section>}
 
     <section aria-label="Producción"><h3>Producción</h3><dl>
@@ -77,6 +79,66 @@ function Content({ data, unit, onViewRecords }) {
         </li>)}</ul>}
     </section>}
 
+    {data.cost_access && data.cost_detail?.other_expenses && <OtherExpenses groups={data.cost_detail.other_expenses} />}
+    {data.cost_access && data.completeness && <Completeness data={data} onRegisterExpense={onRegisterExpense} onChanged={onChanged} />}
+
     <Button type="primary" disabled={!data.records_count} onClick={() => onViewRecords(recordsFilterFor(data))}>Ver los {formatNumber(data.records_count, 0)} registros de cosecha</Button>
   </div>;
+}
+
+
+function OtherExpenses({ groups }) {
+  return <section aria-label="Otros gastos"><h3>Otros gastos</h3>
+    {!groups.length ? <p className="gs-ui-helper">No hay gastos adicionales registrados para este resultado.</p>
+      : <ul className="gs-harvest-planning-list">{groups.map(group => <li key={group.category}>
+        <div className="gs-harvest-planning-head"><strong>{categoryLabel(group.category)}</strong><span>{usdOrPending(group.known_usd)}</span></div>
+        <ul>{group.entries.map(item => <li key={`${item.entry_id}-${item.sub_lot?.id || 'lot'}`}>
+          {item.description} · {formatCalendarDate(item.expense_date)} · {item.pending ? 'Pendiente' : formatUsd(item.amount_usd)}
+          <div className="gs-ui-helper">{distributionLabel(item.method)}{item.reference ? ` · ${item.reference}` : ''}{item.sub_lot ? ` · Subdivisión ${item.sub_lot.name}` : ''}</div>
+          {item.pending && <div className="gs-ui-helper">{pendingEntryNote}</div>}
+        </li>)}</ul>
+      </li>)}</ul>}
+  </section>;
+}
+
+// Explicit completeness: nothing is "Completo" without a human declaration that is still valid (no newer evidence).
+function Completeness({ data, onRegisterExpense, onChanged }) {
+  const c = data.completeness, costs = data.costs, edit = data.economic_edit;
+  const [confirm, setConfirm] = useState(false), [reopen, setReopen] = useState(false), [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(null);
+  const keys = resultKeyParams(data);
+  const complete = c.status === 'complete', reviewed = c.parts.filter(part => part.valid);
+  const changed = c.parts.some(part => part.evidence_changed || part.auto_invalidated);
+  const intent = useRef(newIdempotencyKey());     // same key while an attempt is retried; renewed after it succeeds
+  const send = async payload => declareCompleteness({ ...payload, ...keys, ...(c.include_children ? { include_children: true } : {}) }, intent.current);
+  const expenses = (data.cost_detail?.other_expenses || []).reduce((n, group) => n + group.entries.length, 0) + (data.cost_detail?.plannings?.length || 0);
+  const run = async payload => {
+    setBusy(true); setError(null);
+    try { await send(payload); setConfirm(false); setReopen(false); setReason(''); intent.current = newIdempotencyKey(); onChanged(); }
+    catch (reasonError) { setError(reasonError?.response?.data?.message || reasonError?.response?.data?.error || 'No se pudo guardar.'); }
+    finally { setBusy(false); }
+  };
+  return <section aria-label="Estado de los gastos"><h3>Estado de los gastos</h3>
+    <dl><Row label="Estado"><StatusBadge tone={complete ? 'success' : 'warning'}>{complete ? 'Completo' : 'Parcial'}</StatusBadge></Row>
+      {complete && reviewed.length > 0 && <Row label="Revisión">{revisedBy(reviewed[0])}</Row>}</dl>
+    {!complete && changed && <p className="gs-harvest-warning" role="note">Hubo cambios en los gastos desde la última revisión. Revisalos y volvé a marcarlos como completos.</p>}
+    {edit && !complete && blockerText(c.blockers).map(text => <p className="gs-ui-helper" key={text} role="note">{text}</p>)}
+    {edit && <div className="gs-harvest-cost-actions">
+      <Button onClick={() => onRegisterExpense?.({ campaign_id: keys.campaign_id, crop_id: keys.crop_id, lot_id: keys.lot_id, sub_lot_id: keys.sub_lot_id })}>Registrar gasto</Button>
+      {!complete && <Button type="primary" disabled={!c.can_declare} onClick={() => setConfirm(true)}>Marcar gastos como completos</Button>}
+      {c.can_reopen && <Button onClick={() => setReopen(true)}>Reabrir gastos</Button>}
+    </div>}
+    <FocusModal open={confirm} title="Marcar gastos como completos" onCancel={() => setConfirm(false)} busy={busy}
+      footer={<><Button onClick={() => setConfirm(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} onClick={() => run({ action: 'complete' })}>Marcar como completos</Button></>}>
+      <p>Gasto conocido: <strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Pendiente'}</strong></p>
+      <p>Gastos considerados: {formatNumber(expenses, 0)} · Pendientes: {formatNumber((costs?.pending_lines || 0) + (costs?.pending_entries || 0), 0)}</p>
+      <p className="gs-harvest-warning" role="note">{completeWarning}</p>
+      {error && <p className="gs-harvest-warning" role="alert">{error}</p>}
+    </FocusModal>
+    <FocusModal open={reopen} title="Reabrir gastos" onCancel={() => setReopen(false)} busy={busy}
+      footer={<><Button onClick={() => setReopen(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} disabled={!reason.trim()} onClick={() => run({ action: 'reopen', reason })}>Reabrir gastos</Button></>}>
+      <p>Los gastos vuelven a estado Parcial hasta una nueva revisión. Indicá el motivo.</p>
+      <Input.TextArea aria-label="Motivo" rows={3} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
+      {error && <p className="gs-harvest-warning" role="alert">{error}</p>}
+    </FocusModal>
+  </section>;
 }
