@@ -43,6 +43,20 @@ const results = Array.from({ length: 30 }, (_, index) => {
   }
   return row;
 });
+// FIN-01B: economic data only when the server grants it (?costs). Row 0 is T4 (+ sublots), row 1 has nothing known, row 2 a confirmed zero.
+const costAccess = flags.has('costs');
+const costOf = (index, child) => {
+  if (!costAccess) return null;
+  if (index === 1) return { status: 'pending', known_total_usd: null, products_usd: null, labor_usd: null, pending_lines: 2, per_ha_usd: null, per_tn_usd: null, is_minimum: false, is_provisional: false };
+  if (index === 2) return { status: 'partial', known_total_usd: '0.000000', products_usd: '0.000000', labor_usd: null, pending_lines: 0, per_ha_usd: '0.000000', per_tn_usd: '0.000000', is_minimum: true, is_provisional: true };
+  if (child) return { status: 'partial', known_total_usd: '100.500000', products_usd: '100.500000', labor_usd: null, pending_lines: 0, per_ha_usd: '3.350000', per_tn_usd: '0.335000', is_minimum: true, is_provisional: true };
+  return { status: 'partial', known_total_usd: '5420.000000', products_usd: '3980.000000', labor_usd: '1440.000000', pending_lines: 1, per_ha_usd: '99.449541', per_tn_usd: '12.431193', is_minimum: true, is_provisional: true };
+};
+results.forEach((row, index) => { row.costs = costOf(index); row.children.forEach(child => { child.costs = costOf(index, true); }); });
+const flatResults = () => results.flatMap(row => [row, ...row.children]);
+const costDetail = () => ({ source: 'planning_economic_snapshots', note: 'Estos costos corresponden a ejecuciones registradas en GrowSync. Pueden existir otros gastos aún no imputados.',
+  plannings: [{ planning_id: 'p-2', planning_enabled: false, revision: 1, activity: 'Fumigación', effective_date: '2027-02-01', sub_lot: null, allocation_weight: '1.000000000000', products_usd: '60.000000', labor_usd: null, known_usd: '60.000000', pending_lines: 1,
+    lines: [{ kind: 'product', name: 'Glifosato', quantity: '10', unit: 'L', amount_usd: '60.000000', pending: false }, { kind: 'product', name: 'Coadyuvante', quantity: '2', unit: 'L', amount_usd: null, pending: true }] }] });
 window.__requests = [];
 api.defaults.adapter = async config => {
   const params = config.params || {};
@@ -56,10 +70,15 @@ api.defaults.adapter = async config => {
   if (url === '/harvest-records/stats/summary') return ok({ total_records: 12, total_production_kg: 12000, total_area_ha: 120, avg_yield_kg_ha: 100 });
   if (url === '/harvest-records/stats/by-crop') return ok([{ crop: 'Soja', production_kg: 12000, area_ha: 120, yield_kg_ha: 100 }]);
   if (url === '/harvest-records/stats/by-campaign') return ok([{ campaign_id: 'cmp-1', campaign_name: 'Gruesa 2026/27', production_kg: 12000, area_ha: 120, yield_kg_ha: 100 }]);
+  if (url === '/harvest-records/results/detail') {
+    const row = flatResults().find(r => r.lot.id === params.lot_id && r.campaign.id === params.campaign_id && r.crop.id === params.crop_id && (r.sub_lot?.id || undefined) === params.sub_lot_id && (params.sub_lot_id ? r.level === 'sub_lot' : r.level === 'lot'));
+    if (!row) { const error = new Error('not found'); error.response = { status: 404, data: { message: 'Resultado no encontrado.' } }; throw error; }
+    return ok({ ...row, cost_access: costAccess, ...(costAccess ? { cost_detail: costDetail() } : {}), records_query: { campaign_id: row.campaign.id, crop_id: row.crop.id, lot_id: row.lot.id } });
+  }
   if (url === '/harvest-records/results') {
     const page = Number(params.page || 1), size = Number(params.pageSize || 25);
     const rows = flags.has('empty') ? [] : results;
-    return ok({ summary: { lots: rows.length, results: rows.length, results_with_harvest: rows.length, harvested_area_ha: '2049.00', production_kg: '18300000.00', records: 120, prorated_records: 1,
+    return ok({ summary: { cost_access: costAccess, ...(costAccess ? { known_cost_usd: '91795.000000', incomplete_lots: rows.length, lots_without_known_cost: 1 } : {}), lots: rows.length, results: rows.length, results_with_harvest: rows.length, harvested_area_ha: '2049.00', production_kg: '18300000.00', records: 120, prorated_records: 1,
       unclassified: { records: flags.has('unclassified') ? 2 : 0, production_kg: '0.00', harvested_area_ha: '0.00', reasons: {}, record_ids: [] } },
       data: rows.slice((page - 1) * size, page * size), pagination: { total: rows.length, page, pageSize: size, totalPages: Math.ceil(rows.length / size) } });
   }

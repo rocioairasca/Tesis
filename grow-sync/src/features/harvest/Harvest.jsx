@@ -36,6 +36,7 @@ const Harvest = () => {
   const [recordsPage, setRecordsPage] = useState(1);
   const [resultsPage, setResultsPage] = useState(1);
   const [expanded, setExpanded] = useState([]);
+  const [selectedResult, setSelectedResult] = useState(null);
   const [unit, setUnit] = useState("kg");
   const [chartsOpen, setChartsOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1440);
   const [filterData, setFilterData] = useState({ campaigns: [], crops: [] });
@@ -71,9 +72,9 @@ const Harvest = () => {
 
   const changeFilter = (key, value) => {
     setFilters((previous) => ({ ...previous, [key]: value }));
-    setRecordsPage(1); setResultsPage(1); setExpanded([]); setKeyFilter(null);
+    setRecordsPage(1); setResultsPage(1); setExpanded([]); setKeyFilter(null); setSelectedResult(null);
   };
-  const clearFilters = () => { setFilters(defaultFilters); setRecordsPage(1); setResultsPage(1); setExpanded([]); setKeyFilter(null); };
+  const clearFilters = () => { setFilters(defaultFilters); setRecordsPage(1); setResultsPage(1); setExpanded([]); setKeyFilter(null); setSelectedResult(null); };
   const addSurfaces = useCallback((list) => setSeenSurfaces((previous) => mergeOptions(previous, list)), []);
   const labelOf = (list, value) => list.find((item) => item.value === value)?.label;
   const activeFilters = Object.entries(filters)
@@ -204,7 +205,7 @@ const Harvest = () => {
         ? <HarvestTable refreshKey={refreshKey} onEdit={openDrawer} lots={lots} filters={filters} keyFilter={keyFilter} onClearKeyFilter={() => setKeyFilter(null)}
             onBack={keyFilter ? backToResults : undefined} page={recordsPage} onPage={setRecordsPage} unit={unit} chartsOpen={chartsOpen} onSurfaces={addSurfaces} />
         : <HarvestResults refreshKey={refreshKey} filters={filters} page={resultsPage} onPage={setResultsPage} expanded={expanded} onExpanded={setExpanded}
-            unit={unit} onViewRecords={viewRecords} onSurfaces={addSurfaces} />}
+            unit={unit} onViewRecords={viewRecords} onSurfaces={addSurfaces} selected={selectedResult} onSelect={setSelectedResult} />}
       <FormDrawer title={editingRecord ? 'Editar registro de cosecha' : 'Nuevo registro de cosecha'} open={isDrawerOpen} onClose={closeDrawer} wide destroyOnHidden>
         <HarvestForm
           lots={lots}

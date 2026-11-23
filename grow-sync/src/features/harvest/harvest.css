@@ -96,3 +96,33 @@
   .gs-harvest-step-2 h2::before { content:'Paso 3 de 4'; }
   .gs-harvest-step-3 h2::before { content:'Paso 4 de 4'; }
 }
+
+/* FIN-01B: real costs from Planning (known floor, never a total) */
+.gs-harvest-summary--4 { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.gs-harvest-summary--4 > .gs-ui-metric:nth-child(3) { border-right:1px solid var(--gs-border); }
+.gs-harvest-cost--pending { color:var(--gs-text-secondary); }
+.gs-harvest-provisional { margin-left:var(--gs-space-4); color:var(--gs-text-secondary); }
+.gs-harvest-open { padding:0; height:auto; max-width:100%; }
+.gs-harvest-row--selected > td { background:var(--gs-surface-selected) !important; }
+.gs-harvest-card-costs { display:grid; gap:var(--gs-space-4); }
+.gs-harvest-results-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--gs-space-16); align-items:start; }
+.gs-harvest-results-layout--panel { grid-template-columns:minmax(0,1fr) 380px; }
+.gs-harvest-result-detail { background:var(--gs-surface); border:1px solid var(--gs-border); border-radius:8px; min-width:0; }
+.gs-harvest-detail-header { display:flex; justify-content:space-between; align-items:flex-start; gap:var(--gs-space-8); padding:var(--gs-space-16); border-bottom:1px solid var(--gs-border); }
+.gs-harvest-detail-header h2 { font-size:18px; margin:0; overflow-wrap:anywhere; }
+.gs-harvest-detail-header p { margin:0; }
+.gs-harvest-detail-body { display:grid; gap:var(--gs-space-16); padding:var(--gs-space-16); }
+.gs-harvest-detail-body h3 { font-size:14px; margin:0 0 var(--gs-space-8); }
+.gs-harvest-detail-body dl { margin:0; }
+.gs-harvest-detail-row { display:flex; justify-content:space-between; gap:var(--gs-space-16); padding:var(--gs-space-4) 0; border-bottom:1px solid var(--gs-border); }
+.gs-harvest-detail-row dt { color:var(--gs-text-secondary); }
+.gs-harvest-detail-row dd { margin:0; text-align:right; min-width:0; overflow-wrap:anywhere; }
+.gs-harvest-planning-list, .gs-harvest-planning-list ul { list-style:none; padding:0; margin:0; display:grid; gap:var(--gs-space-8); }
+.gs-harvest-planning-list > li { border:1px solid var(--gs-border); border-radius:8px; padding:var(--gs-space-8) var(--gs-space-12); }
+.gs-harvest-planning-list ul { margin-top:var(--gs-space-4); font-size:12px; color:var(--gs-text-secondary); }
+.gs-harvest-planning-head { display:flex; justify-content:space-between; gap:var(--gs-space-8); }
+.gs-harvest-result-detail--full { position:fixed; inset:0; z-index:1000; border-radius:0; border:0; overflow:auto; }
+@media (max-width:1199px) { .gs-harvest-results-layout--panel { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:767px) { .gs-harvest-summary--4 { grid-template-columns:1fr; } }
+.gs-harvest-lot { flex-wrap:wrap; row-gap:0; }
+.gs-harvest-lot-surface { flex-basis:100%; color:var(--gs-text-secondary); font-size:12px; }

@@ -69,3 +69,53 @@ test('registros no clasificados: mensaje solo cuando corresponde', () => {
   assert.match(unclassifiedNote({ unclassified: { records: 1 } }), /1 cosecha no se puede clasificar/);
   assert.match(unclassifiedNote({ unclassified: { records: 3 } }), /3 cosechas no se pueden clasificar.*suposición/);
 });
+
+// ---- FIN-01B: real costs (known floor, never a total) ---------------------------------------------------------------
+import { formatUsd, formatKnownCost, formatCostPerHa, formatCostPerTn, costStatus, hasKnownCost, hasCostAccess, resultKeyParams, sameResult, costDisclaimer, provisionalNote } from '../src/features/harvest/harvestResults.mjs';
+
+test('USD: máximo 2 decimales (half up sobre enteros), enteros sin ,00, separador de miles', () => {
+  assert.equal(formatUsd('5420.000000'), 'USD 5.420');
+  assert.equal(formatUsd('99.449541'), 'USD 99,45');
+  assert.equal(formatUsd('12.431193'), 'USD 12,43');
+  assert.equal(formatUsd('0.000000'), 'USD 0');            // a confirmed zero is a known amount
+  assert.equal(formatUsd('0.005000'), 'USD 0,01');          // half up, no float artifacts
+  assert.equal(formatUsd('1234567.995'), 'USD 1.234.568');
+  assert.equal(formatUsd(null), '—');                       // NULL is never zero
+  assert.equal(formatUsd(undefined), '—');
+  assert.equal(formatUsd('abc'), '—');
+});
+
+test('costos conocidos, relaciones mínimas con ≥ y provisorio; Pendiente sin importes', () => {
+  const known = { status: 'partial', known_total_usd: '5420.000000', per_ha_usd: '99.449541', per_tn_usd: '12.431193', is_minimum: true, is_provisional: true, pending_lines: 1 };
+  assert.equal(formatKnownCost(known), 'USD 5.420 conocidos');
+  assert.equal(formatCostPerHa(known), '≥ USD 99,45/ha');
+  assert.equal(formatCostPerTn(known), '≥ USD 12,43/t');
+  assert.equal(formatKnownCost({ known_total_usd: '0.000000' }), 'USD 0 conocidos');
+  const pending = { status: 'pending', known_total_usd: null, per_ha_usd: null, per_tn_usd: null, is_minimum: false };
+  assert.equal(formatKnownCost(pending), 'Pendiente');
+  assert.equal(formatCostPerHa(pending), '—'); assert.equal(formatCostPerTn(pending), '—');
+  assert.equal(formatCostPerTn({ ...known, per_tn_usd: null }), '—'); // no harvest: no ratio
+  assert.equal(formatCostPerHa({ ...known, is_minimum: false }), 'USD 99,45/ha');
+  assert.equal(hasKnownCost(known), true); assert.equal(hasKnownCost(pending), false); assert.equal(hasKnownCost(null), false);
+});
+
+test('estado económico: solo Pendiente y Parcial; nunca Completo', () => {
+  assert.equal(costStatus({ status: 'pending' }).label, 'Pendiente');
+  assert.equal(costStatus({ status: 'partial' }).label, 'Parcial');
+  assert.equal(costStatus({ status: 'complete' }), null);   // FIN-01C: not representable yet
+  assert.equal(costStatus(null), null);
+});
+
+test('acceso económico viene del servidor y la clave del resultado es exacta', () => {
+  assert.equal(hasCostAccess({ summary: { cost_access: true } }), true);
+  assert.equal(hasCostAccess({ summary: { cost_access: false } }), false);
+  assert.equal(hasCostAccess({ summary: {} }), false);
+  assert.equal(hasCostAccess(null), false);
+  const row = { lot: { id: 'l' }, sub_lot: { id: 's' }, campaign: { id: 'c' }, crop: { id: 'k' } };
+  assert.deepEqual(resultKeyParams(row), { campaign_id: 'c', crop_id: 'k', lot_id: 'l', sub_lot_id: 's' });
+  assert.deepEqual(resultKeyParams({ ...row, sub_lot: null }), { campaign_id: 'c', crop_id: 'k', lot_id: 'l' });
+  assert.equal(sameResult(row, resultKeyParams(row)), true);
+  assert.equal(sameResult({ ...row, sub_lot: null }, resultKeyParams(row)), false);
+  assert.equal(sameResult(row, null), false);
+  assert.match(costDisclaimer, /Pueden existir otros gastos aún no imputados/); assert.match(provisionalNote, /provisional/);
+});

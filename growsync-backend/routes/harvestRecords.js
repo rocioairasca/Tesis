@@ -45,6 +45,14 @@ router.get(
 );
 
 router.get(
+  '/results/detail',
+  checkJwt,
+  userData,
+  requirePermission(PERMISSIONS.HARVEST_VIEW),
+  harvestResultsController.getHarvestResultDetail
+);
+
+router.get(
   '/results',
   checkJwt,
   userData,

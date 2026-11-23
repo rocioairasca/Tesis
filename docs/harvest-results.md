@@ -55,3 +55,52 @@ La columna "Registrado por" salió de la tabla (sigue en el detalle) y el resume
 - Backend: `tests/harvestResults.integration.test.js` (PGlite, datos sintéticos).
 - Frontend: `tests/harvestResults.test.mjs` y `tests/harvest.browser.mjs` (fixture `tests/harvest.fixture.jsx`, adaptador Axios local).
   El navegador usa Edge como las demás suites; `GS_BROWSER_CHANNEL=default` usa el Chromium incluido.
+
+# FIN-01B: costos reales provenientes de Planning
+
+Estado: implementado localmente (sin commit, push, deploy ni migraciones). No hay tablas nuevas: se leen `economic_snapshots`, `economic_snapshot_lines`
+y `economic_snapshot_targets` (migración `20261105`, que debe estar aplicada). No hay `cost_entries`, declaración de completitud, ventas, ingresos, margen ni rentabilidad.
+
+## Regla de producto
+Nunca hay `Completo`: aunque todas las líneas de Planning estén confirmadas, pueden existir gastos fuera de Planning (FIN-01C).
+Estados visibles: `pending` (no hay costo conocido) y `partial` (hay al menos un costo conocido, aunque sea 0 confirmado). NULL no es cero; cero confirmado es conocido.
+`is_minimum` es `true` siempre que haya costo conocido (es un piso). `is_provisional` es `true` si hay costo/tn y la cosecha no está `closed`.
+
+## Fuente y asignación
+- Solo la **última revisión** de cada Planning (`NOT EXISTS` otra fila con `supersedes_id = id`): una revisión supersedida nunca se cuenta. `planning.enabled = false` es soft-disable/visibilidad, NO una reversa económica: la evidencia sellada sigue contando una sola vez (el detalle informa `planning_enabled`). Solo una reversa/void económica explícita (futura) podrá retirar o compensar un costo.
+- Importe por destino = `amount_usd × allocation_weight` de `economic_snapshot_targets`, en BigInt exacto (escala 1e24); no se recalcula FEFO, dosis ni superficies.
+  Un destino con peso 0 no recibe costo ni líneas pendientes. Los pesos de una Planning suman exactamente 1 (lo garantiza el sellado), así que el reparto conserva el total.
+- Clave económica = `lot_id + sub_lot_id + campaign_id (del snapshot) + beneficiary_crop_id`; debe coincidir ids con la clave productiva. No se asocia por nombre ni fechas;
+  una campaña o cultivo distinto produce otra fila. Un lote con costos y sin cosecha aparece igual (superficie del lote como respaldo).
+- Padre/hijas (D2): el padre suma costos del nivel lote + sublotes; las hijas solo lo imputado a su sublote. Los líneas pendientes se cuentan por `line_id` distinto (no se duplican entre hijas).
+- Gasto/ha = gasto conocido ÷ superficie autoritativa de FIN-01A (ciclos o respaldo); no se suman superficies de las labores. Costo/tn = gasto conocido ÷ (producción kg ÷ 1000), solo con producción positiva.
+
+## API
+`GET /api/harvest-records/results`: cada fila agrega `costs` y el resumen agrega `cost_access`, `known_cost_usd`, `incomplete_lots` y `lots_without_known_cost`.
+```
+"costs": { "status": "pending|partial", "known_total_usd": "…"|null, "products_usd": "…"|null, "labor_usd": "…"|null, "pending_lines": 0,
+           "per_ha_usd": "…"|null, "per_tn_usd": "…"|null, "is_minimum": true, "is_provisional": true }
+```
+Importes como texto decimal (6 decimales). `products_usd`/`labor_usd` son `null` si ninguna línea de ese tipo está confirmada. No hay promedio ni "costo completo".
+`GET /api/harvest-records/results/detail?campaign_id&crop_id&lot_id[&sub_lot_id]`: resultado + `records_query` + (con acceso) `cost_detail.plannings[]`
+(actividad, fecha efectiva, revisión, peso, productos, labor, conocido, pendientes y líneas) y la nota «Pueden existir otros gastos aún no imputados».
+No se exponen `request_hash`, `idempotency_key` ni `created_txid`.
+
+## Permisos
+Costos solo con los permisos económicos existentes (`planning.view` + `inventory.view`, vía `economicExecution.allowed`). Con solo `harvest.view` el endpoint devuelve la producción,
+`summary.cost_access = false`, `costs = null` y ningún importe. No se agregaron permisos. La UI no oculta datos que el servidor ya devolvió: simplemente no los recibe.
+
+## Frontend
+`HarvestResults.jsx` agrega Gastos, Gasto/ha, Costo/tn y Estado económico (solo con `cost_access`; en ese caso se omite «Sup. cosechada», disponible en el detalle) y la métrica «Gasto conocido»
+(ayuda «Costos registrados hasta el momento» + lotes con costos incompletos). Tarjetas móviles: gasto conocido, costo/tn y estado. `HarvestResultDetail.jsx`: panel acoplado no modal en escritorio y pantalla completa en 390 px.
+La selección, filtros y página viven en `Harvest.jsx`: «Ver los N registros» y volver los conservan. Formato USD con máximo 2 decimales, half-up sobre enteros, sin `,00`.
+
+## Eficiencia
+- Los filtros de campaña, cultivo, lote y sublote se empujan a SQL en ciclos, snapshots/targets/líneas (siempre) y como pre-filtro conservador en cosechas (la exactitud sigue en JS).
+- Sin filtro de campaña se siguen leyendo todas las cosechas habilitadas de la empresa; las consultas de costos leen una vez targets y una vez líneas (sin producto cartesiano en SQL).
+- Consulta potencialmente costosa: `NOT EXISTS (… n.supersedes_id = s.id)` usa el índice único de `supersedes_id`; conviene un índice `economic_snapshots(company_id, campaign_id)` y
+  `economic_snapshot_targets(company_id, lot_id, beneficiary_crop_id)` si el volumen crece (no se agregó migración). Sin caché.
+
+## Tests
+Backend: `tests/harvestResultsCosts.integration.test.js` (PGlite; tablas económicas con las columnas de la migración, sin aplicar sus triggers).
+Frontend: `tests/harvestResults.test.mjs` (helpers), `tests/harvestCosts.browser.mjs` (fixture `harvest.fixture.jsx` con `?costs`).

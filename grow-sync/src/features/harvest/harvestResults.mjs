@@ -69,3 +69,38 @@ export function unclassifiedNote(summary) {
   const count = Number(summary?.unclassified?.records || 0);
   return count ? `${count} ${count === 1 ? 'cosecha no se puede clasificar' : 'cosechas no se pueden clasificar'} por falta de campaña, cultivo o superficies válidas. No se asignaron por suposición.` : null;
 }
+
+// ---- Real costs from Planning (FIN-01B) ------------------------------------------------------------------------------
+// Costs are a KNOWN FLOOR, never a total: there is no "Completo" yet and every derived value is shown as a minimum (≥).
+// Money arrives as decimal strings; rounding to 2 decimals (half up) is done on integers, never with floats.
+function microUnits(value) {
+  const text = String(value ?? '').trim();
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return null;
+  const negative = text.startsWith('-');
+  const [whole, fraction = ''] = text.replace('-', '').split('.');
+  const result = BigInt(whole) * 1000000n + BigInt((fraction + '000000').slice(0, 6));
+  return negative ? -result : result;
+}
+export function formatUsd(value) {
+  const micro = microUnits(value);
+  if (micro == null) return '—';
+  const cents = (micro + 5000n) / 10000n;
+  const whole = (cents / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const fraction = String(cents % 100n).padStart(2, '0');
+  return `USD ${whole}${fraction === '00' ? '' : ',' + fraction}`; // integers never show ,00
+}
+export const COST_STATUS = { pending: { label: 'Pendiente', tone: 'neutral' }, partial: { label: 'Parcial', tone: 'warning' } };
+export const costStatus = costs => (costs && COST_STATUS[costs.status]) || null;
+export const hasKnownCost = costs => !!costs && costs.known_total_usd != null;
+const floor = (costs, text) => text === '—' ? text : (costs?.is_minimum ? `≥ ${text}` : text);
+export const formatKnownCost = costs => hasKnownCost(costs) ? `${formatUsd(costs.known_total_usd)} conocidos` : 'Pendiente';
+export const formatCostPerHa = costs => costs?.per_ha_usd == null ? '—' : floor(costs, `${formatUsd(costs.per_ha_usd)}/ha`);
+export const formatCostPerTn = costs => costs?.per_tn_usd == null ? '—' : floor(costs, `${formatUsd(costs.per_tn_usd)}/t`);
+export const costDisclaimer = 'Estos costos corresponden a ejecuciones registradas en GrowSync. Pueden existir otros gastos aún no imputados.';
+export const provisionalNote = 'La cosecha sigue en curso: el costo por tonelada es provisional.';
+export const summaryCostHelp = 'Costos registrados hasta el momento';
+export const hasCostAccess = data => data?.summary?.cost_access === true;
+/** Identity of one result, used to ask for its detail and to remember the selection. */
+export const resultKeyParams = row => ({ campaign_id: row.campaign.id, crop_id: row.crop.id, lot_id: row.lot.id, ...(row.sub_lot ? { sub_lot_id: row.sub_lot.id } : {}) });
+export const sameResult = (row, params) => !!row && !!params && row.campaign.id === params.campaign_id && row.crop.id === params.crop_id
+  && row.lot.id === params.lot_id && (row.sub_lot?.id || null) === (params.sub_lot_id || null);

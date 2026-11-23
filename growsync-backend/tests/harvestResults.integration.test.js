@@ -62,8 +62,10 @@ test('varias cosechas parciales de la misma clave consolidan una sola fila', asy
     assert.equal(row.surface_ha, '68.30'); assert.equal(row.surface_source, 'cycles'); assert.equal(row.harvest_status, 'in_progress');
     assert.equal(row.yield_kg_ha, '8931.19');
     assert.equal(out.summary.production_kg, '610000.00'); assert.equal(out.summary.records, 3);
-    assert.equal(Object.hasOwn(row, 'costs'), false);
-    assert.equal(JSON.stringify(out).includes('cost'), false);
+    // Without economic permission (this user has none) nothing economic is returned (FIN-01B contract).
+    assert.equal(row.costs, null); assert.equal(out.summary.cost_access, false);
+    assert.equal(Object.keys(out.summary).some(key => key.includes('cost') && key !== 'cost_access'), false);
+    assert.equal(JSON.stringify(out).includes('usd'), false);
   } finally { await db.close(); }
 });
 
