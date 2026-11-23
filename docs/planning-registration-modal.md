@@ -18,7 +18,7 @@ los campos monetarios sólo en este formulario; no modifica revisiones económic
 
 ## Persistencia mínima
 
-Migración nueva: `20261108_planning_selection_mode.sql`.
+Migración nueva: `20261107_planning_selection_mode.sql`.
 Añade `planning_lots.selection_mode`, nullable, sin backfill:
 
 - `full_lot`: lote completo, sin sub_lot_id.
@@ -112,7 +112,7 @@ los tres tamaños. No se alteraron reglas económicas para resolver los tests.
 - `grow-sync/tests/planningRecipes.test.mjs`
 - `grow-sync/tests/planningRegistrationType.test.mjs`
 - `growsync-backend/controllers/planning.js`
-- `growsync-backend/migrations/20261108_planning_selection_mode.sql`
+- `growsync-backend/migrations/20261107_planning_selection_mode.sql`
 - `growsync-backend/services/planningSelections.js`
 - `growsync-backend/tests/economicExecution.fixture.js`
 - `growsync-backend/tests/historicalHarvestAdoption.fixture.js`

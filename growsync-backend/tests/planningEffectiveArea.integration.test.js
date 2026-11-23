@@ -216,7 +216,7 @@ test('selection mode migration keeps existing full, sublot and historical data u
  const isolated=new PGlite();try{
   await isolated.exec("CREATE TABLE planning_lots(id int,sub_lot_id uuid,area_ha numeric,effective_area_ha numeric);INSERT INTO planning_lots VALUES(1,NULL,100,NULL),(2,gen_random_uuid(),30,20),(3,NULL,NULL,NULL),(4,NULL,100,10);");
   const before=(await isolated.query('SELECT * FROM planning_lots ORDER BY id')).rows;
-  await isolated.exec(fs.readFileSync(require.resolve('../migrations/20261108_planning_selection_mode.sql'),'utf8'));
+  await isolated.exec(fs.readFileSync(require.resolve('../migrations/20261107_planning_selection_mode.sql'),'utf8'));
   const after=(await isolated.query('SELECT * FROM planning_lots ORDER BY id')).rows;
   assert.deepEqual(after.map(({selection_mode,...row})=>row),before);assert(after.every(r=>r.selection_mode===null));
   await assert.rejects(isolated.exec("UPDATE planning_lots SET selection_mode='full_lot' WHERE id=4"),e=>e.code==='23514');

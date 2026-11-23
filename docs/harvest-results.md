@@ -150,4 +150,4 @@ Frontend: `tests/harvestResults.test.mjs` (helpers) y `tests/harvestEconomic.bro
 - «Toda la campaña» solo admite `area_proportional`; `manual_percent` requiere destinos explícitos.
 - Evidencia nueva de Planning (snapshot o revisión) invalida por huella sin escribir nada: `results`, `results/detail` y `GET …/completeness` muestran el estado efectivo (`partial`/`open`).
   `GET …/completeness` devuelve `state` (efectivo), `declared_state` (lo guardado) y `stale`.
-- Falla preexistente, ajena a FIN-01C: `economicExecution.integration.test.js` referencia `migrations/20261108_planning_selection_mode.sql`, que no existe en el repo.
+- Falla preexistente (resuelta en QA-ECON): las fixtures referenciaban `20261108_planning_selection_mode.sql`; el archivo real es `20261107_planning_selection_mode.sql`.
