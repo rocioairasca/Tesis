@@ -4,6 +4,7 @@ const {rejectModeInput,historical,blockHistorical}=require('../middleware/histor
 router.use(rejectModeInput);
 
 const harvestRecordsController = require('../controllers/harvestRecords');
+const harvestResultsController = require('../controllers/harvestResults');
 const checkJwt = require('../middleware/checkJwt');
 const userData = require('../middleware/userData');
 const requirePermission = require('../middleware/requirePermission');
@@ -41,6 +42,14 @@ router.get(
   userData,
   requirePermission(PERMISSIONS.HARVEST_VIEW),
   harvestRecordsController.getHarvestStatsByCrop
+);
+
+router.get(
+  '/results',
+  checkJwt,
+  userData,
+  requirePermission(PERMISSIONS.HARVEST_VIEW),
+  harvestResultsController.getHarvestResults
 );
 
 router.get(

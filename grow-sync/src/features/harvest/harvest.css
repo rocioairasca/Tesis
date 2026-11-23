@@ -3,6 +3,24 @@
 .gs-harvest .gs-ui-page-actions > .ant-space-item:has(.ant-btn-primary) { order:2; }
 .gs-harvest .gs-ui-page-header, .gs-harvest .gs-ui-filter-bar { margin-bottom:0; }
 .gs-harvest-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--gs-space-12); }
+.gs-harvest-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); background:var(--gs-surface); border:1px solid var(--gs-border); border-radius:8px; }
+.gs-harvest-summary > .gs-ui-metric { padding:var(--gs-space-8) var(--gs-space-16); min-width:0; border-right:1px solid var(--gs-border); }
+.gs-harvest-summary > .gs-ui-metric:last-child { border-right:0; }
+.gs-harvest-summary .gs-ui-metric-value { font-size:18px; overflow-wrap:anywhere; }
+.gs-harvest-viewbar { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:var(--gs-space-8); border-bottom:1px solid var(--gs-border); }
+.gs-harvest-viewbar .ant-tabs-nav { margin:0; }
+.gs-harvest-viewtools { display:flex; align-items:center; gap:var(--gs-space-12); padding-bottom:var(--gs-space-8); flex-wrap:wrap; }
+.gs-harvest .gs-ui-inline-filters .gs-harvest-campaign { width:240px; }
+.gs-harvest .gs-harvest-campaign .ant-select-selector { border:1.5px solid var(--gs-brand-navigation); background:var(--gs-surface-selected); font-weight:600; }
+.gs-harvest-keyfilter { display:flex; align-items:center; gap:var(--gs-space-8); flex-wrap:wrap; }
+.gs-harvest-warning { margin:0; padding:var(--gs-space-8) var(--gs-space-12); border:1px solid var(--gs-warning); border-radius:8px; color:var(--gs-warning); }
+.gs-harvest-lot { display:flex; align-items:center; gap:var(--gs-space-8); min-width:0; }
+.gs-harvest-lot strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gs-harvest-prorated { font-size:12px; color:var(--gs-text-secondary); border:1px dashed var(--gs-border); border-radius:8px; padding:0 var(--gs-space-8); white-space:nowrap; }
+.gs-harvest-records-link { padding:0; height:auto; }
+.gs-harvest-result-cards .gs-harvest-result-child { margin-left:var(--gs-space-16); border-left:3px solid var(--gs-border); }
+.gs-harvest-card-actions { display:flex; gap:var(--gs-space-16); flex-wrap:wrap; }
+.gs-harvest-results-table .ant-table-row-level-1 td:first-child { padding-left:var(--gs-space-24); }
 .gs-harvest-metrics > .gs-ui-metric { background:var(--gs-surface); border:1px solid var(--gs-border); border-radius:12px; padding:var(--gs-space-16); min-width:0; }
 .gs-harvest-metrics .gs-ui-metric-value { font-size:20px; overflow-wrap:anywhere; }
 .gs-harvest-scope { margin:calc(-1 * var(--gs-space-8)) 0 0; }
@@ -30,6 +48,7 @@
 .gs-harvest-legend i { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .gs-harvest-legend span { flex:1; min-width:0; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
 .gs-harvest-legend strong { font-weight:500; white-space:nowrap; }
+.gs-harvest-workspace--with-panel { grid-template-columns:minmax(0,1fr) 300px; }
 .gs-harvest-workspace--charts { display:block; }
 .gs-harvest-workspace--charts .gs-harvest-charts { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .gs-harvest-mobile { display:grid; gap:var(--gs-space-8); overflow-wrap:anywhere; }
@@ -56,14 +75,17 @@
 .gs-harvest-step-3 .gs-harvest-item { display:none; }
 .gs-harvest-confirmation { display:grid; gap:var(--gs-space-12); overflow-wrap:anywhere; }
 .gs-harvest-form-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:var(--gs-space-12); margin-top:var(--gs-space-24); }
-@media (max-width:1699px) { .gs-harvest-workspace { grid-template-columns:minmax(0,1fr); } .gs-harvest-workspace .gs-harvest-charts { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:1199px) { .gs-harvest-workspace, .gs-harvest-workspace--with-panel { grid-template-columns:minmax(0,1fr); } .gs-harvest-workspace .gs-harvest-charts { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:900px) { .gs-harvest-workspace .gs-harvest-charts { grid-template-columns:1fr; } }
 @media (max-width:767px) {
   .gs-harvest-metrics { gap:var(--gs-space-8); }
   .gs-harvest-metrics > .gs-ui-metric { padding:var(--gs-space-8); }
   .gs-harvest-metrics .gs-ui-metric-label { font-size:12px; flex-direction:column; align-items:flex-start; overflow-wrap:anywhere; }
   .gs-harvest-metrics .gs-ui-metric-value { font-size:16px; }
-  .gs-harvest-workspace:not(.gs-harvest-workspace--charts) > aside { display:none; }
+  .gs-harvest-summary { grid-template-columns:1fr; }
+  .gs-harvest-summary > .gs-ui-metric { border-right:0; border-bottom:1px solid var(--gs-border); }
+  .gs-harvest-summary > .gs-ui-metric:last-child { border-bottom:0; }
+  .gs-harvest .gs-ui-inline-filters .gs-harvest-campaign { width:100%; }
   .gs-harvest-table { overflow:visible; }
   .gs-harvest-table .gs-ui-record-heading > strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .gs-harvest-detail .gs-harvest-metrics { grid-template-columns:1fr; }

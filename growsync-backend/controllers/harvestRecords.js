@@ -6,6 +6,7 @@ const { lockAssignments, ledger, balances, allocate, recalculate, assertNoReopen
 
 const { validateRegistration, validateEffectiveDate } = require('../services/harvestRegistration');
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_FILTER_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeCrop(value) {
   return String(value || '').trim().toLowerCase();
@@ -574,7 +575,27 @@ exports.listHarvestRecords = async (req, res, next) => {
       where.push(`(hr.crop = $${params.length} OR lower(c.name) = $${params.length})`);
     }
 
-    if (lot_id) {
+    // Exact id filters (also used by "Ver los N registros" in Resultados por lote). A record belongs to a result key
+    // through its productive-cycle links; legacy records without links fall back to their own columns.
+    const idFilters = { campaign_id: req.query.campaign_id, crop_id: req.query.crop_id, sub_lot_id: req.query.sub_lot_id };
+    const idKeys = Object.keys(idFilters).filter((key) => idFilters[key]);
+    for (const key of idKeys) {
+      if (typeof idFilters[key] !== 'string' || !UUID_FILTER_RE.test(idFilters[key])) throw fail(`${key} inválido.`);
+    }
+    if (idKeys.length) {
+      const linkConditions = [];
+      const ownConditions = [];
+      for (const key of [...idKeys, ...(lot_id ? ['lot_id'] : [])]) {
+        params.push(key === 'lot_id' ? lot_id : idFilters[key]);
+        linkConditions.push(`ca.${key} = $${params.length}`);
+        ownConditions.push(`hr.${key} = $${params.length}`);
+      }
+      where.push(`(
+        EXISTS (SELECT 1 FROM harvest_crop_assignments hca JOIN crop_assignments ca ON ca.id = hca.crop_assignment_id AND ca.company_id = hr.company_id
+                WHERE hca.harvest_id = hr.id AND ${linkConditions.join(' AND ')})
+        OR (NOT EXISTS (SELECT 1 FROM harvest_crop_assignments hca WHERE hca.harvest_id = hr.id) AND ${ownConditions.join(' AND ')})
+      )`);
+    } else if (lot_id) {
       params.push(lot_id);
       where.push(`hr.lot_id = $${params.length}`);
     }

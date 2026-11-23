@@ -25,6 +25,11 @@ export const getHarvestByCampaign = async (params = {}) => {
     return res.data;
 };
 
+export const getHarvestResults = async (params = {}) => {
+  const res = await api.get('/harvest-records/results', { params });
+  return res.data;
+};
+
 export const getHarvestRecords = async (params = {}) => {
   const res = await api.get('/harvest-records', { params });
   return res.data;
