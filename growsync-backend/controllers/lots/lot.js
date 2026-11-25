@@ -13,6 +13,7 @@
 // IMPORTACION DEL CLIENTE SUPABASE
 const supabase = require('../../db/supabaseClient');
 const { pool } = require('../../db/supabaseClient');
+const { saveLot } = require('../../services/lotGeometry');
 
 /**
  * LISTAR LOTES (habilitados por defecto)
@@ -63,6 +64,7 @@ const listLots = async (req, res, next) => {
             l.name,
             l.area,
             l.area_ha,
+            ST_AsGeoJSON(l.geom)::json AS geom,
             l.location,
             l.enabled,
             l.created_at,
@@ -78,6 +80,7 @@ const listLots = async (req, res, next) => {
           fl.name,
           fl.area,
           fl.area_ha,
+          fl.geom,
           fl.location,
           fl.enabled,
           fl.created_at,
@@ -128,28 +131,23 @@ const listLots = async (req, res, next) => {
       });
     }
 
-    const columns = 'id,name,area,location,enabled,created_at';
-
-    let query = supabase
-      .from('lots')
-      .select(columns, { count: 'exact' })
-      .eq('company_id', company_id) // Multi-tenancy filter
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (!includeDisabled) query = query.eq('enabled', true);
-    if (q && q.trim().length >= 2) query = query.ilike('name', `%${q.trim()}%`);
-
-    const { data, error, count } = await query;
-
-    if (error) throw error;
-
-    return res.json({
-      data: data || [],
-      page: Number(page),
-      pageSize: limit,
-      total: count ?? (data?.length || 0),
-    });
+    const { rows } = await pool.query(`
+      SELECT id,name,area,area_ha,location,enabled,created_at,ST_AsGeoJSON(geom)::json AS geom,
+        COUNT(*) OVER() AS total_count
+      FROM lots WHERE company_id=$1 AND ($2::boolean OR enabled=TRUE)
+        AND ($3::text IS NULL OR name ILIKE $3)
+      ORDER BY created_at DESC LIMIT $4 OFFSET $5`,
+      [company_id, includeDisabled === true || includeDisabled === 'true',
+        q?.trim().length >= 2 ? `%${q.trim()}%` : null, limit, offset]);
+    // Preserve the exact total even when the requested page is past the last row.
+    const total = rows.length ? Number(rows[0].total_count) : Number((await pool.query(
+      `SELECT COUNT(*) AS total FROM lots WHERE company_id=$1 AND ($2::boolean OR enabled=TRUE)
+        AND ($3::text IS NULL OR name ILIKE $3)`,
+      [company_id, includeDisabled === true || includeDisabled === 'true',
+        q?.trim().length >= 2 ? `%${q.trim()}%` : null])).rows[0].total);
+    return res.json({ data: rows.map(({total_count, ...row}) => ({ ...row,
+      area: row.area == null ? null : Number(row.area), area_ha: row.area_ha == null ? null : Number(row.area_ha) })), page: Number(page),
+      pageSize: limit, total });
   } catch (err) {
     next(err);
   }
@@ -165,15 +163,7 @@ const addLot = async (req, res, next) => {
       return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
     }
 
-    const { name, area, location } = req.body;
-
-    const { data, error } = await supabase
-      .from('lots')
-      .insert([{ name, area, location, company_id }])
-      .select('id,name,area,location,enabled,created_at')
-      .single();
-
-    if (error) throw error;
+    const data = await saveLot(pool, { companyId: company_id, name: req.body.name, location: req.body.location });
 
     return res.status(201).json({ lot: data });
   } catch (err) {
@@ -192,22 +182,8 @@ const editLot = async (req, res, next) => {
       return res.status(400).json({ error: 'BadRequest', message: 'Usuario no asignado a una empresa' });
     }
 
-    const { id } = req.params;
-    const { name, area, location } = req.body;
-
-    const { data, error } = await supabase
-      .from('lots')
-      .update({ name, area, location })
-      .eq('id', id)
-      .eq('company_id', company_id) // Security check
-      .select('id,name,area,location,enabled,created_at')
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (!data) {
-      return res.status(404).json({ error: 'NotFound', message: 'Lote no encontrado' });
-    }
+    const data = await saveLot(pool, { companyId: company_id, id: req.params.id,
+      name: req.body.name, location: req.body.location });
 
     return res.json({ lot: data });
   } catch (err) {

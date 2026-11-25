@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Button, Drawer, Form, Input, InputNumber, notification } from 'antd';
+import React, { useState, useRef, useCallback } from 'react';
+import { Button, Drawer, Form, Input, Alert, notification } from 'antd';
 import api from '../../services/apiClient';
 import useIsMobile from '../../hooks/useIsMobile';
 import MapSelector from '../../components/MapSelector';
@@ -7,7 +7,7 @@ import { PERMISSIONS } from '../../constants/permissions';
 import { hasPermission } from '../../utils/permissions';
 import { getUserFriendlyError } from '../../utils/userFriendlyErrors';
 import LotsOverview from './LotsOverview';
-import { getCurrentLocation } from '../../utils/geolocation.mjs';
+import { displayGeometry } from '../../utils/mapGeometry.mjs';
 
 const getId = (r) => r?.id ?? r?._id;
 
@@ -30,8 +30,16 @@ export default function Lotes({ initialState = 'enabled' }) {
   const [form] = Form.useForm();
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const mapRef = useRef();
-  const locationRequest = useRef(null);
-  useEffect(() => () => locationRequest.current?.abort(), []);
+  const [calculatedArea, setCalculatedArea] = useState(null);
+  const [mapLocation, setMapLocation] = useState(null);
+  const location = Form.useWatch('location', form);
+  const hasStoredGeometry = Boolean(editingLot?.geom);
+  const hasPolygon = displayGeometry(location)?.type === 'Polygon';
+  const canSaveGeometry = hasPolygon || hasStoredGeometry;
+  const selectPolygon = useCallback(data => {
+    form.setFieldsValue({ location: ensureString(data.location) });
+    setCalculatedArea(Number(data.calculatedArea));
+  }, [form]);
   const isMobile = useIsMobile();
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
   const canCreate = hasPermission(currentUser, PERMISSIONS.LOTS_CREATE);
@@ -39,45 +47,16 @@ export default function Lotes({ initialState = 'enabled' }) {
   // Drawer handlers ---
   const openDrawer = (lot = null) => {
     if (lot ? !canEdit : !canCreate) return;
-    locationRequest.current?.abort();
     setEditingLot(lot);
-    if (lot) {
-      form.setFieldsValue({
-        name: lot.name ?? "",
-        area: lot.area ?? undefined,
-        location: ensureString(safeParse(lot.location) || lot.location),
-      });
-    } else {
-      form.resetFields();
-
-      const controller = new AbortController();
-      locationRequest.current = controller;
-      getCurrentLocation({ signal: controller.signal }).then(
-        (position) => {
-          if (controller.signal.aborted || form.getFieldValue('location')) return;
-          const { latitude, longitude } = position;
-
-          const userLocation = {
-            type: "Point",
-            coordinates: [longitude, latitude],
-          };
-
-          form.setFieldsValue({
-            location: JSON.stringify(userLocation),
-          });
-
-          
-        },
-        (error) => {
-          if (error.name !== 'AbortError' && import.meta.env.DEV) console.warn("No se pudo obtener la ubicación del usuario:", error.code);
-        }
-      );
-    }
+    setCalculatedArea(lot?.geom ? Number(lot.area_ha) : null);
+    form.resetFields();
+    if (lot) form.setFieldsValue({ name: lot.name ?? '' });
     setIsDrawerOpen(true);
   };
 
   const closeDrawer = () => {
-    locationRequest.current?.abort();
+    setIsMapModalOpen(false);
+    setMapLocation(null);
     setIsDrawerOpen(false);
     setEditingLot(null);
     form.resetFields();
@@ -85,20 +64,22 @@ export default function Lotes({ initialState = 'enabled' }) {
 
   // Agregar o Editar Lote
   const handleSubmit = async (values) => {
+    if (!canSaveGeometry) return;
     const payload = {
       name: values.name?.trim(),
-      area: Number(values.area ?? 0),
-      location: ensureString(values.location),
+      ...(values.location ? { location: ensureString(values.location) } : {}),
     };
 
     try {
-      if (editingLot && getId(editingLot)) {
-        await api.put(`/lots/${getId(editingLot)}`, payload);
-        notification.success({ message: "Lote actualizado exitosamente" });
-      } else {
-        await api.post("/lots", payload);
-        notification.success({ message: "Lote creado exitosamente" });
-      }
+      const isEditing = editingLot && getId(editingLot);
+      const { data } = isEditing
+        ? await api.put(`/lots/${getId(editingLot)}`, payload)
+        : await api.post('/lots', payload);
+      // Turf is only a drawing estimate. Adopt the committed PostGIS value before closing;
+      // the overview/context are then reloaded from the backend, including area_ha.
+      setCalculatedArea(Number(data.lot.area_ha));
+      form.setFieldsValue({ location: undefined });
+      notification.success({ message: isEditing ? 'Lote actualizado exitosamente' : 'Lote creado exitosamente' });
       setRefresh(value => value + 1);
       closeDrawer();
     } catch (error) {
@@ -138,28 +119,30 @@ export default function Lotes({ initialState = 'enabled' }) {
             <Input placeholder="Ej: Lote Norte" />
           </Form.Item>
 
-          <Form.Item
-            name="area"
-            label="Área Total (hectáreas)"
-            rules={[{ required: true, message: "Por favor ingresá la superficie." }]}
-            extra="Área calculada automáticamente. Podés modificarla si lo deseás."
-          >
-            <InputNumber min={0} style={{ width: "100%" }} placeholder="Ej: 12.5" />
+          {editingLot && !hasStoredGeometry && !hasPolygon && <Alert type="warning" showIcon
+            message="Este lote todavía no tiene una superficie geográfica definida. Dibujala en el mapa para continuar." />}
+          <Form.Item label="Superficie" style={{ marginTop: 16 }}>
+            <output aria-label="Superficie calculada">{canSaveGeometry && calculatedArea > 0
+              ? `${hasPolygon ? 'Superficie estimada' : 'Superficie calculada'}: ${calculatedArea.toLocaleString('es-AR', { maximumFractionDigits: 4 })} ha`
+              : 'Superficie: pendiente de dibujar'}</output>
           </Form.Item>
+          {!canSaveGeometry && <p>Dibujá la superficie del lote en el mapa antes de guardarlo.</p>}
 
-          {/* location se guarda como string JSON */}
           <Form.Item name="location" hidden>
             <Input />
           </Form.Item>
 
           <Form.Item>
-            <Button type="default" onClick={() => setIsMapModalOpen(true)} block>
+            <Button type="default" onClick={() => {
+              setMapLocation(safeParse(form.getFieldValue('location')) || safeParse(editingLot?.geom));
+              setIsMapModalOpen(true);
+            }} block>
               Seleccionar ubicación en el mapa
             </Button>
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" block>
+            <Button type="primary" htmlType="submit" disabled={!canSaveGeometry} block>
               {editingLot ? "Actualizar Lote" : "Guardar Lote"}
             </Button>
           </Form.Item>
@@ -171,23 +154,17 @@ export default function Lotes({ initialState = 'enabled' }) {
           placement="right"
           open={isMapModalOpen}
           onClose={() => setIsMapModalOpen(false)}
-          width={800}
+          width={isMobile ? '100%' : 800}
+          destroyOnHidden
+          footer={<Button type="primary" onClick={() => setIsMapModalOpen(false)}>Listo</Button>}
         >
-          <MapSelector
-            lots={lots.filter(lot => lot.enabled !== false)}
-            initialLocation={editingLot?.location ? safeParse(editingLot.location) : null}
-            onSelect={(data) => {
-              // data: { location: obj|str, calculatedArea: number }
-              form.setFieldsValue({
-                location: ensureString(data.location),
-                area: Number(data.calculatedArea ?? form.getFieldValue("area") ?? 0),
-              });
-              setIsMapModalOpen(false);
-            }}
-            modalOpen={isMapModalOpen}
+          {isMapModalOpen && <MapSelector
+            lots={lots.filter(lot => lot.enabled !== false && getId(lot) !== getId(editingLot))}
+            initialLocation={mapLocation}
+            onSelect={selectPolygon}
             mapRef={mapRef}
-            insideDrawer={true}
-          />
+          />}
+
         </Drawer>
       </Drawer>
 

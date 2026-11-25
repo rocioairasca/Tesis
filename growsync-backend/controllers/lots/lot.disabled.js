@@ -33,7 +33,7 @@ const listDisabledLots = async (req, res, next) => {
     const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
 
     // Seleccionamos columnas explícitas
-    const columns = 'id,name,area,location,enabled,created_at';
+    const columns = 'id,name,area,area_ha,geom,location,enabled,created_at';
 
     let query = supabase
       .from('lots')

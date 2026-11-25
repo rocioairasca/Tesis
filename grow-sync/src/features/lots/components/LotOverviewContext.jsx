@@ -16,7 +16,9 @@ export default function LotOverviewContext({ row, actions, onClose }) {
     {row.productiveConflict && <p className="gs-lots-secondary">{conflictMessage}</p>}{row.observations?.map(text=><p key={text} className="gs-lots-secondary">{text}</p>)}<strong className="gs-lots-area">{areaLabel(row.area)}</strong>
     <p><StatusBadge tone="neutral">{row.enabled ? 'Activo' : 'Deshabilitado'}</StatusBadge></p>
     <dl className="gs-lots-context-facts"><div><dt>Cultivo</dt><dd>{cropText(row)}</dd></div><div><dt>Campaña</dt><dd>{campaignText(row)}</dd></div>{!row.subLot && <div><dt>Divisiones vigentes</dt><dd>{row.children.length}</dd></div>}</dl>
-    {!row.geometry && <p className="gs-lots-secondary">No hay una ubicación representable en el mapa.</p>}
+    {!row.subLot && row.lot.geom === null
+      ? <p className="gs-lots-secondary">Este lote todavía no tiene una superficie geográfica definida. Dibujala en el mapa para continuar.</p>
+      : !row.geometry && <p className="gs-lots-secondary">No hay una ubicación representable en el mapa.</p>}
     {!row.enabled && <p className="gs-lots-secondary">El contexto productivo no está disponible para lotes deshabilitados.</p>}
     {detail && <EntityLink onClick={detail.onClick}>Ver detalle →</EntityLink>}
   </div>;

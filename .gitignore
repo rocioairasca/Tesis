@@ -1,3 +1,9 @@
 .codex/
 dist-codex-check/
 .local-postgis/
+
+growsync-backend/.env.staging.local
+
+growsync/.env.staging.local
+
+grow-sync/.env.staging.local

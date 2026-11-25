@@ -75,3 +75,14 @@ test('Lotes: lectura paginada, permisos efectivos, árbol y contexto accesibles'
     assert.ok(overview.includes('Mapa')); assert.ok(overview.includes('Lista')); assert.ok(overview.includes('Cargando lotes')); assert.ok(!overview.includes('Nuevo lote'));
   } finally { await server.close(); }
 });
+
+test('Lotes: persisted area_ha takes precedence over legacy area; legacy remains readable', () => {
+  const rows=buildLotRows([
+    {id:'saved',name:'Saved',area:128.7662,area_ha:'128.6859',enabled:true},
+    {id:'legacy',name:'Legacy',area:100,area_ha:null,geom:null,enabled:true},
+  ]);
+  assert.equal(rows[0].area,128.6859);
+  assert.equal(listRows(rows)[0].area,128.6859);
+  assert.equal(selectedRow(rows,'lot:saved').area,128.6859);
+  assert.equal(rows[1].area,100);
+});

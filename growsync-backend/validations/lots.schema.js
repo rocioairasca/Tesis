@@ -2,8 +2,8 @@
 const { z } = require('zod');
 
 const Name = z.string().trim().min(1, 'Nombre requerido');
-const Area = z.coerce.number().positive('Área debe ser > 0');
-const Location = z.any().optional().nullable(); 
+const { lotPolygon, MESSAGE } = require('./lotLocation');
+const Location = z.any().refine(value => Boolean(lotPolygon(value)), MESSAGE);
 const LayoutStatus = z.enum(['draft', 'active', 'locked', 'archived']);
 const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD');
 
@@ -24,8 +24,8 @@ const ToleranceHa = z.coerce.number().min(0).max(100).optional().nullable();
 exports.createBody = z.object({
   body: z.object({
     name: Name,
-    area: Area,
-    location: Location,         // opcional
+    area: z.unknown().optional(), // Ignored: calculated by PostGIS.
+    location: Location,
     created_by: z.string().uuid().optional().nullable(),
   }),
 });
@@ -34,8 +34,8 @@ exports.updateBody = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     name: Name.optional(),
-    area: Area.optional(),
-    location: Location,
+    area: z.unknown().optional(),
+    location: Location.optional(),
     enabled: z.coerce.boolean().optional(), 
   }),
 });

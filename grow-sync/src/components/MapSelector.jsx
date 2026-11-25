@@ -9,7 +9,7 @@ import {
   Tooltip,
   LayersControl,
 } from 'react-leaflet';
-import { Button, Empty } from 'antd';
+import { Button, Empty, Spin } from 'antd';
 import MapViewport from './MapViewport';
 import { getCurrentLocation } from '../utils/geolocation.mjs';
 import { displayGeometry, geometryBounds, leafletBounds } from '../utils/mapGeometry.mjs';
@@ -130,59 +130,25 @@ const MapSelector = ({
     return () => controller.abort();
   }, [Boolean(onSelect)]);
 
-  const roundCoord = useCallback((coord) => ({
-    lat: parseFloat(coord.lat.toFixed(6)),
-    lng: parseFloat(coord.lng.toFixed(6)),
-  }), []);
-
-  const normalizePolygon = useCallback((latlngs) => {
-    if (!Array.isArray(latlngs) || latlngs.length === 0) return null;
-
-    const ring = Array.isArray(latlngs[0]) ? [...latlngs[0]] : [...latlngs];
-    if (ring.length === 0) return null;
-
-    const normalized = ring.map(roundCoord);
-
-    const first = normalized[0];
-    const last = normalized[normalized.length - 1];
-
-    if (first.lat !== last.lat || first.lng !== last.lng) {
-      normalized.push(first);
-    }
-
-    return normalized;
-  }, [roundCoord]);
-
   const emitPolygonData = useCallback((layer) => {
-    const latlngs = layer.getLatLngs();
-    const polygon = normalizePolygon(latlngs);
-
-    if (!polygon || polygon.length < 4) return;
-
-    const geojsonPolygon = {
-      type: 'Polygon',
-      coordinates: [polygon.map((coord) => [coord.lng, coord.lat])],
-    };
-
-    const areaInMeters = turf.area(geojsonPolygon);
-    const areaInHectares = areaInMeters / 10000;
-
-    if (onSelect) {
-      onSelect({
-        location: JSON.stringify([polygon]),
-        calculatedArea: areaInHectares.toFixed(2),
-      });
-    }
-  }, [normalizePolygon, onSelect]);
+    // Keep all rings (including holes); the server validates topology and computes persisted area.
+    const geometry = layer.toGeoJSON(6).geometry;
+    if (geometry?.type !== 'Polygon') return;
+    const areaHa = turf.area(geometry) / 10000;
+    if (!(areaHa > 0)) return;
+    onSelect?.({ location: JSON.stringify(geometry), calculatedArea: areaHa.toFixed(4) });
+  }, [onSelect]);
 
   const selectedGeometry = displayGeometry(activeLocation);
   const viewBounds = geometryBounds(selectedGeometry ? [selectedGeometry] : lots.map(lot => displayGeometry(lot.geom) || displayGeometry(lot.location)))
     || geometryBounds(userPosition ? [{type:'Point',coordinates:[userPosition.lng,userPosition.lat]}] : []);
-  const initialCenter = viewBounds ? [(viewBounds.south+viewBounds.north)/2,(viewBounds.west+viewBounds.east)/2] : null;
+  const initialCenter = viewBounds ? [(viewBounds.south+viewBounds.north)/2,(viewBounds.west+viewBounds.east)/2] : (onSelect ? [0, 0] : null);
   const handleRecenter = () => {
     if (mapRef.current && viewBounds) mapRef.current.fitBounds(leafletBounds(viewBounds), {padding:[40,40],maxZoom:16});
   };
-  if (!initialCenter) return <Empty description={onSelect ? 'Sin ubicación disponible. Para dibujar el primer lote, permití el acceso a tu ubicación y volvé a abrir el mapa.' : 'No hay geometrías válidas para mostrar.'} />;
+  // Geoman installs Leaflet init hooks: the editable map must be created after the lazy import.
+  if (onSelect && !geomanReady) return <Spin aria-label="Cargando herramientas del mapa" />;
+  if (!initialCenter) return <Empty description="No hay geometrías válidas para mostrar." />;
   return (
     <div style={{ height: '500px', width: '100%', position: 'relative' }}>
       <Button
@@ -201,7 +167,7 @@ const MapSelector = ({
       <MapContainer
         ref={mapRef}
         center={initialCenter}
-        zoom={13}
+        zoom={viewBounds ? 13 : 2}
         style={{ height: '100%', width: '100%' }}
       >
         <GeomanControls
@@ -235,10 +201,10 @@ const MapSelector = ({
 
         <MapHatchPatterns />
 
-        {activeLocation && (
+        {!onSelect && selectedGeometry?.type === 'Polygon' && (
           <Polygon
-            positions={activeLocation}
-            pathOptions={{ color: '#FF5733', weight: 2 }}
+            positions={selectedGeometry.coordinates.map(ring => ring.map(([lng, lat]) => [lat, lng]))}
+            pathOptions={{ color: '#FF5733', weight: 2, pmIgnore: true }}
           />
         )}
 
@@ -272,6 +238,7 @@ const MapSelector = ({
               <Polygon
                 positions={[ring]}
                 pathOptions={{
+                  pmIgnore: true,
                   color,
                   weight: divided ? 3 : 2,
                   smoothFactor: 1,
@@ -288,6 +255,7 @@ const MapSelector = ({
                 <Marker
                   position={labelPosition}
                   icon={createLotLabelIcon(lot.name)}
+                  pmIgnore={true}
                   interactive={false}
                   keyboard={false}
                 />
@@ -303,6 +271,7 @@ const MapSelector = ({
                     key={subLot.id}
                     positions={positions}
                     pathOptions={{
+                      pmIgnore: true,
                       color,
                       weight: 1.4,
                       opacity: 0.95,
@@ -351,6 +320,7 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
 
     map.pm.setGlobalOptions({
       continueDrawing: false,
+      allowSelfIntersection: false,
       tooltips: false,
       pathOptions: {
         color: '#437118',
@@ -360,19 +330,22 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
 
     const clearEditableLayer = () => {
       if (editableLayerRef.current && map.hasLayer(editableLayerRef.current)) {
+        editableLayerRef.current.off('pm:edit', handleEdit);
         map.removeLayer(editableLayerRef.current);
       }
       editableLayerRef.current = null;
     };
 
     const createEditableLayerFromSelected = () => {
-      if (!activeLocation?.[0]?.length) return;
+      const geometry = displayGeometry(activeLocation);
+      if (geometry?.type !== 'Polygon') return;
 
       clearEditableLayer();
 
-      const latlngs = activeLocation[0].map(({ lat, lng }) => [lat, lng]);
+      const latlngs = geometry.coordinates.map(ring => ring.map(([lng, lat]) => [lat, lng]));
       const polygon = L.polygon(latlngs, { color: '#437118', weight: 2 }).addTo(map);
-      polygon.pm.enable({ tooltips: false });
+      polygon.on('pm:edit', handleEdit);
+      polygon.pm.enable({ tooltips: false, allowSelfIntersection: false });
 
       editableLayerRef.current = polygon;
     };
@@ -381,7 +354,8 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
       clearEditableLayer();
 
       editableLayerRef.current = e.layer;
-      editableLayerRef.current.pm.enable({ tooltips: false });
+      e.layer.on('pm:edit', handleEdit);
+      editableLayerRef.current.pm.enable({ tooltips: false, allowSelfIntersection: false });
 
       emitPolygonData(e.layer);
     };
@@ -393,11 +367,9 @@ const GeomanControls = ({ enabled, selectedLocation, initialLocation, emitPolygo
     createEditableLayerFromSelected();
 
     map.on('pm:create', handleCreate);
-    map.on('pm:edit', handleEdit);
 
     return () => {
       map.off('pm:create', handleCreate);
-      map.off('pm:edit', handleEdit);
 
       if (map.pm) {
         map.pm.removeControls();
