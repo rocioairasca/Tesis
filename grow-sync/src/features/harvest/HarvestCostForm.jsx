@@ -57,19 +57,24 @@ export default function HarvestCostForm({ lots = [], crops = [], preset = null, 
     finally { setBusy(false); }
   };
 
+  const singleLot = form.scope === 'lots' && form.targets.length <= 1;
+  const hasPresetContext = !!(preset?.campaign_id && preset?.lot_id);
   return <form className="gs-harvest-cost-form" onSubmit={event => { event.preventDefault(); submit(); }} aria-label="Registrar gasto">
-    <Alert type="info" showIcon message={overlapWarning} />
-    <Field label="Campaña"><Select aria-label="Campaña" value={form.campaign_id} onChange={value => set('campaign_id', value)} placeholder="Elegí la campaña"
-      options={campaigns.map(item => ({ value: item.id, label: item.name }))} /></Field>
-    <Field label="Cultivo"><Select aria-label="Cultivo" value={form.crop_id} onChange={value => set('crop_id', value)} placeholder="Elegí el cultivo"
-      options={crops.map(item => ({ value: item.id, label: item.name }))} /></Field>
+    {hasPresetContext && <p className="gs-ui-helper">El lote, campaña y cultivo ya están completados desde el resultado que estabas consultando.</p>}
+    <p className="gs-ui-helper" role="note">{overlapWarning}</p>
+
+    {/* 1. Qué gasto fue */}
     <Field label="Categoría"><Select aria-label="Categoría" value={form.category} onChange={value => set('category', value)} placeholder="Elegí la categoría" options={COST_CATEGORIES} /></Field>
     <Field label="Descripción"><Input aria-label="Descripción" maxLength={500} value={form.description} onChange={event => set('description', event.target.value)} /></Field>
-    <Field label="Fecha del gasto"><Input aria-label="Fecha del gasto" type="date" value={form.expense_date} onChange={event => set('expense_date', event.target.value)} /></Field>
+
+    {/* 2. Importe */}
     <div className="gs-harvest-cost-row">
       <Field label="Importe"><Input aria-label="Importe" inputMode="decimal" value={form.amount} onChange={event => set('amount', event.target.value)} /></Field>
       <Field label="Moneda"><Select aria-label="Moneda" value={form.currency} onChange={value => set('currency', value)} options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} /></Field>
     </div>
+
+    {/* 3. Fecha */}
+    <Field label="Fecha del gasto"><Input aria-label="Fecha del gasto" type="date" value={form.expense_date} onChange={event => set('expense_date', event.target.value)} /></Field>
     {ars && <fieldset className="gs-harvest-cost-fx"><legend>Cotización (dólar mayorista del día de pago)</legend>
       <Field label="Fecha de pago"><Input aria-label="Fecha de pago" type="date" value={form.payment_date} onChange={event => set('payment_date', event.target.value)} /></Field>
       <Field label="Cotización"><Input aria-label="Cotización" inputMode="decimal" value={form.fx_rate} onChange={event => set('fx_rate', event.target.value)} /></Field>
@@ -77,6 +82,13 @@ export default function HarvestCostForm({ lots = [], crops = [], preset = null, 
       {!fxReady && <p className="gs-harvest-warning" role="note">{pendingEntryNote}</p>}
     </fieldset>}
 
+    {/* 4. Campaña / cultivo */}
+    <Field label="Campaña"><Select aria-label="Campaña" value={form.campaign_id} onChange={value => set('campaign_id', value)} placeholder="Elegí la campaña"
+      options={campaigns.map(item => ({ value: item.id, label: item.name }))} /></Field>
+    <Field label="Cultivo"><Select aria-label="Cultivo" value={form.crop_id} onChange={value => set('crop_id', value)} placeholder="Elegí el cultivo"
+      options={crops.map(item => ({ value: item.id, label: item.name }))} /></Field>
+
+    {/* 5. Destino */}
     <Field label="Destino">
       <Radio.Group aria-label="Destino" value={form.scope} onChange={event => set('scope', event.target.value)}
         options={[{ value: 'lots', label: 'Lotes o sublotes' }, { value: 'campaign', label: 'Toda la campaña' }]} />
@@ -85,15 +97,21 @@ export default function HarvestCostForm({ lots = [], crops = [], preset = null, 
       ? <p className="gs-ui-helper" role="note">{campaignScopeNotice}</p>
       : <>
         <Field label="Lotes o sublotes"><Select aria-label="Lotes o sublotes" mode="multiple" value={form.targets.map(item => item.key)} onChange={pickTargets} options={options} placeholder="Elegí los destinos" optionFilterProp="label" /></Field>
-        <Field label="Distribución"><Radio.Group aria-label="Distribución" value={form.method} onChange={event => set('method', event.target.value)}
-          options={[{ value: 'area_proportional', label: 'Por superficie' }, { value: 'manual_percent', label: 'Porcentaje manual' }]} /></Field>
-        {manual && form.targets.map(target => <Field key={target.key} label={`% para ${options.find(item => item.value === target.key)?.label || ''}`}>
+        {!singleLot && <Field label="Distribución"><Radio.Group aria-label="Distribución" value={form.method} onChange={event => set('method', event.target.value)}
+          options={[{ value: 'area_proportional', label: 'Por superficie' }, { value: 'manual_percent', label: 'Porcentaje manual' }]} /></Field>}
+        {manual && !singleLot && form.targets.map(target => <Field key={target.key} label={`% para ${options.find(item => item.value === target.key)?.label || ''}`}>
           <Input aria-label={`Porcentaje ${options.find(item => item.value === target.key)?.label || ''}`} inputMode="decimal" value={target.percent} onChange={event => setPercent(target.key, event.target.value)} /></Field>)}
       </>}
 
-    <Field label="Proveedor o referencia (opcional)"><Input aria-label="Proveedor" maxLength={500} value={form.supplier_name} onChange={event => set('supplier_name', event.target.value)} /></Field>
-    <Field label="Comprobante (opcional)"><Input aria-label="Comprobante" maxLength={500} value={form.reference} onChange={event => set('reference', event.target.value)} /></Field>
-    <Field label="Notas (opcional)"><Input.TextArea aria-label="Notas" maxLength={2000} rows={2} value={form.notes} onChange={event => set('notes', event.target.value)} /></Field>
+    {/* 6. Opcionales */}
+    <details className="gs-harvest-form-optionals">
+      <summary>Más detalles</summary>
+      <div>
+        <Field label="Proveedor o referencia"><Input aria-label="Proveedor" maxLength={500} value={form.supplier_name} onChange={event => set('supplier_name', event.target.value)} /></Field>
+        <Field label="Comprobante"><Input aria-label="Comprobante" maxLength={500} value={form.reference} onChange={event => set('reference', event.target.value)} /></Field>
+        <Field label="Notas"><Input.TextArea aria-label="Notas" maxLength={2000} rows={2} value={form.notes} onChange={event => set('notes', event.target.value)} /></Field>
+      </div>
+    </details>
 
     {error && <Alert type="error" showIcon message={String(error)} />}
     {!!problems.length && <ul className="gs-ui-helper" aria-label="Datos pendientes">{problems.map(item => <li key={item}>{item}</li>)}</ul>}

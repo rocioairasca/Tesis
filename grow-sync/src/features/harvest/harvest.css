@@ -148,3 +148,19 @@
 .gs-harvest-cost-fx { border: 1px solid var(--gs-border, #d9d9d9); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .gs-harvest-cost-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 @media (max-width: 767px) { .gs-harvest-cost-row { grid-template-columns: 1fr; } .gs-harvest-cost-actions .ant-btn { flex: 1 1 100%; } }
+
+/* UI pass 2: cost presentation, detail improvements, form */
+.gs-harvest-cost-two-line { display:flex; flex-direction:column; align-items:flex-end; gap:1px; }
+.gs-harvest-floor-note { font-size:11px; color:var(--gs-text-secondary); font-weight:400; }
+.gs-harvest-detail-row.gs-harvest-total-row { border-bottom:0; border-top:2px solid var(--gs-border); padding-top:var(--gs-space-8); }
+.gs-harvest-detail-row.gs-harvest-total-row dt { font-weight:600; }
+.gs-harvest-cost-rates { margin-top:var(--gs-space-8); border-top:1px dashed var(--gs-border); padding-top:var(--gs-space-8); }
+.gs-harvest-pending-note { margin:var(--gs-space-4) 0 0; font-size:12px; color:var(--gs-warning); }
+.gs-harvest-form-optionals > summary { display:flex; align-items:center; gap:var(--gs-space-8); cursor:pointer; font-size:13px; color:var(--gs-text-secondary); padding:var(--gs-space-8) 0; list-style:none; }
+.gs-harvest-form-optionals > summary::-webkit-details-marker { display:none; }
+.gs-harvest-form-optionals > summary::before { content:'▸'; font-size:10px; display:inline-block; transition:transform 0.15s; }
+.gs-harvest-form-optionals[open] > summary::before { transform:rotate(90deg); }
+.gs-harvest-form-optionals > div { display:flex; flex-direction:column; gap:var(--gs-space-16); padding-top:var(--gs-space-4); }
+
+/* UI pass 3: completeness section title */
+.gs-harvest-completeness-title { font-size:14px; font-weight:600; color:var(--gs-text-primary); margin:0 0 var(--gs-space-8); }

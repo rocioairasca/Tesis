@@ -6,11 +6,12 @@ import useIsMobile from '../../hooks/useIsMobile';
 import { declareCompleteness, getHarvestResultDetail, newIdempotencyKey } from '../../services/harvestService';
 import { formatCalendarDate } from '../../utils/calendarDate';
 import { formatNumber } from '../../utils/numberFormat';
-import { blockerText, categoryLabel, completeWarning, costDisclaimer, costStatus, distributionLabel, formatArea, formatCostPerHa, formatCostPerTn, formatProductionUnit, formatUsd, formatYield, harvestStatus,
+import { blockerText, categoryLabel, completeWarning, costDisclaimer, distributionLabel, formatArea, formatCostPerHa, formatCostPerTn, formatProductionUnit, formatUsd, formatYield, harvestStatus,
   hasKnownCost, pendingEntryNote, provisionalNote, proratedNote, recordsFilterFor, resultKeyParams, resultTitle, revisedBy } from './harvestResults.mjs';
 
-const Row = ({ label, children }) => <div className="gs-harvest-detail-row"><dt>{label}</dt><dd>{children}</dd></div>;
-const usdOrPending = value => value == null ? 'Pendiente' : formatUsd(value);
+const stripFloor = text => typeof text === 'string' ? text.replace(/^≥\s*/, '') : text;
+const Row = ({ label, children, className }) => <div className={`gs-harvest-detail-row${className ? ' ' + className : ''}`}><dt>{label}</dt><dd>{children}</dd></div>;
+const usdOrPending = value => value == null ? 'Falta definir' : formatUsd(value);
 
 // Detail of one "Resultados por lote" row. Desktop: docked, non-modal panel. Mobile: full screen with a back button.
 // Economic sections exist only when the server returned them (cost_access); nothing is hidden client-side.
@@ -28,7 +29,6 @@ export default function HarvestResultDetail({ params, unit, onClose, onViewRecor
     : !data ? <LoadingState label="Cargando detalle…" rows={4} /> : <Content data={data} unit={unit} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={() => { setRevision(value => value + 1); onChanged?.(); }} />;
   const title = data ? resultTitle(data) : 'Detalle del resultado';
   const harvestBadge = data?.harvest_status ? harvestStatus(data.harvest_status) : null;
-  const econBadge = data?.cost_access ? costStatus(data.costs) : null;
   const header = <div className="gs-harvest-detail-header">
     {mobile && <Button type="link" onClick={onClose}>Volver a resultados</Button>}
     <div>
@@ -36,7 +36,6 @@ export default function HarvestResultDetail({ params, unit, onClose, onViewRecor
       {data && <p className="gs-ui-helper">
         {data.crop.name} · {data.campaign.name}
         {harvestBadge && <> · <StatusBadge tone={harvestBadge.tone}>{harvestBadge.label}</StatusBadge></>}
-        {econBadge && <> · <StatusBadge tone={econBadge.tone}>{econBadge.label}</StatusBadge></>}
       </p>}
     </div>
     {!mobile && <Button type="text" icon={<CloseOutlined />} aria-label="Cerrar detalle" onClick={onClose} />}
@@ -69,10 +68,11 @@ function Content({ data, unit, onViewRecords, onRegisterExpense, onChanged }) {
     {data.cost_access && data.cost_detail && <section className="gs-harvest-detail-section" aria-label="Costos de planificación">
       <h3>Costos de planificación</h3>
       {!data.cost_detail.plannings.length
-        ? <p className="gs-ui-helper">No hay ejecuciones de Planning con costo para este resultado.</p>
+        ? <><p className="gs-ui-helper">Todavía no hay costos provenientes de planificaciones.</p><p className="gs-ui-helper">Los costos aparecerán cuando completes actividades con información económica.</p></>
+
         : <ul className="gs-harvest-planning-list">{data.cost_detail.plannings.map(item => <li key={`${item.planning_id}-${item.sub_lot?.id || 'lot'}`}>
             <div className="gs-harvest-planning-head"><strong>{item.activity}</strong><span>{formatCalendarDate(item.effective_date)}</span></div>
-            {item.planning_enabled === false && <div className="gs-ui-helper">Deshabilitada · su costo sigue contando.</div>}
+            {item.planning_enabled === false && <div className="gs-ui-helper">Deshabilitada · el costo se conserva.</div>}
             <div className="gs-ui-helper">{item.sub_lot ? `${item.sub_lot.name} · ` : ''}Conocido: {usdOrPending(item.known_usd)}{item.pending_lines ? ` · ${item.pending_lines} pendiente${item.pending_lines === 1 ? '' : 's'}` : ''}</div>
             <ul>{item.lines.map((line, index) => <li key={index}>{line.name}{line.quantity ? ` · ${formatNumber(line.quantity)} ${line.unit}` : ''}: {line.pending ? 'Pendiente' : formatUsd(line.amount_usd)}</li>)}</ul>
           </li>)}</ul>}
@@ -86,14 +86,22 @@ function Content({ data, unit, onViewRecords, onRegisterExpense, onChanged }) {
       <h3>Costos y rentabilidad</h3>
       <dl>
         <Row label="Productos">{usdOrPending(costs.products_usd)}</Row>
-        <Row label="Labor">{usdOrPending(costs.labor_usd)}</Row>
+        <Row label="Mano de obra">{usdOrPending(costs.labor_usd)}</Row>
         <Row label="Otros gastos">{usdOrPending(costs.other_usd)}</Row>
-        <Row label="Total conocido"><strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Pendiente'}</strong></Row>
-        <Row label="Gasto conocido / ha">{formatCostPerHa(costs)}</Row>
-        <Row label="Gasto conocido / tn">{formatCostPerTn(costs)}</Row>
-        {costs.pending_lines > 0 && <Row label="Líneas pendientes">{formatNumber(costs.pending_lines, 0)}</Row>}
-        {costs.pending_entries > 0 && <Row label="Gastos pendientes">{formatNumber(costs.pending_entries, 0)}</Row>}
+        <Row label="Total registrado" className="gs-harvest-total-row"><strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Falta definir'}</strong></Row>
       </dl>
+      {(costs.pending_lines > 0 || costs.pending_entries > 0) && <p className="gs-harvest-pending-note" role="note">
+        {[costs.pending_lines > 0 && `${costs.pending_lines} concepto${costs.pending_lines === 1 ? '' : 's'} sin valorizar`,
+          costs.pending_entries > 0 && `${costs.pending_entries} gasto${costs.pending_entries === 1 ? '' : 's'} sin cotización`].filter(Boolean).join(' · ')}
+      </p>}
+      {(costs.per_ha_usd != null || costs.per_tn_usd != null) && <dl className="gs-harvest-cost-rates">
+        {costs.per_ha_usd != null && <Row label="Gasto / ha">
+          <div className="gs-harvest-cost-two-line">{stripFloor(formatCostPerHa(costs))}{costs.is_minimum && <small className="gs-harvest-floor-note">Mínimo registrado</small>}</div>
+        </Row>}
+        {costs.per_tn_usd != null && <Row label="Gasto / tn">
+          <div className="gs-harvest-cost-two-line">{stripFloor(formatCostPerTn(costs))}{costs.is_minimum && <small className="gs-harvest-floor-note">Mínimo registrado</small>}</div>
+        </Row>}
+      </dl>}
       {costs.is_provisional && <p className="gs-ui-helper">{provisionalNote}</p>}
       {costs.status !== 'complete' && <p className="gs-harvest-note" role="note">{costDisclaimer}</p>}
     </section>}
@@ -135,27 +143,32 @@ function Completeness({ data, onRegisterExpense, onChanged }) {
     catch (reasonError) { setError(reasonError?.response?.data?.message || reasonError?.response?.data?.error || 'No se pudo guardar.'); }
     finally { setBusy(false); }
   };
+  const statusTitle = complete
+    ? 'Costos completos'
+    : changed ? 'Los costos cambiaron — revisalos'
+    : c.can_declare ? 'Los costos están listos para finalizar'
+    : 'Falta completar costos';
   return <section className="gs-harvest-detail-section" aria-label="Estado de los gastos">
-    <h3>Estado de los gastos</h3>
-    <dl><Row label="Estado"><StatusBadge tone={complete ? 'success' : 'warning'}>{complete ? 'Completo' : 'Parcial'}</StatusBadge></Row>
-      {complete && reviewed.length > 0 && <Row label="Revisión">{revisedBy(reviewed[0])}</Row>}</dl>
-    {!complete && changed && <p className="gs-harvest-warning" role="note">Hubo cambios en los gastos desde la última revisión. Revisalos y volvé a marcarlos como completos.</p>}
+    <p className="gs-harvest-completeness-title">{statusTitle}</p>
+    {complete && reviewed.length > 0 && <p className="gs-ui-helper">{revisedBy(reviewed[0])}</p>}
+    {complete && !c.can_reopen && <p className="gs-ui-helper">Todos los costos registrados fueron revisados.</p>}
+    {!complete && changed && <p className="gs-harvest-warning" role="note">Hubo cambios en los gastos desde la última revisión.</p>}
     {edit && !complete && blockerText(c.blockers).map(text => <p className="gs-ui-helper" key={text} role="note">{text}</p>)}
     {edit && <div className="gs-harvest-cost-actions">
       <Button onClick={() => onRegisterExpense?.({ campaign_id: keys.campaign_id, crop_id: keys.crop_id, lot_id: keys.lot_id, sub_lot_id: keys.sub_lot_id })}>Registrar gasto</Button>
-      {!complete && <Button type="primary" disabled={!c.can_declare} onClick={() => setConfirm(true)}>Marcar gastos como completos</Button>}
-      {c.can_reopen && <Button onClick={() => setReopen(true)}>Reabrir gastos</Button>}
+      {!complete && <Button type="primary" disabled={!c.can_declare} onClick={() => setConfirm(true)}>Finalizar carga de costos</Button>}
+      {c.can_reopen && <Button onClick={() => setReopen(true)}>Volver a revisar</Button>}
     </div>}
-    <FocusModal open={confirm} title="Marcar gastos como completos" onCancel={() => setConfirm(false)} busy={busy}
-      footer={<><Button onClick={() => setConfirm(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} onClick={() => run({ action: 'complete' })}>Marcar como completos</Button></>}>
-      <p>Gasto conocido: <strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Pendiente'}</strong></p>
-      <p>Gastos considerados: {formatNumber(expenses, 0)} · Pendientes: {formatNumber((costs?.pending_lines || 0) + (costs?.pending_entries || 0), 0)}</p>
+    <FocusModal open={confirm} title="Finalizar carga de costos" onCancel={() => setConfirm(false)} busy={busy}
+      footer={<><Button onClick={() => setConfirm(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} onClick={() => run({ action: 'complete' })}>Finalizar carga de costos</Button></>}>
+      <p>Gasto conocido: <strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Falta definir'}</strong></p>
+      <p>Gastos considerados: {formatNumber(expenses, 0)} · Falta definir: {formatNumber((costs?.pending_lines || 0) + (costs?.pending_entries || 0), 0)}</p>
       <p className="gs-harvest-warning" role="note">{completeWarning}</p>
       {error && <p className="gs-harvest-warning" role="alert">{error}</p>}
     </FocusModal>
-    <FocusModal open={reopen} title="Reabrir gastos" onCancel={() => setReopen(false)} busy={busy}
-      footer={<><Button onClick={() => setReopen(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} disabled={!reason.trim()} onClick={() => run({ action: 'reopen', reason })}>Reabrir gastos</Button></>}>
-      <p>Los gastos vuelven a estado Parcial hasta una nueva revisión. Indicá el motivo.</p>
+    <FocusModal open={reopen} title="Volver a revisar costos" onCancel={() => setReopen(false)} busy={busy}
+      footer={<><Button onClick={() => setReopen(false)} disabled={busy}>Cancelar</Button><Button type="primary" loading={busy} disabled={!reason.trim()} onClick={() => run({ action: 'reopen', reason })}>Volver a revisar</Button></>}>
+      <p>Los costos vuelven a revisión hasta que se cierren nuevamente. Indicá el motivo.</p>
       <Input.TextArea aria-label="Motivo" rows={3} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
       {error && <p className="gs-harvest-warning" role="alert">{error}</p>}
     </FocusModal>

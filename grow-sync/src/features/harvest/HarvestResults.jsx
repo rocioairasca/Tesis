@@ -9,6 +9,10 @@ import { costStatus, formatArea, formatCostPerHa, formatCostPerTn, formatKnownCo
 import HarvestResultDetail from './HarvestResultDetail';
 
 const PAGE_SIZE = 25;
+const stripFloor = text => typeof text === 'string' ? text.replace(/^≥\s*/, '') : text;
+const CostCell = ({ value, isMinimum }) => isMinimum
+  ? <div className="gs-harvest-cost-two-line">{stripFloor(value)}<small className="gs-harvest-floor-note">Mínimo</small></div>
+  : value;
 const StatusCell = ({ row }) => {
   const status = harvestStatus(row.harvest_status);
   return status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : <span aria-label="Sin estado de cosecha">—</span>;
@@ -63,10 +67,13 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
     { title: 'Registros', key: 'records', width: 80, align: 'right', render: (_, row) => recordsButton(row) },
     { title: 'Cosecha', key: 'status', width: 110, render: (_, row) => <StatusCell row={row} /> },
     ...(costAccess ? [
-      { title: 'Estado económico', key: 'cost_status', width: 130, className: 'gs-harvest-col-econ-first', onHeaderCell: () => ({ className: 'gs-harvest-col-econ-first' }), render: (_, row) => <CostStatus row={row} /> },
-      { title: 'Gastos', key: 'cost', width: 150, align: 'right', render: (_, row) => <span className={hasKnownCostClass(row)}>{formatKnownCost(row.costs)}</span> },
-      { title: 'Gasto / ha', key: 'cost_ha', width: 120, align: 'right', render: (_, row) => formatCostPerHa(row.costs) },
-      { title: 'Costo / tn', key: 'cost_tn', width: 130, align: 'right', render: (_, row) => <>{formatCostPerTn(row.costs)}<Provisional row={row} /></> },
+      { title: 'Estado', key: 'cost_status', width: 110, className: 'gs-harvest-col-econ-first', onHeaderCell: () => ({ className: 'gs-harvest-col-econ-first' }), render: (_, row) => <CostStatus row={row} /> },
+      { title: 'Registrado', key: 'cost', width: 140, align: 'right', render: (_, row) => {
+        const known = row.costs?.known_total_usd;
+        return known != null ? <span>{formatUsd(known)}</span> : <span className="gs-harvest-cost--pending">—</span>;
+      } },
+      { title: 'USD/ha', key: 'cost_ha', width: 110, align: 'right', render: (_, row) => <CostCell value={formatCostPerHa(row.costs)} isMinimum={row.costs?.is_minimum} /> },
+      { title: 'USD/tn', key: 'cost_tn', width: 120, align: 'right', render: (_, row) => <><CostCell value={formatCostPerTn(row.costs)} isMinimum={row.costs?.is_minimum} /><Provisional row={row} /></> },
     ] : []),
   ];
   const panel = selected && !mobile && <HarvestResultDetail params={selected} unit={unit} refreshKey={refreshKey} onClose={() => onSelect(null)} onViewRecords={onViewRecords} onRegisterExpense={onRegisterExpense} onChanged={onChanged} />;
@@ -75,8 +82,10 @@ export default function HarvestResults({ filters, page, onPage, expanded, onExpa
       <Metric compact label="Superficie cosechada" value={formatArea(summary.harvested_area_ha)} />
       <Metric compact label="Producción total" value={formatProductionUnit(summary.production_kg, unit)} />
       <Metric compact label="Lotes con resultados" value={formatNumber(summary.results, 0)} helper={`${formatNumber(summary.records, 0)} registros de cosecha`} />
-      {costAccess && <Metric compact label="Gasto conocido" value={formatUsd(summary.known_cost_usd)}
-        helper={`${summaryCostHelp} · ${formatNumber(summary.incomplete_lots, 0)} ${summary.incomplete_lots === 1 ? 'lote' : 'lotes'} con costos incompletos`} />}
+      {costAccess && <Metric compact label="Gastos" value={formatUsd(summary.known_cost_usd)}
+        helper={summary.incomplete_lots > 0
+          ? `${formatNumber(summary.incomplete_lots, 0)} ${summary.incomplete_lots === 1 ? 'lote' : 'lotes'} con costos pendientes`
+          : 'Todos los lotes con costos registrados'} />}
     </div>}
     {summary?.prorated_records > 0 && <p className="gs-ui-helper">Parte de la producción se repartió entre destinos en proporción a la superficie vinculada (prorrateo, no medición).</p>}
     {note && <p className="gs-harvest-warning" role="status">{note}</p>}

@@ -124,12 +124,12 @@ export const COST_CATEGORIES = [
 export const categoryLabel = value => COST_CATEGORIES.find(item => item.value === value)?.label || 'Otro';
 export const overlapWarning = 'Verificá que este gasto no esté ya registrado mediante una planificación ejecutada.';
 export const campaignScopeNotice = 'El gasto se distribuirá entre los destinos actuales de la campaña.';
-export const completeWarning = 'Confirmás que revisaste los gastos de este lote, campaña y cultivo y que no quedan gastos conocidos por registrar.';
-export const pendingEntryNote = 'Pendiente: falta la cotización del día de pago. No suma al total hasta confirmarla.';
+export const completeWarning = 'Confirmás que revisaste los gastos de este lote, campaña y cultivo y que no quedan gastos por registrar.';
+export const pendingEntryNote = 'Falta la cotización del día de pago. No suma al total hasta confirmarla.';
 export const COMPLETE_BLOCKERS = {
-  no_known_cost: 'Todavía no hay gastos conocidos para declarar.',
-  pending_lines: 'Hay líneas de planificaciones pendientes de valorizar.',
-  pending_entries: 'Hay gastos pendientes de cotización.',
+  no_known_cost: 'Todavía no hay gastos registrados para cerrar.',
+  pending_lines: 'Falta valorizar líneas de planificación.',
+  pending_entries: 'Falta confirmar la cotización de gastos en pesos.',
 };
 export const blockerText = blockers => (blockers || []).map(code => COMPLETE_BLOCKERS[code]).filter(Boolean);
 export const distributionLabel = method => (method === 'manual_percent' ? 'Porcentaje manual' : 'Por superficie');
