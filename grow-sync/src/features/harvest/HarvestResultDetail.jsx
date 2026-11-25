@@ -12,6 +12,8 @@ import { blockerText, categoryLabel, completeWarning, costDisclaimer, distributi
 const stripFloor = text => typeof text === 'string' ? text.replace(/^≥\s*/, '') : text;
 const Row = ({ label, children, className }) => <div className={`gs-harvest-detail-row${className ? ' ' + className : ''}`}><dt>{label}</dt><dd>{children}</dd></div>;
 const usdOrPending = value => value == null ? 'Falta definir' : formatUsd(value);
+// true only when plannings contain at least one line of the given kind that is still pending a valuation
+const pendingKind = (plannings, kind) => Array.isArray(plannings) && plannings.some(p => Array.isArray(p.lines) && p.lines.some(l => l.kind === kind && l.pending));
 
 // Detail of one "Resultados por lote" row. Desktop: docked, non-modal panel. Mobile: full screen with a back button.
 // Economic sections exist only when the server returned them (cost_access); nothing is hidden client-side.
@@ -47,6 +49,11 @@ export default function HarvestResultDetail({ params, unit, onClose, onViewRecor
 
 function Content({ data, unit, onViewRecords, onRegisterExpense, onChanged }) {
   const costs = data.costs;
+  const plannings = data.cost_detail?.plannings;
+  const hasPendingProd = pendingKind(plannings, 'product');
+  const hasPendingLabor = pendingKind(plannings, 'labor');
+  const hasPendingOther = costs?.other_usd == null && (costs?.pending_entries ?? 0) > 0;
+  const cv = (val, pend) => val != null ? formatUsd(val) : pend ? 'Falta definir' : '—';
   return <div className="gs-harvest-detail-body">
 
     {/* 1. PRODUCCIÓN */}
@@ -85,9 +92,9 @@ function Content({ data, unit, onViewRecords, onRegisterExpense, onChanged }) {
     {data.cost_access && costs && <section className="gs-harvest-detail-section" aria-label="Costos y rentabilidad">
       <h3>Costos y rentabilidad</h3>
       <dl>
-        <Row label="Productos">{usdOrPending(costs.products_usd)}</Row>
-        <Row label="Mano de obra">{usdOrPending(costs.labor_usd)}</Row>
-        <Row label="Otros gastos">{usdOrPending(costs.other_usd)}</Row>
+        <Row label="Productos">{cv(costs.products_usd, hasPendingProd)}</Row>
+        <Row label="Mano de obra">{cv(costs.labor_usd, hasPendingLabor)}</Row>
+        <Row label="Otros gastos">{cv(costs.other_usd, hasPendingOther)}</Row>
         <Row label="Total registrado" className="gs-harvest-total-row"><strong>{hasKnownCost(costs) ? formatUsd(costs.known_total_usd) : 'Falta definir'}</strong></Row>
       </dl>
       {(costs.pending_lines > 0 || costs.pending_entries > 0) && <p className="gs-harvest-pending-note" role="note">
